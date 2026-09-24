@@ -1,0 +1,296 @@
+# DATA_DICTIONARY.md — Digital Sales Forecast & Pacing
+
+Contrato de datos 1.3.0 (Fases 1 a 3). Convención: nombres internos en camelCase; en CSV y JSON exportado, snake_case.
+"Obligatorio" se refiere a la carga del tipo indicado (H = histórico, P = plan, A = actual).
+
+## 1. Campos de archivo (CSV) → modelo canónico
+
+| Campo canónico | Encabezados aceptados (ejemplos) | Tipo | Obligatorio | Descripción | Cálculo / normalización |
+|---|---|---|---|---|---|
+| date | fecha, date, dia | fecha `YYYY-MM-DD` | H, P, A | Día del registro | ISO siempre; `DD/MM/AAAA` o `MM/DD/AAAA` solo si es inequívoca o el usuario elige el formato. Ambigua o imposible → error |
+| channel | canal, channel | texto (id) | H, P, A | Canal digital | Normalizado a `ecommerce`, `app`, `whatsapp`, `llamadas` vía alias. Otro valor → error |
+| revenue | venta, ventas, revenue, sales, meta_venta | número ≥ 0 | H, P, A | Venta en moneda (MXN) | Quita `$`, MXN y separadores de miles. Derivable: pedidos × AOV |
+| orders | pedidos, orders, ordenes, meta_pedidos | entero ≥ 0 | H, A | Número de pedidos | Derivable: volumen × CR |
+| trafficVolume | traffic_volume, sesiones, sessions, mensajes, llamadas, meta_traffic_volume | entero ≥ 0 | H, A | Sesiones (Ecommerce, App), mensajes/contactos (WhatsApp) o llamadas (Llamadas) | Derivable: pedidos ÷ CR |
+| conversionRate | conversion_rate, cr, meta_conversion_rate | fracción 0–1 | No | Tasa de conversión | Acepta `0.0167` o `1.67%`. Calculado: pedidos ÷ volumen. Cargado se compara contra el calculado con tolerancia |
+| aov | aov, ticket_promedio, meta_aov | número ≥ 0 | No | Ticket promedio | Calculado: venta ÷ pedidos. Cargado se compara contra el calculado con tolerancia |
+| event | evento, event | texto | No | Evento comercial del día | Espacios limpiados. Si existe y no hay tipo de día → `dayType = event` |
+| holiday | festivo, holiday, feriado | texto | No | Festivo | Si existe y no hay tipo de día → `dayType = holiday` |
+| season | temporada, season | texto | No | Temporada comercial | — |
+| dayType | tipo_dia, day_type | enum | No | `regular`, `holiday`, `event`, `campaign`, `special` | Acepta español (festivo, evento, campaña, especial). Si falta, se infiere |
+| notes | observaciones, notas, notes | texto | No | Comentario libre (sobre todo en actual) | — |
+
+## 2. CanonicalRecord (registro normalizado)
+
+| Campo | Tipo | Obligatorio | Descripción | Cálculo |
+|---|---|---|---|---|
+| key | texto | Sí | Llave lógica | `date|channel|dataType` |
+| dataType | enum | Sí | `historical`, `plan`, `actual` | Tipo elegido al cargar |
+| date | fecha | Sí | Día normalizado | Ver §1 |
+| channel | texto | Sí | Canal normalizado | Ver §1 |
+| dayType | enum | Sí | Tipo de día | Cargado o inferido (default `regular`) |
+| holiday, event, season, notes | texto \| null | No | Atributos del día | Cargados |
+| metrics.<métrica>.value | número \| null | Sí | Valor de la métrica | Observado o calculado; null si falta o es inválido |
+| metrics.<métrica>.source | enum | Sí | `observed`, `calculated`, `missing`, `invalid` | Ver ARCHITECTURE §13 |
+| metrics.<métrica>.raw | texto | No | Texto original | Solo si era inválido o se limpió |
+| metrics.<métrica>.note | texto | No | Razón de un faltante | Ej. "No calculable: volumen 0." |
+| status | enum | Sí | `valid`, `warning`, `error` | Peor severidad de sus issues |
+| issueCounts.error / .warning | entero | Sí | Conteo de issues de la fila | — |
+| provenance.batchId | texto | Sí | Lote (archivo) de origen | — |
+| provenance.fileName | texto | Sí | Nombre del archivo | — |
+| provenance.row | entero | Sí | Línea en el archivo (encabezado = 1) | — |
+
+## 3. Batch (archivo importado)
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| id | texto | Identificador del lote |
+| dataType | enum | Tipo de dato del archivo |
+| fileName | texto | Nombre del archivo |
+| importedAt | fecha-hora ISO | Momento de la importación |
+| rowCount / accepted / rejected | entero | Filas leídas / importadas / fuera del modelo |
+| includeErrorRows | booleano | Si se importaron filas con errores en métricas |
+| settings | objeto | Tolerancia, formato de fecha y de número usados |
+| mapping | objeto | Encabezado → campo canónico (null = ignorado) |
+| delimiter | texto | Separador detectado |
+| summary | objeto | Conteos de la validación |
+| issues | Issue[] | Todos los issues del archivo, con `rowImported` |
+| origin | texto | Opcional: `mock-fase0`, `migration` |
+
+## 4. Issue (error de calidad)
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| type | enum | Tipo del catálogo `config.errorTypes` (ver ARCHITECTURE §14) |
+| severity | `error` \| `warning` | Severidad aplicada |
+| row | entero \| null | Línea del archivo |
+| field | texto \| null | Encabezado original (o campo canónico) |
+| message | texto | Explicación y, cuando aplica, cómo corregir |
+| value | texto \| número \| null | Valor problemático |
+| key | texto \| null | Llave del registro, si tiene |
+| batchId, fileName, dataType, rowImported | — | Agregados al guardar el lote |
+
+## 5. DailyRecord (vista consolidada, Fase 0)
+
+| Campo | Tipo | Descripción | Cálculo |
+|---|---|---|---|
+| id | texto | `date|channel` | — |
+| date, year, month, quarter, fortnight | — | Atributos de calendario | `FP.calendar.getDateAttributes` |
+| week, weekYear, weekKey | — | Semana ISO | `getWeekInfo` (único punto de definición) |
+| weekOfMonth, weekOfMonthLabel | — | W1…W5 dentro del mes | días 1–7 = W1, etc. |
+| dayOfWeek, dayOfWeekIndex, dayOfYear, isWeekend | — | Día de la semana y del año | — |
+| channel, dayType, holiday, event, season | — | Atributos de negocio | Desde el registro canónico |
+| plan / actual / forecast | bloque de 5 métricas | Estados separados | plan ← planData; actual ← actualData; forecast vacío hasta fases posteriores |
+| sources.<estado>.<métrica> | `observed` \| `input` \| `model` \| `calculated` | Origen en vocabulario de Fase 0 | Plan cargado = `input`; real cargado = `observed` |
+| validation.<estado> | objeto | Resultado de `FP.metrics.validateBlock` | Tolerancias de `config.tolerances` |
+
+## 6. Metas (Targets, Fase 0)
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| year, currency | — | Año y moneda |
+| annual | bloque de métricas | Meta anual total (Fase 0–1: solo `revenue`) |
+| byChannel.<canal> | bloque | Meta anual por canal |
+| byMonth, byWeek, byDay | mapa periodo → { total, byChannel } | Reservado para la distribución (fase posterior) |
+| updatedAt | fecha-hora | Última edición |
+
+## 7. Ajustes de importación (`settings`)
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| tolerance | fracción | 0.01 | Tolerancia relativa CR/AOV (`DATA_VALIDATION_TOLERANCE`) |
+| dateFormat | `auto` \| `DMY` \| `MDY` | `auto` | Orden de fechas con "/" |
+| numberFormat | `dot` \| `comma` | `dot` | 1,234.56 o 1.234,56 |
+| includeErrorRows | booleano | false | Importar filas con errores en métricas |
+
+## 8. Relaciones matemáticas
+
+| Métrica | Fórmula | Condición para calcular |
+|---|---|---|
+| CR | pedidos ÷ volumen | ambos presentes, volumen > 0 |
+| AOV | venta ÷ pedidos | ambos presentes, pedidos > 0 |
+| Pedidos | volumen × CR | ambos presentes |
+| Venta | pedidos × AOV = volumen × CR × AOV | ambos presentes |
+| Volumen | pedidos ÷ CR | ambos presentes, CR > 0 |
+
+Las agregaciones suman venta, pedidos y volumen y recalculan CR y AOV desde las sumas; nunca promedian ratios.
+
+
+---
+
+# Fase 2 — Planeación
+
+## 9. Celda del plan distribuido
+
+| Campo | Tipo | Descripción | Origen | Cálculo | Ejemplo |
+|---|---|---|---|---|---|
+| value | número \| null | Valor planeado | motor | según métrica (§10) | `257308.84` |
+| source | enum | De dónde sale el valor | motor | ver ARCHITECTURE §26 | `historical_seasonality` |
+| status | enum | `loaded`, `calculated`, `calculated_with_assumption`, `insufficient_data` | motor | — | `calculated` |
+| confidence | enum | `excellent`, `sufficient`, `limited`, `insufficient` | seasonality | umbrales de `config.planning` | `limited` |
+| note | texto | Explicación corta | motor | — | `venta ÷ AOV supuesto` |
+
+## 10. Día del plan (`plan.channels.<canal>.days[]`)
+
+| Campo | Tipo | Descripción | Origen | Cálculo | Ejemplo |
+|---|---|---|---|---|---|
+| date | fecha | Día | calendario | `daysOfYear(año)` | `2026-09-24` |
+| month | entero | Mes del día | calendario | — | `9` |
+| tag | objeto \| null | Evento, festivo, temporada y tipo de día del año planeado | planData, actualData, eventos configurados | `buildTags` | `{ event: "Hot Sale" }` |
+| explicit | objeto \| null | Registro importado que fija el día | planData | — | `null` |
+| weightInfo.weight | número | Peso diario antes de normalizar | seasonality | F_díaSemana^α × F_calendario^α × F_evento^α × F_temporada^α | `1.0428` |
+| weightInfo.factors | objeto | Factor aplicado por componente | seasonality | — | `{ dayOfWeek: 1.042 }` |
+| share | fracción | Participación del día en su mes | motor | peso ÷ Σ pesos del mes | `0.0345` |
+| cells.revenue | celda | Venta planeada | explícito o reparto | meta_mes × peso normalizado (mayor residuo, centavos) | `257308.84` |
+| cells.orders | celda | Pedidos planeados | calculado | pedidos_mes (venta ÷ AOV) repartidos por venta, enteros | `281` |
+| cells.trafficVolume | celda | Volumen planeado | calculado | volumen_mes (pedidos ÷ CR) repartido, enteros | `25735` |
+| cells.conversionRate | celda | CR del día | calculado | pedidos ÷ volumen | `0.01092` |
+| cells.aov | celda | AOV del día | calculado | venta ÷ pedidos | `915.69` |
+
+## 11. Mes del plan (`months[]`)
+
+| Campo | Tipo | Descripción | Origen | Cálculo | Ejemplo |
+|---|---|---|---|---|---|
+| key | texto | `AAAA-MM` | calendario | — | `2026-09` |
+| target | número | Meta mensual de venta | explícita o reparto | meta anual × peso mensual (mayor residuo) | `7466255.71` |
+| source | enum | Origen de la meta mensual | motor | prioridad §23 | `historical_seasonality` |
+| share | fracción | Peso aplicado en el año planeado | seasonality | índice diario^α × días del mes, normalizado | `0.0762` |
+| histShare | fracción | Participación histórica promedio | seasonality | años completos | `0.0761` |
+| confidence | enum | Confianza del peso mensual | seasonality | años completos | `sufficient` |
+| explicitDays | entero | Días fijados por el plan importado | planData | — | `0` |
+| assumptions.aov / .conversionRate | celda | Supuestos del mes | histórico o usuario | Σventa÷Σpedidos, Σpedidos÷Σvolumen | `916.27` |
+| plan | bloque | Totales del mes | agregación | Σ días; CR y AOV desde sumas | — |
+
+## 12. Semana del plan (`generateWeeklyPlan`)
+
+| Campo | Tipo | Descripción | Cálculo | Ejemplo |
+|---|---|---|---|---|
+| weekKey | texto | Semana ISO | `getWeekInfo` | `2026-W39` |
+| weekStart / weekEnd | fecha | Lunes y domingo | ISO | `2026-09-21` / `2026-09-27` |
+| crossesMonths | booleano | La semana toca dos meses | — | `false` |
+| plan | bloque | Totales de la semana | Σ días | — |
+| byMonth[] | lista | Parte de la semana en cada mes | Σ días por mes | `[{ month: "2026-09", days: 7 }]` |
+
+## 13. Perfil de estacionalidad (por canal)
+
+| Campo | Tipo | Descripción | Cálculo | Ejemplo |
+|---|---|---|---|---|
+| years / completeYears | enteros | Años con dato / años completos | cobertura por mes ≥ `monthMinCoverage` | `[2024, 2025]` |
+| sufficiency | enum | Suficiencia general | `yearThresholds` | `sufficient` |
+| monthly.index[12] | número | Índice de venta diaria por mes | promedio del mes ÷ promedio anual, robusto entre años | `1.176` (mayo) |
+| dayOfWeek.factors[7] | número | Factor lunes…domingo | ratio vs base, winsorizado, promedio 1 | `0.836` (domingo) |
+| calendar.factors[31] | número | Factor por día del mes | solo con evidencia; encogido | `1.073` (día 15) |
+| events.<clave> | objeto | Evento o festivo: `raw`, `factor`, `samples`, `occurrences`, `years`, `confidence`, `note` | ratio vs base × F_díaSemana, encogido y acotado | Hot Sale `1.390` |
+| seasons.<clave> | objeto | Temporada: igual que eventos | contraste dentro del mes | `1.000` |
+| metrics.byMonth[12] | objeto | CR y AOV históricos del mes con muestras | razón de sumas | `{ aov: 916.27 }` |
+
+## 14. Auditoría y versiones
+
+| Campo | Tipo | Descripción | Ejemplo |
+|---|---|---|---|
+| audit.generatedAt | fecha-hora | Momento de generación | `2026-09-23T21:50:00Z` |
+| audit.algorithmVersion | texto | Versión del algoritmo | `planning-v1` |
+| audit.historicalPeriod | objeto | Modo, desde/hasta, años completos, registros | `{ completeYears: [2024, 2025] }` |
+| audit.distributionMethod | texto | Método aplicado | `D · Histórico + calendario + eventos` |
+| audit.assumptions | objeto | CR/AOV usados y su fuente | — |
+| audit.confidence | enum | Confianza general | `sufficient` |
+| version.type | enum | `original_distributed_plan` (congelado) o `plan_revision` | — |
+| version.id | texto | Identificador | `distributed-plan-2026-original` |
+
+## 15. Configuración de planeación (`planningSettings`)
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| method | `A`–`D` | `D` | Método aplicado |
+| historicalPeriod | objeto | anterior al año planeado | Periodo histórico usado |
+| useExplicitPlan | booleano | true | Respetar el plan diario importado |
+| smoothing | enum | `winsorized_mean` | Método de suavizado |
+| outlierMadK | número | 3 | Umbral de extremos |
+| shrinkageK | número | 6 | Encogimiento hacia 1 |
+| minSamples | entero | 3 | Mínimo de muestras por grupo |
+| monthMinCoverage | fracción | 0.8 | Cobertura para contar un mes como completo |
+| componentWeights | objeto | todos 1 | Intensidad de mensual, día de semana, calendario, eventos, temporada |
+| assumptions.<canal> | objeto | null | CR y AOV manuales (solo si no hay histórico) |
+
+
+---
+
+# Fase 3 — Pacing y forecast
+
+## 16. Día de pacing (`run.channels.<canal>.days[]`, igual en `run.total.days[]`)
+
+| Campo | Tipo | Descripción | Origen | Cálculo | Ejemplo |
+|---|---|---|---|---|---|
+| date, month, weekKey | texto | Día, mes `AAAA-MM`, semana ISO | calendario | — | `2026-09-22`, `2026-09`, `2026-W39` |
+| temporal | enum | `past`, `today`, `future` | pacing | vs `referenceDate` | `today` |
+| closed | booleano | Día ≤ corte | pacing | — | `true` |
+| counted | booleano | Cerrado y con venta real | pacing | — | `true` |
+| plan | bloque | Plan del día (5 métricas) | plan original (Fase 2) o planData | copia de solo lectura | `{ revenue: 269268.25 }` |
+| actual | bloque \| null | Real del día (solo si está cerrado) | actualData / historicalData | observado o calculado | `{ revenue: 251121.72 }` |
+| partialActual | bloque \| null | Real de un día no cerrado (en curso) | actualData | se muestra, no cuenta | — |
+| actualSource | enum | `actual` o `historical` | store | — | `actual` |
+| forecast | bloque \| null | Forecast del día | motor | actual si contado; método si no | `{ revenue: 263000 }` |
+| forecastSource | enum | `actual`, `projected`, `insufficient_data` | motor | — | `projected` |
+| fallback / fallbackReason | booleano / texto | Un índice sin datos obligó a usar el plan | métodos | — | `false` |
+| pacing.<métrica> | objeto | `{ plan, actual, gap, gapPct, compliance }` del día | gap | actual − plan | `gap: -18146.53` |
+| cumulative.<métrica> | objeto | Igual, acumulado desde el 1 de enero en días contados | pacing | Σ contados | `compliance: 1.034` |
+| status | enum | `above`, `on_plan`, `below`, `insufficient_data`, `in_progress`, `future` | gap | umbrales | `below` |
+| tag | objeto \| null | Evento, festivo, temporada del día | datos y eventos configurados | — | `{ holiday: "Día de la Independencia" }` |
+
+## 17. Resumen de periodo (`annual`, `months[]`, `weeks[]`, eventos)
+
+| Campo | Tipo | Descripción | Cálculo | Ejemplo |
+|---|---|---|---|---|
+| key / firstDate / lastDate | texto | Periodo | — | `2026-09` |
+| status | enum | `closed`, `current`, `future` | días vs corte | `current` |
+| days / countedDays / missingActualDays | entero | Días del periodo / con real / cerrados sin real | — | `30 / 22 / 0` |
+| plan | bloque | Plan del periodo completo | Σ días | `7466255.71` |
+| planToDate | bloque | Plan de los días contados | Σ plan contados | `5463153.86` |
+| actualToDate | bloque | Real de los días contados | Σ real | `5525185.97` |
+| toDate.<métrica> | objeto | Gap y cumplimiento a la fecha | actualToDate vs planToDate | `compliance: 1.011` |
+| forecast | bloque | Forecast de cierre del periodo | Σ forecast diario | `7528287.82` |
+| forecastGap.<métrica> | objeto | `{ plan, forecast, gap, gapPct, attainment }` | forecast − plan | `gap: 62032.11` |
+| pacingStatus | enum | Semáforo del periodo (venta) | `toDate.revenue.compliance` | `above` |
+| weekStart / weekEnd / crossesMonths | — | Solo semanas | ISO | `2026-09-21` |
+
+## 18. Performance index (`indices.<ventana>.<métrica>`)
+
+| Campo | Tipo | Descripción | Ejemplo |
+|---|---|---|---|
+| window | enum | `ytd`, `month`, `last7`, `last14`, `last28` | `last28` |
+| from / to | fecha | Rango (termina en el corte) | `2026-08-26` / `2026-09-22` |
+| value | número \| null | Σactual ÷ Σplan (CR y AOV: razón de razones de sumas) | `1.0156` |
+| status | enum | `ok` o `insufficient_data` | `ok` |
+| comparableDays / windowDays / coverage | número | Días usados / días de la ventana / fracción | `28 / 28 / 1` |
+| actual / plan | número | Sumas usadas (métricas aditivas) | `7118092.08` |
+
+## 19. Corrida y versiones
+
+| Campo | Tipo | Descripción | Ejemplo |
+|---|---|---|---|
+| run.referenceDate / run.cutoff / run.todayStatus | — | Fecha de referencia, corte y estado del día | `2026-09-22` |
+| run.method | objeto | Método aplicado | `{ id: "D", label: "Por drivers" }` |
+| run.plan | objeto | Fuente del plan: `original_distributed_plan`, `imported_plan` o `none` | — |
+| run.comparison | objeto | Métodos A–D por canal y total | — |
+| run.alerts[] | objeto | `{ type, severity (info/attention), channel, metric, message, … }` | `gap_growing` |
+| run.events[] | objeto | `{ type, name, start, end, days, byChannel, total, observation }` | Hot Sale |
+| version.forecastVersion | texto | `v1`, `v2`, … | `v2` |
+| version.generatedAt / referenceDate / cutoff | fecha | Momento de guardado y referencia | `2026-09-10` |
+| version.assumptions | objeto | Índices y parámetros usados por canal | — |
+| version.results | objeto | Anual y mensual por canal y total | — |
+| change.total | objeto | `{ current, previous, change, changePct }` | `change: -710663` |
+| accuracy[] | objeto | `{ forecastVersion, evaluatedMonths, mape, bias, accuracy, status, detail }` | — |
+
+## 20. Parámetros del forecast (`forecastSettings`)
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| referenceDate | fecha \| null | null (hoy) | Fecha de referencia |
+| todayStatus | enum | `completed` | Día de referencia completo o en curso |
+| method | `A`–`D` | `A` | Método en uso |
+| recentWindow | ventana | `last28` | Ventana del método C |
+| driverWindows | objeto | volumen `last28`, CR `ytd`, AOV `ytd` | Ventanas del método D |
+| minComparableDays / minWindowCoverage | número | 5 / 0.7 | Suficiencia de un índice |
+| useHistoricalAsActual | booleano | true | Completar el real con histórico del mismo año |
+| pacingThresholds | objeto | aboveFrom 1.01, onPlanFrom 0.99 | Semáforo |
+| alerts | objeto | streakDays 5, recentVsCumulative 0.05, forecastGapPct 0.03 | Umbrales de alertas |
