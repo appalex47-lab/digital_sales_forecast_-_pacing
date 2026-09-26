@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Digital Sales Forecast & Pacing
 
 Documento de referencia para todas las fases. Antes de modificar cualquier módulo, léelo completo.
-Versión de la app: 0.10.0 (Fase 8.2). Versión del contrato de datos: **1.9.0**.
+Versión de la app: 0.12.0 (Fase 9.1). Versión del contrato de datos: **1.10.0** (sin cambios en 9.1).
 Guía de experiencia: `UX_GUIDE.md`.
 Diccionario de campos: `DATA_DICTIONARY.md`.
 
@@ -114,6 +114,7 @@ Fases:
   ui/guidance/help.js           Íconos de ayuda, panel, glosario, etiquetas de estado       (Fase 7)
   ui/guidance/tour.js           Recorrido guiado de 10 pasos                                (Fase 7)
   ui/guidance/traceability.js   Cadena plan → … → medición de una acción (solo lectura)     (Fase 7)
+  ui/guidance/explain.js        "¿Por qué este número?" y "¿Qué significa?" con la corrida real (Fase 9.1)
   ui/guidance/home-view.js      Inicio / centro de control                                  (Fase 7)
   ui/guidance/measure-view.js   Medir y aprender (vista global de acciones y mediciones)    (Fase 7)
   ui/guidance/help-view.js      ¿Cómo funciona? y ¿cómo leer un diagnóstico?                (Fase 7)
@@ -1921,3 +1922,207 @@ app ya sabe (moneda, canales, catálogo de productos cargado) sin guardarlo. No 
   `config.business.context` congelados; datos cargados sin cambios; export → borrar → recargar vuelve a valores por
   defecto → importar llena el borrador; un contexto corrupto no impide arrancar. Regresión de Fases 1–8.1.1 sin
   errores y 22/22 pruebas de almacenamiento.
+
+---
+
+# FASE 8.4 — Geografía y estructura operativa del análisis de productos
+
+## 100. Alcance: solo la capa de productos
+
+```
+PRODUCT DATA                                   (no: APPLICATION → GLOBAL GEOGRAPHY)
+├── Categoría → Subcategoría → Producto → SKU
+└── Geografía / operación del pedido
+    ├── Región   (derivada: de su estado o de su sucursal)
+    ├── Estado   (catálogo fijo de 32, con código estable)
+    ├── Ciudad   (identidad = estado + nombre)
+    ├── Sucursal (identidad = código; nombre aparte)
+    └── Tipo de entrega (operativa, no geográfica)
+```
+
+Canal = dónde se vende; región/estado/ciudad/sucursal/entrega = dónde se atiende el pedido. No se tocó planeación,
+metas, forecast, pacing, reforecast, recovery, escenarios, acciones, diagnóstico general, filtros ni navegación global,
+canales (`config.channels`) ni métricas (`config.metricKeys`, `packed-v1`). La geografía vive en `productStore`,
+`productAnalysis`, `productImport`, `product-view` y en el export de productos.
+
+## 101. Modelo y jerarquía (`FP.productStore`: `dims`, `geo`, `entity`, `geoOptions`)
+
+- **IDs estables:** estado → código (`JAL`, `CDMX`… en `config.products.stateCodes`, mismo orden que `states`, que no
+  cambia porque los bloques guardan el índice); ciudad → `JAL-GUADALAJARA`; sucursal → su código (`025`), con nombre
+  aparte (`nombre_sucursal`); región → nombre normalizado (`OCCIDENTE`). Nunca el nombre visible como identificador si
+  hay código.
+- **Jerarquía derivada de los propios archivos de venta (no se inventa):**
+  - región de un estado = valor más frecuente de la columna `region` para ese estado (si no hay estado, la de la sucursal);
+  - ubicación de una sucursal = estado y ciudad más frecuentes de sus pedidos de **recolección** (en domicilio el estado
+    es el del cliente); sin recolecciones, los de todos sus pedidos;
+  - nombre de sucursal = `nombre_sucursal` más frecuente; si no hay, el código.
+- **Ruta completa:** `entity(nivel, clave)` devuelve `{ level, id, code, name, path[] }`, p. ej.
+  Occidente → Jalisco → Guadalajara → Sucursal Guadalajara Centro. Sin duplicar: la región no se guarda por renglón.
+- **Persistencia:** listas en `meta.productDims` (sucursales y ciudades) y votos del modelo en `meta.productGeo`; la
+  jerarquía se recalcula (`deriveGeo`) al abrir. Todo en IndexedDB, dentro de las stores existentes.
+
+## 102. Datos por renglón y compatibilidad
+
+- **Bloque de venta:** se agregan dos columnas opcionales: `cityIdx` (Uint16) y `geoFlags` (Uint8: 1 estado inválido,
+  2 entrega inválida). Los bloques anteriores no las tienen y se leen como "ciudad faltante, sin banderas".
+  **No hizo falta esquema v3:** no cambian stores, llaves ni índices; solo campos opcionales dentro del objeto.
+- **Llave de venta:** fecha + canal + SKU + estado + sucursal + entrega + ciudad (+ bandera). Compatibilidad: si un día ya
+  guardado sin ciudad se vuelve a cargar con ciudad, y los renglones nuevos suman lo mismo que el guardado, se
+  **enriquece** (se sustituye por el detalle, sin duplicar); si no cuadran, es conflicto con la política elegida.
+- **Resúmenes:** `productRollups` gana el nivel `city`. En instalaciones previas se reconstruyen una sola vez al abrir
+  (bandera `meta.productGeoRollups`), sin tocar los bloques. Región no tiene resumen propio: se calcula al consultar.
+- **Funnel:** sin cambios; nunca recibe geografía. Al ver o filtrar por región, estado, ciudad, sucursal o entrega, CR y
+  funnel quedan "No disponible".
+
+## 103. Importación y calidad
+
+Mismo importador (8.1.1), con campos nuevos opcionales `region`, `ciudad`, `nombre_sucursal` y alias revisados
+(`estado_nombre`, `store_id`, `codigo_sucursal`, `municipio`, `store_name`).
+**Cambio de contrato respecto a 8.1.1:** estado, sucursal y tipo de entrega pasan de obligatorios a recomendados. Un
+renglón sin geografía o con geografía parcial se conserva y se analiza al nivel disponible; nada se descarta por eso.
+
+| Situación | Tratamiento |
+|---|---|
+| Nivel faltante | "No disponible" (o "No aplica" si el Business Context declara geografía no relevante); nunca 0 |
+| Estado o entrega no reconocidos | se conserva el renglón, el valor queda "Inválido" (bandera), no se adivina |
+| Geografía parcial / sin geografía | aviso informativo `PARTIAL_GEOGRAPHY` / `NO_GEOGRAPHY` |
+| Ciudad sin estado válido | `CITY_WITHOUT_STATE` |
+| Nombre de sucursal sin código | `BRANCH_NAME_WITHOUT_CODE` (no se usa como identificador) |
+| Estado en varias regiones | `REGION_CONFLICT` (se usa la más frecuente) |
+| Sucursal con recolecciones en varios estados | `BRANCH_STATE_CONFLICT` |
+| Sucursal con varios nombres / nombre repetido en varios códigos | `BRANCH_NAME_CONFLICT` / `DUPLICATE_BRANCH_NAME` |
+| Sucursal sin estado en ningún renglón | `BRANCH_WITHOUT_STATE` |
+
+Solo se rechaza un renglón sin fecha, canal o SKU válidos (igual que antes).
+
+## 104. Análisis y señales
+
+- Un solo motor: `aggregate({ groupBy, filter })` acepta cualquier combinación de niveles de producto y geografía
+  (Categoría × Región, Producto × Ciudad, SKU × Sucursal…). Sin funciones por combinación.
+- Ruta de navegación genérica (`pa.drill`): se empieza por categoría o por un nivel geográfico y se baja por el
+  siguiente natural (región → estado → ciudad → sucursal → categoría…) o por el que se elija en "Desglosar por".
+- Filtros de geografía solo dentro de la vista de productos, con jerarquía: estados de la región, ciudades del estado,
+  sucursales de la ciudad; al cambiar un nivel se limpian los inferiores. No hay filtro global.
+- **Señales geográficas:** para los grupos que más caen y más crecen, si la variación se concentra en pocos estados o
+  sucursales (≥ 60 % de la variación en ≤ 2 estados / 3 sucursales con ≤ 50 % de la venta de referencia) o dónde se
+  movió más. Cada señal trae dimensión, entidad, periodo, métrica, variación y base de comparación. Se calculan en dos
+  pasadas (`crossRevenue`), no una por grupo. Son descriptivas: dónde, no por qué. Cohere no participa en esta fase;
+  las señales quedan en el export para que fases posteriores las usen como contexto.
+- **Terminología:** la vista usa el término de "sucursal" del Business Context (8.2), p. ej. "Tienda".
+
+## 105. Export y contratos
+
+`category_product_analysis_export.json` gana, de forma aditiva: `rows[].geography` (`{ level, id, code, name, path }`,
+null si no aplica), `geoSignals[]` y `geography` (`scope: 'products'`, niveles disponibles, filtros activos, avisos de
+calidad). Ningún campo existente cambió. `analysis_export.json` y `reforecast_export.json` (consumidos por Recovery
+Center) no se tocaron.
+
+## 106. Pruebas y rendimiento
+
+- Síncronas: 157 (144 anteriores, 2 actualizadas al nuevo contrato de geografía opcional, + 13 de 8.4: códigos,
+  jerarquía y rutas, ubicación por recolecciones, CSV completo/parcial/sin geografía/solo estado, calidad y huérfanos,
+  faltante vs inválido, cruces que cuadran con el total, filtros jerárquicos, funnel sin geografía, enriquecimiento de
+  bloques anteriores, export, alcance solo productos).
+- Asíncronas: 25 (se ajustaron 2 a nombres de columna y a la nueva semántica; + 4 de 8.4 sobre IndexedDB: persistencia
+  del modelo y resúmenes por ciudad, filtros y desgloses, enriquecimiento al recargar, reconstrucción única).
+- Rendimiento (410 mil renglones de venta de prueba): filtro región + estado + ciudad con señales geográficas ~0.4 s.
+
+---
+
+# FASE 9.1 — UX pedagógica ("aprender mientras usas la herramienta")
+
+Extiende la capa de guía de Fase 7; no crea navegación, ayuda, recorrido ni modos paralelos. No toca motores, datos,
+exports, IndexedDB ni contratos (el único dato nuevo es la lista de lecciones vistas, dentro de `uxSettings`).
+
+## 105. Qué se reutilizó y cómo se extendió
+
+| Pieza de Fase 7 | Extensión de 9.1 |
+|---|---|
+| `HELP` (una entrada por concepto) | Campos opcionales `purpose`, `whenToUse`, `decision`, `related`, fusionados desde `PEDAGOGY` en las mismas entradas; 3 entradas nuevas (`diagnostico`, `recovery`, `metodologia`) |
+| `EXPLAINERS` (flujo + puntos por vista) | Bloque `learn` (método, supuestos, ejemplo ilustrativo, límites, conceptos relacionados) = nivel 3 |
+| `TRIGGERS` | 3 disparadores más (diagnóstico, escenario, pacing) |
+| `TOUR` (10 pasos) | 13 pasos: se agregan Plan, Real y Recovery; cada paso con capítulo (Planear, Monitorear, Diagnosticar, Recuperar, Medir) para retomarlo por partes |
+| `state.ux.mode` (Ejecutivo / Analista) | Tercer valor `learner` (Aprendiz); mismo selector, lista en `MODES` |
+| Siguiente paso (`contextEngine.getNextStep`) | La barra de aprendizaje lo muestra como "¿Qué hago ahora?"; no hay una segunda lógica |
+| Panel lateral de ayuda (`FP.help`) | Lo usan también las explicaciones "¿Por qué?" (`FP.help.openPanel`) |
+| Estados vacíos (`enhanceEmpty`) | Agregan "Por qué" con el propósito de la vista requerida |
+
+Contenido nuevo en `guidanceConfig.js`, todo como datos: `PEDAGOGY`, `METHOD_GUIDE`, `METHODOLOGY` (13 pasos, narrativa
+marcada como fase futura), `VIEW_STEP`, `LESSONS` (10 lecciones), `MODES`.
+
+## 106. Divulgación progresiva
+
+1. **Nivel 1 (siempre visible):** título del explicador, etiqueta de estado, descripción corta del concepto.
+2. **Nivel 2 ("¿Cómo funciona?"):** flujo y puntos del explicador; entrada completa de ayuda con las 8 preguntas.
+3. **Nivel 3 ("Aprender más"):** método, supuestos, ejemplo ilustrativo, límites y conceptos relacionados. Siempre a
+   pedido, en todos los modos, para no sobrecargar.
+
+Las 8 preguntas se mapean a campos de HELP: qué es (`shortDescription`), para qué sirve (`purpose`), cómo funciona
+(`detailedDescription`), cómo se calcula (`formula`), qué significa (`interpretation`/`howToRead`), cuándo usarlo
+(`whenToUse`), qué NO significa (`caveats`) y qué decisión ayuda a tomar (`decision`).
+
+## 107. Modos
+
+| Modo | Qué cambia (solo presentación) |
+|---|---|
+| Aprendiz | Barra de aprendizaje (dónde está la vista en la metodología, para qué sirve, qué decisión ayuda a tomar, qué hacer ahora) + microlearning |
+| Analista | Igual que antes de 9.1 (explicadores abiertos, todo el detalle técnico) |
+| Ejecutivo | Igual que antes de 9.1 (bloques técnicos colapsados, nunca eliminados) |
+
+Cambiar de modo no altera filtros, contexto, vista ni resultados (probado). Los botones "¿Por qué?" y las guías de
+método están disponibles en los tres modos.
+
+## 108. "¿Por qué este número?" (`FP.explain`)
+
+Recompone la cifra con la corrida real del motor, sin calcular nada nuevo:
+
+- **Forecast:** actual de los días contados + Σ proyección de los días restantes (del mismo `run.days`), método y
+  descripción de `config.forecast.methods`, e índices usados por canal (de `run.channels[ch].assumptions`).
+- **Gap a la fecha, cumplimiento, gap forecast:** actual, plan de los mismos días, meta y forecast del resumen del
+  periodo (año o mes) que usan las vistas.
+- **Identidad:** volumen × CR × AOV con `FP.metrics.calculateOrders/calculateRevenue`.
+- **Reforecast:** meta − actual = pendiente, días futuros, requerido y presión (de la corrida de reforecast).
+
+Cada explicación trae una **verificación**: si la suma de los pasos no coincide con la cifra del motor, lo muestra en
+lugar de ocultarlo. Separa "¿cómo se calculó?", "¿qué significa?" y "¿qué NO significa?".
+
+Dónde aparece: KPIs de Pacing & Forecast, tarjetas de Inicio y recuperación requerida en Recovery & Reforecast.
+
+## 109. Métodos de forecast: la explicación coincide con el código
+
+Los nombres y descripciones se leen de `config.forecast.methods` (la misma fuente que el motor). `METHOD_GUIDE`
+solo agrega lo pedagógico, redactado leyendo `forecastMethods.js`:
+
+| Método | Usa | Supone |
+|---|---|---|
+| A · Plan restante | el plan de cada día restante | lo que falta será como se planeó |
+| B · Performance acumulada | plan × índice acumulado del año | el desempeño del año se mantiene |
+| C · Performance reciente | plan × índice de la ventana reciente (28 días por defecto) | el desempeño reciente se mantiene |
+| D · Por drivers | volumen, CR y AOV del plan × el índice de cada uno (28 días / acumulado / acumulado); pedidos y venta derivados | cada palanca mantiene su desempeño |
+
+Nota: el prompt de 9.1 nombraba los métodos "Ritmo, Reciente, Acumulado, Combinado". Esos nombres no existen en el
+código; se documentaron los cuatro métodos reales para no contradecir al motor.
+
+## 110. Microlearning
+
+`LESSONS`: una idea por evento real (plan guardado, datos cargados, pacing visto, forecast visto, método cambiado,
+señal vista, reforecast visto, escenario guardado, acción medida, geografía de productos vista). Solo en modo
+Aprendiz, una lección a la vez, descartable ("Entendido") y nunca repetida (`uxSettings.learned`).
+
+## 111. Integridad y terminología
+
+- Los ejemplos se etiquetan "Ejemplo ilustrativo"; no se muestran cifras inventadas como reales.
+- Ninguna explicación afirma causas; la de diagnóstico enseña explícitamente driver ≠ señal ≠ hipótesis.
+- La geografía se explica como exclusiva del análisis de productos (Fase 8.4).
+- Los textos nuevos pueden usar `{{sale}}`, `{{order}}`, `{{customer}}`, `{{product}}`, `{{location}}` (y plurales),
+  resueltos con la terminología del Business Context (Fase 8.2).
+- Cohere no interviene: la metodología es determinística y versionada con el código.
+
+## 112. Pruebas
+
+- Síncronas: 168 (157 anteriores + 11 de 9.1: pedagogía completa de conceptos clave, un solo sistema de ayuda, guía
+  de métodos = configuración del motor, "¿por qué?" = cifras del motor en los 4 métodos, identidad y reforecast,
+  significado sin causalidad, cadena metodológica, lecciones, modos, terminología, ejemplos ilustrativos). Una
+  prueba de Fase 7 se ajustó: exigía exactamente 10 pasos de recorrido; ahora exige que los 10 originales sigan en
+  orden dentro del recorrido extendido.
+- Asíncronas: 25, sin cambios.

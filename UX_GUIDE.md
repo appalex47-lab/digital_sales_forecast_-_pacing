@@ -107,3 +107,49 @@ terminología y notas. Solo el nombre es obligatorio; lo recomendado se marca si
    forecast, diagnóstico, datos cargados, plan congelado ni exports.
 4. "Exportar business_context.json" guarda un respaldo portable; "Importar" lo carga como borrador en otro equipo.
 5. "Quitar contexto" vuelve a los valores por defecto al recargar; tus datos no se tocan.
+
+## Geografía de productos (Diagnosticar › Categoría → Producto)
+
+**Qué es:** ver cómo se comportan los productos según dónde se atendió el pedido: región, estado, ciudad, sucursal y
+tipo de entrega. **Para qué:** detectar diferencias entre zonas o sucursales y dónde se concentra una caída o un
+crecimiento. **Qué no significa:** una diferencia geográfica no demuestra por sí misma una causa.
+
+- **Empezar por:** Categoría, Región, Estado, Ciudad, Sucursal o Tipo de entrega (solo aparecen los que tienen datos).
+- **Ver ›** baja al siguiente nivel natural (región → estado → ciudad → sucursal → categoría…); **Desglosar por** permite
+  elegir otro, p. ej. de un producto a sus ciudades. Las migas permiten volver a cualquier punto.
+- **Filtros de geografía** (solo en esta vista): respetan la jerarquía; al elegir un estado solo aparecen sus ciudades y
+  sucursales. "Quitar filtros de geografía" los limpia.
+- **Dónde se concentra la variación:** señales del tipo "Producto X cayó 25 %; el 80 % se concentra en Jalisco". Son
+  señales para investigar.
+- **Calidad de la geografía:** avisos como sucursal en varios estados o estado en varias regiones; la app usa el valor
+  más frecuente y lo dice.
+- Faltante se ve "No disponible", no cero; un estado no reconocido se ve "Inválido". CR y funnel no aplican a niveles
+  geográficos porque el funnel ocurre antes del checkout.
+- La geografía no cambia metas, forecast, pacing ni diagnóstico general: vive solo en el análisis de productos.
+
+## Aprender mientras usas la herramienta (Fase 9.1)
+
+**Modo Aprendiz** (selector de modo, junto a Analista y Ejecutivo). Agrega, sin cambiar ningún cálculo:
+- Una barra que muestra dónde estás dentro de la metodología (Meta → Plan → Real → Pacing → Forecast → Diagnóstico →
+  Señales → Hipótesis → Recovery → Escenarios → Acción → Observado → Narrativa), qué pregunta responde la vista, para
+  qué sirve, qué decisión ayuda a tomar y **¿qué hago ahora?** (el mismo siguiente paso de siempre).
+- Lecciones breves ("Lo que acabas de aprender") cuando ocurre algo real: guardar el plan, cargar datos, ver el
+  forecast, cambiar de método, ver señales, simular un escenario, medir una acción. Aparecen una vez y se cierran con
+  "Entendido".
+
+Cambiar de modo conserva filtros, contexto y resultados.
+
+**Tres niveles de explicación:**
+1. Siempre visible: el título del explicador y la descripción corta.
+2. "¿Cómo funciona?": el flujo de la vista y, en el ícono "?", la ayuda completa con **¿qué es?, ¿para qué sirve?,
+   ¿cómo funciona?, ¿cómo se calcula?, ¿qué significa?, ¿cuándo usarlo?, ¿qué NO significa? y ¿qué decisión ayuda a
+   tomar?**, más conceptos relacionados.
+3. "Aprender más": método, supuestos, un ejemplo ilustrativo y los límites.
+
+**¿Por qué este número?** Junto a forecast, gap, cumplimiento, gap forecast, venta y recuperación requerida. Muestra
+los pasos con las cifras reales del motor, confirma que suman la cifra mostrada y separa qué significa de qué no.
+
+**Métodos de forecast.** En la comparación de métodos, cada uno explica qué usa, qué supone, cuándo diverge de los
+demás y su límite. Ninguno se presenta como el mejor.
+
+**Estados vacíos** dicen qué falta, por qué hace falta y a dónde ir.

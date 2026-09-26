@@ -1,6 +1,6 @@
 # DATA_DICTIONARY.md — Digital Sales Forecast & Pacing
 
-Contrato de datos 1.9.0 (Fases 1 a 8.2). Convención: nombres internos en camelCase; en CSV y JSON exportado, snake_case.
+Contrato de datos 1.10.0 (Fases 1 a 8.4). Convención: nombres internos en camelCase; en CSV y JSON exportado, snake_case.
 "Obligatorio" se refiere a la carga del tipo indicado (H = histórico, P = plan, A = actual).
 
 ## 1. Campos de archivo (CSV) → modelo canónico
@@ -684,3 +684,50 @@ impliedZero, conflicts, skus[] }` — sumas solo de celdas observadas; `funnelJo
 ## 44. business_context.json
 
 `{ schema: 'business_context', schemaVersion: 1, metadata: { exportedAt, savedAt, app, version }, context }`.
+
+---
+
+# Fase 8.4 — Geografía de productos
+
+## 45. Columnas de geografía del archivo de venta (todas opcionales)
+
+Encabezados oficiales (plantilla): `fecha, canal, sku, codigo_producto, producto, marca, categoria, subcategoria,
+presentacion, region, estado, ciudad, sucursal, nombre_sucursal, tipo_entrega, venta, pedidos, unidades`.
+
+| Campo | Encabezados aceptados | Tipo | Nivel | Padre | Faltante | Inválido |
+|---|---|---|---|---|---|---|
+| region | region, zona, region_comercial | texto | región | — | "No disponible" | — |
+| state | estado, entidad, estado_nombre… | catálogo de 32 | estado | región | "No disponible" | se conserva, marcado "Inválido" |
+| city | ciudad, city, municipio | texto | ciudad | estado | "No disponible" | — |
+| branch | sucursal, store_id, codigo_sucursal… | código | sucursal | ciudad / estado | "No disponible" | — |
+| branchName | nombre_sucursal, store_name… | texto | atributo de la sucursal | — | se usa el código | sin código: aviso, no se usa como id |
+| delivery | tipo_entrega, modalidad… | domicilio / recolección | operación (no geografía) | — | "No disponible" | se conserva, marcado "Inválido" |
+
+"No aplica" en lugar de "No disponible" cuando el Business Context declara `geography.relevant = false`.
+
+## 46. Entidad geográfica (`FP.productStore.entity`, `rows[].geography` en el export)
+
+| Campo | Ejemplo | Descripción |
+|---|---|---|
+| level | `branch` | region, state, city o branch |
+| id | `025` / `JAL` / `JAL-GUADALAJARA` / `OCCIDENTE` | identificador estable |
+| code | `025` / `JAL` | código (sucursal, estado) |
+| name | Sucursal Guadalajara Centro | nombre visible |
+| path | [región, estado, ciudad, sucursal] | ruta completa hacia arriba |
+
+## 47. Almacenamiento (sin esquema v3)
+
+| Dónde | Campo | Tipo | Descripción |
+|---|---|---|---|
+| bloque de venta | cityIdx | Uint16Array (opcional) | índice en `productDims.cities`; ausente en bloques previos = faltante |
+| bloque de venta | geoFlags | Uint8Array (opcional) | 1 estado inválido, 2 entrega inválida |
+| meta `productDims` | cities | `[{ name, stateIdx }]` | ciudades (índice 0 = sin dato) |
+| meta `productGeo` | regions, votes | lista y conteos | base para derivar la jerarquía |
+| meta `productGeoRollups` | version, blocks | — | resúmenes por ciudad ya reconstruidos |
+| `productRollups` | level `city` | — | nuevo nivel de resumen |
+
+## 48. Export (aditivo)
+
+`category_product_analysis_export.json`: `rows[].geography`, `geoSignals[]` (`{ type: geo_concentration | geo_largest,
+dimension, level, entity, geography[], period, baseline, metric, variation, explainedShare, baselineShare, label, note }`)
+y `geography { scope: 'products', levelsAvailable, filters, quality[], note }`.
