@@ -34,13 +34,18 @@
   const fieldsOf = (kind) => (kind === 'funnel' ? P().funnelFields : P().fields);
   const typeOf = (kind) => (kind === 'funnel' ? P().funnelType : P().dataType);
   const storeOf = (kind) => (kind === 'funnel' ? 'productFunnel' : 'productDays');
-  const GEO = ['state', 'branch', 'delivery'];
-  const LEVELS = ['category', 'subcategory', 'state', 'branch', 'delivery'];
+  /** Dimensiones de geografía y operación de producto (Fase 8.4: solo capa de productos, no transversales). */
+  const GEO = ['region', 'state', 'city', 'branch', 'delivery'];
+  /** Niveles con resumen guardado. Región no se guarda: se deriva de estado/sucursal con el modelo geográfico. */
+  const LEVELS = ['category', 'subcategory', 'state', 'city', 'branch', 'delivery'];
+  /** Banderas de geografía por renglón (columna geoFlags; ausente en bloques anteriores = todo válido). */
+  const GF = { stateInvalid: 1, deliveryInvalid: 2 };
   const METRICS = () => [...P().metrics, ...P().funnelMetrics];
 
   /* ======================= Catálogos de dimensiones ======================= */
 
-  const dims = { states: [], stateKey: new Map(), branches: [], branchKey: new Map(), deliveries: [], deliveryKey: new Map(), _dirty: false };
+  const dims = { states: [], stateKey: new Map(), branches: [], branchKey: new Map(), deliveries: [], deliveryKey: new Map(),
+    cities: [], cityKey: new Map(), _dirty: false };
   const clean = (s) => N().simplify(s).replace(/[.]/g, '').replace(/\s+/g, ' ').trim();
   function resetDims() {
     dims.states = ['(sin dato)', ...P().states.map((s) => s[0])];
@@ -50,6 +55,8 @@
     dims.deliveryKey = new Map();
     P().deliveries.forEach(([id, lbl, aliases], i) => { [id, lbl, ...aliases].forEach((a) => dims.deliveryKey.set(clean(a), i + 1)); });
     dims.branches = ['(sin dato)']; dims.branchKey = new Map(); dims._dirty = false;
+    dims.cities = [{ name: '(sin dato)', stateIdx: 0 }]; dims.cityKey = new Map();
+    resetGeo();
   }
   const deliveryLabel = (id) => (P().deliveries.find((d) => d[0] === id) || [id, id])[1];
   function stateIdx(raw) { return dims.stateKey.get(clean(raw)) || 0; }
@@ -60,6 +67,148 @@
     let i = dims.branchKey.get(k);
     if (i === undefined && create) { i = dims.branches.length; dims.branches.push(String(lbl).trim().replace(/\s+/g, ' ')); dims.branchKey.set(k, i); dims._dirty = true; }
     return i === undefined ? 0 : i;
+  }
+
+  /** Ciudad: identidad = estado + nombre (una "Guadalajara" de Jalisco no es otra de otro estado). */
+  function cityIdx(name, sIdx, create = true) {
+    const k = clean(name);
+    if (!k) return 0;
+    const key = `${sIdx}|${k}`;
+    let i = dims.cityKey.get(key);
+    if (i === undefined && create) { i = dims.cities.length; dims.cities.push({ name: String(name).trim().replace(/\s+/g, ' '), stateIdx: sIdx }); dims.cityKey.set(key, i); dims._dirty = true; }
+    return i === undefined ? 0 : i;
+  }
+  const stateCode = (sIdx) => (sIdx > 0 ? P().stateCodes[sIdx - 1] : null);
+
+  /* ======================= Modelo geográfico (Fase 8.4, solo productos) ======================= */
+
+  /**
+   * Jerarquía Región → Estado → Ciudad → Sucursal, derivada de lo que traen los archivos de venta:
+   *  - región de un estado: la columna `region` más frecuente para ese estado (o para la sucursal si no hay estado)
+   *  - ubicación de una sucursal: estado/ciudad más frecuentes de sus pedidos de RECOLECCIÓN (en domicilio el estado es
+   *    del cliente); si no tiene recolecciones, los de todos sus pedidos
+   *  - nombre de sucursal: columna `nombre_sucursal` más frecuente; si no hay, el código
+   * Nada se inventa: lo que no aparece en los datos queda como "No disponible".
+   */
+  const geo = { regions: [], regionKey: new Map(), votes: { stateRegion: {}, branchRegion: {}, branch: {} }, stateRegion: {}, branchRegion: {}, branchInfo: {}, issues: [] };
+  function resetGeo() {
+    geo.regions = ['(sin dato)']; geo.regionKey = new Map();
+    geo.votes = { stateRegion: {}, branchRegion: {}, branch: {} };
+    geo.stateRegion = {}; geo.branchRegion = {}; geo.branchInfo = {}; geo.issues = [];
+  }
+  function regionIdx(name, create = true) {
+    const k = clean(name);
+    if (!k) return 0;
+    let i = geo.regionKey.get(k);
+    if (i === undefined && create) { i = geo.regions.length; geo.regions.push(String(name).trim().replace(/\s+/g, ' ')); geo.regionKey.set(k, i); }
+    return i === undefined ? 0 : i;
+  }
+  const vote = (o, k, v, n = 1) => { const m = (o[k] = o[k] || {}); m[v] = (m[v] || 0) + n; };
+  const mode = (m) => { let best = null, n = -1; Object.entries(m || {}).forEach(([k, c]) => { if (c > n) { best = k; n = c; } }); return best; };
+
+  /** Suma las observaciones de un borrador al modelo y recalcula jerarquía y avisos de consistencia. */
+  function absorbGeo(obs) {
+    obs.stateRegion.forEach((regs, s) => regs.forEach((n, r) => vote(geo.votes.stateRegion, s, regionIdx(r), n)));
+    obs.branchRegion.forEach((regs, b) => regs.forEach((n, r) => vote(geo.votes.branchRegion, branchIdx(b), regionIdx(r), n)));
+    obs.branch.forEach((o, b) => {
+      const bi = branchIdx(b);
+      const t = (geo.votes.branch[bi] = geo.votes.branch[bi] || { names: {}, pickupStates: {}, allStates: {}, pickupCities: {}, allCities: {} });
+      ['names', 'pickupStates', 'allStates'].forEach((k) => o[k].forEach((n, v) => { t[k][v] = (t[k][v] || 0) + n; }));
+      ['pickupCities', 'allCities'].forEach((k) => o[k].forEach((n, v) => { const [si, cn] = v.split('\u0001'); const ci = cityIdx(cn, Number(si)); t[k][ci] = (t[k][ci] || 0) + n; }));
+    });
+    deriveGeo();
+  }
+
+  function deriveGeo() {
+    geo.stateRegion = {}; geo.branchRegion = {}; geo.branchInfo = {}; geo.issues = [];
+    const issue = (type, message, entity) => geo.issues.push({ type, severity: 'warning', message, entity });
+    Object.entries(geo.votes.stateRegion).forEach(([s, m]) => {
+      geo.stateRegion[s] = Number(mode(m));
+      if (Object.keys(m).length > 1) issue('REGION_CONFLICT', `${dims.states[s]} aparece en ${Object.keys(m).length} regiones (${Object.keys(m).map((r) => geo.regions[r]).join(', ')}). Se usa ${geo.regions[geo.stateRegion[s]]}.`, { level: 'state', id: stateCode(Number(s)) });
+    });
+    Object.entries(geo.votes.branchRegion).forEach(([b, m]) => { geo.branchRegion[b] = Number(mode(m)); });
+    const names = {};
+    Object.entries(geo.votes.branch).forEach(([b, t]) => {
+      const bi = Number(b);
+      const pickup = Object.keys(t.pickupStates).filter((k) => k !== '0').length;
+      const stSrc = pickup ? t.pickupStates : t.allStates;
+      const cSrc = Object.keys(t.pickupCities).filter((k) => k !== '0').length ? t.pickupCities : t.allCities;
+      const st = Number(mode(Object.fromEntries(Object.entries(stSrc).filter(([k]) => k !== '0')))) || 0;
+      const ci = Number(mode(Object.fromEntries(Object.entries(cSrc).filter(([k]) => k !== '0' && dims.cities[k] && dims.cities[k].stateIdx === st)))) || 0;
+      const nm = mode(t.names) || dims.branches[bi];
+      geo.branchInfo[bi] = { stateIdx: st, cityIdx: ci, name: nm, located: pickup ? 'recoleccion' : 'todos los pedidos' };
+      if (Object.keys(t.names).length > 1) issue('BRANCH_NAME_CONFLICT', `La sucursal ${dims.branches[bi]} aparece con ${Object.keys(t.names).length} nombres. Se usa "${nm}".`, { level: 'branch', id: dims.branches[bi] });
+      if (pickup && Object.keys(t.pickupStates).filter((k) => k !== '0').length > 1) issue('BRANCH_STATE_CONFLICT', `La sucursal ${dims.branches[bi]} tiene recolecciones en ${Object.keys(t.pickupStates).filter((k) => k !== '0').length} estados. Se ubica en ${dims.states[st]}.`, { level: 'branch', id: dims.branches[bi] });
+      if (!st) issue('BRANCH_WITHOUT_STATE', `La sucursal ${dims.branches[bi]} no tiene estado en ningún renglón.`, { level: 'branch', id: dims.branches[bi] });
+      if (nm && nm !== dims.branches[bi]) (names[clean(nm)] = names[clean(nm)] || []).push(dims.branches[bi]);
+    });
+    Object.entries(names).filter(([, codes]) => codes.length > 1).forEach(([, codes]) => issue('DUPLICATE_BRANCH_NAME', `Las sucursales ${codes.join(', ')} comparten nombre. Se distinguen por código.`, { level: 'branch', id: codes.join(',') }));
+    dims.cities.forEach((c, i) => { if (i > 0 && !c.stateIdx) issue('CITY_WITHOUT_STATE', `La ciudad ${c.name} aparece sin estado.`, { level: 'city', id: c.name }); });
+  }
+
+  /** Región de un renglón de venta: la de su estado; si no hay estado, la de su sucursal. */
+  const rowRegion = (p, i) => {
+    const s = p.stateIdx[i];
+    const r = s ? geo.stateRegion[s] : 0;
+    return r || geo.branchRegion[p.branchIdx[i]] || 0;
+  };
+
+  /** Entidad geográfica con id estable, nombre y ruta completa. */
+  function entity(level, idxOrKey) {
+    const reg = (r) => (r ? { level: 'region', id: clean(geo.regions[r]).toUpperCase().replace(/\s+/g, '_'), name: geo.regions[r] } : null);
+    if (level === 'state') {
+      const s = typeof idxOrKey === 'number' ? idxOrKey : dims.states.indexOf(idxOrKey);
+      if (s <= 0) return null;
+      const e = { level, id: stateCode(s), code: stateCode(s), name: dims.states[s] };
+      return { ...e, path: [reg(geo.stateRegion[s]), e].filter(Boolean) };
+    }
+    if (level === 'city') {
+      const c = typeof idxOrKey === 'number' ? idxOrKey : dims.cities.findIndex((x, i) => i > 0 && cityLabel(i) === idxOrKey);
+      if (c <= 0) return null;
+      const city = dims.cities[c];
+      const e = { level, id: `${stateCode(city.stateIdx) || 'NA'}-${clean(city.name).toUpperCase().replace(/\s+/g, '_')}`, name: city.name };
+      const st = entity('state', city.stateIdx);
+      return { ...e, path: [...(st ? st.path : []), e] };
+    }
+    if (level === 'branch') {
+      const b = typeof idxOrKey === 'number' ? idxOrKey : dims.branchKey.get(clean(idxOrKey));
+      if (!b) return null;
+      const info = geo.branchInfo[b] || {};
+      const e = { level, id: dims.branches[b], code: dims.branches[b], name: info.name || dims.branches[b] };
+      const up = info.cityIdx ? entity('city', info.cityIdx) : info.stateIdx ? entity('state', info.stateIdx) : null;
+      const r = !up && geo.branchRegion[b] ? [reg(geo.branchRegion[b])] : [];
+      return { ...e, path: [...r, ...(up ? up.path : []), e] };
+    }
+    if (level === 'region') {
+      const r = typeof idxOrKey === 'number' ? idxOrKey : geo.regionKey.get(clean(idxOrKey));
+      return r ? { ...reg(r), path: [reg(r)] } : null;
+    }
+    return null;
+  }
+  const cityLabel = (c) => (c > 0 ? `${dims.cities[c].name}${dims.cities[c].stateIdx ? `, ${stateCode(dims.cities[c].stateIdx)}` : ''}` : '(sin dato)');
+
+  /**
+   * Opciones de los filtros de geografía respetando la jerarquía: estados de la región, ciudades del estado,
+   * sucursales de la ciudad/estado/región elegidos. Solo lo que existe en los datos.
+   */
+  function geoOptions(sel = {}) {
+    const statesWithData = new Set((meta.states || []));
+    const regionOf = (s) => geo.regions[geo.stateRegion[s]] || null;
+    const regions = [...new Set(Object.values(geo.stateRegion).concat(Object.values(geo.branchRegion)).filter(Boolean).map((r) => geo.regions[r]))].sort();
+    const states = dims.states.map((n, i) => ({ i, n })).filter(({ i, n }) => i > 0 && statesWithData.has(n) && (!sel.region || regionOf(i) === sel.region)).map((x) => x.n);
+    const sIdx = sel.state ? dims.states.indexOf(sel.state) : 0;
+    const cities = dims.cities.map((c, i) => ({ c, i })).filter(({ c, i }) => i > 0 && (!sIdx || c.stateIdx === sIdx) && (!sel.region || regionOf(c.stateIdx) === sel.region)).map(({ i }) => cityLabel(i)).sort();
+    const cIdx = sel.city ? dims.cities.findIndex((x, i) => i > 0 && cityLabel(i) === sel.city) : 0;
+    const branches = dims.branches.map((b, i) => ({ b, i })).filter(({ i }) => {
+      if (i === 0) return false;
+      const info = geo.branchInfo[i] || {};
+      if (cIdx > 0 && info.cityIdx !== cIdx) return false;
+      if (sIdx > 0 && info.stateIdx !== sIdx) return false;
+      if (sel.region && (geo.regions[info.stateIdx ? geo.stateRegion[info.stateIdx] : geo.branchRegion[i]] || null) !== sel.region) return false;
+      return true;
+    }).map(({ b, i }) => ({ code: b, name: (geo.branchInfo[i] || {}).name || b }));
+    const deliveries = (meta.deliveries || []).slice();
+    return { regions, states, cities, branches, deliveries, available: { region: regions.length > 0, state: states.length > 0, city: cities.length > 0, branch: branches.length > 0, delivery: deliveries.length > 0 } };
   }
 
   /* ======================= Contrato y mapeo ======================= */
@@ -123,7 +272,7 @@
     };
   }
 
-  const cellKey = (kind, c) => (kind === 'sales' ? `${c.sku}\u0001${c.stateIdx}\u0001${clean(c.branch)}\u0001${c.deliveryIdx}` : c.sku);
+  const cellKey = (kind, c) => (kind === 'sales' ? `${c.sku}\u0001${c.stateIdx}\u0001${clean(c.branch)}\u0001${c.deliveryIdx}\u0001${clean(c.city || '')}\u0001${c.geoFlags || 0}` : c.sku);
 
   /**
    * Borrador de un archivo (venta o funnel). `addRow(line, cells)` valida y acumula por llave.
@@ -139,7 +288,8 @@
       hasExtra: kind === 'sales' && idx.extraDimension !== undefined,
       parts: new Map(), catalog: new Map(), issues: newIssues(), conflicts: [],
       summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0 },
-      dates: new Set(), channels: new Set(), states: new Set(), branches: new Set(), deliveries: new Set(),
+      dates: new Set(), channels: new Set(), states: new Set(), branches: new Set(), deliveries: new Set(), cities: new Set(),
+      geoObs: { stateRegion: new Map(), branchRegion: new Map(), branch: new Map() },
       settings: { dateFormat, numberFormat }
     };
     const get = (cells, key) => (idx[key] === undefined ? '' : (cells[idx[key]] === undefined ? '' : String(cells[idx[key]]).trim()));
@@ -157,14 +307,22 @@
       if (cr.status !== 'ok') { reject = true; d.issues.add(cr.status === 'missing' ? 'MISSING_CHANNEL' : 'INVALID_CHANNEL', 'error', line, 'canal', rawCh, cr.note || 'Canal no reconocido.'); }
       const sku = get(cells, 'sku');
       if (!sku) { reject = true; d.issues.add('MISSING_SKU', 'error', line, 'sku', '', 'La fila no tiene SKU.'); }
-      let sIdx = 0, bLabel = '', dIdx = 0;
+      // Geografía y operación (Fase 8.4): opcionales. Faltante = "No disponible"; inválido se marca; nunca se adivina ni se descarta el renglón.
+      let sIdx = 0, bLabel = '', dIdx = 0, cLabel = '', gFlags = 0, rRaw = '', bName = '';
       if (kind === 'sales') {
         const rs = get(cells, 'state'), rb = get(cells, 'branch'), rd = get(cells, 'delivery');
-        if (!rs) { reject = true; d.issues.add('MISSING_STATE', 'error', line, 'estado', '', 'La fila no tiene estado.'); }
-        else if (!(sIdx = stateIdx(rs))) { reject = true; d.issues.add('INVALID_STATE', 'error', line, 'estado', rs, `"${rs}" no es un estado reconocido de la República.`); }
-        if (!rb) { reject = true; d.issues.add('MISSING_BRANCH', 'error', line, 'sucursal', '', 'La fila no tiene sucursal (obligatoria).'); } else bLabel = rb.replace(/\s+/g, ' ');
-        if (!rd) { reject = true; d.issues.add('MISSING_DELIVERY', 'error', line, 'tipo_entrega', '', 'La fila no tiene tipo de entrega.'); }
-        else if (!(dIdx = deliveryIdx(rd))) { reject = true; d.issues.add('INVALID_DELIVERY', 'error', line, 'tipo_entrega', rd, `"${rd}" no es un tipo de entrega reconocido (domicilio o recolección).`); }
+        cLabel = get(cells, 'city').replace(/\s+/g, ' '); rRaw = get(cells, 'region'); bName = get(cells, 'branchName');
+        if (!rs) { if (idx.state !== undefined) { warn = true; d.issues.add('MISSING_STATE', 'warning', line, 'estado', '', 'Renglón sin estado: se conserva y se analiza como "No disponible".'); } }
+        else if (!(sIdx = stateIdx(rs))) { warn = true; gFlags |= GF.stateInvalid; d.issues.add('INVALID_STATE', 'warning', line, 'estado', rs, `"${rs}" no es un estado reconocido: se conserva el renglón y el estado queda como inválido.`); }
+        if (!rb) { if (idx.branch !== undefined) { warn = true; d.issues.add('MISSING_BRANCH', 'warning', line, 'sucursal', '', 'Renglón sin sucursal: se conserva y se analiza al nivel disponible.'); } } else bLabel = rb.replace(/\s+/g, ' ');
+        if (!rd) { if (idx.delivery !== undefined) { warn = true; d.issues.add('MISSING_DELIVERY', 'warning', line, 'tipo_entrega', '', 'Renglón sin tipo de entrega: queda como "No disponible".'); } }
+        else if (!(dIdx = deliveryIdx(rd))) { warn = true; gFlags |= GF.deliveryInvalid; d.issues.add('INVALID_DELIVERY', 'warning', line, 'tipo_entrega', rd, `"${rd}" no es un tipo de entrega reconocido (domicilio o recolección): queda como inválido.`); }
+        if (cLabel && !sIdx) { warn = true; d.issues.add('CITY_WITHOUT_STATE', 'warning', line, 'ciudad', cLabel, `Ciudad "${cLabel}" sin estado válido: se conserva, pero no se puede ubicar en la jerarquía.`); }
+        const geoCols = [['region', rRaw], ['state', rs], ['city', cLabel], ['branch', bLabel]].filter(([k]) => idx[k] !== undefined);
+        const present = geoCols.filter(([, v]) => v).length;
+        if (present > 0 && present < geoCols.length) d.issues.add('PARTIAL_GEOGRAPHY', 'info', line, geoCols.filter(([, v]) => !v).map(([k]) => label(k).toLowerCase()).join(', '), '', 'Geografía parcial: el renglón se conserva y se analiza a los niveles disponibles.');
+        if (geoCols.length && present === 0) d.issues.add('NO_GEOGRAPHY', 'info', line, 'geografía', '', 'Renglón sin geografía: se conserva y aparece como "No disponible".');
+        if (bName && !bLabel) { warn = true; d.issues.add('BRANCH_NAME_WITHOUT_CODE', 'warning', line, 'nombre_sucursal', bName, 'Nombre de sucursal sin código: no se usa como identificador.'); }
       }
       if (reject) { d.summary.rejected++; return; }
       if (kind === 'sales') {
@@ -189,12 +347,26 @@
       });
       const date = dr.value, channel = cr.value;
       d.dates.add(date); d.channels.add(channel);
-      if (kind === 'sales') { d.states.add(sIdx); d.branches.add(bLabel); d.deliveries.add(dIdx); }
+      if (kind === 'sales') {
+        d.states.add(sIdx); if (bLabel) d.branches.add(bLabel); d.deliveries.add(dIdx); if (cLabel) d.cities.add(`${sIdx}\u0001${cLabel}`);
+        // Observaciones para el modelo geográfico (región por estado/sucursal, ubicación y nombre de sucursal)
+        const G = d.geoObs;
+        const inc = (m, k, n = 1) => m.set(k, (m.get(k) || 0) + n);
+        if (rRaw && sIdx) { if (!G.stateRegion.has(sIdx)) G.stateRegion.set(sIdx, new Map()); inc(G.stateRegion.get(sIdx), rRaw); }
+        if (rRaw && bLabel) { if (!G.branchRegion.has(bLabel)) G.branchRegion.set(bLabel, new Map()); inc(G.branchRegion.get(bLabel), rRaw); }
+        if (bLabel) {
+          if (!G.branch.has(bLabel)) G.branch.set(bLabel, { names: new Map(), pickupStates: new Map(), allStates: new Map(), pickupCities: new Map(), allCities: new Map() });
+          const o = G.branch.get(bLabel);
+          if (bName) inc(o.names, bName);
+          inc(o.allStates, sIdx); if (cLabel) inc(o.allCities, `${sIdx}\u0001${cLabel}`);
+          if (dims.deliveries[dIdx] === 'recoleccion') { inc(o.pickupStates, sIdx); if (cLabel) inc(o.pickupCities, `${sIdx}\u0001${cLabel}`); }
+        }
+      }
       const pk = `${date}|${channel}`;
       if (!d.parts.has(pk)) d.parts.set(pk, new Map());
       const part = d.parts.get(pk);
       const extra = d.hasExtra ? (get(cells, 'extraDimension') || '(vacío)') : '';
-      const nc = { sku, stateIdx: sIdx, branch: bLabel, deliveryIdx: dIdx, extra, values: vals, states: sts, line, conflict: false };
+      const nc = { sku, stateIdx: sIdx, branch: bLabel, deliveryIdx: dIdx, city: cLabel, geoFlags: gFlags, extra, values: vals, states: sts, line, conflict: false };
       const key = `${cellKey(kind, nc)}\u0001${extra}`;
       const cell = part.get(key);
       if (cell) {
@@ -252,7 +424,7 @@
   function emptyBlock(kind, date, channel, n, batches) {
     const p = { schema: 2, kind, date, channel, n, skuIdx: new Uint32Array(n), row: new Uint32Array(n), flags: new Uint8Array(n),
       state: new Uint8Array(n * metricsOf(kind).length), src: new Uint16Array(n), batches };
-    if (kind === 'sales') { p.stateIdx = new Uint8Array(n); p.branchIdx = new Uint16Array(n); p.deliveryIdx = new Uint8Array(n); }
+    if (kind === 'sales') { p.stateIdx = new Uint8Array(n); p.branchIdx = new Uint16Array(n); p.deliveryIdx = new Uint8Array(n); p.cityIdx = new Uint16Array(n); p.geoFlags = new Uint8Array(n); }
     metricsOf(kind).forEach((m) => { p[m] = new Float64Array(n); });
     return p;
   }
@@ -267,7 +439,8 @@
     groups.forEach((cells) => {
       const c = combine(cells, kind), c0 = cells[0];
       p.skuIdx[i] = catalogIdx({ sku: c0.sku });
-      if (kind === 'sales') { p.stateIdx[i] = c0.stateIdx; p.branchIdx[i] = branchIdx(c0.branch); p.deliveryIdx[i] = c0.deliveryIdx; }
+      if (kind === 'sales') { p.stateIdx[i] = c0.stateIdx; p.branchIdx[i] = branchIdx(c0.branch); p.deliveryIdx[i] = c0.deliveryIdx;
+        p.cityIdx[i] = cityIdx(c0.city, c0.stateIdx); p.geoFlags[i] = c0.geoFlags || 0; }
       p.row[i] = c.line;
       p.flags[i] = (c.conflict ? 1 : 0) | (c.multiplicity > 1 ? 2 : 0);
       if (c.multiplicity > 1) multi++;
@@ -277,14 +450,29 @@
     return { part: p, multiplicity: multi };
   }
 
-  const rowKey = (p, i) => (p.kind === 'funnel' ? String(p.skuIdx[i]) : `${p.skuIdx[i]}|${p.stateIdx[i]}|${p.branchIdx[i]}|${p.deliveryIdx[i]}`);
+  /** Columnas agregadas en 8.4: los bloques anteriores no las tienen (= ciudad faltante, sin banderas). */
+  const cityAt = (p, i) => (p.cityIdx ? p.cityIdx[i] : 0);
+  const flagsAt = (p, i) => (p.geoFlags ? p.geoFlags[i] : 0);
+  const partialKey = (p, i) => `${p.skuIdx[i]}|${p.stateIdx[i]}|${p.branchIdx[i]}|${p.deliveryIdx[i]}`;
+  const rowKey = (p, i) => (p.kind === 'funnel' ? String(p.skuIdx[i]) : `${partialKey(p, i)}|${cityAt(p, i)}|${flagsAt(p, i)}`);
 
   function cellAt(p, i) {
     const kind = p.kind || 'sales';
     const ms = metricsOf(kind), w = ms.length;
     const o = { kind, sku: catalog.list[p.skuIdx[i]] ? catalog.list[p.skuIdx[i]].sku : null, row: p.row[i], batchId: p.batches[p.src ? p.src[i] : 0] || p.batches[0],
       conflict: Boolean(p.flags[i] & 1), multiplicity: Boolean(p.flags[i] & 2) };
-    if (kind === 'sales') { o.state = dims.states[p.stateIdx[i]] || null; o.branch = dims.branches[p.branchIdx[i]] || null; o.delivery = deliveryLabel(dims.deliveries[p.deliveryIdx[i]]) || null; }
+    if (kind === 'sales') {
+      const f = flagsAt(p, i), c = cityAt(p, i), r = rowRegion(p, i);
+      o.state = f & GF.stateInvalid ? '(inválido)' : p.stateIdx[i] ? dims.states[p.stateIdx[i]] : null;
+      o.stateCode = stateCode(p.stateIdx[i]);
+      o.city = c ? dims.cities[c].name : null;
+      o.region = r ? geo.regions[r] : null;
+      o.branch = p.branchIdx[i] ? dims.branches[p.branchIdx[i]] : null;
+      o.branchName = p.branchIdx[i] ? ((geo.branchInfo[p.branchIdx[i]] || {}).name || null) : null;
+      o.delivery = f & GF.deliveryInvalid ? '(inválido)' : p.deliveryIdx[i] ? deliveryLabel(dims.deliveries[p.deliveryIdx[i]]) : null;
+      o.geography = { region: o.region ? 'observed' : 'missing', state: f & GF.stateInvalid ? 'invalid' : o.state ? 'observed' : 'missing', city: o.city ? 'observed' : 'missing',
+        branch: o.branch ? 'observed' : 'missing', delivery: f & GF.deliveryInvalid ? 'invalid' : o.delivery ? 'observed' : 'missing' };
+    }
     ms.forEach((m, j) => { const st = p.state[i * w + j]; o[m] = st === ST.observed ? p[m][i] : null; o[`${m}State`] = ['observed', 'missing', 'invalid'][st]; });
     return o;
   }
@@ -297,7 +485,24 @@
     const report = { identical: 0, conflicts: 0, replaced: 0, added: 0, details: [] };
     const srcIdx = (p, i) => p.batches[p.src ? p.src[i] : 0] || p.batches[0];
     for (let i = 0; i < oldP.n; i++) out.set(rowKey(oldP, i), { p: oldP, i, batch: srcIdx(oldP, i) });
+    // Compatibilidad 8.4: un renglón guardado sin ciudad (bloque anterior) y renglones nuevos con ciudad para la misma
+    // llave (SKU, estado, sucursal, entrega) son el mismo hecho con más detalle si las métricas suman igual.
+    report.enriched = 0;
+    if (kind === 'sales' && !oldP.cityIdx) {
+      const byPartial = new Map();
+      for (let i = 0; i < newP.n; i++) if (cityAt(newP, i)) { const k = partialKey(newP, i); if (!byPartial.has(k)) byPartial.set(k, []); byPartial.get(k).push(i); }
+      byPartial.forEach((idxs, k) => {
+        const oldKey = `${k}|0|0`;
+        const ex = out.get(oldKey);
+        if (!ex) return;
+        const sums = ms.map((m, j) => idxs.reduce((a, i) => (newP.state[i * w + j] === ST.observed ? a + newP[m][i] : NaN), 0));
+        const same = ms.every((m, j) => (ex.p.state[ex.i * w + j] === ST.observed ? Math.abs(ex.p[m][ex.i] - sums[j]) < 1e-6 : Number.isNaN(sums[j])));
+        if (same || policy === 'replace') { out.delete(oldKey); report.enriched += same ? 1 : 0; if (!same) { report.conflicts++; report.replaced++; } }
+        else { out.set(oldKey, { ...ex, conflict: true }); report.conflicts++; idxs.forEach((i) => { newP.__skip = newP.__skip || new Set(); newP.__skip.add(i); }); }
+      });
+    }
     for (let i = 0; i < newP.n; i++) {
+      if (newP.__skip && newP.__skip.has(i)) continue;
       const k = rowKey(newP, i);
       const ex = out.get(k);
       if (!ex) { out.set(k, { p: newP, i, batch: batchId }); report.added++; continue; }
@@ -313,7 +518,8 @@
     let i = 0;
     out.forEach((e) => {
       p.skuIdx[i] = e.p.skuIdx[e.i]; p.row[i] = e.p.row[e.i]; p.flags[i] = e.p.flags[e.i] | (e.conflict ? 1 : 0); p.src[i] = bIdx(e.batch);
-      if (kind === 'sales') { p.stateIdx[i] = e.p.stateIdx[e.i]; p.branchIdx[i] = e.p.branchIdx[e.i]; p.deliveryIdx[i] = e.p.deliveryIdx[e.i]; }
+      if (kind === 'sales') { p.stateIdx[i] = e.p.stateIdx[e.i]; p.branchIdx[i] = e.p.branchIdx[e.i]; p.deliveryIdx[i] = e.p.deliveryIdx[e.i];
+        p.cityIdx[i] = cityAt(e.p, e.i); p.geoFlags[i] = flagsAt(e.p, e.i); }
       ms.forEach((m, j) => { p[m][i] = e.p[m][e.i]; p.state[i * w + j] = e.p.state[e.i * w + j]; });
       i++;
     });
@@ -349,9 +555,11 @@
     subcategory: (p, i, c) => (c && c.subcategory) || '(sin subcategoría)',
     product: (p, i, c) => (c && (c.product || c.sku)) || '(sin producto)',
     sku: (p, i, c) => (c ? c.sku : '?'),
-    state: (p, i) => dims.states[p.stateIdx[i]] || '(sin dato)',
+    region: (p, i) => geo.regions[rowRegion(p, i)] || '(sin dato)',
+    state: (p, i) => (flagsAt(p, i) & GF.stateInvalid ? '(inválido)' : dims.states[p.stateIdx[i]] || '(sin dato)'),
+    city: (p, i) => cityLabel(cityAt(p, i)),
     branch: (p, i) => dims.branches[p.branchIdx[i]] || '(sin dato)',
-    delivery: (p, i) => deliveryLabel(dims.deliveries[p.deliveryIdx[i]]) || '(sin dato)'
+    delivery: (p, i) => (flagsAt(p, i) & GF.deliveryInvalid ? '(inválido)' : p.deliveryIdx[i] ? deliveryLabel(dims.deliveries[p.deliveryIdx[i]]) : '(sin dato)')
   };
 
   function matchesProduct(c, f) {
@@ -364,12 +572,14 @@
   }
   function matchesGeo(p, i, f) {
     if (!f) return true;
-    if (f.state && (dims.states[p.stateIdx[i]] || '') !== f.state) return false;
+    if (f.region && GROUPS.region(p, i) !== f.region) return false;
+    if (f.city && GROUPS.city(p, i) !== f.city) return false;
+    if (f.state && GROUPS.state(p, i) !== f.state) return false;
     if (f.branch && (dims.branches[p.branchIdx[i]] || '') !== f.branch) return false;
-    if (f.delivery && deliveryLabel(dims.deliveries[p.deliveryIdx[i]]) !== f.delivery) return false;
+    if (f.delivery && GROUPS.delivery(p, i) !== f.delivery) return false;
     return true;
   }
-  const funnelJoinable = (groupBy, f) => !GEO.includes(groupBy) && !(f && (f.state || f.branch || f.delivery));
+  const funnelJoinable = (groupBy, f) => !GEO.includes(groupBy) && !(f && GEO.some((g) => f[g]));
 
   /**
    * Acumula un día × canal (bloque de venta y/o de funnel) en un Map de grupos.
@@ -525,7 +735,8 @@
 
   async function saveDims() {
     if (!repo || !repo.ready || !dims._dirty) return;
-    await repo.setMeta('productDims', { branches: dims.branches });
+    await repo.setMeta('productDims', { branches: dims.branches, cities: dims.cities });
+    await repo.setMeta('productGeo', { version: 1, regions: geo.regions, votes: geo.votes });
     dims._dirty = false;
   }
 
@@ -539,9 +750,23 @@
     rows.sort((a, b) => a.idx - b.idx).forEach((c) => { catalog.list[c.idx] = c; catalog.bySku.set(c.sku, c); });
     const dm = await repo.meta('productDims');
     if (dm && Array.isArray(dm.branches)) { dims.branches = dm.branches.slice(); dims.branchKey = new Map(dims.branches.map((b, i) => [clean(b), i]).filter((x) => x[1] > 0)); }
+    if (dm && Array.isArray(dm.cities)) { dims.cities = dm.cities.map((c) => ({ ...c })); dims.cityKey = new Map(dims.cities.map((c, i) => [`${c.stateIdx}|${clean(c.name)}`, i]).filter((x) => x[1] > 0)); }
+    const gm = await repo.meta('productGeo');
+    if (gm && Array.isArray(gm.regions)) {
+      geo.regions = gm.regions.slice(); geo.regionKey = new Map(geo.regions.map((r, i) => [clean(r), i]).filter((x) => x[1] > 0));
+      geo.votes = gm.votes || geo.votes; deriveGeo();
+    }
     const m = await repo.meta('products');
     if (m) { const { key, ...rest } = m; meta = { ...meta, ...rest }; }
     const rb = await repo.meta('productRebuild');
+    const geoRollups = await repo.meta('productGeoRollups');
+    if (!(rb && rb.pending) && !geoRollups) {
+      // 8.4: los resúmenes ganan el nivel ciudad. Se recalculan una vez con los bloques existentes (sin tocar los bloques).
+      const keys = new Set();
+      await IDB().iterate(repo.db, 'productDays', {}, (p) => { keys.add(`${p.date}|${p.channel}`); });
+      for (const k of keys) { const [d, ch] = k.split('|'); await rebuildRollups(d, ch); }
+      await repo.setMeta('productGeoRollups', { version: 1, doneAt: new Date().toISOString(), blocks: keys.size });
+    }
     if (rb && rb.pending) {
       // Tras migrar v1 → v2: separar métricas y recalcular todos los resúmenes con ambos bloques
       if ((meta.mappedMetrics || []).includes('views')) { meta.funnelMetrics = ['views']; meta.mappedMetrics = meta.mappedMetrics.filter((x) => x !== 'views'); meta.funnelBatches = meta.batches; }
@@ -550,6 +775,7 @@
       for (const k of keys) { const [d, ch] = k.split('|'); await rebuildRollups(d, ch); }
       await repo.setMeta('products', meta);
       await repo.setMeta('productRebuild', { pending: false, doneAt: new Date().toISOString(), blocks: keys.size });
+      await repo.setMeta('productGeoRollups', { version: 1, doneAt: new Date().toISOString(), blocks: keys.size });
     }
   }
 
@@ -579,7 +805,8 @@
       const oldBy = new Map();
       for (let i = 0; i < old.n; i++) {
         const sku = catalog.list[old.skuIdx[i]] ? catalog.list[old.skuIdx[i]].sku : null;
-        oldBy.set(kind === 'sales' ? cellKey(kind, { sku, stateIdx: old.stateIdx[i], branch: dims.branches[old.branchIdx[i]] || '', deliveryIdx: old.deliveryIdx[i] }) : sku, i);
+        oldBy.set(kind === 'sales' ? cellKey(kind, { sku, stateIdx: old.stateIdx[i], branch: old.branchIdx[i] ? dims.branches[old.branchIdx[i]] : '', deliveryIdx: old.deliveryIdx[i],
+          city: cityAt(old, i) ? dims.cities[cityAt(old, i)].name : '', geoFlags: flagsAt(old, i) }) : sku, i);
       }
       const groups = new Map();
       cells.forEach((c) => { const k = cellKey(kind, c); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); });
@@ -601,6 +828,7 @@
     const id = `pbat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const report = { identical: 0, conflicts: 0, replaced: 0, added: 0, multiplicity: 0, details: [] };
     draft.catalog.forEach((entry) => catalogIdx(entry));
+    if (kind === 'sales' && draft.geoObs) absorbGeo(draft.geoObs);
     const dirty = catalog.list.filter((c) => c._dirty);
     if (dirty.length) {
       await IDB().putMany(repo.db, 'productCatalog', dirty.map((c) => { const { _dirty, ...rest } = c; return rest; }), { batchSize: 5000 });
@@ -617,7 +845,7 @@
       if (old) {
         const merged = mergePartitions(old, built.part, policy, id);
         finalP = merged.part;
-        ['identical', 'conflicts', 'replaced', 'added'].forEach((k) => { report[k] += merged.report[k]; });
+        ['identical', 'conflicts', 'replaced', 'added', 'enriched'].forEach((k) => { report[k] = (report[k] || 0) + (merged.report[k] || 0); });
         merged.report.details.forEach((x) => { if (report.details.length < 500) report.details.push(x); });
       } else report.added += built.part.n;
       await IDB().put(repo.db, storeOf(kind), finalP);
@@ -643,9 +871,10 @@
       batches: (meta.batches || 0) + (kind === 'sales' ? 1 : 0), funnelBatches: (meta.funnelBatches || 0) + (kind === 'funnel' ? 1 : 0),
       dateMin: all[0] || null, dateMax: all[all.length - 1] || null,
       channels: [...new Set([...(meta.channels || []), ...draft.channels])], skus: catalog.list.length,
-      states: [...new Set([...(meta.states || []), ...[...draft.states].map((i) => dims.states[i])])].sort(),
+      states: [...new Set([...(meta.states || []), ...[...draft.states].filter((i) => i > 0).map((i) => dims.states[i])])].sort(),
       branches: [...new Set([...(meta.branches || []), ...draft.branches])].sort(),
-      deliveries: [...new Set([...(meta.deliveries || []), ...[...draft.deliveries].map((i) => deliveryLabel(dims.deliveries[i]))])] };
+      deliveries: [...new Set([...(meta.deliveries || []), ...[...draft.deliveries].filter((i) => i > 0).map((i) => deliveryLabel(dims.deliveries[i]))])],
+      cities: dims.cities.length - 1, regions: geo.regions.length - 1 };
     await repo.setMeta('products', meta);
     return batch;
   }
@@ -675,7 +904,7 @@
     const map = new Map();
     if (!available()) return map;
     const f = filter || {};
-    const noFilter = !['category', 'subcategory', 'product', 'sku', 'state', 'branch', 'delivery'].some((k) => f[k]);
+    const noFilter = !['category', 'subcategory', 'product', 'sku', ...GEO].some((k) => f[k]);
     if (noFilter && LEVELS.includes(groupBy)) {
       await IDB().iterate(repo.db, 'productRollups', { index: 'level_key_date', range: IDBKeyRange.bound([groupBy, '', from], [groupBy, '\uffff', to]) }, (r) => {
         if (r.date < from || r.date > to) return;
@@ -696,6 +925,29 @@
       if (++k % 40 === 0) await IDB().yieldToUI();
     }
     return map;
+  }
+
+  /**
+   * Venta cruzada grupo × dimensión de geografía en UNA sola pasada (Fase 8.4, señales geográficas).
+   * Solo para los grupos pedidos (`keys`); devuelve Map grupo → Map(dimensión → Map(entidad → venta)).
+   */
+  async function crossRevenue({ from, to, channel = null, groupBy, keys, subBy = ['state', 'branch'], filter = null }) {
+    const out = new Map([...keys].map((k) => [k, new Map(subBy.map((d) => [d, new Map()]))]));
+    if (!available()) return out;
+    const f = filter || {};
+    let k = 0;
+    await IDB().iterate(repo.db, 'productDays', chanRange(channel, from, to), (p) => {
+      for (let i = 0; i < p.n; i++) {
+        if (p.state[i * 3] !== ST.observed) continue;
+        const c = catalog.list[p.skuIdx[i]];
+        if (!matchesProduct(c, f) || !matchesGeo(p, i, f)) continue;
+        const g = out.get(GROUPS[groupBy](p, i, c));
+        if (!g) continue;
+        subBy.forEach((d) => { const m = g.get(d), e = GROUPS[d](p, i, c); m.set(e, (m.get(e) || 0) + p.revenue[i]); });
+      }
+      k++;
+    });
+    return out;
   }
 
   /** Renglones de un SKU con trazabilidad (venta con dimensiones y funnel). */
@@ -727,10 +979,11 @@
   }
 
   FP.productStore = {
-    ST, KINDS, METRICS, metricsOf, fieldsOf, typeOf, storeOf, LEVELS, GEO, dims, resetDims, stateIdx, deliveryIdx, branchIdx, deliveryLabel,
+    ST, KINDS, METRICS, metricsOf, fieldsOf, typeOf, storeOf, LEVELS, GEO, GF, dims, geo, resetDims, stateIdx, deliveryIdx, branchIdx, cityIdx, cityLabel, stateCode, deliveryLabel,
+    absorbGeo, deriveGeo, entity, geoOptions, rowRegion,
     suggestMapping, detectKind, validateMapping, label, numberCell, createDraft, combine, toPartition, mergePartitions, cellAt,
     newAcc, mergeAcc, accumulateJoint, accumulatePartition, finalize, rollupsOf, accFromRollup, GROUPS, funnelJoinable, upgradeV1Block,
-    catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, skuTrace, listBatches, counts,
+    catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, crossRevenue, skuTrace, listBatches, counts,
     get meta() { return meta; },
     reset() { catalog.list = []; catalog.bySku = new Map(); meta = emptyMeta(); resetDims(); },
     _resetCatalog() { catalog.list = []; catalog.bySku = new Map(); resetDims(); }

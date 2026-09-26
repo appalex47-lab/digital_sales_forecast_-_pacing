@@ -86,7 +86,7 @@
         <div><dt>Forecast</dt><dd class="num">${esc(F().currency(fc, 0))}</dd><small>Método ${esc(rf.forecast.method.id)}</small></div>
         <div><dt>Gap forecast</dt><dd class="num">${esc(signed('revenue', fgap))}</dd><small>Forecast − meta</small></div>
         <div><dt>Reforecast</dt><dd class="num">${esc(F().currency(refc, 0))}</dd><small>Actual + requerido</small></div>
-        <div><dt>Recuperación requerida</dt><dd class="num">${esc(F().currency(h.requiredTotal, 0))}</dd><small>Pendiente en ${h.futureDays} días futuros</small></div>
+        <div><dt>Recuperación requerida</dt><dd class="num">${esc(F().currency(h.requiredTotal, 0))}</dd><small>Pendiente en ${h.futureDays} días futuros ${FP.explain ? FP.explain.whyButton('reforecast', { channel: 'total' }) : ''}</small></div>
         <div><dt>Presión de recuperación</dt><dd class="num">${esc(spct(press))}</dd><small>Requerido vs plan de esos días</small></div>
       </dl>
       ${h.surplus ? `<p class="note note--ok">Surplus: ${esc(F().currency(h.surplus, 0))} por encima de la meta en canales que ya la superaron. El requerimiento de esos canales es 0 y el exceso no se usa para compensar otros canales.</p>` : ''}

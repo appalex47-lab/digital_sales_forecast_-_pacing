@@ -119,7 +119,7 @@
     return {
       draft, mappingIssues, canImport: draft.summary.accepted > 0, stored,
       summary: { ...draft.summary, kind, skus: draft.catalog.size, dates: draft.dates.size, channels: [...draft.channels].sort(),
-        states: draft.states.size, branches: draft.branches.size, deliveries: [...draft.deliveries].map((i) => PS().deliveryLabel(PS().dims.deliveries[i])),
+        states: draft.states.size, branches: draft.branches.size, deliveries: [...draft.deliveries].filter((i) => i > 0).map((i) => PS().deliveryLabel(PS().dims.deliveries[i])), cities: draft.cities.size,
         dateMin: [...draft.dates].sort()[0] || null, dateMax: [...draft.dates].sort().pop() || null,
         mappedMetrics: draft.mappedMetrics, issuesByType: draft.issues.byType },
       elapsedMs: Date.now() - t0
@@ -143,7 +143,7 @@
       const metrics = {};
       PS().metricsOf(kind).forEach((m) => { metrics[m] = idx[m] === undefined ? { state: 'unavailable', value: null } : (() => { const c = PS().numberCell(r.cells[idx[m]], settings.numberFormat || 'dot'); return { state: ['observed', 'missing', 'invalid'][c.state], value: Number.isFinite(c.value) ? c.value : null, raw: c.raw }; })(); });
       return { line: r.line, date: get('date'), channel: get('channel'), sku: get('sku'), product: get('product'), category: get('category'), subcategory: get('subcategory'),
-        state: get('state'), branch: get('branch'), delivery: get('delivery'),
+        state: get('state'), branch: get('branch'), delivery: get('delivery'), region: get('region'), city: get('city'),
         metrics, accepted, duplicate: dup, issues };
     });
   }

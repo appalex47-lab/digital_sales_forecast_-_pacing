@@ -28,13 +28,13 @@
     return { ch, label, p, rp, run, rs };
   }
 
-  function card(stateKind, label, value, compare, period, helpId) {
+  function card(stateKind, label, value, compare, period, helpId, whyHtml = '') {
     const esc = H().esc;
     return `<div class="metric-card ${stateKind ? `metric-card--${stateKind}` : ''}">
       <div class="metric-card__head">${stateKind ? FP.help.stateTag(stateKind) : ''}<span class="metric-card__label">${esc(label)}</span>${helpId ? FP.help.helpButton(helpId) : ''}</div>
       <div class="metric-card__value num">${esc(value)}</div>
       ${compare ? `<div class="metric-card__compare">${esc(compare)}</div>` : ''}
-      <div class="metric-card__period">${esc(period)}</div></div>`;
+      <div class="metric-card__period">${esc(period)}${whyHtml ? ` ${whyHtml}` : ''}</div></div>`;
   }
 
   /**
@@ -74,16 +74,17 @@
     let messages = FP.contextEngine.headline(status);
     if (f) {
       const p = f.p, t = p.toDate.revenue, fg = p.forecastGap.revenue, rp = f.rp;
+      const why = (kind) => (FP.explain ? FP.explain.whyButton(kind, { channel: f.ch, periodKey: h.periodType === 'month' ? h.periodKey : '', metric: 'revenue' }) : '');
       const pressure = rp && rp.pressure ? rp.pressure.revenue.pressure : null;
       const future = p.status === 'future';
       cards = `
         ${card('actual', 'Venta acumulada', future ? '—' : F().currency(p.actualToDate && p.actualToDate.revenue, 0), future ? 'Periodo futuro' : `vs plan ${F().signedPercent(t.gapPct, 1)}`, 'Acumulado a la fecha', 'actual')}
         ${card('plan', 'Meta acumulada', F().currency(p.planToDate && p.planToDate.revenue, 0), `Meta del periodo ${F().currency(p.plan.revenue, 0)}`, 'Plan de los días con real', 'plan')}
-        ${card(null, 'Gap', future ? '—' : FP.pacingView.signed('revenue', t.gap), 'Actual − plan', 'Acumulado a la fecha', 'gap')}
-        ${card(null, 'Cumplimiento', future ? '—' : F().percent(t.compliance, 1), FP.pacingView.paceLabel(FP.gap.pacingStatus(t.compliance, f.run.settings.pacingThresholds)), 'Acumulado a la fecha', 'cumplimiento')}
-        ${card('forecast', 'Forecast', F().currency(p.forecast && p.forecast.revenue, 0), `Método ${f.run.method.id}`, 'Cierre del periodo', 'forecast')}
-        ${card(null, 'Gap forecast', FP.pacingView.signed('revenue', fg.gap), F().signedPercent(fg.gapPct, 1), 'Forecast − meta', 'forecastGap')}
-        ${card('reforecast', 'Presión de recuperación', fin(pressure) ? F().signedPercent(pressure, 1) : '—', rp && rp.required ? `Requerido ${F().currency(rp.required.revenue, 0)}` : 'Sin días por recuperar', 'Requerido vs plan de los días restantes', 'recoveryPressure')}`;
+        ${card(null, 'Gap', future ? '—' : FP.pacingView.signed('revenue', t.gap), 'Actual − plan', 'Acumulado a la fecha', 'gap', future ? '' : why('gap'))}
+        ${card(null, 'Cumplimiento', future ? '—' : F().percent(t.compliance, 1), FP.pacingView.paceLabel(FP.gap.pacingStatus(t.compliance, f.run.settings.pacingThresholds)), 'Acumulado a la fecha', 'cumplimiento', future ? '' : why('compliance'))}
+        ${card('forecast', 'Forecast', F().currency(p.forecast && p.forecast.revenue, 0), `Método ${f.run.method.id}`, 'Cierre del periodo', 'forecast', why('forecast'))}
+        ${card(null, 'Gap forecast', FP.pacingView.signed('revenue', fg.gap), F().signedPercent(fg.gapPct, 1), 'Forecast − meta', 'forecastGap', why('forecastGap'))}
+        ${card('reforecast', 'Presión de recuperación', fin(pressure) ? F().signedPercent(pressure, 1) : '—', rp && rp.required ? `Requerido ${F().currency(rp.required.revenue, 0)}` : 'Sin días por recuperar', 'Requerido vs plan de los días restantes', 'recoveryPressure', state.rf && state.rf.run && h.periodType !== 'month' ? FP.explain.whyButton('reforecast', { channel: f.ch }) : '')}`;
       if (!(p.plan && Number.isFinite(p.plan.revenue))) messages = [...messages,
         'El plan cargado no cubre todo el periodo: la meta y el forecast del periodo no se pueden cerrar. Elige un mes cubierto por el plan o completa el plan.'];
       if (h.periodType === 'month' && h.periodKey) messages = [

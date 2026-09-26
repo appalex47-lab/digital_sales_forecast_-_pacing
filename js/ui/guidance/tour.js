@@ -1,6 +1,7 @@
 /**
  * tour.js — Recorrido guiado opcional (Fase 7).
- * Meta → pacing → forecast → gap → drivers → señales → hipótesis → escenario → acción → medición.
+ * Meta → plan → real → pacing → forecast → gap → drivers → señales → hipótesis → recovery → escenario → acción → medición.
+ * Fase 9.1: mismo recorrido extendido con plan, real y recovery, agrupado en capítulos para retomarlo por partes.
  * Se puede avanzar, retroceder, salir y retomar. El progreso es de navegación, no del negocio.
  */
 (function (root) {
@@ -28,7 +29,7 @@
           <span class="tour-bar__step">Paso ${i + 1} de ${n}</span>
           <span class="tour-bar__progress" role="progressbar" aria-valuemin="1" aria-valuemax="${n}" aria-valuenow="${i + 1}" aria-label="Progreso del recorrido">
             <span style="width:${((i + 1) / n * 100).toFixed(1)}%"></span></span>
-          <strong>${esc(s.title)}</strong>
+          <strong>${s.chapter ? `${esc(s.chapter)} · ` : ''}${esc(s.title)}</strong>
         </div>
         <dl class="tour-bar__body">
           <div><dt>Qué estamos viendo</dt><dd>${esc(s.what)}</dd></div>

@@ -14,6 +14,12 @@
     ['Alta especialidad', ['Oncología', 'Biológicos']], ['Nutrición', ['Suplementos', 'Alimentos especiales']]
   ];
   const STATES = ['Ciudad de México', 'Estado de México', 'Jalisco', 'Nuevo León', 'Puebla', 'Guanajuato', 'Querétaro', 'Veracruz', 'Yucatán', 'Baja California'];
+  /** Fase 8.4: región y ciudades de prueba por estado. */
+  const REGION = { 'Ciudad de México': 'Centro', 'Estado de México': 'Centro', Puebla: 'Centro', Guanajuato: 'Bajío', Querétaro: 'Bajío', Jalisco: 'Occidente',
+    'Nuevo León': 'Norte', 'Baja California': 'Norte', Veracruz: 'Sureste', Yucatán: 'Sureste' };
+  const CITIES = { 'Ciudad de México': ['Benito Juárez', 'Coyoacán'], 'Estado de México': ['Toluca', 'Naucalpan'], Jalisco: ['Guadalajara', 'Zapopan'],
+    'Nuevo León': ['Monterrey', 'San Pedro'], Puebla: ['Puebla'], Guanajuato: ['León'], Querétaro: ['Querétaro'], Veracruz: ['Veracruz', 'Xalapa'],
+    Yucatán: ['Mérida'], 'Baja California': ['Tijuana', 'Mexicali'] };
 
   function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
@@ -29,7 +35,10 @@
   }
 
   /** 100 sucursales repartidas en 10 estados. */
-  const branches = () => Array.from({ length: 100 }, (_, i) => ({ id: `SUC-${String(i + 1).padStart(3, '0')}`, state: STATES[i % STATES.length] }));
+  const branches = () => Array.from({ length: 100 }, (_, i) => {
+    const state = STATES[i % STATES.length], cities = CITIES[state], city = cities[Math.floor(i / STATES.length) % cities.length];
+    return { id: `SUC-${String(i + 1).padStart(3, '0')}`, name: `Sucursal ${city} ${Math.floor(i / STATES.length) + 1}`, state, city, region: REGION[state] };
+  });
 
   /**
    * Venta y funnel diarios. En septiembre: Dermocosmética recibe más vistas pero su paso vista → carrito cae
@@ -39,7 +48,7 @@
   function generate({ from = '2026-08-01', to = '2026-09-22', skus = 600, channels = ['ecommerce', 'app', 'whatsapp', 'llamadas'], seed = 9 } = {}) {
     const cat = catalog(skus), br = branches();
     const r = rng(seed);
-    const sales = ['fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,estado,sucursal,tipo_entrega,venta,pedidos,unidades'];
+    const sales = ['fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades'];
     const funnel = ['fecha,canal,sku,vistas_ficha,agregados_carrito,inicio_checkout,compras_ga4'];
     const chW = { ecommerce: 1, app: 0.8, whatsapp: 0.35, llamadas: 0.25 };
     for (let d = from; d <= to; d = FP.calendar.addDays(d, 1)) {
@@ -68,7 +77,7 @@
           x.o += o; x.u += units; x.rev += units * c.price * (0.95 + r() * 0.1);
           rows.set(k, x);
         }
-        rows.forEach((x) => sales.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${x.b.state},${x.b.id},${x.dom ? 'domicilio' : 'recoleccion'},${Math.round(x.rev * 100) / 100},${x.o},${x.u}`));
+        rows.forEach((x) => sales.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${x.b.region},${x.b.state},${x.b.city},${x.b.id},${x.b.name},${x.dom ? 'domicilio' : 'recoleccion'},${Math.round(x.rev * 100) / 100},${x.o},${x.u}`));
       }));
     }
     return { sales: sales.join('\n'), funnel: funnel.join('\n') };
@@ -93,5 +102,21 @@
     ].join('\n');
   }
 
-  FP.mockProducts = { catalog, branches, generate, qualityCase, CATS, STATES };
+  /** Caso de geografía (Fase 8.4): completa, parcial, sin geografía, huérfanos e inconsistencias padre/hijo. */
+  function geoCase() {
+    const h = 'fecha,canal,sku,producto,categoria,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades';
+    return [h,
+      '2026-09-20,ecommerce,G1,Prod G1,Vitaminas,Occidente,Jalisco,Guadalajara,025,Sucursal Guadalajara Centro,recoleccion,1000,10,12',
+      '2026-09-20,ecommerce,G1,Prod G1,Vitaminas,Occidente,Jalisco,Zapopan,025,Sucursal Guadalajara Centro,domicilio,500,5,5',
+      '2026-09-20,ecommerce,G2,Prod G2,Vitaminas,Occidente,Jalisco,Guadalajara,,,domicilio,300,3,3',
+      '2026-09-20,ecommerce,G3,Prod G3,Vitaminas,,,,,,,200,2,2',
+      '2026-09-20,app,G4,Prod G4,Vitaminas,Centro,Jalisco,Guadalajara,026,Sucursal Chapultepec,recoleccion,100,1,1',
+      '2026-09-20,app,G5,Prod G5,Vitaminas,Centro,CDMX,Coyoacán,027,Sucursal Guadalajara Centro,recoleccion,100,1,1',
+      '2026-09-20,app,G6,Prod G6,Vitaminas,Norte,Narnia,Ciudad X,028,Sucursal Narnia,recoleccion,100,1,1',
+      '2026-09-20,app,G7,Prod G7,Vitaminas,Norte,Nuevo León,Monterrey,029,Sucursal Norte,recoleccion,100,1,1',
+      '2026-09-20,app,G7,Prod G7,Vitaminas,Norte,Coahuila,Saltillo,029,Sucursal Norte,recoleccion,50,1,1'
+    ].join('\n');
+  }
+
+  FP.mockProducts = { catalog, branches, generate, qualityCase, geoCase, CATS, STATES, REGION, CITIES };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -135,21 +135,84 @@
 
   const fmt = (v) => (FP.format ? FP.format.currency(v, 0) : String(Math.round(v)));
 
+  /** Siguiente nivel natural. Fase 8.4: región → estado → ciudad → sucursal; de geografía se puede bajar a producto. */
   const NEXT = { total: 'channel', channel: 'category', category: 'subcategory', subcategory: 'product', product: 'sku', sku: null,
-    state: 'branch', branch: null, delivery: null };
+    region: 'state', state: 'city', city: 'branch', branch: 'category', delivery: 'category' };
+  const PRODUCT_LEVELS = ['category', 'subcategory', 'product', 'sku'];
+
+  /** Entidad geográfica de un grupo (id estable, nombre y ruta) cuando el nivel es geográfico. */
+  function geography(level, key) {
+    if (!['region', 'state', 'city', 'branch'].includes(level) || /^\(/.test(key)) return null;
+    const e = PS().entity(level, key);
+    return e ? { level, id: e.id, code: e.code || null, name: e.name, path: e.path.map((x) => ({ level: x.level, id: x.id, name: x.name })) } : null;
+  }
 
   /**
-   * Corre el análisis de un nivel con filtros (drilldown) sobre IndexedDB.
-   * @param {object} p { from, to, comparison, channel, level, filter }
+   * Señales geográficas de producto (Fase 8.4): para los grupos que más caen (o crecen) en el nivel actual, ¿la
+   * variación se concentra en pocos estados o sucursales? Descriptivas: dimensión, entidad, periodo, métrica,
+   * variación y base de comparación. No dicen por qué.
    */
-  async function run({ from, to, comparison = 'previous', channel = 'total', level = 'category', filter = {} }) {
+  async function geoSignals(res, { from, to, base, channel, filter, level }) {
+    const out = [];
+    if (!PRODUCT_LEVELS.includes(level) || !(PS().meta.states || []).length) return out;
+    const cands = [
+      ...res.rows.filter((r) => r.contributionAbs < 0).sort((a, b) => a.contributionAbs - b.contributionAbs).slice(0, 3),
+      ...res.rows.filter((r) => r.contributionAbs > 0).sort((a, b) => b.contributionAbs - a.contributionAbs).slice(0, 2)
+    ];
+    const dims = ['state', 'branch'].filter((d) => !filter[d]);
+    if (!cands.length || !dims.length) return out;
+    // Dos pasadas en total (periodo actual y referencia), no una por grupo y dimensión
+    const keys = new Set(cands.map((r) => r.key));
+    const [curX, prevX] = [await PS().crossRevenue({ from, to, channel, groupBy: level, keys, subBy: dims, filter }),
+      await PS().crossRevenue({ from: base.from, to: base.to, channel, groupBy: level, keys, subBy: dims, filter })];
+    for (const r of cands) {
+      for (const dim of dims) {
+        const cur = curX.get(r.key).get(dim), prev = prevX.get(r.key).get(dim);
+        const keysD = new Set([...cur.keys(), ...prev.keys()]);
+        const deltas = [...keysD].filter((k) => !/^\(/.test(k)).map((k) => {
+          const c = cur.get(k) || 0, b = prev.get(k) || 0;
+          return { key: k, current: c, baseline: b, delta: c - b, deltaPct: b ? c / b - 1 : null };
+        });
+        const totalBase = deltas.reduce((a, x) => a + x.baseline, 0);
+        const sameSign = deltas.filter((x) => Math.sign(x.delta) === Math.sign(r.contributionAbs)).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+        const totalMove = sameSign.reduce((a, x) => a + Math.abs(x.delta), 0);
+        if (!sameSign.length || !totalMove) continue;
+        const top = sameSign.slice(0, dim === 'state' ? 2 : 3);
+        const explained = top.reduce((a, x) => a + Math.abs(x.delta), 0) / totalMove;
+        const baseShare = totalBase ? top.reduce((a, x) => a + x.baseline, 0) / totalBase : null;
+        const concentrated = explained >= 0.6 && (baseShare === null || baseShare <= 0.5) && keysD.size > top.length + 1;
+        const verb = r.contributionAbs < 0 ? 'cayó' : 'creció';
+        const names = top.map((x) => (dim === 'branch' ? (PS().entity('branch', x.key) || {}).name || x.key : x.key));
+        out.push({
+          kind: 'signal', type: concentrated ? 'geo_concentration' : 'geo_largest', dimension: dim, level, entity: r.key,
+          geography: top.map((x) => geography(dim, x.key)).filter(Boolean),
+          period: { from, to }, baseline: { from: base.from, to: base.to, label: base.label }, metric: 'revenue',
+          variation: { delta: top[0].delta, deltaPct: top[0].deltaPct }, explainedShare: explained, baselineShare: baseShare,
+          label: concentrated
+            ? `${r.key} ${verb} ${fmtPct(r.revenue.deltaPct)}; el ${fmtPct(explained, false)} de esa variación se concentra en ${names.join(' y ')} (${fmtPct(baseShare, false)} de su venta de referencia).`
+            : `${r.key} ${verb} ${fmtPct(r.revenue.deltaPct)}; donde más se movió fue ${names[0]} (${fmtPct(top[0].deltaPct)}).`,
+          note: 'Señal geográfica descriptiva: dónde se concentra la variación, no por qué. Requiere investigación.'
+        });
+      }
+    }
+    return out;
+  }
+  const fmtPct = (v, signed = true) => (fin(v) ? `${signed && v > 0 ? '+' : ''}${(v * 100).toFixed(1)} %` : 's/d');
+
+  /**
+   * Corre el análisis de un nivel con filtros (drilldown y filtros de geografía) sobre IndexedDB.
+   * @param {object} p { from, to, comparison, channel, level, filter, next }
+   */
+  async function run({ from, to, comparison = 'previous', channel = 'total', level = 'category', filter = {}, next = undefined, withGeoSignals = true }) {
     const base = baselinePeriod({ from, to }, comparison);
     const m = PS().meta || {};
     const mapped = { sales: m.mappedMetrics && m.mappedMetrics.length ? m.mappedMetrics : C().products.metrics, funnel: m.funnelMetrics || [] };
     const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const [cur, prev] = [await PS().aggregate({ from, to, channel, groupBy: level, filter }), await PS().aggregate({ from: base.from, to: base.to, channel, groupBy: level, filter })];
     const res = compare(cur, prev, { level, avail: mapped });
-    return { ...res, period: { from, to }, baseline: base, comparison, channel, filter, next: NEXT[level], mappedMetrics: mapped,
+    res.rows.forEach((r) => { const g = geography(level, r.key); if (g) r.geography = g; });
+    const gs = withGeoSignals ? await geoSignals(res, { from, to, base, channel, filter, level }) : [];
+    return { ...res, geoSignals: gs, period: { from, to }, baseline: base, comparison, channel, filter, next: next !== undefined ? next : NEXT[level], mappedMetrics: mapped,
       elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0) };
   }
 
@@ -163,5 +226,5 @@
         ? 'No existe plan por producto: el desglose de productos compara contra el periodo anterior.' : null };
   }
 
-  FP.productAnalysis = { baselinePeriod, compare, patterns, compensation, concentration, run, fromDiagnosis, NEXT };
+  FP.productAnalysis = { baselinePeriod, compare, patterns, compensation, concentration, run, fromDiagnosis, NEXT, geography, geoSignals };
 })(typeof window !== 'undefined' ? window : globalThis);

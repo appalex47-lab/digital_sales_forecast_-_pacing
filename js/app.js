@@ -60,6 +60,8 @@
     // Fase 7: navegación, contexto persistente y guía (solo presentación)
     ux: {
       mode: 'analyst',
+      // Fase 9.1: microlearning (una idea por evento real, una sola vez, solo en modo Aprendiz)
+      learned: [], lesson: null,
       ctx: { channel: 'total', periodType: 'month', periodKey: null, comparison: 'actual_vs_plan' },
       ctxNote: null,
       visited: {},
@@ -70,7 +72,7 @@
       crumbExtra: {}
     },
     // Fase 8.1: Categoría → Producto (resultados en memoria; datos en IndexedDB)
-    pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', deliveryFilter: '', path: {}, topN: 20, page: 1, result: null, loading: false, key: null,
+    pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
@@ -473,15 +475,37 @@
     const env = storage.load(K.uxSettings);
     const d = env && env.data ? env.data : {};
     const u = state.ux;
-    ['mode', 'visited', 'lastByGroup', 'tour', 'home', 'ctx'].forEach((k) => { if (d[k] !== undefined) u[k] = typeof d[k] === 'object' && !Array.isArray(d[k]) ? { ...u[k], ...d[k] } : d[k]; });
+    ['mode', 'visited', 'lastByGroup', 'tour', 'home', 'ctx', 'learned'].forEach((k) => { if (d[k] !== undefined) u[k] = typeof d[k] === 'object' && !Array.isArray(d[k]) ? { ...u[k], ...d[k] } : d[k]; });
     u.tour.active = Boolean(d.tour && d.tour.active);
   }
   function saveUx() {
     const u = state.ux;
-    storage.save(K.uxSettings, { mode: u.mode, visited: u.visited, lastByGroup: u.lastByGroup, tour: u.tour, home: u.home, ctx: u.ctx });
+    storage.save(K.uxSettings, { mode: u.mode, visited: u.visited, lastByGroup: u.lastByGroup, tour: u.tour, home: u.home, ctx: u.ctx, learned: u.learned });
   }
 
   /** Render completo: navegación → vista existente → barra de contexto → ayuda, modo y recorrido. */
+  /**
+   * Fase 9.1 — Microlearning: registra que ocurrió un evento real y, en modo Aprendiz, muestra la lección
+   * correspondiente una sola vez. No interrumpe: se muestra junto a la barra de contexto y se puede cerrar.
+   */
+  function learn(event) {
+    const u = state.ux;
+    if (u.mode !== 'learner' || u.lesson) return;
+    const l = FP.guidanceConfig.LESSONS.find((x) => x.event === event && !(u.learned || []).includes(x.id));
+    if (!l) return;
+    u.learned = [...(u.learned || []), l.id];
+    u.lesson = l.id;
+  }
+  /** Eventos que se detectan al ver una vista con resultados reales (no al abrirla vacía). */
+  function learnFromView() {
+    const v = state.view;
+    const fcReal = state.fc.run && state.fc.run.plan && state.fc.run.plan.source !== 'none' && state.fc.run.cutoff;
+    if (v === 'pacing' && fcReal) { learn('pacing-seen'); learn('forecast-seen'); }
+    else if (v === 'reforecast' && state.rf.run) learn('reforecast-seen');
+    else if (v === 'diagnostico' && state.dx.run && state.dx.run.signals && state.dx.run.signals.length) learn('signal-seen');
+    else if (v === 'producto' && state.pa.result && ['region', 'state', 'city', 'branch', 'delivery'].includes(state.pa.result.level)) learn('product-geo-seen');
+  }
+
   function render() {
     const u = state.ux;
     u.visited[state.view] = true;
@@ -489,6 +513,7 @@
     if (g) u.lastByGroup[g] = state.view;
     FP.navigation.renderNav(state);
     renderView();
+    learnFromView();
     const status = FP.contextEngine.collectStatus(state);
     FP.navigation.renderContextBar(state, status);
     const exp = document.getElementById(`ux-exp-${state.view}`);
@@ -585,13 +610,38 @@
       FP.ui.toast(`Productos guardados: ${batch.summary.accepted.toLocaleString('es-MX')} SKU-días de ${batch.fileName}${m.conflicts ? `; ${m.conflicts} conflictos con lo guardado (${batch.policy === 'replace' ? 'reemplazados' : 'se conservó lo guardado y se marcaron'})` : ''}.`);
     } catch (e) {
       item.status = 'ready'; render();
-      FP.ui.toast(`No se pudieron guardar los productos: ${e.message}`);
+      FP.ui.toast(`No se pudieron guardar los productos (${e.message}). Los datos anteriores no se modificaron; revisa el espacio disponible del navegador y vuelve a intentar, o exporta tus datos como respaldo.`);
     }
   }
 
-  const paLevel = (pa) => (pa.viewBy === 'geo' ? (pa.path.state ? 'branch' : 'state')
-    : pa.path.product ? 'sku' : pa.path.subcategory ? 'product' : pa.path.category ? 'subcategory' : 'category');
-  const paChainOrder = (pa) => (pa.viewBy === 'geo' ? ['state', 'branch'] : ['category', 'subcategory', 'product', 'sku']);
+  /**
+   * Fase 8.4: navegación del análisis de productos como ruta genérica de niveles (producto y geografía).
+   * pa.drill = [{ level, key }] (lo que se fue abriendo), pa.geo = filtros de geografía, pa.next = siguiente nivel elegido.
+   */
+  const PA_NATURAL = FP.productAnalysis.NEXT;
+  const PA_ALL = ['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'];
+  function paUsed(pa) { return new Set([...pa.drill.map((d) => d.level), ...Object.keys(pa.geo).filter((k) => pa.geo[k])]); }
+  function paAvailable() {
+    const a = FP.productStore.available() ? FP.productStore.geoOptions({}).available : {};
+    return (lv) => !['region', 'state', 'city', 'branch', 'delivery'].includes(lv) || a[lv];
+  }
+  function paLevel(pa) {
+    const used = paUsed(pa), ok = paAvailable();
+    if (pa.next && !used.has(pa.next) && ok(pa.next)) return pa.next;
+    if (!pa.drill.length) return used.has(pa.viewBy) || !ok(pa.viewBy) ? 'category' : pa.viewBy;
+    let n = PA_NATURAL[pa.drill[pa.drill.length - 1].level];
+    const seen = new Set();
+    while (n && (used.has(n) || !ok(n)) && !seen.has(n)) { seen.add(n); n = PA_NATURAL[n]; }
+    return n && !used.has(n) ? n : null;
+  }
+  /** Niveles que se pueden elegir como siguiente desglose (los que no están ya en la ruta ni en los filtros). */
+  function paNextChoices(pa) { const used = paUsed(pa), ok = paAvailable(); return PA_ALL.filter((l) => !used.has(l) && ok(l)); }
+  function paFilter(pa) {
+    const f = {};
+    pa.drill.forEach((d) => { f[d.level] = d.key; });
+    Object.entries(pa.geo).forEach(([k, v]) => { if (v) f[k] = v; });
+    return f;
+  }
 
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
   async function ensureProductAnalysis() {
@@ -604,12 +654,13 @@
       pa.from = `${m.dateMax.slice(0, 7)}-01`;
     }
     if (!pa.counts) { pa.counts = await FP.productStore.counts(); pa.estimate = await repo.estimate(); }
-    const level = paLevel(pa);
-    const filter = { ...pa.path, ...(pa.deliveryFilter ? { delivery: pa.deliveryFilter } : {}) };
+    const level = paLevel(pa) || 'sku';
+    const filter = paFilter(pa);
     const key = JSON.stringify([pa.from, pa.to, pa.comparison, pa.channel, filter, level]);
     if (pa.result && pa.key === key) return;
     pa.key = key; pa.loading = true;
-    const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, comparison: pa.comparison, channel: pa.channel, level, filter });
+    const probe = { ...pa, drill: [...pa.drill, { level, key: '_' }], next: null };
+    const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, comparison: pa.comparison, channel: pa.channel, level, filter, next: level === 'sku' ? null : paLevel(probe) });
     if (pa.key !== key) return;
     pa.result = res; pa.loading = false; pa.page = 1;
     if (state.view === 'producto') FP.productView.render(state);
@@ -655,7 +706,7 @@
         else addToStaging(IMP.stage(text, { fileName: file.name, dataType }));
         added++;
       } catch (e) {
-        FP.ui.toast(`No se pudo leer ${file.name}: ${e.message}`);
+        FP.ui.toast(`No se pudo leer ${file.name} (${e.message}). Verifica que sea un CSV de texto (UTF-8) y no un archivo de Excel; si viene de Excel, guárdalo como "CSV UTF-8" y vuelve a cargarlo.`);
       }
     }
     if (added) { render(); FP.ui.toast(`${added} archivo${added === 1 ? '' : 's'} en revisión. Nada se ha importado todavía.`); scrollToStaging(); }
@@ -700,7 +751,7 @@
       if (!root.confirm('¿Borrar todos los datos guardados de esta app en este navegador? Incluye archivos importados, metas y ajustes.')) return;
       storage.clear();
       if (FP.productStore) FP.productStore.reset();
-      state.pa = { ...state.pa, result: null, counts: null, from: null, to: null, path: {}, trace: null };
+      state.pa = { ...state.pa, result: null, counts: null, from: null, to: null, drill: [], geo: {}, next: null, trace: null };
       state.store = ST.createStore();
       state.staging = { items: [], activeId: null, issueFilter: 'all' };
       loadSettings();
@@ -825,6 +876,7 @@
       if (!item.result.canImport) { render(); FP.ui.toast('Corrige el mapeo antes de importar.'); return; }
       const batch = ST.commitBatch(state.store, item.staged, item.result,
         { includeErrorRows: state.settings.includeErrorRows, settings: state.settings });
+      learn('data-committed');
       state.staging.items = state.staging.items.filter((i) => i !== item);
       state.staging.activeId = state.staging.items[0] ? state.staging.items[0].staged.id : null;
       reprocessAll(); // los pendientes pueden duplicar lo recién importado
@@ -872,7 +924,19 @@
       const v = el.dataset.view;
       if (root.location.hash === `#${v}`) render(); else root.location.hash = v;
     },
-    'ux-mode'(el) { state.ux.mode = el.dataset.value === 'exec' ? 'exec' : 'analyst'; render(); },
+    'ux-mode'(el) {
+      // Un solo estado de modo (Fase 7 + Aprendiz de Fase 9.1). Cambiar de modo solo cambia la presentación:
+      // filtros, contexto, vista y resultados se conservan.
+      const v = el.dataset.value;
+      state.ux.mode = FP.guidanceConfig.MODES.some(([id]) => id === v) ? v : 'analyst';
+      if (state.ux.mode !== 'learner') state.ux.lesson = null;
+      render();
+    },
+    'lesson-dismiss'() { state.ux.lesson = null; render(); },
+    /** "¿Por qué este número?": explica la cifra con la corrida real del motor, en el panel de ayuda de Fase 7. */
+    'why'(el) {
+      FP.explain.open(el.dataset.kind, state, { channel: el.dataset.channel || 'total', periodKey: el.dataset.period || null, metric: el.dataset.metric || 'revenue' });
+    },
     'home-setting'(el) {
       const h = state.ux.home;
       if (el.dataset.key === 'channel') { h.channel = el.value; state.ux.ctx.channel = el.value; }
@@ -973,19 +1037,28 @@
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
     },
-    'pa-viewby'(el) { state.pa.viewBy = el.dataset.value; state.pa.path = {}; state.pa.result = null; state.pa.trace = null; render(); },
+    'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
     'pa-drill'(el) {
       const pa = state.pa, lvl = paLevel(pa);
-      if (!lvl || lvl === 'sku' || (pa.viewBy === 'geo' && lvl === 'branch')) return;
-      pa.path = { ...pa.path, [lvl]: el.dataset.key }; pa.result = null; pa.trace = null; render();
+      if (!lvl || lvl === 'sku') return;
+      pa.drill = [...pa.drill, { level: lvl, key: el.dataset.key }]; pa.next = null; pa.result = null; pa.trace = null; render();
     },
     'pa-up'(el) {
-      const pa = state.pa, order = paChainOrder(pa);
-      const lv = el.dataset.level;
-      if (lv === 'root' || lv === null) pa.path = {};
-      else { const i = order.indexOf(lv); const p = {}; order.slice(0, i + 1).forEach((k) => { if (pa.path[k]) p[k] = pa.path[k]; }); pa.path = p; }
-      pa.result = null; pa.trace = null; render();
+      const pa = state.pa, i = Number(el.dataset.index);
+      pa.drill = i < 0 ? [] : pa.drill.slice(0, i + 1); pa.next = null; pa.result = null; pa.trace = null; render();
     },
+    'pa-next'(el) { const pa = state.pa; pa.next = el.value || null; pa.result = null; render(); },
+    'pa-geo'(el) {
+      const pa = state.pa, k = el.dataset.key;
+      const order = ['region', 'state', 'city', 'branch'];
+      const g = { ...pa.geo, [k]: el.value || '' };
+      // Respeta la jerarquía: al cambiar un nivel, los inferiores se limpian
+      if (order.includes(k)) order.slice(order.indexOf(k) + 1).forEach((x) => { g[x] = ''; });
+      pa.geo = g;
+      pa.drill = pa.drill.filter((d) => !g[d.level]);
+      pa.next = null; pa.result = null; pa.trace = null; render();
+    },
+    'pa-geo-clear'() { const pa = state.pa; pa.geo = {}; pa.next = null; pa.result = null; render(); },
     'pa-page'(el) { state.pa.page = Number(el.dataset.value); render(); },
     async 'pa-trace'(el) {
       const pa = state.pa;
@@ -1052,6 +1125,7 @@
       document.getElementById('rc-simulator').scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
     'rc-save-scenario'() {
+      learn('scenario-saved');
       const rc = state.rc;
       if (!rc.preview || !rc.preview.valid) { FP.ui.toast('El escenario no es válido; revisa los mensajes.'); return; }
       const hyp = rc.analysis.hypotheses.find((h) => h.id === rc.draft.hypothesisId) || null;
@@ -1118,6 +1192,7 @@
       saveActionPlan(); render();
     },
     'rc-measure'(el) {
+      learn('measured');
       const r = FP.actionTracking.recordMeasurement(state.rc.plan, { actionId: el.dataset.id, scenarios: state.rc.scenarioStore.scenarios,
         store: state.store, run: ensureForecast() });
       if (!r.ok) { FP.ui.toast(r.error); return; }
@@ -1244,6 +1319,7 @@
     'fc-setting'(el) {
       const fc = state.fc;
       const key = el.dataset.key;
+      if (key === 'method') learn('method-changed');
       let v;
       if (el.type === 'checkbox') v = el.checked;
       else if (el.type === 'number') {
@@ -1303,6 +1379,7 @@
     },
 
     'plan-save'() {
+      learn('plan-saved');
       const ps = state.planning;
       if (!ps.preview) return;
       const v = FP.planning.savePlan(ps.registry, ps.preview);
@@ -1540,7 +1617,7 @@
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
-  FP.app = { state, actions, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { state, actions, paLevel, paNextChoices, paFilter, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

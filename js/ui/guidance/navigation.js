@@ -130,15 +130,17 @@
             <strong>${esc(next.label)}</strong><span class="cell-sub">${esc(next.reason)}</span>
             <button type="button" class="btn btn--primary btn--small" data-action="go" data-view="${next.view}">Ir</button></div>` : ''}
           <div class="btn-row">
-            ${H().segmented('ux-mode', [['exec', 'Ejecutivo'], ['analyst', 'Analista']], state.ux.mode)}
+            ${H().segmented('ux-mode', G().MODES, state.ux.mode)}
           </div>
           <div class="btn-row">
             ${(v.help || []).length ? `<button type="button" class="btn btn--small" data-action="help-section">Ayuda de esta sección</button>` : ''}
             <button type="button" class="btn btn--small" data-action="glossary">Glosario</button>
-            <button type="button" class="btn btn--small" data-action="tour-start">${state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/10)` : 'Recorrido guiado'}</button>
+            <button type="button" class="btn btn--small" data-action="tour-start">${state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/${G().TOUR.length})` : 'Recorrido guiado'}</button>
           </div>
         </div>
-      </div>`;
+      </div>
+      ${state.ux.mode === 'learner' ? FP.help.learningBar(view, next) : ''}
+      ${state.ux.mode === 'learner' && state.ux.lesson ? FP.help.lessonCard(state.ux.lesson) : ''}`;
   }
 
   /** Marca los bloques técnicos (una vez) para que el modo Ejecutivo los colapse con CSS. */
@@ -153,6 +155,7 @@
 
   function applyMode(state) {
     document.body.classList.toggle('mode-exec', state.ux.mode === 'exec');
+    document.body.classList.toggle('mode-learner', state.ux.mode === 'learner');
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
     if (state.ux.mode !== 'exec') return;
     const main = document.getElementById(`view-${state.view}`);

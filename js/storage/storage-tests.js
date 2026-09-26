@@ -167,8 +167,9 @@
       // Encabezado real: fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,estado,sucursal,tipo_entrega,venta,pedidos,unidades
       const lines = gen.sales.split('\n');
       const header = lines[0], row = lines[1].split(',');
+      const col = (n) => header.split(',').indexOf(n); // por nombre de columna, no por posición (la plantilla creció en 8.4)
       const [date, channel, sku] = row;
-      row[12] = '1'; row[13] = '1'; row[14] = '1'; // venta, pedidos, unidades
+      row[col('venta')] = '1'; row[col('pedidos')] = '1'; row[col('unidades')] = '1';
       const changed = [header, row.join(',')].join('\n');
       const st = FP.productImport.stage(changed, { fileName: 'correccion.csv', kind: 'sales' });
       const r1 = await FP.productImport.process(st, {});
@@ -177,15 +178,16 @@
       const r2 = await FP.productImport.process(st, {});
       const rep = await PS().commit(r2.draft, { fileName: 'correccion.csv', policy: 'replace' });
       const trR = await PS().skuTrace({ sku, from: date, to: date, channel });
-      const kept = trK.find((x) => x.kind === 'sales' && x.branch === row[10]);
-      const replaced = trR.find((x) => x.kind === 'sales' && x.branch === row[10] && x.revenue === 1);
+      const kept = trK.find((x) => x.kind === 'sales' && x.branch === row[col('sucursal')]);
+      const replaced = trR.find((x) => x.kind === 'sales' && x.branch === row[col('sucursal')] && x.revenue === 1);
       return Boolean(keep.storedMerge.conflicts >= 1 && kept && kept.conflict && kept.revenue !== 1 && rep.storedMerge.replaced >= 1 && replaced && replaced.fileName === 'correccion.csv');
     });
-    await t('Faltante e inválido no son cero; estado/sucursal/entrega obligatorios se rechazan sin adivinar', async () => {
+    await t('Faltante e inválido no son cero; geografía inválida se marca sin adivinar (desde 8.4 el renglón se conserva)', async () => {
       const q = FP.productImport.stage(FP.mockProducts.qualityCase(), { fileName: 'q.csv', kind: 'sales' });
       const r = await FP.productImport.process(q, {});
       const hasAll = ['INVALID_STATE', 'MISSING_BRANCH', 'INVALID_DELIVERY', 'EXACT_DUPLICATE', 'CONFLICT', 'NEGATIVE_REVENUE', 'INVALID_REVENUE'].every((k) => r.summary.issuesByType[k]);
-      return { pass: hasAll && r.summary.rejected > 0 && r.summary.accepted > 0, detail: `${r.summary.rejected} rechazadas, ${r.summary.accepted} aceptadas` };
+      // Solo se rechaza lo que no se puede ubicar en el tiempo o el canal (aquí: canal "marketplace"); la geografía inválida se conserva marcada
+      return { pass: hasAll && r.summary.rejected === 1 && r.summary.accepted > 0 && Boolean(r.summary.issuesByType.INVALID_CHANNEL), detail: `${r.summary.rejected} rechazadas, ${r.summary.accepted} aceptadas` };
     });
     await t('CR y funnel no disponibles al filtrar por estado, sucursal o entrega', async () => {
       const byCat = await PS().aggregate({ from: '2026-08-01', to: '2026-09-09', channel: 'ecommerce', groupBy: 'category' });
@@ -199,6 +201,49 @@
       const trk = r.total.current.trackingCoverage;
       return { pass: Math.abs(share - 1) < 1e-9 && r.rows.some((x) => x.signals.length) && trk.status === 'available',
         detail: `${r.rows.length} categorías en ${r.elapsedMs} ms, cobertura de tracking ${(trk.value * 100).toFixed(0)}%` };
+    });
+
+    // ---------- Fase 8.4: geografía de productos sobre IndexedDB ----------
+    await t('Geografía: modelo, ciudades y resúmenes por ciudad persisten al reabrir', async () => {
+      const g = FP.productImport.stage(FP.mockProducts.geoCase(), { fileName: 'geo.csv' });
+      const r = await FP.productImport.process(g, {});
+      await PS().commit(r.draft, { fileName: 'geo.csv' });
+      await PS().init(prodRepo);
+      const b = PS().entity('branch', '025');
+      const cities = await PS().aggregate({ from: '2026-09-20', to: '2026-09-20', groupBy: 'city' });
+      const rolls = await IDB.getAll(prodRepo.db, 'productRollups', { index: 'level_key_date', range: IDBKeyRange.bound(['city', '', '2026-09-20'], ['city', '\uffff', '2026-09-20']) });
+      return { pass: Boolean(b && b.path.map((x) => x.id).join('>') === 'OCCIDENTE>JAL>JAL-GUADALAJARA>025') && cities.get('Guadalajara, JAL').revenue === 1400 && rolls.length > 0 && PS().geo.issues.length >= 4,
+        detail: `${rolls.length} resúmenes por ciudad · ${PS().geo.issues.length} avisos de consistencia` };
+    });
+    await t('Geografía: filtros y desgloses sobre IndexedDB (región → estado → sucursal, entrega)', async () => {
+      const reg = await PS().aggregate({ from: '2026-09-20', to: '2026-09-20', groupBy: 'state', filter: { region: 'Occidente' } });
+      const br = await PS().aggregate({ from: '2026-09-20', to: '2026-09-20', groupBy: 'branch', filter: { state: 'Jalisco', delivery: 'Recolección en sucursal' } });
+      const sku = await PS().aggregate({ from: '2026-09-20', to: '2026-09-20', groupBy: 'sku', filter: { city: 'Guadalajara, JAL' } });
+      return [...reg.keys()].join() === 'Jalisco' && br.get('025').revenue === 1000 && !br.has('(sin dato)') && sku.get('G1').revenue === 1000 && sku.get('G2').revenue === 300;
+    });
+    await t('Geografía: bloque anterior sin ciudad se enriquece al recargar el periodo con ciudad (sin duplicar)', async () => {
+      const H0 = 'fecha,canal,sku,estado,sucursal,tipo_entrega,venta,pedidos,unidades';
+      const r0 = await FP.productImport.process(FP.productImport.stage(`${H0}\n2026-09-21,app,E1,Jalisco,025,domicilio,300,3,3`, { fileName: 'viejo.csv' }), {});
+      await PS().commit(r0.draft, { fileName: 'viejo.csv' });
+      const blk = await IDB.get(prodRepo.db, 'productDays', ['2026-09-21', 'app']);
+      delete blk.cityIdx; delete blk.geoFlags;
+      await IDB.put(prodRepo.db, 'productDays', blk);
+      const H1 = 'fecha,canal,sku,estado,ciudad,sucursal,tipo_entrega,venta,pedidos,unidades';
+      const r1 = await FP.productImport.process(FP.productImport.stage(`${H1}\n2026-09-21,app,E1,Jalisco,Guadalajara,025,domicilio,200,2,2\n2026-09-21,app,E1,Jalisco,Zapopan,025,domicilio,100,1,1`, { fileName: 'nuevo.csv' }), {});
+      const b = await PS().commit(r1.draft, { fileName: 'nuevo.csv' });
+      const m = await PS().aggregate({ from: '2026-09-21', to: '2026-09-21', channel: 'app', groupBy: 'sku' });
+      return { pass: b.storedMerge.enriched === 1 && m.get('E1').revenue === 300, detail: `enriquecidos ${b.storedMerge.enriched}, venta del SKU ${m.get('E1').revenue}` };
+    });
+    await t('Geografía: resúmenes por ciudad se reconstruyen una vez en instalaciones anteriores', async () => {
+      await prodRepo.setMeta('productGeoRollups', { key: 'productGeoRollups', removed: true });
+      await IDB.del(prodRepo.db, 'meta', 'productGeoRollups');
+      const tx = prodRepo.db.transaction('productRollups', 'readwrite');
+      tx.objectStore('productRollups').clear();
+      await new Promise((res2) => { tx.oncomplete = res2; });
+      await PS().init(prodRepo);
+      const m = await prodRepo.meta('productGeoRollups');
+      const n = await IDB.count(prodRepo.db, 'productRollups');
+      return { pass: Boolean(m && m.version === 1) && n > 0, detail: `${n} resúmenes reconstruidos en ${m ? m.blocks : 0} bloques` };
     });
 
     if (volume) {

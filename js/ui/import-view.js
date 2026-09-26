@@ -95,7 +95,7 @@
     return `<section class="panel upload-card" aria-labelledby="up-products">
       <div class="panel__head"><div><h3 class="panel__title" id="up-products">${esc(dt.label)}</h3><p class="panel__desc">${esc(dt.description)}</p></div></div>
       <div class="panel__body">
-        <p class="upload-card__req"><span class="field__hint">Venta:</span> <span class="chip">Fecha</span> <span class="chip">Canal</span> <span class="chip">SKU</span> <span class="chip">Estado</span> <span class="chip">Sucursal</span> <span class="chip">Tipo de entrega</span> <span class="field__hint">· Funnel:</span> <span class="chip">Fecha</span> <span class="chip">Canal</span> <span class="chip">SKU</span></p>
+        <p class="upload-card__req"><span class="field__hint">Venta:</span> <span class="chip">Fecha</span> <span class="chip">Canal</span> <span class="chip">SKU</span> <span class="field__hint">recomendadas:</span> <span class="chip chip--soft">Región</span> <span class="chip chip--soft">Estado</span> <span class="chip chip--soft">Ciudad</span> <span class="chip chip--soft">Sucursal</span> <span class="chip chip--soft">Tipo de entrega</span> <span class="field__hint">· Funnel:</span> <span class="chip">Fecha</span> <span class="chip">Canal</span> <span class="chip">SKU</span></p>
         <p class="upload-card__cols field__hint">Venta: ${esc(dt.template.join(', '))}.<br>Funnel: ${esc(C().products.funnelType.template.join(', '))}. Recomendado: un archivo por mes de cada uno.</p>
         <div class="btn-row">
           <label class="btn btn--primary file-btn ${ok ? '' : 'is-disabled'}">Seleccionar CSV (venta o funnel)

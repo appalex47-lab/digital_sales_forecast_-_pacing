@@ -63,7 +63,7 @@
       const assumptions = ch === 'total' ? 'Suma de los canales, cada uno con sus índices.' : assumptionsText(m.assumptions);
       return `<tr class="${id === run.method.id ? 'row-current' : ''}">
         <td><strong>${id} · ${esc(run.settings.methods[id].label)}</strong>${id === run.method.id ? ' <span class="chip">en uso</span>' : ''}
-          <span class="cell-sub">${esc(run.settings.methods[id].description)}</span></td>
+          <span class="cell-sub">${esc(run.settings.methods[id].description)}</span>${methodGuide(id)}</td>
         <td class="wrap"><span class="cell-sub">${esc(assumptions)}</span>${m.fallbackDays ? `<span class="cell-sub">${m.fallbackDays} días con índice sin datos (usan plan)</span>` : ''}</td>
         <td class="num">${esc(F().metric(k, fc && fc[k]))}</td>
         <td class="num">${esc(PV().signed(k, g && g.gap))}<span class="cell-sub">${esc(F().signedPercent(g && g.gapPct, 1))}</span></td>
@@ -75,7 +75,22 @@
         <thead><tr><th>Método</th><th>Supuestos</th><th class="num">Forecast anual</th><th class="num">Diferencia vs plan (${esc(F().metric(k, plan[k]))})</th><th>Confianza</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <p class="field__hint">Todos conservan el patrón diario del plan (nunca "restante ÷ días restantes"). En D los índices se aplican solo a volumen, CR y AOV; pedidos y venta se derivan, sin doble conteo.
-        Ningún método se declara mejor: el método en uso se elige arriba.</p>`;
+        Ningún método se declara mejor: el método en uso se elige arriba.</p>
+      <details class="disclosure"><summary>¿Por qué los cuatro métodos pueden dar cierres distintos?</summary><div class="panel__body">
+        <p>Con los mismos datos, cada método supone algo distinto sobre los días que faltan: A supone que serán como el plan; B, que seguirán el desempeño de todo el año; C, que seguirán el de la ventana reciente; D, que cada palanca (volumen, CR, AOV) seguirá su propio desempeño.
+        Si el año, lo reciente y las palancas se comportan parecido, los cierres coinciden; si no, se separan. Esa diferencia es información, no un error.</p></div></details>`;
+  }
+
+  /** Fase 9.1: guía pedagógica del método (qué usa, qué supone, cuándo diverge, límite). Nombre y descripción vienen del config. */
+  function methodGuide(id) {
+    const g = FP.guidanceConfig.METHOD_GUIDE[id];
+    if (!g) return '';
+    const esc = H().esc;
+    return `<details class="method-guide"><summary class="cell-sub">¿Qué usa y qué supone?</summary><dl class="help-entry">
+      <div class="help-entry__row"><dt>Usa</dt><dd>${esc(g.uses)}</dd></div>
+      <div class="help-entry__row"><dt>Supone</dt><dd>${esc(g.assumption)}</dd></div>
+      <div class="help-entry__row"><dt>Diverge de los otros cuando</dt><dd>${esc(g.divergesWhen)}</dd></div>
+      <div class="help-entry__row"><dt>Límite</dt><dd>${esc(g.limitation)}</dd></div></dl></details>`;
   }
 
   function renderAlerts(state) {

@@ -16,7 +16,7 @@
   const STATUS = { available: ['ok', 'Disponible'], partial: ['warning', 'Parcial'], missing: ['na', 'Faltante'], invalid: ['error', 'Inválido'],
     unavailable: ['na', 'No disponible'], not_calculable: ['na', 'No calculable'] };
   const GROWTH = { growth: ['ok', 'Crece'], decline: ['error', 'Cae'], stable: ['na', 'Estable'], new: ['ok', 'Nuevo'], lost: ['warning', 'Sin venta'] };
-  const LEVEL = { channel: 'Canal', category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', sku: 'SKU', state: 'Estado', branch: 'Sucursal', delivery: 'Tipo de entrega' };
+  const LEVEL = { channel: 'Canal', category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', sku: 'SKU', region: 'Región', state: 'Estado', city: 'Ciudad', branch: 'Sucursal', delivery: 'Tipo de entrega' };
   const ISSUE = {
     MISSING_DATE: 'Falta fecha', INVALID_DATE: 'Fecha inválida', AMBIGUOUS_DATE: 'Fecha ambigua', MISSING_CHANNEL: 'Falta canal', INVALID_CHANNEL: 'Canal no reconocido',
     MISSING_SKU: 'Falta SKU', MISSING_PRODUCT: 'SKU sin producto', MISSING_CATEGORY: 'Producto sin categoría', MISSING_SUBCATEGORY: 'Producto sin subcategoría',
@@ -26,6 +26,9 @@
     NEGATIVE_REVENUE: 'Venta negativa', NEGATIVE_ORDERS: 'Pedidos negativos', NEGATIVE_UNITS: 'Unidades negativas', NEGATIVE_VIEWS: 'Vistas negativas',
     MISSING_STATE: 'Falta estado', INVALID_STATE: 'Estado no reconocido', MISSING_BRANCH: 'Falta sucursal', MISSING_DELIVERY: 'Falta tipo de entrega',
     INVALID_DELIVERY: 'Tipo de entrega no reconocido', INVALID_ADDTOCART: 'Carrito inválido', INVALID_BEGINCHECKOUT: 'Checkout inválido', INVALID_PURCHASESGA4: 'Compras GA4 inválidas',
+    PARTIAL_GEOGRAPHY: 'Geografía parcial', NO_GEOGRAPHY: 'Sin geografía', CITY_WITHOUT_STATE: 'Ciudad sin estado', BRANCH_NAME_WITHOUT_CODE: 'Nombre de sucursal sin código',
+    REGION_CONFLICT: 'Estado en varias regiones', BRANCH_STATE_CONFLICT: 'Sucursal en varios estados', BRANCH_NAME_CONFLICT: 'Sucursal con varios nombres',
+    BRANCH_WITHOUT_STATE: 'Sucursal sin estado', DUPLICATE_BRANCH_NAME: 'Nombre de sucursal repetido',
     NEGATIVE_ADDTOCART: 'Carrito negativo', NEGATIVE_BEGINCHECKOUT: 'Checkout negativo', NEGATIVE_PURCHASESGA4: 'Compras GA4 negativas'
   };
   const KIND_LABEL = { sales: 'Venta', funnel: 'Funnel GA4' };
@@ -55,7 +58,7 @@
     const ms = PS().metricsOf(kind);
     const preview = pv.map((p) => `<tr><td class="num">${p.line}</td><td>${esc(p.date)}</td><td>${esc(p.channel)}</td><td>${esc(p.sku)}</td>
       ${kind === 'sales' ? `<td class="wrap">${esc(p.product)}<span class="cell-sub">${esc([p.category, p.subcategory].filter(Boolean).join(' › '))}</span></td>
-      <td class="wrap">${esc(p.state)}<span class="cell-sub">${esc(p.branch)} · ${esc(p.delivery)}</span></td>` : ''}
+      <td class="wrap">${esc([p.region, p.state, p.city].filter(Boolean).join(' › ') || geoMissing())}<span class="cell-sub">${esc(p.branch || geoMissing())} · ${esc(p.delivery || geoMissing())}</span></td>` : ''}
       ${ms.map((m) => `<td class="num">${stateCell(p.metrics[m])}</td>`).join('')}
       <td>${!p.accepted && !p.duplicate ? H().pill('error', 'Se rechaza') : p.duplicate === 'exact' ? H().pill('na', 'Duplicado exacto') : p.duplicate === 'conflict' ? H().pill('warning', 'Conflicto') : p.issues.length ? H().pill('warning', 'Advertencia') : H().pill('ok', '✓ Válida')}</td></tr>`).join('');
     let body;
@@ -106,7 +109,7 @@
             <p class="field__hint">Obligatorios: ${esc(req.map((f) => PS().label(f)).join(', '))} y al menos una métrica. Encabezados oficiales: ${esc(PS().typeOf(kind).template.join(', '))}.</p>
             <div class="table-wrap"><table class="table"><thead><tr><th>Columna del archivo</th><th>Ejemplos</th><th>Campo</th></tr></thead><tbody>${mapping}</tbody></table></div></li>
           <li><h4>Vista previa (primeras ${pv.length} filas normalizadas)</h4>
-            ${pv.length ? `<div class="table-wrap"><table class="table"><thead><tr><th class="num">Fila</th><th>Fecha</th><th>Canal</th><th>SKU</th>${kind === 'sales' ? '<th>Producto</th><th>Estado · sucursal · entrega</th>' : ''}
+            ${pv.length ? `<div class="table-wrap"><table class="table"><thead><tr><th class="num">Fila</th><th>Fecha</th><th>Canal</th><th>SKU</th>${kind === 'sales' ? '<th>Producto</th><th>Región · estado · ciudad · sucursal · entrega</th>' : ''}
               ${ms.map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}<th>Resultado</th></tr></thead><tbody>${preview}</tbody></table></div>` : '<p class="note">Asigna fecha, canal y SKU para ver la vista previa.</p>'}</li>
           <li><h4>Validación del archivo completo</h4>${body}</li>
         </ol>
@@ -148,6 +151,8 @@
             <li>${F().integer(m.skus || 0)} SKU · ${esc(m.dateMin || '—')} a ${esc(m.dateMax || '—')} · ${esc((m.channels || []).join(', '))}</li>
             <li>Venta: ${esc((m.mappedMetrics || []).map((x) => PS().label(x)).join(', ') || '—')}</li>
             <li>Funnel (GA4): ${esc((m.funnelMetrics || []).map((x) => PS().label(x)).join(', ') || 'sin cargar')}${(m.funnelMetrics || []).includes('views') ? '' : ' · CR por producto no disponible (falta el archivo de funnel)'}</li>
+            <li>Geografía: ${esc([m.regions ? `${m.regions} regiones` : null, (m.states || []).length ? `${m.states.length} estados` : null, m.cities ? `${m.cities} ciudades` : null,
+              (m.branches || []).length ? `${m.branches.length} ${plural(locTerm().toLowerCase())}` : null].filter(Boolean).join(' · ') || 'no disponible')}${(PS().geo.issues || []).length ? ` · ${PS().geo.issues.length} aviso(s) de consistencia` : ''}</li>
             <li>${F().integer(m.batches)} archivo(s) importados</li></ul>`
             : `<p class="note">${PS().available() ? 'Todavía no hay datos de productos.' : 'IndexedDB no está disponible en este navegador: la capa de productos está desactivada.'}</p>`}
           <div class="btn-row"><a class="btn btn--small btn--primary" href="#carga">Cargar productos</a>
@@ -157,15 +162,36 @@
       </div>`;
   }
 
+  /** Término del negocio para "sucursal" (Business Context, Fase 8.2); el resto de textos no cambia en esta fase. */
+  const locTerm = () => { const t = C().business && C().business.terms && C().business.terms.location; return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Sucursal'; };
+  const plural = (w) => (/[aeiouáéó]$/.test(w) ? `${w}s` : `${w}es`);
+  const levelName = (lv) => (lv === 'branch' ? locTerm() : LEVEL[lv] || lv);
+  /** "No disponible" (faltante), "No aplica" (el negocio declaró que la geografía no es relevante) o "Inválido". */
+  const geoMissing = () => ((C().business && C().business.context && C().business.context.geography && C().business.context.geography.relevant === false) ? 'No aplica' : 'No disponible');
+  const displayKey = (lv, key) => {
+    if (key === '(sin dato)') return ['region', 'state', 'city', 'branch', 'delivery'].includes(lv) ? geoMissing() : key;
+    if (key === '(inválido)') return 'Inválido';
+    if (lv === 'branch') { const e = PS().entity('branch', key); return e && e.name !== e.code ? `${e.name} (${e.code})` : key; }
+    return key;
+  };
+
   function renderControls(state) {
     const pa = state.pa;
-    const path = pa.path;
-    const m = PS().meta || {};
-    const chain = pa.viewBy === 'geo' ? ['state', 'branch'] : ['category', 'subcategory', 'product', 'sku'];
-    const crumbs = [['Negocio', null], ...(pa.channel !== 'total' ? [[FP.dataModel.getChannel(pa.channel).label, null]] : []),
-      ...(pa.deliveryFilter ? [[pa.deliveryFilter, null]] : []),
-      ...chain.filter((k) => path[k]).map((k) => [path[k], k])];
-    const deliveryOpts = (m.deliveries && m.deliveries.length ? m.deliveries : C().products.deliveries.map((d) => d[1]));
+    const opts = PS().available() ? PS().geoOptions(pa.geo) : { regions: [], states: [], cities: [], branches: [], deliveries: [], available: {} };
+    const av = opts.available;
+    const level = FP.app.paLevel(pa);
+    const choices = FP.app.paNextChoices(pa);
+    const roots = [['category', 'Categoría'], ...(av.region ? [['region', 'Región']] : []), ...(av.state ? [['state', 'Estado']] : []),
+      ...(av.city ? [['city', 'Ciudad']] : []), ...(av.branch ? [['branch', locTerm()]] : []), ...(av.delivery ? [['delivery', 'Tipo de entrega']] : [])];
+    const sel = (key, label, list, valueOf = (x) => x, textOf = (x) => x) => (list.length ? `<div class="field"><label for="pa-g-${key}" class="field__hint">${esc(label)}</label>
+      <select id="pa-g-${key}" data-action="pa-geo" data-key="${key}"><option value="">${key === 'delivery' ? 'Ambos' : 'Todos'}</option>
+        ${list.map((x) => `<option value="${esc(valueOf(x))}" ${pa.geo[key] === valueOf(x) ? 'selected' : ''}>${esc(textOf(x))}</option>`).join('')}</select></div>` : '');
+    const geoActive = Object.values(pa.geo).some(Boolean);
+    const crumbs = [`<button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-index="-1">Negocio${pa.channel !== 'total' ? ` · ${esc(FP.dataModel.getChannel(pa.channel).label)}` : ''}</button>`,
+      ...pa.drill.map((d, i) => (i < pa.drill.length - 1 || level
+        ? `<button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-index="${i}" title="${esc(levelName(d.level))}">${esc(displayKey(d.level, d.key))}</button>`
+        : `<strong>${esc(displayKey(d.level, d.key))}</strong>`))];
+    const geoLevel = ['region', 'state', 'city', 'branch', 'delivery'].includes(level) || geoActive || pa.drill.some((d) => ['region', 'state', 'city', 'branch', 'delivery'].includes(d.level));
     $('pa-controls').innerHTML = `
       <div class="filters">
         <div class="field"><label for="pa-from" class="field__hint">Desde</label><input id="pa-from" type="date" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"></div>
@@ -177,18 +203,24 @@
         <div class="field"><label for="pa-ch" class="field__hint">Canal</label>
           <select id="pa-ch" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
             `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-        <div class="field"><span class="field__hint">Ver por</span>${H().segmented('pa-viewby', [['category', 'Categoría'], ['geo', 'Estado y sucursal']], pa.viewBy)}</div>
-        <div class="field"><label for="pa-delivery" class="field__hint">Tipo de entrega</label>
-          <select id="pa-delivery" data-action="pa-setting" data-key="deliveryFilter"><option value="">Ambos</option>
-            ${deliveryOpts.map((d) => `<option value="${esc(d)}" ${pa.deliveryFilter === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></div>
+        <div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
+          <select id="pa-viewby" data-action="pa-viewby">${roots.map(([v, l]) => `<option value="${v}" ${pa.viewBy === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
         <div class="field"><label for="pa-top" class="field__hint">Mostrar (solo visual)</label>
           <select id="pa-top" data-action="pa-setting" data-key="topN">${C().products.topN.map((n) => `<option value="${n}" ${String(pa.topN) === String(n) ? 'selected' : ''}>${n ? `Top ${n}` : 'Todos (paginado)'}</option>`).join('')}</select></div>
         <div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--small" data-action="pa-from-dx" ${state.dx && state.dx.run ? '' : 'disabled'}>Usar periodo y canal del diagnóstico</button></div>
       </div>
-      <nav class="breadcrumbs" aria-label="Nivel">${crumbs.map(([l, k], i) => i < crumbs.length - 1
-        ? `<button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-level="${k || 'root'}">${esc(l)}</button> ›`
-        : `<strong>${esc(l)}</strong>`).join(' ')}</nav>
-      ${pa.deliveryFilter || (pa.viewBy === 'geo') ? `<p class="field__hint">Estado, sucursal y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles en esta vista.</p>` : ''}
+      ${av.region || av.state || av.city || av.branch || av.delivery ? `
+      <fieldset class="filters geo-filters"><legend class="field__hint">Geografía y operación (solo análisis de productos)</legend>
+        ${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}
+        ${sel('branch', locTerm(), opts.branches, (b) => b.code, (b) => (b.name !== b.code ? `${b.name} (${b.code})` : b.code))}
+        ${sel('delivery', 'Tipo de entrega', opts.deliveries)}
+        ${geoActive ? '<div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--ghost btn--small" data-action="pa-geo-clear">Quitar filtros de geografía</button></div>' : ''}
+      </fieldset>` : ''}
+      <nav class="breadcrumbs" aria-label="Ruta del análisis">${crumbs.join(' › ')}
+        ${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}
+        ${choices.length && level ? `<span class="breadcrumbs__next"><label for="pa-next" class="field__hint">Desglosar por</label>
+          <select id="pa-next" data-action="pa-next">${choices.map((c) => `<option value="${c}" ${c === level ? 'selected' : ''}>${esc(levelName(c))}</option>`).join('')}</select></span>` : ''}</nav>
+      ${geoLevel ? `<p class="field__hint">${esc(`Región, estado, ciudad, ${locTerm().toLowerCase()} y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles aquí. Una diferencia entre zonas no demuestra por sí misma una causa.`)}</p>` : ''}
       ${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
   }
 
@@ -202,7 +234,7 @@
     const kp = (k, label) => { const c = t.current[k], b = t.baseline[k]; const d = fin(c && c.value) && fin(b && b.value) && b.value !== 0 ? c.value / b.value - 1 : null;
       return `<div><dt>${esc(label)} ${statusPill(c.status)}</dt><dd class="num">${metricVal(k, c)}</dd><small>vs ${metricVal(k, b)} · ${esc(F().signedPercent(d, 1))}</small></div>`; };
     $('pa-kpis').innerHTML = `
-      <div class="subhead"><h3 class="panel__title">${esc(LEVEL[r.level] || r.level)} · ${esc(r.period.from)} a ${esc(r.period.to)}</h3>
+      <div class="subhead"><h3 class="panel__title">${esc(levelName(r.level))} · ${esc(r.period.from)} a ${esc(r.period.to)}</h3>
         <span class="field__hint">Referencia: ${esc(r.baseline.from)} a ${esc(r.baseline.to)} (${esc(r.baseline.label)}) · ${r.elapsedMs} ms</span></div>
       <dl class="kpis kpis--6">${kp('revenue', 'Venta')}${kp('orders', 'Pedidos')}${kp('units', 'Unidades')}${kp('aov', 'AOV')}${kp('conversionRate', 'CR')}${kp('views', 'Vistas')}</dl>
       <dl class="kpis kpis--3">${kp('cartRate', 'Vista → carrito')}${kp('checkoutRate', 'Carrito → checkout')}${kp('purchaseRate', 'Checkout → compra')}</dl>
@@ -218,10 +250,10 @@
     const shown = n ? rows.slice(0, n) : rows.slice((page - 1) * size, page * size);
     const dm = (row, k) => { const x = row.drivers[k]; return fin(x.deltaPct) ? F().signedPercent(x.deltaPct, 1) : '—'; };
     $('pa-table').innerHTML = `<div class="table-wrap"><table class="table">
-      <thead><tr><th>${esc(LEVEL[r.level] || r.level)}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
+      <thead><tr><th>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
         <th class="num">Contribución</th><th>Estado</th><th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
       <tbody>${shown.map((x) => `<tr>
-        <td><strong>${esc(x.key)}</strong>${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}</td>
+        <td><strong>${esc(displayKey(r.level, x.key))}</strong>${x.geography && x.geography.path.length > 1 ? `<span class="cell-sub">${esc(x.geography.path.slice(0, -1).map((g) => g.name).join(' › '))}</span>` : ''}${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}</td>
         <td class="num">${esc(F().currency(x.revenue.current, 0))}</td><td class="num">${esc(F().currency(x.revenue.baseline, 0))}</td>
         <td class="num">${esc(FP.pacingView.signed('revenue', x.revenue.delta))}<span class="cell-sub">${esc(F().signedPercent(x.revenue.deltaPct, 1))}</span></td>
         <td class="num">${esc(F().percent(x.share, 1))}</td>
@@ -231,7 +263,7 @@
         <td class="num">${metricVal('conversionRate', x.current && x.current.conversionRate)}</td>
         <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>
         <td>${x.signals.map((s) => `<span class="chip" title="${esc(s.evidence)}">Patrón ${esc(s.pattern)}</span>`).join(' ')}</td>
-        <td>${r.next ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}">Ver ›</button>`
+        <td>${r.level !== 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}" ${x.key === '(sin dato)' || x.key === '(inválido)' ? 'title="Abre los renglones sin este dato"' : ''}>Ver ›</button>`
           : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}</td></tr>`).join('')}</tbody></table></div>
       ${n ? `<p class="field__hint">Top ${n} de ${F().integer(rows.length)} por |contribución|. El Top N es solo visual: todos los SKU siguen guardados y en los totales.</p>`
         : `<div class="pager"><span>${F().integer((page - 1) * size + 1)}–${F().integer(Math.min(page * size, rows.length))} de ${F().integer(rows.length)}</span>
@@ -239,17 +271,22 @@
           <button type="button" class="btn btn--small" data-action="pa-page" data-value="${page + 1}" ${page * size >= rows.length ? 'disabled' : ''}>Siguiente</button></div></div>`}
       <p class="field__hint">Participación = venta del grupo ÷ total del periodo. Contribución = Δ del grupo ÷ Δ total (puede pasar de 100 % si otros grupos compensan).</p>`;
 
-    $('pa-signals').innerHTML = r.signals.length ? `<ul class="alert-list">${r.signals.slice(0, 30).map((s) => `<li>${H().pill('warning', `Patrón ${s.pattern}`)} <span><strong>${esc(s.key)}</strong>: ${esc(s.label)} <span class="cell-sub">${esc(s.evidence)} · ${esc(s.note)}</span></span></li>`).join('')}</ul>`
-      : `<p class="note">Sin patrones de señales con los umbrales actuales${(r.mappedMetrics && r.mappedMetrics.funnel || []).includes('views') ? '' : ' (sin el archivo de funnel no se evalúan los patrones de tráfico, CR ni las tasas del embudo)'}.</p>`;
+    const gsig = r.geoSignals || [];
+    const gIssues = PS().geo.issues || [];
+    const geoHtml = `${gsig.length ? `<h4>Dónde se concentra la variación</h4><ul class="alert-list">${gsig.map((g) => `<li>${H().pill(g.type === 'geo_concentration' ? 'warning' : 'na', g.dimension === 'branch' ? locTerm() : 'Estado')} <span>${esc(g.label)}
+        <span class="cell-sub">${esc(`${levelName(g.level)} · ${g.period.from} a ${g.period.to} vs ${g.baseline.from} a ${g.baseline.to} · venta · ${g.note}`)}</span></span></li>`).join('')}</ul>` : ''}
+      ${gIssues.length ? `<details class="disclosure"><summary>Calidad de la geografía (${gIssues.length})</summary><ul class="plain-list">${gIssues.map((i) => `<li>${H().pill('warning', ISSUE[i.type] || i.type)} ${esc(i.message)}</li>`).join('')}</ul></details>` : ''}`;
+    $('pa-signals').innerHTML = geoHtml + (r.signals.length ? `<ul class="alert-list">${r.signals.slice(0, 30).map((s) => `<li>${H().pill('warning', `Patrón ${s.pattern}`)} <span><strong>${esc(s.key)}</strong>: ${esc(s.label)} <span class="cell-sub">${esc(s.evidence)} · ${esc(s.note)}</span></span></li>`).join('')}</ul>`
+      : `<p class="note">Sin patrones de señales con los umbrales actuales${(r.mappedMetrics && r.mappedMetrics.funnel || []).includes('views') ? '' : ' (sin el archivo de funnel no se evalúan los patrones de tráfico, CR ni las tasas del embudo)'}.</p>`);
 
     const tr = pa.trace;
     const cellTxt = (x, m) => (fin(x[m]) ? esc(F().integer(x[m])) : `<span class="val val--missing">${esc(x[`${m}State`] === 'invalid' ? 'inválido' : 'falta')}</span>`);
     $('pa-trace').innerHTML = !tr ? '<p class="field__hint">En el nivel SKU usa "Trazabilidad" para ver cada día con su archivo y fila de origen (venta y funnel por separado).</p>' : `
       <div class="subhead"><h3 class="panel__title">Trazabilidad · ${esc(tr.sku)}</h3><button type="button" class="btn btn--ghost btn--small" data-action="pa-trace-close">Cerrar</button></div>
-      <div class="table-wrap table-wrap--tall"><table class="table"><thead><tr><th>Fecha</th><th>Canal</th><th>Archivo</th><th>Estado · sucursal · entrega</th>
+      <div class="table-wrap table-wrap--tall"><table class="table"><thead><tr><th>Fecha</th><th>Canal</th><th>Archivo</th><th>Región · estado · ciudad · sucursal · entrega</th>
         ${PS().metricsOf('sales').map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}${PS().metricsOf('funnel').map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}<th>Origen</th></tr></thead>
         <tbody>${tr.rows.slice(0, 500).map((x) => `<tr><td class="num">${esc(x.date)}</td><td>${esc(x.channel)}</td><td>${esc(KIND_LABEL[x.kind])}</td>
-          <td class="wrap cell-sub">${x.kind === 'sales' ? esc(`${x.state} · ${x.branch} · ${x.delivery}`) : '—'}</td>
+          <td class="wrap cell-sub">${x.kind === 'sales' ? esc([x.region, x.state, x.city, x.branchName && x.branchName !== x.branch ? `${x.branchName} (${x.branch})` : x.branch, x.delivery].map((v) => v || geoMissing()).join(' · ')) : '—'}</td>
           ${PS().metricsOf('sales').map((m) => `<td class="num">${x.kind === 'sales' ? cellTxt(x, m) : ''}</td>`).join('')}
           ${PS().metricsOf('funnel').map((m) => `<td class="num">${x.kind === 'funnel' ? cellTxt(x, m) : ''}</td>`).join('')}
           <td><span class="cell-sub">${esc(x.fileName || x.batchId)} · fila ${x.row}${x.conflict ? ' · conflicto' : ''}${x.multiplicity ? ' · suma de varias filas' : ''}</span></td></tr>`).join('')}</tbody></table></div>

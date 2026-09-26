@@ -160,13 +160,13 @@
     app: {
       name: 'Digital Sales Forecast & Pacing',
       subtitle: 'Planeación, pacing y reforecast de ventas digitales',
-      version: '0.10.0',
+      version: '0.12.0',
       phase: 8,
-      phaseLabel: 'Fase 8.2 · Business Setup'
+      phaseLabel: 'Fase 9.1 · UX pedagógica'
     },
 
     /** Versión del contrato de datos. Cambiarla exige nota en ARCHITECTURE.md §9. */
-    schemaVersion: '1.9.0',
+    schemaVersion: '1.10.0',
 
     locale: 'es-MX',
     /** Moneda de visualización. Default MXN; la alimenta el Business Context si está configurado (Fase 8.2). */
@@ -505,8 +505,10 @@
       dataType: {
         id: 'products', label: 'Productos · venta',
         description: 'Venta diaria por SKU con estado, sucursal y tipo de entrega (sistema de ventas). Se guarda en IndexedDB.',
-        required: ['date', 'channel', 'sku', 'state', 'branch', 'delivery'],
-        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'estado', 'sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades']
+        /** Fase 8.4: estado, sucursal y entrega dejan de ser obligatorios (un producto sin geografía se conserva como "No disponible"). */
+        required: ['date', 'channel', 'sku'],
+        recommended: ['state', 'branch', 'delivery'],
+        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades']
       },
       funnelType: {
         id: 'productFunnel', label: 'Productos · funnel (GA4)',
@@ -524,8 +526,11 @@
         { key: 'category', label: 'Categoría', kind: 'text', synonyms: ['categoria', 'category', 'departamento', 'item_category'] },
         { key: 'subcategory', label: 'Subcategoría', kind: 'text', synonyms: ['subcategoria', 'subcategory', 'sub_categoria', 'familia', 'item_category2'] },
         { key: 'presentation', label: 'Presentación', kind: 'text', synonyms: ['presentacion', 'presentation', 'contenido'] },
-        { key: 'state', label: 'Estado', kind: 'state', synonyms: ['estado', 'entidad', 'estado_entrega', 'state', 'region_estado'] },
-        { key: 'branch', label: 'Sucursal', kind: 'branch', synonyms: ['sucursal', 'tienda', 'branch', 'store', 'sucursal_asignada', 'id_sucursal'] },
+        { key: 'region', label: 'Región', kind: 'text', synonyms: ['region', 'zona', 'region_comercial'] },
+        { key: 'state', label: 'Estado', kind: 'state', synonyms: ['estado', 'entidad', 'estado_entrega', 'state', 'region_estado', 'estado_nombre'] },
+        { key: 'city', label: 'Ciudad', kind: 'text', synonyms: ['ciudad', 'city', 'municipio', 'ciudad_entrega'] },
+        { key: 'branch', label: 'Sucursal (código)', kind: 'branch', synonyms: ['sucursal', 'tienda', 'branch', 'store', 'sucursal_asignada', 'id_sucursal', 'store_id', 'codigo_sucursal'] },
+        { key: 'branchName', label: 'Nombre de sucursal', kind: 'text', synonyms: ['nombre_sucursal', 'sucursal_nombre', 'store_name', 'nombre_tienda'] },
         { key: 'delivery', label: 'Tipo de entrega', kind: 'delivery', synonyms: ['tipo_entrega', 'entrega', 'tipo_de_entrega', 'modalidad', 'delivery_type', 'metodo_entrega'] },
         { key: 'extraDimension', label: 'Otra dimensión (se suma por renglón)', kind: 'text', synonyms: ['fuente', 'source', 'dispositivo', 'device', 'subcanal'] },
         { key: 'revenue', label: 'Venta', kind: 'number', metric: true, synonyms: ['venta', 'ventas', 'revenue', 'sales', 'importe', 'monto', 'venta_neta'] },
@@ -544,7 +549,7 @@
       /** Métricas por archivo (lista fija; la Fase 8.5 de métricas configurables está en pausa). */
       metrics: ['revenue', 'orders', 'units'],
       funnelMetrics: ['views', 'addToCart', 'beginCheckout', 'purchasesGa4'],
-      /** Catálogo fijo de estados (32) con variantes aceptadas (ya simplificadas: minúsculas, sin acentos). */
+      /** Catálogo fijo de estados (32) con variantes aceptadas. El orden no cambia (los bloques guardan su índice). */
       states: [
         ['Aguascalientes', ['aguascalientes', 'ags']], ['Baja California', ['baja california', 'bc', 'baja california norte']],
         ['Baja California Sur', ['baja california sur', 'bcs']], ['Campeche', ['campeche', 'camp']], ['Chiapas', ['chiapas', 'chis']],
@@ -558,6 +563,8 @@
         ['Sonora', ['sonora', 'son']], ['Tabasco', ['tabasco', 'tab']], ['Tamaulipas', ['tamaulipas', 'tamps']], ['Tlaxcala', ['tlaxcala', 'tlax']],
         ['Veracruz', ['veracruz', 'veracruz de ignacio de la llave', 'ver']], ['Yucatán', ['yucatan', 'yuc']], ['Zacatecas', ['zacatecas', 'zac']]
       ],
+      /** Fase 8.4: código estable de cada estado (mismo orden que `states`). */
+      stateCodes: ['AGS', 'BC', 'BCS', 'CAMP', 'CHIS', 'CHIH', 'CDMX', 'COAH', 'COL', 'DGO', 'MEX', 'GTO', 'GRO', 'HGO', 'JAL', 'MICH', 'MOR', 'NAY', 'NL', 'OAX', 'PUE', 'QRO', 'QROO', 'SLP', 'SIN', 'SON', 'TAB', 'TAMPS', 'TLAX', 'VER', 'YUC', 'ZAC'],
       /** Tipos de entrega (fijos). */
       deliveries: [
         ['domicilio', 'Envío a domicilio', ['domicilio', 'envio a domicilio', 'a domicilio', 'envio', 'home delivery', 'delivery', 'entrega a domicilio', 'envio domicilio']],

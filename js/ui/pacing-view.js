@@ -76,6 +76,9 @@
 
   /* ---------- Tablero ejecutivo ---------- */
 
+  /** Fase 9.1: acceso a "¿Por qué este número?" (explica con la corrida real; no calcula nada). */
+  const why = (kind, metric, channel = 'total', periodKey = '') => (FP.explain ? FP.explain.whyButton(kind, { channel, periodKey, metric }) : '');
+
   function renderExecutive(state) {
     const esc = H().esc;
     const run = state.fc.run;
@@ -91,11 +94,11 @@
       <dl class="kpis kpis--6">
         <div><dt>${additive ? 'Meta del año' : 'Plan del año'}</dt><dd class="num">${esc(val(k, a.plan[k]))}</dd></div>
         <div><dt>Actual a la fecha</dt><dd class="num">${esc(val(k, a.actualToDate && a.actualToDate[k]))}</dd>
-          <small>vs plan a la fecha ${esc(val(k, a.planToDate && a.planToDate[k]))}</small></div>
-        <div><dt>Cumplimiento</dt><dd class="num">${esc(pct(td.compliance))}</dd><small>${a.countedDays} días con real</small></div>
-        <div><dt>Gap a la fecha</dt><dd class="num">${esc(signed(k, td.gap))}</dd><small>${esc(spct(td.gapPct))}</small></div>
-        <div><dt>Forecast de cierre</dt><dd class="num">${esc(val(k, a.forecast && a.forecast[k]))}</dd><small>Método ${esc(run.method.id)}</small></div>
-        <div><dt>Gap forecast</dt><dd class="num">${esc(signed(k, fg.gap))}</dd><small>${esc(spct(fg.gapPct))} vs meta</small></div>
+          <small>vs plan a la fecha ${esc(val(k, a.planToDate && a.planToDate[k]))} ${k === 'revenue' ? why('identity', k) : ''}</small></div>
+        <div><dt>Cumplimiento</dt><dd class="num">${esc(pct(td.compliance))}</dd><small>${a.countedDays} días con real ${why('compliance', k)}</small></div>
+        <div><dt>Gap a la fecha</dt><dd class="num">${esc(signed(k, td.gap))}</dd><small>${esc(spct(td.gapPct))} ${why('gap', k)}</small></div>
+        <div><dt>Forecast de cierre</dt><dd class="num">${esc(val(k, a.forecast && a.forecast[k]))}</dd><small>Método ${esc(run.method.id)} ${why('forecast', k)}</small></div>
+        <div><dt>Gap forecast</dt><dd class="num">${esc(signed(k, fg.gap))}</dd><small>${esc(spct(fg.gapPct))} vs meta ${why('forecastGap', k)}</small></div>
       </dl>
       <p class="field__hint">Gap a la fecha = actual − plan de los mismos días (plan diario ponderado). Gap forecast = forecast de cierre − meta del año. Son dos cosas distintas.
         ${a.missingActualDays ? ` <strong>${a.missingActualDays} días cerrados no tienen real</strong> y no entran al pacing.` : ''}</p>`;

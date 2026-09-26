@@ -729,7 +729,8 @@
       const f = GC.HELP.find((e) => e.id === 'forecast'), r = GC.HELP.find((e) => e.id === 'reforecast');
       return f.shortDescription !== r.shortDescription && /no es el objetivo/i.test(f.caveats) && /requerimiento/i.test(r.caveats) &&
         !/pron[oó]stico/i.test(`${r.title} ${r.shortDescription} ${r.detailedDescription}`) && Object.keys(GC.STATES).length === 6 &&
-        GC.TOUR.length === 10 && GC.TOUR.every((s) => GC.VIEWS[s.view]);
+        (() => { const orig = ['meta', 'pacing', 'forecast', 'gap', 'drivers', 'senales', 'hipotesis', 'escenario', 'accion', 'medicion'];
+          const ids = GC.TOUR.map((t) => t.id); let k = 0; ids.forEach((id) => { if (id === orig[k]) k++; }); return k === orig.length; })() && GC.TOUR.every((s) => GC.VIEWS[s.view]);
     });
     test('Fase 7: trazabilidad', 'La cadena se recorre en orden y no altera datos', () => {
       const sc = { scenarioId: 'SC_001_v1', name: 'CR', createdAt: '2026-09-24T00:00:00Z', inputs: { crValue: 0.001 },
@@ -789,10 +790,12 @@
         const mf = PSx.suggestMapping(['fecha', 'canal', 'sku', 'vistas_ficha', 'compras_ga4'], 'funnel');
         return ms.Estado === 'state' && ms.Sucursal === 'branch' && ms.Tipo_entrega === 'delivery' && mf.vistas_ficha === 'views' &&
           PSx.detectKind(['fecha', 'canal', 'sku', 'vistas_ficha', 'agregados_carrito']) === 'funnel' && PSx.detectKind(['fecha', 'canal', 'sku', 'venta', 'pedidos']) === 'sales' &&
-          PSx.validateMapping({ a: 'date', b: 'channel', c: 'sku' }, 'sales').some((i) => i.field === 'state') &&
+          // Desde la Fase 8.4 estado, sucursal y entrega son recomendados, no obligatorios (un producto sin geografía se conserva)
+          !PSx.validateMapping({ a: 'date', b: 'channel', c: 'sku', d: 'revenue' }, 'sales').some((i) => i.field === 'state') &&
+          PSx.validateMapping({ a: 'date', b: 'channel', c: 'sku' }, 'sales').some((i) => i.field === 'metrics') &&
           !PSx.validateMapping({ a: 'date', b: 'channel', c: 'sku', d: 'views' }, 'funnel').some((i) => i.field === 'state');
       });
-      test('Fase 8.1.1: datos', 'Estado, sucursal y entrega obligatorios; catálogo fijo, sin adivinar', withCatalog(() => {
+      test('Fase 8.1.1: datos', 'Estado, sucursal y entrega: catálogo fijo, sin adivinar (desde 8.4: se conservan y se marcan)', withCatalog(() => {
         const d = draftOf([
           rowS('2026-09-01', 'app', 'A', 'S1', '', 'SUC1', 'domicilio', 1, 1, 1),
           rowS('2026-09-01', 'app', 'A', 'S1', 'Narnia', 'SUC1', 'domicilio', 1, 1, 1),
@@ -800,7 +803,13 @@
           rowS('2026-09-01', 'app', 'A', 'S1', 'CDMX', 'SUC1', 'dron', 1, 1, 1),
           rowS('2026-09-01', 'app', 'A', 'S1', 'edo. mex.', 'SUC1', 'Recoger en sucursal', 1, 1, 1)
         ]);
-        return d.summary.rejected === 4 && d.summary.accepted === 1 && Boolean(d.issues.byType.MISSING_STATE && d.issues.byType.INVALID_STATE && d.issues.byType.MISSING_BRANCH && d.issues.byType.INVALID_DELIVERY);
+        // Nada se descarta ni se adivina: faltantes quedan "No disponible", inválidos se marcan como inválidos
+        const cells = [...d.parts.values()][0];
+        const byLine = (ln) => [...cells.values()].find((c) => c.line === ln);
+        return d.summary.rejected === 0 && d.summary.accepted === 5 &&
+          Boolean(d.issues.byType.MISSING_STATE && d.issues.byType.INVALID_STATE && d.issues.byType.MISSING_BRANCH && d.issues.byType.INVALID_DELIVERY) &&
+          byLine(3).stateIdx === 0 && (byLine(3).geoFlags & PSx.GF.stateInvalid) && byLine(2).stateIdx === 0 && !(byLine(2).geoFlags & PSx.GF.stateInvalid) &&
+          (byLine(5).geoFlags & PSx.GF.deliveryInvalid) && PSx.dims.states[byLine(6).stateIdx] === 'Estado de México';
       }));
       test('Fase 8.1.1: duplicados', 'Llave con estado + sucursal + entrega: exacto, conflicto y multiplicidad', withCatalog(() => {
         const d = draftOf([
@@ -961,6 +970,189 @@
         const back = BCt.fromImport(JSON.parse(JSON.stringify(ex)));
         return ex.schema === 'business_context' && ex.schemaVersion === 1 && ex.metadata.savedAt === 't' && back.ok && back.ctx.business.name === 'Negocio Demo' &&
           !BCt.fromImport({ schema: 'analysis_export' }).ok && !BCt.fromImport({ schema: 'business_context', schemaVersion: 9, context: { schemaVersion: 9 } }).ok;
+      });
+    }
+
+    /* ---------------- Fase 8.4: geografía del análisis de productos (lógica pura) ---------------- */
+    if (FP.productStore && FP.productStore.entity) {
+      const PG = FP.productStore, PAx = FP.productAnalysis;
+      const saved = { list: PG.catalog.list, bySku: PG.catalog.bySku };
+      const snapDims = () => JSON.stringify({ b: PG.dims.branches, c: PG.dims.cities, r: PG.geo.regions, v: PG.geo.votes });
+      const dimsBefore = snapDims();
+      const iso = (fn) => () => {
+        const keep = { dims: { branches: PG.dims.branches.slice(), branchKey: new Map(PG.dims.branchKey), cities: PG.dims.cities.slice(), cityKey: new Map(PG.dims.cityKey) },
+          geo: { regions: PG.geo.regions.slice(), regionKey: new Map(PG.geo.regionKey), votes: JSON.parse(JSON.stringify(PG.geo.votes)) } };
+        PG._resetCatalog();
+        try { return fn(); } finally {
+          PG.catalog.list = saved.list; PG.catalog.bySku = saved.bySku;
+          Object.assign(PG.dims, keep.dims); Object.assign(PG.geo, keep.geo); PG.deriveGeo();
+        }
+      };
+      const HG = ['fecha', 'canal', 'sku', 'producto', 'categoria', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades'];
+      const loadGeo = (lines, headers = HG) => {
+        const d = PG.createDraft(headers, PG.suggestMapping(headers, 'sales'), { kind: 'sales' });
+        lines.forEach((l, i) => d.addRow(i + 2, l.split(',')));
+        PG.absorbGeo(d.geoObs);
+        const parts = [];
+        d.parts.forEach((cells, pk) => { const [dt, ch] = pk.split('|'); parts.push(PG.toPartition(dt, ch, cells, 'b', 'sales').part); });
+        d.catalog.forEach((e) => { const c = PG.catalog.bySku.get(e.sku); if (c) Object.assign(c, { product: e.product, category: e.category }); });
+        return { d, parts };
+      };
+      const agg = (parts, groupBy, filter) => { const m = new Map(); parts.forEach((p) => PG.accumulateJoint(m, p, null, { groupBy, filter })); return m; };
+      const G = FP.mockProducts.geoCase().split('\n').slice(1);
+
+      test('Fase 8.4: modelo', 'Códigos estables de estado (32) alineados con el catálogo', () =>
+        C.products.stateCodes.length === C.products.states.length && PG.stateCode(PG.stateIdx('Jalisco')) === 'JAL' && PG.stateCode(PG.stateIdx('cdmx')) === 'CDMX');
+      test('Fase 8.4: jerarquía', 'Sucursal → ciudad → estado → región con ruta completa e IDs estables', iso(() => {
+        loadGeo(G);
+        const b = PG.entity('branch', '025'), c = PG.entity('city', 'Guadalajara, JAL');
+        return b.id === '025' && b.name === 'Sucursal Guadalajara Centro' && b.path.map((x) => x.level).join('>') === 'region>state>city>branch' &&
+          b.path.map((x) => x.id).join('>') === 'OCCIDENTE>JAL>JAL-GUADALAJARA>025' && c.path[0].name === 'Occidente';
+      }));
+      test('Fase 8.4: jerarquía', 'La sucursal se ubica por sus recolecciones, no por el domicilio del cliente', iso(() => {
+        loadGeo(['2026-09-20,ecommerce,A,P,Cat,,Jalisco,Guadalajara,030,S30,recoleccion,1,1,1',
+          '2026-09-20,ecommerce,A,P,Cat,,Sonora,Hermosillo,030,S30,domicilio,1,1,1', '2026-09-20,ecommerce,B,P,Cat,,Sonora,Hermosillo,030,S30,domicilio,1,1,1']);
+        return PG.entity('branch', '030').path.find((x) => x.level === 'state').id === 'JAL';
+      }));
+      test('Fase 8.4: importación', 'CSV completo, parcial y sin geografía: nada se descarta ni se adivina', iso(() => {
+        const { d } = loadGeo(G);
+        const t = d.issues.byType;
+        return d.summary.rejected === 0 && d.summary.accepted === G.length && Boolean(t.PARTIAL_GEOGRAPHY && t.NO_GEOGRAPHY && t.INVALID_STATE && t.CITY_WITHOUT_STATE);
+      }));
+      test('Fase 8.4: importación', 'CSV solo con estado y CSV sin ninguna columna de geografía', iso(() => {
+        const a = loadGeo(['2026-09-20,app,A,10,1,1'], ['fecha', 'canal', 'sku', 'venta', 'pedidos', 'unidades']);
+        const b = loadGeo(['2026-09-20,app,A,Puebla,10,1,1'], ['fecha', 'canal', 'sku', 'estado', 'venta', 'pedidos', 'unidades']);
+        const ca = PG.cellAt(a.parts[0], 0), cb = PG.cellAt(b.parts[0], 0);
+        return a.d.summary.accepted === 1 && !a.d.issues.byType.NO_GEOGRAPHY && ca.state === null && ca.geography.state === 'missing' &&
+          cb.state === 'Puebla' && cb.stateCode === 'PUE' && cb.city === null && cb.geography.city === 'missing';
+      }));
+      test('Fase 8.4: calidad', 'Huérfanos, conflictos padre/hijo, nombres y códigos repetidos se reportan', iso(() => {
+        loadGeo(G);
+        const types = new Set(PG.geo.issues.map((i) => i.type));
+        return ['REGION_CONFLICT', 'BRANCH_WITHOUT_STATE', 'BRANCH_STATE_CONFLICT', 'DUPLICATE_BRANCH_NAME', 'CITY_WITHOUT_STATE'].every((t) => types.has(t));
+      }));
+      test('Fase 8.4: calidad', 'Faltante, inválido y sin geografía se distinguen; nunca son 0', iso(() => {
+        const { parts } = loadGeo(G);
+        const cells = parts.flatMap((p) => Array.from({ length: p.n }, (_, i) => PG.cellAt(p, i)));
+        const g3 = cells.find((c) => c.sku === 'G3'), g6 = cells.find((c) => c.sku === 'G6');
+        const st = agg(parts, 'state');
+        return g3.geography.state === 'missing' && g3.state === null && g3.revenue === 200 && g6.geography.state === 'invalid' && g6.state === '(inválido)' &&
+          st.get('(sin dato)').revenue === 200 && st.get('(inválido)').revenue === 100;
+      }));
+      test('Fase 8.4: análisis', 'Categoría × región, producto × ciudad y SKU × sucursal cuadran con el total', iso(() => {
+        const { parts } = loadGeo(G);
+        const tot = agg(parts, 'total').get('Total').revenue;
+        const sum = (m) => [...m.values()].reduce((a, x) => a + x.revenue, 0);
+        const byRegion = agg(parts, 'region', { category: 'Vitaminas' });
+        const byCity = agg(parts, 'city', { product: 'Prod G1' });
+        const byBranch = agg(parts, 'branch', { sku: 'G1' });
+        return near(sum(byRegion), tot) && byCity.get('Guadalajara, JAL').revenue === 1000 && byCity.get('Zapopan, JAL').revenue === 500 && byBranch.get('025').revenue === 1500;
+      }));
+      test('Fase 8.4: filtros', 'Filtros jerárquicos: ciudades del estado, sucursales de la ciudad; región filtra sus estados', iso(() => {
+        const { parts } = loadGeo(G);
+        const saveMeta = PG.meta.states;
+        const o = PG.geoOptions({ state: 'Jalisco' });
+        const cityOk = o.cities.every((c) => /, JAL$/.test(c)) && o.cities.includes('Guadalajara, JAL');
+        const b = PG.geoOptions({ city: 'Guadalajara, JAL' }).branches.map((x) => x.code);
+        const reg = agg(parts, 'state', { region: 'Occidente' });
+        return cityOk && b.includes('025') && !b.includes('027') && [...reg.keys()].every((k) => k === 'Jalisco') && saveMeta === PG.meta.states;
+      }));
+      test('Fase 8.4: funnel', 'Geografía no se inventa en el funnel: CR y funnel no disponibles por región o ciudad', () =>
+        !PG.funnelJoinable('region', {}) && !PG.funnelJoinable('category', { city: 'X' }) && PG.funnelJoinable('category', {}));
+      test('Fase 8.4: persistencia', 'Bloque anterior sin ciudad + archivo nuevo con ciudad que cuadra = enriquecido, sin duplicar', iso(() => {
+        const H0 = ['fecha', 'canal', 'sku', 'estado', 'sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades'];
+        const old = loadGeo(['2026-09-20,app,A,Jalisco,025,domicilio,300,3,3'], H0).parts[0];
+        delete old.cityIdx; delete old.geoFlags;
+        const nw = loadGeo(['2026-09-20,app,A,Jalisco,Guadalajara,025,domicilio,200,2,2', '2026-09-20,app,A,Jalisco,Zapopan,025,domicilio,100,1,1'],
+          ['fecha', 'canal', 'sku', 'estado', 'ciudad', 'sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades']).parts[0];
+        const m = PG.mergePartitions(old, nw, 'keep', 'b2');
+        const bad = loadGeo(['2026-09-20,app,A,Jalisco,Guadalajara,025,domicilio,999,9,9'], ['fecha', 'canal', 'sku', 'estado', 'ciudad', 'sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades']).parts[0];
+        const k = PG.mergePartitions(old, bad, 'keep', 'b3');
+        const total = (p) => Array.from(p.revenue).reduce((a, x) => a + x, 0);
+        return m.report.enriched === 1 && m.part.n === 2 && total(m.part) === 300 && k.report.conflicts === 1 && k.part.n === 1 && total(k.part) === 300;
+      }));
+      test('Fase 8.4: export', 'Filas geográficas con entidad, ruta y señales; campos existentes intactos', iso(() => {
+        const { parts } = loadGeo(G);
+        const m = agg(parts, 'state');
+        const r = { ...PAx.compare(m, new Map(), { level: 'state' }), period: { from: 'a', to: 'b' }, baseline: { from: 'c', to: 'd' }, comparison: 'previous', channel: 'total', filter: {}, next: 'city', mappedMetrics: { sales: C.products.metrics, funnel: [] }, geoSignals: [] };
+        r.rows.forEach((x) => { const g = PAx.geography('state', x.key); if (g) x.geography = g; });
+        const ex = FP.categoryProductExport.buildCategoryProductExport(r, { batches: [] });
+        const jal = ex.rows.find((x) => x.key === 'Jalisco');
+        return ex.schema === 'category_product_analysis_export' && ['rows', 'rules', 'total', 'compensation', 'signals', 'sourceFiles'].every((k) => k in ex) &&
+          jal.geography.id === 'JAL' && jal.geography.path[0].name === 'Occidente' && Array.isArray(ex.geoSignals) && ex.geography.scope === 'products' &&
+          ex.rows.find((x) => x.key === '(sin dato)').geography === null;
+      }));
+      test('Fase 8.4: alcance', 'Geografía solo en productos: canales, métricas y motores globales sin dimensión geográfica', () =>
+        FP.config.channelIds.length === 4 && FP.config.metricKeys.length === 5 && snapDims() === dimsBefore &&
+        !Object.keys(FP.config.diagnostics.dimensions).includes('city') && typeof FP.forecastEngine.runForecast === 'function');
+    }
+
+    /* ---------------- Fase 9.1: UX pedagógica (consistencia entre explicaciones y motores) ---------------- */
+    if (FP.guidanceConfig && FP.guidanceConfig.METHOD_GUIDE && FP.explain) {
+      const GC9 = FP.guidanceConfig, EX = FP.explain;
+      const helpOf = (id) => GC9.HELP.find((h) => h.id === id);
+      const PRIORITY = ['meta', 'plan', 'actual', 'pacing', 'forecast', 'diagnostico', 'driver', 'senal', 'hipotesis', 'recovery', 'escenario', 'accion', 'impactoObservado'];
+      test('Fase 9.1: ayuda', 'Conceptos clave responden qué es, para qué sirve, qué NO significa y qué decisión ayuda a tomar', () =>
+        PRIORITY.every((id) => { const h = helpOf(id); return h && h.shortDescription && h.purpose && h.caveats && h.decision && (h.related || []).every(helpOf); }));
+      test('Fase 9.1: ayuda', 'Un solo sistema de ayuda: pedagogía fusionada en HELP, sin ids duplicados', () => {
+        const ids = GC9.HELP.map((h) => h.id);
+        return new Set(ids).size === ids.length && Object.keys(GC9.PEDAGOGY).every(helpOf) && GC9.TRIGGERS.every(([, id]) => helpOf(id));
+      });
+      test('Fase 9.1: métodos', 'La guía de forecast cubre exactamente los métodos del motor y coincide con su configuración', () => {
+        const cfg = C.forecast;
+        const same = Object.keys(GC9.METHOD_GUIDE).sort().join() === Object.keys(cfg.methods).sort().join();
+        const win = (w) => String(cfg.windows[w].days || '');
+        const cOk = GC9.METHOD_GUIDE.C.uses.includes(win(cfg.recentWindow));
+        const dOk = GC9.METHOD_GUIDE.D.assumption.includes(win(cfg.driverWindows.trafficVolume)) && cfg.driverWindows.conversionRate === 'ytd' && /acumulado del año/.test(GC9.METHOD_GUIDE.D.assumption)
+          && cfg.driverWindows.aov === 'ytd';
+        const bOk = /acumulado del año/.test(GC9.METHOD_GUIDE.B.uses) && /plan/.test(GC9.METHOD_GUIDE.A.uses);
+        return same && cOk && dOk && bOk && helpOf('forecast').formula.includes('A, B, C o D');
+      });
+      test('Fase 9.1: trazabilidad', '"¿Por qué?" recompone forecast, gap, cumplimiento y gap forecast con las cifras reales del motor', () => {
+        const st = actualStore({ ecommerce: 0.9, app: 1.05, whatsapp: 1, llamadas: 0.95 });
+        return ['A', 'B', 'C', 'D'].every((m) => {
+          const run = run3(st, { method: m });
+          return [EX.whyForecast({ run }), EX.whyForecast({ run, channel: 'app', periodKey: '2026-09', metric: 'orders' }), EX.whyGap({ run, channel: 'ecommerce' }),
+            EX.whyCompliance({ run }), EX.whyForecastGap({ run, periodKey: '2026-10' })].every((x) => x.check && x.check.ok)
+            && EX.whyForecast({ run }).method.id === m && EX.whyForecast({ run }).method.label === C.forecast.methods[m].label;
+        });
+      });
+      test('Fase 9.1: trazabilidad', 'Identidad venta = volumen × CR × AOV y reforecast = meta − actual, verificadas contra el motor', () => {
+        const st = actualStore({ ecommerce: 0.9, app: 1, whatsapp: 1, llamadas: 1 });
+        const run = run3(st);
+        const rf = RF.runReforecast({ run, planVersion: planV, store: st });
+        const id = EX.whyIdentity(run.total.annual.actualToDate), r = EX.whyReforecast({ rf });
+        return id.check.ok && r.check.ok && helpOf('revenue').formula.startsWith('Venta = Volumen × CR × AOV') && /no es un pronóstico/i.test(r.doesNotMean);
+      });
+      test('Fase 9.1: interpretación', '"¿Qué significa?" se separa de "¿cómo se calculó?" y no afirma causas', () => {
+        const run = run3(actualStore({ ecommerce: 0.9, app: 1, whatsapp: 1, llamadas: 1 }));
+        const xs = [EX.whyForecast({ run }), EX.whyGap({ run }), EX.whyForecastGap({ run })];
+        return xs.every((x) => x.steps.length && x.meaning && x.doesNotMean && x.meaning !== x.howComputed && !/caus[aóo]/i.test(x.meaning))
+          && /por debajo|por encima/.test(EX.whyGap({ run }).meaning);
+      });
+      test('Fase 9.1: metodología', 'La cadena META → … → OBSERVADO apunta a ayuda y vistas existentes (narrativa marcada como futura)', () => {
+        const M = GC9.METHODOLOGY;
+        return M.map((m) => m.id).join() === 'meta,plan,real,pacing,forecast,diagnostico,senales,hipotesis,recovery,escenarios,accion,observado,narrativa'
+          && M.filter((m) => !m.upcoming).every((m) => helpOf(m.help) && GC9.VIEWS[m.view]) && M.find((m) => m.id === 'narrativa').upcoming === true
+          && Object.entries(GC9.VIEW_STEP).every(([v, st]) => GC9.VIEWS[v] && M.some((m) => m.id === st));
+      });
+      test('Fase 9.1: microlearning', 'Lecciones breves, únicas, ligadas a eventos y a ayuda existente', () => {
+        const L = GC9.LESSONS;
+        return new Set(L.map((l) => l.id)).size === L.length && new Set(L.map((l) => l.event)).size === L.length
+          && L.every((l) => l.text.length <= 170 && helpOf(l.help));
+      });
+      test('Fase 9.1: modos', 'Un solo selector y un solo estado: Aprendiz, Analista y Ejecutivo', () => {
+        const ids = GC9.MODES.map(([id]) => id);
+        return ids.join() === 'learner,analyst,exec' && GC9.TOUR.every((t) => t.chapter) && GC9.TOUR.length >= 10;
+      });
+      test('Fase 9.1: terminología', 'Las explicaciones respetan la terminología del Business Context', () =>
+        EX.term('Cada {{order}} y sus {{orders}}') === 'Cada pedido y sus pedidos'
+        && EX.term('Cada {{order}} y sus {{orders}} en la {{location}}', { order: 'orden', location: 'tienda' }) === 'Cada orden y sus ordenes en la tienda'
+        && EX.term('{{customers}} por {{location}}', { location: 'local' }) === 'clientes por local');
+      test('Fase 9.1: integridad', 'Los ejemplos se etiquetan como ilustrativos; la geografía se explica solo para productos', () => {
+        const ex = Object.values(GC9.EXPLAINERS).filter((x) => x.learn && x.learn.example);
+        return ex.length >= 5 && ex.every((x) => x.learn.example.startsWith('Ejemplo ilustrativo'))
+          && /exclusiva del análisis de productos/.test(GC9.EXPLAINERS.producto.learn.assumptions.join(' '));
       });
     }
 

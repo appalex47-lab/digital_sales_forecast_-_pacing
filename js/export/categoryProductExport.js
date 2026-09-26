@@ -34,8 +34,17 @@
       total: { current: metrics(result.total.current), baseline: metrics(result.total.baseline), revenue: result.total.revenue },
       rows: result.rows.map((r) => ({ key: r.key, level: r.level, status: r.status, revenue: r.revenue, share: r.share, baselineShare: r.baselineShare,
         contribution: r.contribution, contributionAbs: r.contributionAbs, current: metrics(r.current), baseline: metrics(r.baseline),
-        drivers: r.drivers, signals: r.signals, skus: r.current ? r.current.skus : 0, conflicts: r.current ? r.current.conflicts : 0 })),
+        drivers: r.drivers, signals: r.signals, geography: r.geography || null, skus: r.current ? r.current.skus : 0, conflicts: r.current ? r.current.conflicts : 0 })),
       compensation: result.compensation, concentration: result.concentration, signals: result.signals,
+      // Fase 8.4 (aditivo): geografía del análisis de productos. Solo capa de productos; no es una dimensión global.
+      geoSignals: result.geoSignals || [],
+      geography: FP.productStore ? {
+        scope: 'products',
+        levelsAvailable: Object.entries(FP.productStore.geoOptions({}).available).filter(([, v]) => v).map(([k]) => k),
+        filters: Object.fromEntries(['region', 'state', 'city', 'branch', 'delivery'].filter((k) => result.filter && result.filter[k]).map((k) => [k, result.filter[k]])),
+        quality: (FP.productStore.geo.issues || []).map((i) => ({ type: i.type, message: i.message, entity: i.entity })),
+        note: 'Canal = dónde se vende; región/estado/ciudad/sucursal/entrega = dónde se atiende el pedido. El funnel no tiene geografía.'
+      } : null,
       diagnosisLink: diagnosis ? { comparison: diagnosis.comparison, period: diagnosis.period, channel: diagnosis.channel,
         gap: diagnosis.gap || null, mainDriver: diagnosis.level1 ? diagnosis.level1.mainDriver : null } : null,
       sourceFiles: batches.map((b) => ({ id: b.id, fileName: b.fileName, importedAt: b.importedAt, rows: b.summary.rows, accepted: b.summary.accepted,
