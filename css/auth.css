@@ -1,0 +1,38 @@
+/* auth.css — Modal de login y controles de sesión (Supabase Auth) */
+
+/* Sin sesión: scroll bloqueado y todo el dashboard oculto detrás del modal */
+body.auth-locked { overflow: hidden; }
+body.auth-locked > *:not(.auth-overlay):not(script) { display: none !important; }
+
+.auth-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(10, 18, 36, .72);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.auth-overlay[hidden] { display: none !important; }
+
+.auth-modal {
+  width: min(100%, 400px);
+  background: var(--ds-surface, #fff); color: var(--ds-text, #14213D);
+  border-radius: 14px; padding: 28px 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+}
+.auth-modal__title { margin: 0 0 4px; font-size: 1.25rem; }
+.auth-modal__lead { margin: 0 0 20px; color: var(--ds-text-muted, #59677B); font-size: .9rem; }
+.auth-form { display: grid; gap: 14px; }
+.auth-form .field input { width: 100%; box-sizing: border-box; }
+.auth-form .btn { width: 100%; justify-content: center; }
+.auth-error {
+  margin: 0; padding: 8px 10px; border-radius: 8px; font-size: .85rem;
+  background: var(--ds-danger-soft, #FCE8E6); color: var(--ds-danger, #B3261E);
+}
+
+/* Controles de sesión en el header */
+.session-controls { display: flex; align-items: center; gap: 10px; }
+.session-controls[hidden] { display: none !important; }
+.session-controls__email {
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .8rem; color: var(--ds-on-nav, #fff); opacity: .9;
+}
+@media (max-width: 700px) { .session-controls__email { display: none; } }
