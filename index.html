@@ -8,11 +8,28 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230E5E6F'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/auth.css">
 </head>
-<body>
+<body class="auth-locked">
 
   <a class="skip-link" href="#contenido" data-skip="main">Saltar al contenido</a>
   <div class="visually-hidden" id="route-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Modal de login (sin registro: los usuarios se crean desde el panel de Supabase) -->
+  <div class="auth-overlay" id="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="auth-modal">
+      <h2 class="auth-modal__title" id="auth-title">Iniciar sesión</h2>
+      <p class="auth-modal__lead">Accede a tu cuenta de RevNavigator.</p>
+      <form class="auth-form" id="auth-form" novalidate>
+        <div class="field"><label for="auth-email">Correo</label>
+          <input type="email" id="auth-email" autocomplete="username" required></div>
+        <div class="field"><label for="auth-password">Contraseña</label>
+          <input type="password" id="auth-password" autocomplete="current-password" required></div>
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn--primary" id="auth-submit">Entrar</button>
+      </form>
+    </div>
+  </div>
 
   <div id="save-failure" class="save-failure" role="alert" hidden></div>
   <header class="app-header">
@@ -36,7 +53,10 @@
         <div class="topbar__status" id="topbar-status" role="group" aria-label="Estado de la herramienta"></div>
         <div class="topbar__actions">
           <button type="button" class="icon-btn" disabled aria-label="Notificaciones (próximamente)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 004 0"/></svg><span class="icon-btn__dot"></span></button>
-          <span class="avatar" role="img" aria-label="Usuario (próximamente)">RN</span>
+          <div class="session-controls" id="session-controls" hidden>
+            <span class="session-controls__email" id="session-email"></span>
+            <button type="button" class="btn btn--quiet" id="btn-logout">Cerrar sesión</button>
+          </div>
         </div>
       </div>
 
@@ -501,6 +521,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Orden de carga = orden de dependencias (ver ARCHITECTURE.md §4) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
   <script src="js/config/businessContext.js"></script>
   <script src="js/config/config.js"></script>
   <script src="js/config/guidanceConfig.js"></script>
