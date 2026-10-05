@@ -10,8 +10,8 @@
 (function (root) {
   'use strict';
 
-  const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';   // ← reemplazar
-  const SUPABASE_ANON_KEY = 'TU_ANON_PUBLIC_KEY';           // ← reemplazar
+  const SUPABASE_URL = 'https://odsaouldxxjurniizefc.supabase.co/rest/v1/';   // ← reemplazar
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kc2FvdWxkeHhqdXJuaWl6ZWZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNDU1MTYsImV4cCI6MjEwNjcyMTUxNn0.saH_lO9hjm4OoSsZdMQ668-cD3A1lgGsIrEaODeYww8';           // ← reemplazar
 
   const FP = (root.FP = root.FP || {});
   const $ = (id) => document.getElementById(id);
