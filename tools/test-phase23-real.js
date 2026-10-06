@@ -1,0 +1,9 @@
+const fs=require('fs'),vm=require('vm');
+const ctx={console,globalThis:{},FP:{format:{currency:v=>`$${Math.round(v).toLocaleString('en-US')}`}}};ctx.globalThis=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('js/analytics/analysisNarrativeEngine.js','utf8'),ctx);
+const fixture=JSON.parse(fs.readFileSync('tools/real-data-product-aug-sep.json','utf8'));
+const rows=Array.isArray(fixture)?fixture:(fixture.rows||fixture.data||[]);
+const normalized=rows.map(r=>({entity:r.entity||r.product||r.sku||r.name,direction:(Number(r.currentValue??r.current??0)-Number(r.baselineValue??r.baseline??0))>=0?'growth':'decline'})).filter(r=>r.entity);
+const n=ctx.FP.analysisNarrativeEngine.build({rows:normalized,level:'product',contribution:{status:'available',direction:'growth',totalDelta:9964807.87,positive:[{entity:'GARDASIL 9',delta:1421601.92}],negative:[{entity:'VIDAZA',delta:-58057.65}]},risks:{risks:[{entity:'VIDAZA',score:9}],opportunities:[{entity:'GARDASIL 9',score:10}]},cohort:{status:'available',latestPeriod:'2026-09',summary:{newCount:159,retainedCount:1250,reactivatedCount:673,lostCount:556,retentionRate:1250/1806}},forecast:{rows:[{status:'available',entity:'MOUNJARO',horizon:3,changeToHorizon:.12}]}});
+const assert=(x,m)=>{if(!x)throw new Error(m)};
+assert(normalized.length>0,'fixture rows'); assert(n.ready,'narrative ready'); assert(n.layerStatus.fact==='available','fact'); assert(n.layerStatus.driver==='available','driver'); assert(n.layerStatus.signal==='available','signal'); assert(n.layerStatus.hypothesis==='available','hypothesis'); assert(n.layerStatus.projection==='available','projection'); assert(n.layerStatus.lifecycle==='available','lifecycle'); assert(n.executiveSummary.includes('GARDASIL 9')||n.executiveSummary.includes('VIDAZA'),'real entities in summary'); assert(n.nextQuestion.length>20,'next question');
+console.log(`REAL NARRATIVE: ${normalized.length} entidades, 6/6 capas disponibles, PASS`);

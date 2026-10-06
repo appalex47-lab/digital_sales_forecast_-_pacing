@@ -1,0 +1,15 @@
+const fs=require('fs'),vm=require('vm');
+const ctx={console};vm.createContext(ctx);vm.runInContext(fs.readFileSync('js/analytics/actionPriorityEngine.js','utf8'),ctx);
+const E=ctx.FP.actionPriorityEngine;
+const rows=JSON.parse(fs.readFileSync('tools/real-priority-aug-sep.json','utf8'));
+const r=E.analyze(rows,{baselinePeriod:'2026-08',currentPeriod:'2026-09'});
+const checks=[];const t=(n,o)=>checks.push({n,ok:!!o});
+t('2638 entidades comparables',rows.length===2638);
+t('VIDAZA es la mayor caída real',r.drag[0]?.entity==='VIDAZA 25MG/ML FAM CAJ C/1');
+t('caída VIDAZA -58057.65',Math.abs(r.drag[0]?.impact+58057.65)<0.01);
+t('ADEMPAS segunda caída real',r.drag[1]?.entity==='ADEMPAS 2.5MG COM CAJ C/42');
+t('GARDASIL mayor compensador real',r.compensate[0]?.entity==='GARDASIL 9 0.5 mL SUS INY JPRELL CAJ C/1');
+t('GARDASIL +1421601.92',Math.abs(r.compensate[0]?.impact-1421601.92)<0.01);
+t('periodo 2026-08 → 2026-09',r.drag.every(x=>x.baselinePeriod==='2026-08'&&x.currentPeriod==='2026-09')&&r.compensate.every(x=>x.baselinePeriod==='2026-08'&&x.currentPeriod==='2026-09'));
+t('prioridades muestran participación del movimiento',r.drag.every(x=>Number.isFinite(x.impactSharePct))&&r.compensate.every(x=>Number.isFinite(x.impactSharePct)));
+console.log(`${checks.filter(x=>x.ok).length}/${checks.length} checks real Fase 25`);checks.forEach(x=>console.log(`${x.ok?'PASS':'FAIL'} ${x.n}`));if(checks.some(x=>!x.ok))process.exit(1);
