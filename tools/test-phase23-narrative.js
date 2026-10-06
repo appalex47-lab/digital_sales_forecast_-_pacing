@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm');
+const ctx={console,globalThis:{},FP:{format:{currency:v=>`$${Math.round(v)}`}}};ctx.globalThis=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('js/analytics/analysisNarrativeEngine.js','utf8'),ctx);
+const rows=[{entity:'A',direction:'growth'},{entity:'B',direction:'decline'},{entity:'C',direction:'growth'}];
+const n=ctx.FP.analysisNarrativeEngine.build({rows,level:'product',contribution:{status:'available',direction:'growth',totalDelta:100,positive:[{entity:'A',delta:150}],negative:[{entity:'B',delta:-50}]},risks:{risks:[{entity:'B',score:9}],opportunities:[{entity:'A',score:8}]},forecast:{rows:[{status:'available',entity:'A',horizon:3,changeToHorizon:.12}]},cohort:{status:'available',latestPeriod:'2026-09',summary:{newCount:10,retainedCount:20,reactivatedCount:5,lostCount:4,retentionRate:.8}}});
+const assert=(x,m)=>{if(!x)throw new Error(m)};
+assert(n.ready,'ready'); assert(n.schemaVersion===2,'schema'); assert(n.layers.length===6,'six layers');
+assert(n.layerStatus.fact==='available','fact'); assert(n.layerStatus.driver==='available','driver'); assert(n.layerStatus.signal==='available','signal'); assert(n.layerStatus.hypothesis==='available','hypothesis'); assert(n.layerStatus.projection==='available','projection'); assert(n.layerStatus.lifecycle==='available','lifecycle');
+assert(n.sections.lifecycle.length===2,'lifecycle claims'); assert(n.nextQuestion.includes('hipótesis')||n.nextQuestion.includes('evidencia'),'next question');
+assert(n.claims.every(c=>c.layer),'traceable claims');
+const empty=ctx.FP.analysisNarrativeEngine.build({rows:[]}); assert(!empty.ready,'empty');
+console.log('FASE 23 NARRATIVA: 11/11 PASS');
