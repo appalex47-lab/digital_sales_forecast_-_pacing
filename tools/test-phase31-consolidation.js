@@ -1,0 +1,22 @@
+const fs=require('fs'), path=require('path'), vm=require('vm');
+const root=path.resolve(__dirname,'..');
+let pass=0, fail=0;
+function t(name,ok){if(ok){pass++;console.log('PASS',name)}else{fail++;console.log('FAIL',name)}}
+const trend=fs.readFileSync(path.join(root,'js/ui/trend-view.js'),'utf8');
+const arch=fs.readFileSync(path.join(root,'js/analytics/analysisArchitecture.js'),'utf8');
+const app=fs.readFileSync(path.join(root,'js/app.js'),'utf8');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const css=fs.readFileSync(path.join(root,'css/styles.css'),'utf8');
+t('no visible contribution panel function', !/function contributionPanel\s*\(/.test(trend));
+t('no visible contribution panel render call', !/\$\{contributionPanel\(a\)\}/.test(trend));
+t('no visible "Contribución y origen" title', !/Contribución y origen/.test(trend));
+t('next step no longer routes to Contribution', !/continúa con Contribución/.test(trend));
+t('Driver architecture exposes only Mix Intelligence', /id: 'driver'[^\n]*modules: \['Mix Intelligence'\]/.test(arch));
+t('contribution engine remains internal capability', /FP\.contributionEngine/.test(app));
+t('narrative still receives contribution internally', /contribution: an\.contribution/.test(app));
+t('entity chart explicitly declares X/Y axes', /X = fecha \/ período · Y = crecimiento %/.test(trend));
+t('entity chart has actual axis lines and ticks', /trend-chart__axis-line/.test(trend) && /trend-chart__tick/.test(trend));
+t('axis labels are explicit', /Y · crecimiento %/.test(trend) && /X · fecha \/ período/.test(trend));
+t('axis CSS exists', /\.trend-chart__axis-line/.test(css) && /\.trend-chart__tick/.test(css));
+t('contribution engine script remains loaded', /js\/analytics\/contributionEngine\.js/.test(html));
+console.log(`RESULT ${pass}/${pass+fail}`); process.exit(fail?1:0);
