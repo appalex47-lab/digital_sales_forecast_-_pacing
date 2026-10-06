@@ -1,4 +1,0 @@
-Vistas migradas revisadas: import-view, quality-view, data-view, seasonality-view, planning-view, planning-config-view, business-view, pacing-view, forecast-view, reforecast-view, diagnostic-view, product-view, recovery-center, scenario-view, action-plan-view, measure-view, narrative-view, settings-view, package-view, segments-view
-✘ design-system.css (I-base) línea 734: hex fuera de un token → border: 1px solid var(--border, #d9dee7);
-✘ design-system.css (I-base) línea 744: hex fuera de un token → .cohort-help { margin-top:1rem; padding:1rem; border:1px solid var(--b
-RESULTADO lint_design: 2 hallazgos
