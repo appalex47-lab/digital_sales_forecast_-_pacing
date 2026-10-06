@@ -1,0 +1,13 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const base='/tmp/phase28/phase25'; const rows=JSON.parse(fs.readFileSync(`${base}/tools/phase29-real-fixture.json`));
+const ctx=vm.createContext({FP:{},console}); vm.runInContext(fs.readFileSync(`${base}/js/analytics/trendForecastEngine.js`,'utf8'),ctx); const FE=ctx.FP.trendForecastEngine;
+const r=FE.analyzeMany(rows,{horizon:3,method:'ensemble',periodType:'month'});
+let p=0,f=0; const t=(n,fn)=>{try{assert.ok(fn());console.log('PASS',n);p++;}catch(e){console.log('FAIL',n,e.message);f++;}};
+t('CSV real produce forecast',()=>r.status==='available'&&r.rows.length>1000);
+t('ranking por confianza',()=>r.rows.every((x,i)=>i===0||x.confidenceScore<=r.rows[i-1].confidenceScore || Math.abs((x.totalForecast-x.lastValue)-(r.rows[i-1].totalForecast-r.rows[i-1].lastValue))>=0));
+t('hay confianza alta o media',()=>r.highConfidence+r.mediumConfidence>0);
+t('hay crecimiento y/o caída proyectada',()=>r.growth+r.decline>0);
+t('hay piezas disponibles en forecast',()=>r.rows.filter(x=>Number.isFinite(x.latestUnits)).length>1000);
+t('hay backtesting real',()=>r.rows.filter(x=>x.backtest&&x.backtest.periodsTested>0).length>1000);
+const top=r.rows[0]; t('top tiene lectura humana',()=>typeof top.directionReading==='string'&&top.directionReading.length>10);
+console.log(`RESULT ${p}/${p+f} PASS | entidades=${r.rows.length} | alta=${r.highConfidence} media=${r.mediumConfidence} baja=${r.lowConfidence} crecimiento=${r.growth} caída=${r.decline}`); process.exitCode=f?1:0;
