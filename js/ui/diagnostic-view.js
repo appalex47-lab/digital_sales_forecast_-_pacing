@@ -320,10 +320,22 @@
           <td class="num">${calc(x.current, 'conversionRate', (v) => `${(v * 100).toFixed(2)} %`)}</td><td class="num">${calc(x.current, 'aov', (v) => F.currency(v, 0))}</td></tr>`).join('')}</tbody></table></div>`;
     };
     const t = r.category.total.revenue;
+    const bl = r.category.baseline || {};
+    const hc = d.result && d.result.current && d.result.current.revenue, hb = d.result && d.result.baseline && d.result.baseline.revenue, cov = d.coverage;
+    const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 1;
+    const cuadra = near(hc, t.current) && near(hb, t.baseline);
+    const recon = Number.isFinite(hc) && Number.isFinite(hb)
+      ? (cuadra ? `<p class="field__hint" data-recon="ok">Cuadre: la venta de productos (${F.currency(t.current || 0, 0)} contra ${F.currency(t.baseline || 0, 0)}) coincide con la venta del titular.</p>`
+        : `<p class="field__hint" data-recon="diff">Cuadre con el titular: el titular muestra ${F.currency(hc, 0)} contra ${F.currency(hb, 0)}${cov && cov.paired !== undefined ? ` porque solo cuenta los días con dato en ambos periodos (${cov.paired} de ${cov.expected} día×canal${cov.baselineRange ? `, referencia ${esc(cov.baselineRange[0])} a ${esc(cov.baselineRange[1])}` : ''})` : ''}; este desglose suma el periodo completo (${esc(r.from)} a ${esc(r.to)} contra ${esc(bl.from || '')} a ${esc(bl.to || '')}). Diferencia en venta actual: ${signed((t.current || 0) - hc)}; en referencia: ${signed((t.baseline || 0) - hb)}. Si la diferencia no se explica por días sin dato, revisa que el archivo de venta real y el de productos cubran las mismas fechas.</p>`)
+      : '';
+    const dayNote = cov && cov.currentRange && cov.currentRange[1] && r.to && cov.currentRange[1] !== r.to
+      ? `<p class="field__hint" data-recon="days">Aviso: los datos de producto llegan hasta ${esc(r.to)} y el titular cuenta la venta real hasta ${esc(cov.currentRange[1])}; no cubren los mismos días, por eso las cifras pueden no coincidir.</p>` : '';
     el.innerHTML = `${head}
-      <p class="field__hint">Venta de productos ${esc(r.from)} a ${esc(r.to)} contra ${esc(r.comparison === 'yoy' ? 'las mismas fechas del año anterior' : 'el periodo anterior de la misma duración')}:
+      <p class="field__hint">Venta de productos ${esc(r.from)} a ${esc(r.to)} contra ${esc(r.comparison === 'yoy' ? 'las mismas fechas del año anterior' : (bl.label || 'el periodo anterior'))} (${esc(bl.from || '')} a ${esc(bl.to || '')}):
         <strong>${F.currency(t.current || 0, 0)}</strong> contra ${F.currency(t.baseline || 0, 0)} (${signed(t.delta)}). ${r.note ? esc(r.note) : ''}
         Contribución = parte del cambio total de la venta de productos. El CR del embudo es pedidos ÷ vistas de ficha; no es el CR por sesiones del árbol de arriba.</p>
+      ${recon}
+      ${dayNote}
       ${table('Categoría', r.category, 'dx-p-cat')}
       ${table('Producto', r.product, 'dx-p-prod')}
       ${table('Región', r.region, 'dx-p-reg')}

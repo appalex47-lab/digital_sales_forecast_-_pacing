@@ -82,7 +82,7 @@
     const recurrent = co.summary || {};
     const forecastRows = Array.isArray(f?.items) ? f.items.slice(0, 10).map(x => ({ entity: cleanEntity(x), pattern: x.pattern || null, next: x.forecast?.[0] || null })) : [];
     return {
-      scope: { level: a.level || null, periodType: a.periodType || null, periodCount: a.periodCount || null, focus: t.focus || null, comparison: s.comparisonLabel || null },
+      scope: { channel: a.context ? { id: a.context.channel, label: a.context.channelLabel } : { id: a.channel || 'total', label: 'Total digital' }, comparisonRange: a.comparisonInfo ? { current: a.comparisonInfo.current, baseline: a.comparisonInfo.baseline, text: a.comparisonInfo.text, partial: a.comparisonInfo.partial, available: a.comparisonInfo.comparable } : null, level: a.level || null, periodType: a.periodType || null, periodCount: a.periodCount || null, focus: t.focus || null, comparison: s.comparisonLabel || null },
       total: { current: finite(t.currentTotal) ? t.currentTotal : null, baseline: finite(c.totalBaseline) ? c.totalBaseline : null, delta: finite(c.totalDelta) ? c.totalDelta : null, direction: c.direction || null },
       hecho: { declines: decline, growth, lost: lostByValue },
       driver: { contributionPositive: contribPositive, contributionNegative: contribNegative, positiveDelta: c.compensation?.positiveDelta ?? null, negativeDelta: c.compensation?.negativeDelta ?? null, concentration: c.concentration || null },

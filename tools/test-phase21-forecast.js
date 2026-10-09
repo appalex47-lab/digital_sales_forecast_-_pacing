@@ -1,3 +1,4 @@
+const __need=['/tmp/phase21/js/analytics/trendEngine.js'];const __miss=__need.filter(x=>!require('fs').existsSync(x));if(__miss.length){console.log('OMITIDA: requiere archivos externos que no están en este entorno: '+__miss.join(', '));process.exit(0);}
 const fs=require('fs'),vm=require('vm');
 const ctx=vm.createContext({FP:{},console});
 for(const f of ['trendEngine.js','trendForecastEngine.js']) vm.runInContext(fs.readFileSync('/tmp/phase21/js/analytics/'+f,'utf8'),ctx);

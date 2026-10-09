@@ -43,7 +43,7 @@ async def main():
         chk('Q-2 con datos: tres tablas (Categoría, Producto, Región) con venta, referencia, Δ venta, contribución, CR del embudo y AOV', len(a['tbl']) == 3 and [h[0] for h in heads] == ['Categoría', 'Producto', 'Región'] and all(h[1:] == ['Venta', 'Referencia', 'Δ venta', 'Contribución', 'CR del embudo', 'AOV'] for h in heads) and all(len(t['rows']) >= 1 for t in a['tbl']), heads)
         chk('Q-2 la nota explica la comparación (sin plan por producto se compara contra el periodo anterior) y que el CR del embudo no es el CR por sesiones', 'No existe plan por producto' in a['text'] and 'no es el CR por sesiones' in a['text'], a['text'][:400])
         chk('Q-2 «no disponible» ya no lista Categoría, Producto ni Geografía', not any(x in a['notd'] for x in ('Categoría', 'Producto', 'Geografía')), a['notd'])
-        ref = await q.evaluate("""async()=>{const d=FP.app.state.dx.run;const x=FP.productAnalysis.fromDiagnosis(d);const r=await FP.productAnalysis.run({from:x.from,to:x.to,comparison:x.comparison,channel:x.channel,level:'category',withGeoSignals:false});
+        ref = await q.evaluate("""async()=>{const d=FP.app.state.dx.run;const x=FP.productAnalysis.fromDiagnosis(d);const r=await FP.productAnalysis.run({from:x.from,to:x.to,periodType:x.periodType,comparison:x.comparison,channel:x.channel,level:'category',withGeoSignals:false});
           const top=r.rows.filter(z=>!/^\\(/.test(z.key))[0];return {key:top.key,cur:Math.round(top.revenue.current),delta:Math.round(top.revenue.delta),contrib:top.contribution,from:x.from,to:x.to}}""")
         row = a['tbl'][0]['rows'][0]
         cur = int(row[1].replace('$', '').replace(',', '')); dl = row[3].split(' ')[0]

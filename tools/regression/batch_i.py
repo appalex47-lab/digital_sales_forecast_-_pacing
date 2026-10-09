@@ -55,7 +55,7 @@ async def main():
         FIRST = {'planear': 'carga', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'medir': 'medir'}
         await q.goto(u + '#inicio'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
-        chk('R-5 5 secciones, cada una un botón con aria-expanded y aria-controls válido', [x['name'] for x in n] == ['Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Medir y aprender'] and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
+        chk('R-5 6 secciones, cada una un botón con aria-expanded y aria-controls válido', [x['name'] for x in n] == ['Planear', 'Monitorear', 'Diagnosticar', 'Análisis', 'Recuperar', 'Medir y aprender'] and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
         chk('R-5 en Inicio todas las secciones están cerradas y su contenido no ocupa espacio', all(x['exp'] == 'false' and x['hidden'] and not x['vis'] for x in n), n)
         ini = await q.evaluate("[...document.querySelectorAll('.app-nav > .snav__group:not(.snav__group--foldable) .snav__item')].map(a=>[a.innerText.trim(),a.getBoundingClientRect().height>0])")
         chk('R-5 «Inicio» queda suelto y visible', ini and ini[0][0] == 'Inicio' and ini[0][1], ini)

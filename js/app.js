@@ -80,7 +80,7 @@
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
-    an: { level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
+    an: { channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
     // Asistente de metas (no se guarda: solo llena el formulario)
@@ -342,14 +342,14 @@
     out.available = true;
     const x = FP.productAnalysis.fromDiagnosis(d);
     if (!x || !x.from || !x.to) return;
-    const key = JSON.stringify([x.from, x.to, x.channel, x.comparison, m.batches]);
+    const key = JSON.stringify([x.from, x.to, x.periodType, x.channel, x.comparison, m.batches]);
     if (out.key === key && (out.result || out.loading)) return;
     out.key = key; out.loading = true; out.error = null;
     try {
-      const run = (level) => FP.productAnalysis.run({ from: x.from, to: x.to, comparison: x.comparison, channel: x.channel, level, withGeoSignals: false });
+      const run = (level) => FP.productAnalysis.run({ from: x.from, to: x.to, periodType: x.periodType, comparison: x.comparison, channel: x.channel, level, withGeoSignals: false });
       const [category, product, region] = [await run('category'), await run('product'), await run('region')];
       if (out.key !== key) return;
-      out.result = { from: x.from, to: x.to, channel: x.channel, comparison: x.comparison, note: x.note, category, product, region };
+      out.result = { from: x.from, to: category.period.to, channel: x.channel, comparison: x.comparison, note: x.note, category, product, region };
     } catch (e) { if (out.key === key) out.error = String(e && e.message ? e.message : e); }
     finally { if (out.key === key) out.loading = false; }
     if (state.view === 'diagnostico') FP.diagnosticView.renderProducts(state);
@@ -361,7 +361,7 @@
     if (!m || !m.batches) return false; // Caso D: no hay datos de producto cargados.
     if (state.pa.result) { await ensureProductAnalysis(); return false; } // Caso B/C: se respeta tal cual.
     const x = diag && FP.productAnalysis.fromDiagnosis(diag);
-    if (x) Object.assign(state.pa, { from: x.from, to: x.to, channel: x.channel, comparison: x.comparison, note: x.note });
+    if (x) Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note });
     await ensureProductAnalysis(); // Caso A: mismo motor, mismo caché; si no hay diag, usa sus propios valores por defecto.
     return Boolean(state.pa.result);
   }
@@ -1080,304 +1080,353 @@
     if (!pa.counts) { pa.counts = await FP.productStore.counts(); pa.estimate = await repo.estimate(); }
     const level = paLevel(pa) || 'sku';
     const filter = paFilter(pa);
-    const key = JSON.stringify([pa.from, pa.to, pa.comparison, pa.channel, filter, level]);
+    const key = JSON.stringify([pa.from, pa.to, pa.periodType, pa.comparison, pa.channel, filter, level]);
     if (pa.result && pa.key === key) return;
     pa.key = key; pa.loading = true;
     const probe = { ...pa, drill: [...pa.drill, { level, key: '_' }], next: null };
-    const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, comparison: pa.comparison, channel: pa.channel, level, filter, next: level === 'sku' ? null : paLevel(probe) });
+    const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, periodType: pa.periodType, comparison: pa.comparison, channel: pa.channel, level, filter, next: level === 'sku' ? null : paLevel(probe) });
     if (pa.key !== key) return;
     pa.result = res; pa.loading = false; pa.page = 1;
     if (state.view === 'producto') FP.productView.render(state);
   }
 
-  /** Análisis 1: construye series mensuales por dimensión desde el almacenamiento de productos. */
-  async function enrichPriorityEvidence(an, periods) {
+  /** Cambia una parte del contexto de Análisis y descarta TODO resultado derivado (sin contexto viejo en pantalla). */
+  function resetAnalysis(patch) {
+    Object.assign(state.an, patch || {}, { page: 1, forecastPage: 1, rows: [], advanced: [], groups: [], selected: null, key: null, error: null, priorities: null, risks: null, forecast: null,
+      temporal: null, share: null, contribution: null, pvm: null, bridge: null, cohort: null, narrative: null, drill: null, context: null, comparisonInfo: null, reconciliation: null, partialComparison: null,
+      ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } });
+  }
+
+  /** Análisis: primera pista de evidencia para las prioridades (sucursal / estado / canal), en el MISMO canal y períodos comparables del contexto. */
+  async function enrichPriorityEvidence(an, ctx) {
     if (!an.priorities || an.priorities.status !== 'available' || !FP.productStore) return;
-    const filterKey = { category:'category', subcategory:'subcategory', product:'product', sku:'sku', region:'region', state:'state', city:'city', branch:'branch', delivery:'delivery', channel:'channel' }[an.level];
-    if (!filterKey || periods.length < 2) return;
-    const current=periods.at(-1), baseline=periods.at(-2);
-    const targets=[...an.priorities.drag,...an.priorities.compensate].slice(0,12);
-    const dims=['branch','channel','state'];
-    for(const item of targets){
-      const filter={[filterKey]:item.entity}; const pieces=[];
-      for(const dim of dims){
-        if(dim===an.level) continue;
-        try{
-          const [cm,bm]=await Promise.all([
-            FP.productStore.aggregate({from:current.from,to:current.to,channel:'total',groupBy:dim,filter}),
-            FP.productStore.aggregate({from:baseline.from,to:baseline.to,channel:'total',groupBy:dim,filter})
+    const metric = ctx && ctx.metric || 'revenue';
+    const cmp = ctx && ctx.comparison;
+    if (!cmp || !cmp.available || !cmp.current || !cmp.baseline) return;
+    const filterKey = { category:'category', subcategory:'subcategory', product:'product', sku:'sku', region:'region', state:'state', city:'city', branch:'branch', delivery:'delivery' }[an.level];
+    if (!filterKey && an.level !== 'channel') return;
+    const targets = [...an.priorities.drag, ...an.priorities.compensate].slice(0, 12);
+    const dims = ['branch', 'state'].concat(ctx.channel === 'total' && an.level !== 'channel' ? ['channel'] : []);
+    for (const item of targets) {
+      const filter = filterKey ? { [filterKey]: item.entity } : {};
+      const chan = an.level === 'channel' ? item.entity : ctx.channel;
+      const pieces = [];
+      for (const dim of dims) {
+        if (dim === an.level) continue;
+        try {
+          const [cm, bm] = await Promise.all([
+            FP.productStore.aggregate({ from: cmp.current.from, to: cmp.current.to, channel: chan, groupBy: dim, filter }),
+            FP.productStore.aggregate({ from: cmp.baseline.from, to: cmp.baseline.to, channel: chan, groupBy: dim, filter })
           ]);
-          const rows=[]; const keys=new Set([...cm.keys(),...bm.keys()]);
-          keys.forEach(k=>{
-            const cf=FP.productStore.finalize(cm.get(k),null), bf=FP.productStore.finalize(bm.get(k),null);
-            const cv=cf?.revenue?.value,bv=bf?.revenue?.value;
-            if(Number.isFinite(cv)||Number.isFinite(bv)) rows.push({name:k,delta:(Number.isFinite(cv)?cv:0)-(Number.isFinite(bv)?bv:0),current:Number.isFinite(cv)?cv:0,baseline:Number.isFinite(bv)?bv:0});
+          const rows = []; const keys = new Set([...cm.keys(), ...bm.keys()]);
+          keys.forEach(k => {
+            const cf = FP.productStore.finalize(cm.get(k), null), bf = FP.productStore.finalize(bm.get(k), null);
+            const cv = cf?.[metric]?.value, bv = bf?.[metric]?.value;
+            if (Number.isFinite(cv) || Number.isFinite(bv)) rows.push({ name: k, delta: (Number.isFinite(cv) ? cv : 0) - (Number.isFinite(bv) ? bv : 0), current: Number.isFinite(cv) ? cv : 0, baseline: Number.isFinite(bv) ? bv : 0 });
           });
-          rows.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
-          if(rows.length) pieces.push({dimension:dim,rows:rows.slice(0,3)});
-        }catch(e){}
+          rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+          if (rows.length) pieces.push({ dimension: dim, rows: rows.slice(0, 3) });
+        } catch (e) { /* una dimensión sin datos no bloquea la evidencia de las demás */ }
       }
-      item.evidenceBreakdown=pieces;
-      const lead=pieces.flatMap(x=>x.rows.map(r=>({...r,dimension:x.dimension}))).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta)).slice(0,2);
-      item.evidenceSummary=lead.length?lead.map(x=>`${x.dimension==='branch'?'Sucursal':x.dimension==='state'?'Estado':'Canal'}: ${x.name} (${x.delta>=0?'+':''}${Math.round(x.delta).toLocaleString('es-MX')})`).join(' · '):null;
+      item.evidenceBreakdown = pieces;
+      const lead = pieces.flatMap(x => x.rows.map(r => ({ ...r, dimension: x.dimension }))).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 2);
+      item.evidenceSummary = lead.length ? lead.map(x => `${x.dimension === 'branch' ? 'Sucursal' : x.dimension === 'state' ? 'Estado' : 'Canal'}: ${x.name} (${x.delta >= 0 ? '+' : ''}${Math.round(x.delta).toLocaleString('es-MX')})`).join(' · ') : null;
     }
   }
 
+  /** Suma finita de un Map(entidad → agregado del store) en la métrica pedida → { values, parts, total, size }.
+   *  `parts` guarda venta/unidades/pedidos por entidad (insumo de la descomposición PVM). */
+  function sumMap(map, metric = 'revenue') {
+    const values = new Map(), parts = new Map(); let total = 0;
+    map.forEach((acc, entity) => {
+      const fin = FP.productStore.finalize(acc, null);
+      const num = (k) => (fin && fin[k] && typeof fin[k].value === 'number' && Number.isFinite(fin[k].value) ? fin[k].value : null);
+      const v = num(metric);
+      values.set(entity, v); if (v !== null) total += v;
+      parts.set(entity, { r: num('revenue'), u: num('units'), o: num('orders') });
+    });
+    return { values, parts, total, size: map.size };
+  }
+
+  /** Meta (plan) de Venta del rango y canal seleccionados, desde el modelo canónico cargado (`plan` por fecha × canal), con Real por canal del archivo de productos. */
+  async function planForRange(range, ch) {
+    const DM = FP.dataModel, ds = state.dataset;
+    const none = (message) => ({ total: null, message });
+    if (!ds || !DM || !range) return none('No hay metas cargadas. Carga el archivo de Plan/Meta (fecha, canal, meta de venta) en Datos.');
+    const chans = ch === 'total' ? FP.analysisContext.channelIds() : [ch];
+    const by = {}; chans.forEach((c) => { by[c] = { plan: 0, actual: null, days: 0 }; });
+    let any = false, covered = 0, recActual = 0, recActualN = 0;
+    DM.allRecords(ds).forEach((r) => {
+      if (r.date < range.from || r.date > range.to || !by[r.channel]) return;
+      const pv = r.plan && r.plan.revenue;
+      if (typeof pv === 'number' && Number.isFinite(pv)) { by[r.channel].plan += pv; by[r.channel].days++; covered++; any = true; }
+      const av = r.actual && r.actual.revenue;
+      if (typeof av === 'number' && Number.isFinite(av)) { recActual += av; recActualN++; }
+    });
+    const expectedDays = (FP.temporalEngine.spanDays(range) + 1) * chans.length;
+    if (!any) return none(`No hay meta de venta cargada para ${range.label || FP.analysisContext.rangeLabel(range.from, range.to)} en ${FP.analysisContext.channelLabel(ch)}${String(range.from).slice(0, 4) !== String(state.year) ? ` (el plan cargado corresponde a ${state.year})` : ''}.`);
+    const chMap = await FP.productStore.aggregate({ from: range.from, to: range.to, channel: ch, groupBy: 'channel' });
+    chMap.forEach((acc, c) => { if (by[c]) { const f = FP.productStore.finalize(acc, null); if (Number.isFinite(f?.revenue?.value)) by[c].actual = f.revenue.value; } });
+    chans.forEach((c) => { if (by[c].actual === null) by[c].actual = 0; });
+    const total = chans.reduce((s, c) => s + by[c].plan, 0), prodActual = chans.reduce((s, c) => s + by[c].actual, 0);
+    let note = null;
+    if (recActualN && recActual > 0 && Math.abs(prodActual / recActual - 1) > 0.01) note = `El archivo de productos suma ${Math.round(prodActual).toLocaleString('es-MX')} y «Venta real» (archivo diario) suma ${Math.round(recActual).toLocaleString('es-MX')} en el mismo período: difieren ${((prodActual / recActual - 1) * 100).toFixed(1)} %. El puente usa la venta del archivo de productos para que concilie con las entidades.`;
+    return { total, byChannel: Object.fromEntries(chans.map((c) => [c, { plan: by[c].plan, actual: by[c].actual }])), coverage: expectedDays > 0 ? covered / expectedDays : 0, note };
+  }
+
+  /**
+   * Análisis · cálculo único. Todo lo que muestra el módulo (Evolución, Patrones, Share & Mix, Contribución,
+   * Prioridades, Forecast, Cohortes, Narrativa) nace del MISMO contexto `FP.analysisContext.build(...)`:
+   * canal seleccionado + período focal + período de comparación equivalente.
+   */
   async function ensureTrendAnalysis() {
     const an = state.an;
     if (!FP.productStore || !FP.productStore.available()) return;
     const m = FP.productStore.meta || {};
     if (!m.dateMin || !m.dateMax) return;
-    // Todos los módulos comparables deben terminar en el último período completo.
-    // El período es parte del cálculo, no sólo un filtro visual. Siempre se evita
-    // usar un período incompleto como referencia principal.
-    const maxDate = new Date(`${m.dateMax}T00:00:00Z`);
-    const minDate = new Date(`${m.dateMin}T00:00:00Z`);
-    const periodType = an.periodType || 'month';
+    const AC = FP.analysisContext, TE = FP.temporalEngine;
+    an.channel = AC.normChannel(an.channel);
+    an.metric = AC.normMetric(an.metric);
+    const ch = an.channel, metric = an.metric;
+    const periodType = ['year', 'month', 'week', 'day'].includes(an.periodType) ? an.periodType : 'month';
     const count = Math.max(3, Math.min(periodType === 'day' ? 90 : 24, Number(an.periodCount || an.months) || 12));
-    const TE = FP.temporalEngine;
-    if (TE) {
-      const focusOptions = TE.options(m.dateMin, m.dateMax, periodType, periodType === 'day' ? 90 : 24);
-      if (an.focusKey && !focusOptions.some(x => x.key === an.focusKey)) an.focusKey = null;
+    const ctx = AC.build({ periodType, focusKey: an.focusKey, comparison: an.comparison, channel: ch, level: an.level, metric: an.metric, minDate: m.dateMin, maxDate: m.dateMax });
+    if (!ctx.focus) return;
+    if (an.focusKey && an.focusKey !== ctx.focus.key) an.focusKey = null;
+    const focusFrom = TE.rangeForKey(ctx.focus.key, periodType).from;
+    const periods = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const from = TE.add(focusFrom, periodType, -i), key = TE.periodKey(from, periodType);
+      let range = TE.rangeForKey(key, periodType);
+      const isFocus = i === 0;
+      if (isFocus) range = { ...range, to: ctx.focus.to };            // el foco se acota al último día con datos
+      if (range.to < m.dateMin) continue;
+      periods.push({ key, from: range.from, to: range.to, partial: isFocus && ctx.focus.partial });
     }
-    const pad = n => String(n).padStart(2,'0');
-    const startOfWeek = d => { const x=new Date(d); const day=x.getUTCDay()||7; x.setUTCDate(x.getUTCDate()-day+1); x.setUTCHours(0,0,0,0); return x; };
-    const endOfPeriod = (d,type) => {
-      const x=new Date(d); x.setUTCHours(0,0,0,0);
-      if(type==='year'){x.setUTCMonth(11,31);return x;}
-      if(type==='month'){x.setUTCMonth(x.getUTCMonth()+1,0);return x;}
-      if(type==='week'){const w=startOfWeek(x);w.setUTCDate(w.getUTCDate()+6);return w;}
-      return x;
-    };
-    let cursor;
-    const latestCompleteKey = (() => {
-      if (TE) {
-        const opts = TE.options(m.dateMin, m.dateMax, periodType, 24);
-        const latest = [...opts].reverse().find(x => !x.partial); return latest ? latest.key : null;
-      }
-      return null;
-    })();
-    const requestedKey = an.focusKey || latestCompleteKey;
-    if (requestedKey && TE) {
-      const fr = TE.rangeForKey(requestedKey, periodType);
-      cursor = new Date(`${fr.from}T00:00:00Z`);
-    } else if(periodType==='year'){ cursor=new Date(Date.UTC(maxDate.getUTCFullYear(),0,1)); if(endOfPeriod(cursor,periodType)>maxDate) cursor.setUTCFullYear(cursor.getUTCFullYear()-1); }
-    else if(periodType==='month'){ cursor=new Date(Date.UTC(maxDate.getUTCFullYear(),maxDate.getUTCMonth(),1)); if(endOfPeriod(cursor,periodType)>maxDate) cursor.setUTCMonth(cursor.getUTCMonth()-1); }
-    else if(periodType==='week'){ cursor=startOfWeek(maxDate); if(endOfPeriod(cursor,periodType)>maxDate) cursor.setUTCDate(cursor.getUTCDate()-7); }
-    else { cursor=new Date(Date.UTC(maxDate.getUTCFullYear(),maxDate.getUTCMonth(),maxDate.getUTCDate())); }
-    const shift=(d,type,n)=>{const x=new Date(d); if(type==='year')x.setUTCFullYear(x.getUTCFullYear()+n); else if(type==='month')x.setUTCMonth(x.getUTCMonth()+n); else if(type==='week')x.setUTCDate(x.getUTCDate()+7*n); else x.setUTCDate(x.getUTCDate()+n); return x;};
-    const isoWeekKey=(d)=>{const x=new Date(d);x.setUTCHours(0,0,0,0);const day=x.getUTCDay()||7;x.setUTCDate(x.getUTCDate()+4-day);const y=x.getUTCFullYear();const first=new Date(Date.UTC(y,0,1));const w=Math.ceil((((x-first)/86400000)+1)/7);return `${y}-W${pad(w)}`;}; const periodKey=(d,type)=>{ if(type==='year')return String(d.getUTCFullYear()); if(type==='month')return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}`; if(type==='week')return isoWeekKey(d); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; };
-    const rangeFor=(d,type)=>{const from=new Date(d); from.setUTCHours(0,0,0,0); const to=endOfPeriod(from,type); return {from:`${to>=from?from.getUTCFullYear():0}-${pad(from.getUTCMonth()+1)}-${pad(from.getUTCDate())}`,to:`${to.getUTCFullYear()}-${pad(to.getUTCMonth()+1)}-${pad(to.getUTCDate())}`};};
-    const periods=[]; for(let i=count-1;i>=0;i--){const d=shift(cursor,periodType,-i); let range=rangeFor(d,periodType); if(i===0 && TE) range=TE.clampRange ? TE.clampRange(range, m.dateMax) : range; if(new Date(`${range.to}T00:00:00Z`)<minDate) continue; periods.push({key:periodKey(d,periodType),...range,partial: range.to < (TE ? TE.rangeForKey(periodKey(d,periodType),periodType).to : range.to)});}
-    const starts=periods.map(x=>x.key), end=periods.at(-1)?.key||'', firstPeriod=periods[0]?.key||'';
-    const focus = periods.at(-1) || null;
-    const key = JSON.stringify([an.level, periodType, count, firstPeriod, end, an.comparison, requestedKey, focus?.partial]);
+    const focus = periods.at(-1);
+    const closed = periods.filter(p => !p.partial);                      // los patrones se leen sobre períodos CERRADOS
+    const firstPeriod = periods[0]?.key || '';
+    const key = JSON.stringify([ch, metric, an.level, periodType, count, firstPeriod, ctx.focus.key, an.comparison, ctx.focus.to, m.dateMin, m.dateMax]);
     if (an.rows.length && an.key === key && !an.loading) return;
     an.loading = true; an.error = null; an.key = key;
-    const series = new Map();
-    const totalSeries = [];
-    const cohortSeries = new Map();
-    const monthlyMaps = [];
-    const entities = new Set();
+    an.context = ctx;
+    const aggTotal = async (range) => {
+      if (!range || range.to < range.from) return null;
+      const map = await FP.productStore.aggregate({ from: range.from, to: range.to, channel: ch, groupBy: 'total' });
+      let total = 0, any = false;
+      map.forEach(acc => { const fin = FP.productStore.finalize(acc, null); if (Number.isFinite(fin?.[metric]?.value)) { total += fin[metric].value; any = true; } });
+      return any ? total : null;
+    };
     try {
+      /* ---- 1. Serie por período y entidad (canal seleccionado) ---- */
+      const monthlyMaps = [];
+      const entities = new Set();
       for (const period of periods) {
-        const map = await FP.productStore.aggregate({ ...period, channel: 'total', groupBy: an.level });
-        const monthValues = new Map();
-        let monthTotal = 0;
-        map.forEach((acc, entity) => {
-          const fin = FP.productStore.finalize(acc, null);
-          const value = fin && fin.revenue && typeof fin.revenue.value === 'number' && Number.isFinite(fin.revenue.value) ? fin.revenue.value : null;
-          monthValues.set(entity, value);
-          entities.add(entity);
-          if (finiteTrend(value)) monthTotal += value;
-        });
-        monthlyMaps.push({ period: period.key, values: monthValues });
-        totalSeries.push({ period: period.key, value: monthTotal });
+        const map = await FP.productStore.aggregate({ from: period.from, to: period.to, channel: ch, groupBy: an.level });
+        const s = sumMap(map, metric);
+        s.values.forEach((_, e) => entities.add(e));
+        monthlyMaps.push({ period: period.key, partial: period.partial, values: s.values, parts: s.parts, total: s.total, size: s.size });
         await new Promise((r) => setTimeout(r, 0));
       }
-      // Completa la serie con null cuando una entidad no aparece en un mes.
-      // Así una ausencia real rompe la continuidad de una tendencia en vez de
-      // hacer que dos observaciones separadas parezcan meses consecutivos.
-      entities.forEach((entity) => {
-        const full = monthlyMaps.map(({ period, values }) => ({ period, value: values.has(entity) ? values.get(entity) : null }));
-        series.set(entity, full);
-        cohortSeries.set(entity, full);
-      });
-      // Solo entidades con al menos minPeriods observaciones útiles. No rellenamos meses previos al primer dato con cero.
-      const results = FP.trendEngine.analyzeMany(series, { metric: 'revenue' });
-      results.forEach((r) => {
-        r.series = series.get(r.entity) || [];
-        r.impact = finiteTrend(r.currentValue) && finiteTrend(r.previousValue) ? r.currentValue - r.previousValue : null;
-      });
-      an.rows = results.filter((r) => r.periodsAnalyzed >= FP.trendEngine.DEFAULTS.minPeriods);
-
-      // Comparación parcial: reutiliza la agregación del foco ya calculada en
-      // monthlyMaps y hace SOLO una agregación adicional para la ventana
-      // equivalente anterior. No altera la serie histórica ni el motor de
-      // patrones; únicamente corrige current/previous/impact/deltaPct de la
-      // comparación inmediata que se muestra en Evolución y Patrones.
-      if (TE && focus?.partial && an.comparison === 'previous') {
-        const cmp = TE.comparisonRanges(focus, periodType, m.dateMax).find(x =>
-          ['mom', 'wow', 'dod'].includes(x.id)
-        );
-        if (cmp?.range) {
-          const focusValues = monthlyMaps.find(x => x.period === focus.key)?.values || new Map();
-          const baseMap = await FP.productStore.aggregate({ ...cmp.range, channel: 'total', groupBy: an.level });
-          const baseValues = new Map();
-          baseMap.forEach((acc, entity) => {
-            const fin = FP.productStore.finalize(acc, null);
-            const value = fin && fin.revenue && Number.isFinite(fin.revenue.value) ? fin.revenue.value : null;
-            if (Number.isFinite(value)) baseValues.set(entity, value);
-          });
-          an.rows.forEach((r) => {
-            const currentValue = focusValues.get(r.entity);
-            const previousValue = baseValues.get(r.entity);
-            if (Number.isFinite(currentValue) && Number.isFinite(previousValue)) {
-              r.currentValue = currentValue;
-              r.previousValue = previousValue;
-              r.previousPeriod = cmp.range.key || cmp.range.from;
-              r.impact = currentValue - previousValue;
-              r.deltaPct = previousValue !== 0 ? currentValue / previousValue - 1 : null;
+      const closedMaps = monthlyMaps.filter(x => !x.partial);
+      // Referencia de temporada (solo mensual): el mismo mes del año anterior al último cerrado, si queda fuera de la ventana cargada. No entra a patrones ni tendencias.
+      let seasonRef = { total: {}, byEntity: new Map() };
+      if (periodType === 'month' && closedMaps.length) {
+        const lastK = closedMaps[closedMaps.length - 1].period, lyK = `${+lastK.slice(0, 4) - 1}${lastK.slice(4)}`;
+        if (!monthlyMaps.some((x) => x.period === lyK)) {
+          try {
+            const rg = FP.temporalEngine.rangeForKey(lyK, 'month');
+            if (rg && rg.from >= (m.dateMin || '0000') ) {
+              const map = await FP.productStore.aggregate({ from: rg.from, to: rg.to, channel: ch, groupBy: an.level });
+              const s2 = sumMap(map, metric);
+              seasonRef = { total: { [lyK]: s2.total }, byEntity: new Map([...s2.values].map(([e, v]) => [e, { [lyK]: v }])) };
             }
-          });
-          an.partialComparison = {
-            current: { key: focus.key, from: focus.from, to: focus.to },
-            previous: { key: cmp.range.key, from: cmp.range.from, to: cmp.range.to },
-            id: cmp.id,
-            label: cmp.label
-          };
+          } catch (e) { /* sin mes de referencia: la temporada queda no disponible */ }
         }
       }
-      const cohortPeriods = starts.slice();
-      // Capa temporal global: siempre calcula las comparaciones válidas para el periodo focal.
-      if (TE && focus) {
-        const aggregateRevenue = async (range) => {
-          if (!range || range.to < range.from) return null;
-          const map = await FP.productStore.aggregate({ from: range.from, to: range.to, channel: 'total', groupBy: 'total' });
-          let total = 0;
-          map.forEach(acc => { const fin = FP.productStore.finalize(acc, null); if (Number.isFinite(fin?.revenue?.value)) total += fin.revenue.value; });
-          return total;
-        };
-        const maxD = m.dateMax;
-        const focusRange = TE.focusRange(periodType, focus.key, maxD);
-        const currentTotal = await aggregateRevenue(focusRange);
-        const cmpRanges = TE.comparisonRanges(focusRange, periodType, maxD);
-        const comparisons = [];
-        for (const cmp of cmpRanges) {
-          const value = await aggregateRevenue(cmp.range);
-          comparisons.push({ id: cmp.id, label: cmp.label, value, change: TE.comparePct(currentTotal, value), available: Number.isFinite(value) && value !== 0 });
+      const totalSeries = closedMaps.map(x => ({ period: x.period, value: x.total }));
+      const series = new Map();
+      entities.forEach((entity) => {
+        const full = closedMaps.map(({ period, values }) => ({ period, value: values.has(entity) ? values.get(entity) : null }));
+        if (full.some(x => x.value !== null)) series.set(entity, full);   // entidades solo del período en curso no tienen historia cerrada
+      });
+      const cohortSeries = series;
+      const results = FP.trendEngine.analyzeMany(series, { metric });
+      results.forEach((r) => { r.series = series.get(r.entity) || []; });
+      an.rows = results.filter((r) => r.periodsAnalyzed >= FP.trendEngine.DEFAULTS.minPeriods);
+
+      /* ---- 2. Comparación equivalente (misma lógica para TODOS los módulos) ---- */
+      const cc = ctx.comparison;
+      const focusMap = monthlyMaps.at(-1);
+      let baseSum = null;
+      if (cc.available && cc.baseline) baseSum = sumMap(await FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: an.level }), metric);
+      const comparable = Boolean(baseSum && baseSum.size > 0 && baseSum.total > 0 && focusMap && focusMap.size > 0);
+      const cmpMessage = !cc.available ? cc.note
+        : comparable ? null
+        : `No hay ventas en ${ch === 'total' ? 'la fuente' : AC.channelLabel(ch)} para ${!baseSum || baseSum.size === 0 || baseSum.total <= 0 ? cc.baseline.label : cc.current.label}. La comparación no se calcula (N/A); Evolución y Patrones siguen usando el histórico disponible.`;
+      an.comparisonInfo = { ...cc, comparable, message: cmpMessage };
+      an.rows.forEach((r) => {
+        if (comparable) {
+          const cv = focusMap.values.get(r.entity), bv = baseSum.values.get(r.entity);
+          r.currentValue = Number.isFinite(cv) ? cv : 0;
+          r.previousValue = Number.isFinite(bv) ? bv : 0;
+          r.absentCurrent = !Number.isFinite(cv) && Number.isFinite(bv);
+          r.impact = r.currentValue - r.previousValue;
+          r.deltaPct = AC.pctChange(r.currentValue, r.previousValue);          // null → «N/A», nunca 0 % ni −100 % por falta de dato
+          r.recentAbsoluteChange = r.impact; r.percentageChange = r.deltaPct;
+          r.previousPeriod = cc.baseline.label; r.comparisonLabel = cc.text;
+        } else {
+          r.currentValue = Number.isFinite(focusMap?.values.get(r.entity)) ? focusMap.values.get(r.entity) : null;
+          r.previousValue = null; r.impact = null; r.deltaPct = null; r.recentAbsoluteChange = null; r.percentageChange = null; r.comparisonLabel = null;
         }
-        const yoy = comparisons.find(x => x.id === 'yoy') || null;
-        const mom = comparisons.find(x => x.id === 'mom') || null;
-        const wow = comparisons.find(x => x.id === 'wow') || null;
-        const dod = comparisons.find(x => x.id === 'dod') || null;
-        // Estacionalidad: para un periodo mensual/anual, compara el periodo focal contra el promedio histórico del mismo bucket.
-        let seasonality = null;
-        if (periodType === 'month' && !focus.partial) {
-          const monthNo = Number(String(focus.key).slice(5, 7));
-          const sameMonth = periods.filter(x => !x.partial && Number(String(x.key).slice(5, 7)) === monthNo && x.key !== focus.key);
-          if (sameMonth.length) {
-            const vals = [];
-            for (const p0 of sameMonth) { const v = await aggregateRevenue(p0); if (Number.isFinite(v)) vals.push(v); }
-            const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
-            seasonality = { bucket: `Mes ${monthNo}`, comparablePeriods: vals.length, historicalAverage: avg, index: Number.isFinite(avg) && avg !== 0 ? currentTotal / avg : null, status: vals.length >= 1 ? 'available' : 'insufficient_history' };
-          } else seasonality = { bucket: `Mes ${monthNo}`, comparablePeriods: 0, historicalAverage: null, index: null, status: 'insufficient_history' };
-        }
-        an.temporal = { focus: { type: periodType, key: focus.key, from: focus.from, to: focus.to, partial: Boolean(focus.partial), label: TE.label(periodType, focus.key, focus) }, currentTotal, comparisons, yoy, mom, wow, dod, seasonality };
-      } else an.temporal = null;
-      an.cohort = FP.cohortEngine ? FP.cohortEngine.analyze(cohortSeries, cohortPeriods, {
-        level: an.level,
-        minActivity: 0
-      }) : null;
+      });
+      an.partialComparison = focus.partial && comparable ? { current: { key: focus.key, from: focus.from, to: focus.to }, previous: { key: cc.baseline.key, from: cc.baseline.from, to: cc.baseline.to }, id: cc.id, label: cc.idLabel, text: cc.text } : null;
+
+      /* ---- 3. Capa temporal: todas las comparaciones válidas del foco, en el mismo canal ---- */
+      const focusRange = { from: focus.from, to: focus.to, partial: focus.partial, key: focus.key };
+      const currentTotal = await aggTotal(focusRange);
+      const comparisons = [];
+      for (const c of TE.comparisonRanges(focusRange, periodType, m.dateMax)) {
+        const value = await aggTotal(c.range);
+        comparisons.push({ id: c.id, label: c.label, range: c.range, text: c.range ? (() => { const wy = c.range.from.slice(0, 4) !== focusRange.from.slice(0, 4); return `${AC.rangeLabel(focusRange.from, focusRange.to, wy)} vs ${AC.rangeLabel(c.range.from, c.range.to, wy)}`; })() : null,
+          value, change: AC.pctChange(currentTotal, value), available: Number.isFinite(value) && value > 0 && Number.isFinite(currentTotal) });
+      }
+      const pick = (id) => comparisons.find(x => x.id === id) || null;
+      let seasonality = null;
+      if (periodType === 'month' && !focus.partial) {
+        const monthNo = Number(String(focus.key).slice(5, 7));
+        const sameMonth = closed.filter(x => Number(String(x.key).slice(5, 7)) === monthNo && x.key !== focus.key);
+        const vals = [];
+        for (const p0 of sameMonth) { const v = await aggTotal(p0); if (Number.isFinite(v)) vals.push(v); }
+        const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+        seasonality = { bucket: `Mes ${monthNo}`, comparablePeriods: vals.length, historicalAverage: avg, index: Number.isFinite(avg) && avg !== 0 && Number.isFinite(currentTotal) ? currentTotal / avg : null, status: vals.length >= 1 ? 'available' : 'insufficient_history' };
+      }
+      an.temporal = { focus: { type: periodType, key: focus.key, from: focus.from, to: focus.to, partial: Boolean(focus.partial), label: ctx.focus.label }, currentTotal, comparisons, yoy: pick('yoy'), mom: pick('mom'), wow: pick('wow'), dod: pick('dod'), seasonality };
+
+      /* ---- 4. Cohortes y patrones (sobre períodos cerrados) ---- */
+      an.cohort = FP.cohortEngine ? FP.cohortEngine.analyze(cohortSeries, closed.map(x => x.key), { level: an.level, minActivity: 0 }) : null;
       an.rows.sort((a, b) => Math.abs(b.impact || 0) - Math.abs(a.impact || 0));
       if (FP.patternEngine) {
         const advanced = FP.patternEngine.cluster(an.rows);
-        an.rows = advanced.rows;
-        an.advanced = advanced.rows.map((r) => r.advanced);
-        an.groups = advanced.groups;
+        an.rows = advanced.rows; an.advanced = advanced.rows.map((r) => r.advanced); an.groups = advanced.groups;
       } else { an.advanced = []; an.groups = []; }
+
+      /* ---- 5. Share & Mix: períodos EQUIVALENTES (nunca parcial vs completo) ---- */
       if (FP.shareMixEngine) {
-        // Share must compare comparable completed periods. If the latest month is
-        // partial (as October 2026 is in the supplied dataset), use the two latest
-        // completed months instead of comparing January with a partial October.
-        const completePeriods = totalSeries.slice();
-        const pair = completePeriods.slice(-2);
-        let baselinePeriod = pair[0]?.period || totalSeries[0]?.period;
-        let currentPeriod = pair[1]?.period || totalSeries[totalSeries.length - 1]?.period;
-        let baselineTotal = totalSeries.find(x => x.period === baselinePeriod)?.value ?? null;
-        let currentTotal = totalSeries.find(x => x.period === currentPeriod)?.value ?? null;
-        let mixRows;
-        if (an.comparison === 'year_ago' && periods.at(-1)) {
-          const curP = periods.at(-1);
-          const baseDate = shift(new Date(`${curP.from}T00:00:00Z`), periodType, -1);
-          const baseRange = rangeFor(baseDate, periodType);
-          const baseKey = periodKey(baseDate, periodType);
-          const baseMap = await FP.productStore.aggregate({ ...baseRange, channel:'total', groupBy:an.level });
-          const curMap = await FP.productStore.aggregate({ ...curP, channel:'total', groupBy:an.level });
-          const totalValue = (map) => { let v=0; map.forEach(acc=>{const f=FP.productStore.finalize(acc,null); if(Number.isFinite(f?.revenue?.value)) v+=f.revenue.value;}); return v; };
-          const baseHasData = baseMap.size > 0;
-          const curHasData = curMap.size > 0;
-          baselinePeriod=baseKey; currentPeriod=curP.key; baselineTotal=baseHasData ? totalValue(baseMap) : null; currentTotal=curHasData ? totalValue(curMap) : totalSeries.at(-1)?.value ?? null;
-          const entities = new Set([...baseMap.keys(),...curMap.keys()]);
-          mixRows=[...entities].map(entity=>{
-            const bf=FP.productStore.finalize(baseMap.get(entity),null), cf=FP.productStore.finalize(curMap.get(entity),null);
-            return {entity,baselineValue:Number.isFinite(bf?.revenue?.value)?bf.revenue.value:0,currentValue:Number.isFinite(cf?.revenue?.value)?cf.revenue.value:0};
-          }).filter(r=>r.baselineValue>0||r.currentValue>0);
+        const baselinePeriod = cc.baseline ? cc.baseline.label : '—', currentPeriod = cc.current ? cc.current.label : '—';
+        if (comparable) {
+          const keys = new Set([...baseSum.values.keys(), ...focusMap.values.keys()]);
+          const mixRows = [...keys].map(entity => ({ entity,
+            baselineValue: finiteTrend(baseSum.values.get(entity)) ? baseSum.values.get(entity) : 0,
+            currentValue: finiteTrend(focusMap.values.get(entity)) ? focusMap.values.get(entity) : 0 })).filter(r => r.baselineValue > 0 || r.currentValue > 0);
+          an.share = { ...FP.shareMixEngine.rankAndMix(mixRows, focusMap.total, baseSum.total), totalSeries, baselinePeriod, currentPeriod, baselineTotal: baseSum.total, currentTotal: focusMap.total,
+            comparisonLabel: cc.text, comparisonAvailable: true, comparisonMessage: null, comparisonPartial: Boolean(cc.partial) };
         } else {
-          const entities = new Set(series.keys());
-          mixRows = [...entities].map((entity) => {
-            const s = series.get(entity) || [];
-            const base = s.find(x => x.period === baselinePeriod);
-            const cur = s.find(x => x.period === currentPeriod);
-            return { entity, baselineValue: finiteTrend(base?.value) ? base.value : 0, currentValue: finiteTrend(cur?.value) ? cur.value : 0 };
-          }).filter(r => r.baselineValue > 0 || r.currentValue > 0);
+          an.share = { status: 'comparison_unavailable', rows: [], totalSeries, baselinePeriod, currentPeriod, baselineTotal: null, currentTotal: focusMap && focusMap.size ? focusMap.total : null,
+            comparisonLabel: cc.text || `${baselinePeriod} vs ${currentPeriod}`, comparisonAvailable: false, comparisonMessage: cmpMessage };
         }
-        const comparisonAvailable = Number.isFinite(baselineTotal) && baselineTotal > 0 && Number.isFinite(currentTotal);
-        an.share = comparisonAvailable ? {
-          ...FP.shareMixEngine.rankAndMix(mixRows, currentTotal, baselineTotal),
-          totalSeries, baselinePeriod, currentPeriod,
-          baselineTotal, currentTotal,
-          comparisonLabel: `${baselinePeriod || '—'} vs ${currentPeriod || '—'}`,
-          comparisonAvailable: true,
-          comparisonMessage: null
-        } : {
-          status: 'comparison_unavailable', rows: [], totalSeries, baselinePeriod, currentPeriod,
-          baselineTotal: null, currentTotal: Number.isFinite(currentTotal) ? currentTotal : null,
-          comparisonLabel: `${baselinePeriod || '—'} vs ${currentPeriod || '—'}`,
-          comparisonAvailable: false,
-          comparisonMessage: `No hay datos de ${baselinePeriod || 'el período de comparación'} en la fuente cargada. Evolución y Patrones continúan usando el histórico disponible; las métricas comparativas no se calculan.`
-        };
         an.rows.forEach((r) => { const mm = an.share.rows.find(x => x.entity === r.entity); if (mm) r.share = mm; });
       } else an.share = null;
+
+      /* ---- 5a. La historia de cada entidad: fases, estado actual, estabilidad y contexto ---- */
+      if (FP.trendStoryEngine) {
+        const SE = FP.trendStoryEngine;
+        const means = an.rows.map((r) => { const v = (r.series || []).map((x) => x.value).filter((x) => Number.isFinite(x) && x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }).filter((x) => x !== null).sort((a, b) => a - b);
+        const typicalLevel = means.length ? means[means.length >> 1] : null;
+        // categoría de cada entidad (para compararla con su propia categoría): sólo Σ de las series ya calculadas
+        const catOf = new Map(); const catSeries = new Map();
+        if (['product', 'sku', 'subcategory'].includes(an.level) && closed.length) {
+          try {
+            const rg = { from: closed[0].from, to: closed.at(-1).to };
+            const cats = [...(await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: 'category' })).keys()];
+            for (const cat of cats) { const mm = await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: an.level, filter: { category: cat } }); mm.forEach((_, e) => { if (!catOf.has(e)) catOf.set(e, cat); }); }
+            catOf.forEach((cat, e) => { const ser = series.get(e); if (!ser) return; if (!catSeries.has(cat)) catSeries.set(cat, ser.map((x) => ({ period: x.period, value: 0 })));
+              const acc = catSeries.get(cat); ser.forEach((x, i) => { if (Number.isFinite(x.value)) acc[i].value += x.value; }); });
+          } catch (e) { catOf.clear(); catSeries.clear(); }
+        }
+        const scopeLabel = ch === 'total' ? 'el total digital' : `el canal ${AC.channelLabel(ch)}`;
+        an.rows.forEach((r) => {
+          const cur = comparable ? { label: cc.current.label, value: focusMap.values.get(r.entity), baseline: baseSum.values.get(r.entity), baselineLabel: cc.baseline.label, partial: Boolean(focus.partial) } : null;
+          const context = [{ id: 'scope', label: scopeLabel, series: totalSeries }];
+          const cat = catOf.get(r.entity); if (cat && catSeries.has(cat) && an.level !== 'category') context.push({ id: 'category', label: `su categoría (${cat})`, series: catSeries.get(cat) });
+          r.category = cat || null;
+          r.story = SE.analyze(r.series, { current: cur, context, typicalLevel });
+          r.story.outlook = SE.outlook(r.series, { seasonRef: seasonRef.byEntity.get(r.entity) || null, current: cur, story: r.story, horizon: 3, nextPeriod: (pk, k) => { try { const rg = TE.rangeForKey(pk, periodType); return TE.periodKey(TE.add(rg.from, periodType, k), periodType); } catch (e) { return null; } } });
+          if (r.story.outlook) r.story.outlook.unit = { week: 'semana', day: 'día', year: 'año' }[periodType] || 'mes';
+          if (comparable && metric === 'revenue') {
+            const a0 = baseSum.parts.get(r.entity) || {}, a1 = focusMap.parts.get(r.entity) || {};
+            r.story.drivers = SE.priceVolume({ r0: a0.r, u0: a0.u, r1: a1.r, u1: a1.u });
+          }
+        });
+      }
+
+      /* ---- 5b. Volumen · Precio · Mezcla y Puente al plan (sólo Venta; mismo contexto) ---- */
+      an.pvm = null; an.bridge = null;
+      if (metric !== 'revenue') {
+        const why = `Volumen · Precio · Mezcla y Puente al plan se calculan sobre la Venta; con la métrica «${ctx.metricLabel}» no aplican.`;
+        an.pvm = { status: 'not_applicable', message: why }; an.bridge = { status: 'not_applicable', message: why };
+      } else if (!comparable) {
+        an.pvm = { status: 'unavailable', message: cmpMessage || 'No hay período comparable.' };
+        an.bridge = { status: 'unavailable', message: cmpMessage || 'No hay período comparable.' };
+      } else {
+        const ent = new Set([...baseSum.parts.keys(), ...focusMap.parts.keys()]);
+        const pvmRows = [...ent].map((e) => { const a0 = baseSum.parts.get(e) || {}, a1 = focusMap.parts.get(e) || {};
+          return { entity: e, r0: a0.r, u0: a0.u, r1: a1.r, u1: a1.u }; });
+        an.pvm = FP.pvmEngine ? { ...FP.pvmEngine.analyze(pvmRows), level: an.level, comparisonLabel: cc.text } : null;
+        if (an.pvm && an.pvm.status === 'unavailable' && !pvmRows.some((x) => x.u0 > 0 || x.u1 > 0)) an.pvm.message = 'El archivo de productos no trae unidades válidas: no se puede separar volumen, precio y mezcla.';
+        if (FP.planBridgeEngine) {
+          const planInfo = await planForRange(cc.current, ch);
+          const mixR = [...ent].map((e) => ({ entity: e, current: focusMap.values.get(e), baseline: baseSum.values.get(e) }));
+          an.bridge = { ...FP.planBridgeEngine.analyze({ rows: mixR, plan: planInfo, actual: focusMap.total, baselineTotal: baseSum.total }), level: an.level, comparisonLabel: cc.text, currentLabel: cc.current.label, planNote: planInfo.note || null, planMessage: planInfo.message || null };
+          // Proyección de la tendencia del total contra la meta de los meses proyectados (solo mensual; la meta existe por canal, no por entidad)
+          try {
+            const ts = an.share && an.share.totalSeries;
+            if (an.periodType === 'month' && Array.isArray(ts) && ts.length && FP.trendStoryEngine) {
+              const o = FP.trendStoryEngine.outlook(ts, { horizon: 3, seasonRef: seasonRef.total });
+              if (o.status === 'available') {
+                const items = [];
+                for (const p of o.projection) {
+                  if (!p.period) continue;
+                  const pl = await planForRange({ ...FP.temporalEngine.rangeForKey(p.period, 'month') }, ch);
+                  if (pl && Number.isFinite(pl.total) && pl.total > 0 && !(pl.coverage < 1)) items.push({ period: p.period, projected: p.value, low: p.low, high: p.high, plan: pl.total, pct: p.value / pl.total - 1 });
+                }
+                an.bridge.outlookVsPlan = { items, direction: o.direction, confidence: o.confidence.level };
+              }
+            }
+          } catch (e) { /* sin proyección contra meta: no bloquea el puente */ }
+        }
+      }
+
+      /* ---- 6. Prioridades, forecast, contribución, narrativa ---- */
       if (FP.actionPriorityEngine) {
-        an.priorities = FP.actionPriorityEngine.analyze(an.rows, { baselinePeriod: an.share?.baselinePeriod || periods.at(-2)?.key || null, currentPeriod: an.share?.currentPeriod || periods.at(-1)?.key || null, baselinePartial: Boolean(periods.at(-2)?.partial), currentPartial: Boolean(focus?.partial) });
-        await enrichPriorityEvidence(an, periods);
+        an.priorities = comparable
+          ? FP.actionPriorityEngine.analyze(an.rows, { baselinePeriod: cc.baseline.label, currentPeriod: cc.current.label, baselinePartial: false, currentPartial: Boolean(focus.partial) })
+          : { status: 'comparison_unavailable', drag: [], compensate: [], watch: [], all: [], totals: { drag: 0, compensate: 0, balance: 0 }, comparison: { baselinePeriod: cc.baseline ? cc.baseline.label : null, currentPeriod: cc.current.label }, methodology: cmpMessage };
+        await enrichPriorityEvidence(an, ctx);
         an.risks = { status: an.priorities.status, risks: an.priorities.drag, opportunities: an.priorities.compensate, watch: an.priorities.watch, all: an.priorities.all, methodology: an.priorities.methodology };
       } else { an.priorities = null; an.risks = null; }
       if (FP.trendForecastEngine) an.forecast = FP.trendForecastEngine.analyzeMany(an.rows, { horizon: an.forecastHorizon, method: an.forecastMethod, periodType: an.periodType });
       else an.forecast = null;
       if (FP.contributionEngine) {
-        // Contribución debe reconciliar el movimiento de los mismos períodos
-        // comparables usados por Share & Mix. No usa enero→octubre parcial ni
-        // limita el universo a entidades con historia suficiente para tendencias.
-        const cb = an.share && an.share.baselinePeriod;
-        const cc = an.share && an.share.currentPeriod;
         const contributionRows = an.share && Array.isArray(an.share.rows)
-          ? an.share.rows.map((r) => ({
-              entity: r.entity,
-              current: r.currentValue,
-              baseline: r.baselineValue,
+          ? an.share.rows.map((r) => ({ entity: r.entity, current: r.currentValue, baseline: r.baselineValue,
               delta: finiteTrend(r.currentValue) && finiteTrend(r.baselineValue) ? r.currentValue - r.baselineValue : null,
-              baselineShare: r.baselineShare,
-              currentShare: r.currentShare,
-              shareChangePp: r.shareChangePp
-            }))
-          : [];
-        an.contribution = an.share?.comparisonAvailable ? FP.contributionEngine.analyze(contributionRows, { baselinePeriod: cb, currentPeriod: cc }) : { status: 'comparison_unavailable', totalDelta: null, positive: [], negative: [], message: an.share?.comparisonMessage || 'No hay datos comparables.' };
+              baselineShare: r.baselineShare, currentShare: r.currentShare, shareChangePp: r.shareChangePp })) : [];
+        an.contribution = an.share?.comparisonAvailable ? FP.contributionEngine.analyze(contributionRows, { baselinePeriod: cc.baseline.label, currentPeriod: cc.current.label })
+          : { status: 'comparison_unavailable', totalDelta: null, positive: [], negative: [], message: cmpMessage || 'No hay datos comparables.' };
       } else an.contribution = null;
-      an.narrative = FP.analysisNarrativeEngine ? FP.analysisNarrativeEngine.build({ rows: an.rows, risks: an.risks, forecast: an.forecast, contribution: an.contribution, share: an.share, cohort: an.cohort, level: an.level }) : null;
+      // Reconciliación visible: Σ entidades = total del canal, y Σ contribuciones = variación total.
+      an.reconciliation = comparable ? {
+        channel: ch, comparison: cc.text,
+        current: { total: focusMap.total, sumEntities: [...focusMap.values.values()].reduce((s, v) => s + (finiteTrend(v) ? v : 0), 0) },
+        baseline: { total: baseSum.total, sumEntities: [...baseSum.values.values()].reduce((s, v) => s + (finiteTrend(v) ? v : 0), 0) },
+        delta: focusMap.total - baseSum.total, sumContributions: an.contribution && finiteTrend(an.contribution.totalDelta) ? an.contribution.totalDelta : null
+      } : null;
+      an.narrative = FP.analysisNarrativeEngine ? FP.analysisNarrativeEngine.build({ rows: an.rows, risks: an.risks, forecast: an.forecast, contribution: an.contribution, share: an.share, cohort: an.cohort, level: an.level, context: ctx }) : null;
       an.ai = { status: null, result: null, errors: [] };
       an.selected = an.selected && an.rows.find((r) => r.entity === an.selected.entity) || an.rows[0] || null;
+      an.drill = null; an.periodsList = periods;
+      if (an.reopen) { const ro = an.reopen; an.reopen = null; if (ro.scope === 'total' || an.rows.some((r) => r.entity === ro.entity)) { an.drill = { scope: ro.scope, entity: ro.scope === 'total' ? '__total__' : ro.entity, source: 'canal', path: [], loading: true, data: null, error: null }; if (ro.scope === 'entity') an.selected = an.rows.find((r) => r.entity === ro.entity); setTimeout(loadDrill, 0); } }
     } catch (e) {
       an.rows = []; an.selected = null; an.error = e && e.message ? e.message : String(e);
     } finally {
@@ -1385,6 +1434,101 @@
       if (state.view === 'analisis') FP.trendView.render(state);
     }
   }
+  /* ========== Análisis · drill-down (KPI → variación → señal → entidad → canal → producto → período → registro fuente) ========== */
+  const DRILL_CHILD = { category: 'subcategory', subcategory: 'product', product: 'sku', region: 'state', state: 'city', city: 'branch', channel: 'category' };
+  const DRILL_LABEL = { category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', sku: 'SKU', region: 'Región', state: 'Estado', city: 'Ciudad', branch: 'Sucursal', delivery: 'Tipo de entrega', channel: 'Canal' };
+
+  /** Abre el detalle conservando Canal + Período + Comparación + Métrica del contexto vigente. */
+  function openDrill({ scope = 'entity', entity = null, source = 'tabla' } = {}) {
+    const an = state.an;
+    if (scope === 'entity') an.selected = an.rows.find((r) => r.entity === entity) || an.selected;
+    an.drill = { scope, entity: scope === 'total' ? '__total__' : entity, source, path: [], loading: true, data: null, error: null };
+    loadDrill(); render();
+  }
+  async function loadDrill() {
+    const an = state.an, d = an.drill, ctx = an.context, ci = an.comparisonInfo;
+    if (!d) return;
+    // Nunca dejar «Cargando…» sin salida: si falta el contexto del análisis, se dice (antes se salía en silencio y quedaba cargando para siempre)
+    if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; if (state.view === 'analisis') FP.trendView.render(state); return; }
+    const token = d.token = Math.random(); d.loading = true; d.pending = false; d.error = null; d.step = 'Leyendo el período actual…'; d.data = null;
+    const TE = FP.temporalEngine, PS = FP.productStore, mine = () => d.token === token;
+    const repaint = () => { if (mine() && state.view === 'analisis') { try { FP.trendView.render(state); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
+    // Salida de emergencia: si algo tarda demasiado (datos muy grandes), se avisa y se ofrece reintentar en vez de quedarse cargando.
+    const watchdog = setTimeout(() => { if (mine() && d.loading) { d.loading = false; d.pending = false; d.error = 'El detalle tarda más de lo normal (90 s). Puede seguir calculándose; si no aparece, pulsa «Reintentar» o acota el período.'; repaint(); } }, an.drillTimeoutMs || 90000);
+    try {
+      const nodes = d.scope === 'total' ? [...d.path] : [{ level: an.level, key: d.entity }, ...d.path];
+      const filter = {}; let chan = ctx.channel;
+      nodes.forEach((n) => { if (n.level === 'channel') chan = n.key; else filter[n.level] = n.key; });
+      const nodeLevel = nodes.length ? nodes[nodes.length - 1].level : null;
+      const childLevel = nodeLevel ? DRILL_CHILD[nodeLevel] || null : an.level;
+      const cur = ci.current, base = ci.comparable ? ci.baseline : null;
+      const groupBys = ['total', ...(childLevel ? [childLevel] : [])];
+      const showByChannel = ctx.channel === 'total' && nodeLevel !== 'channel' && an.level !== 'channel';
+      // FASE A (rápida): dos pasadas (período actual y comparación), cada bloque día × canal se lee UNA vez
+      // y de ahí salen el total, el desglose por canal y el siguiente nivel.
+      const scanOf = (range) => (range ? PS.aggregateScan({ from: range.from, to: range.to, channel: chan, filter, groupBys }) : Promise.resolve(new Map()));
+      const curScan = await scanOf(cur); if (!mine()) return;
+      d.step = base ? 'Leyendo el período de comparación…' : d.step; repaint();
+      const baseScan = base ? await scanOf(base) : null; if (!mine()) return;
+      const pick = (scan, g, ch = null) => (ch ? (scan.get(ch) && scan.get(ch).get(g)) || new Map() : PS.mergeMaps([...scan.values()].map((m) => m.get(g))));
+      const tot = (scan, ch = null) => sumMap(pick(scan, 'total', ch), ctx.metric).total;
+      const summary = { current: tot(curScan), baseline: baseScan ? tot(baseScan) : null };
+      summary.delta = summary.baseline !== null ? summary.current - summary.baseline : null;
+      summary.deltaPct = FP.analysisContext.pctChange(summary.current, summary.baseline);
+      const rootRow = d.scope === 'entity' && !d.path.length ? an.rows.find((r) => r.entity === d.entity) : null;
+      if (rootRow && rootRow.share) { summary.shareCurrent = rootRow.share.currentShare; summary.shareBaseline = rootRow.share.baselineShare; summary.sharePp = rootRow.share.shareChangePp; }
+      let byChannel = null;
+      if (showByChannel) {
+        byChannel = FP.analysisContext.channelIds().map((c) => { const cv = tot(curScan, c), bv = baseScan ? tot(baseScan, c) : null;
+          return { channel: c, label: FP.analysisContext.channelLabel(c), current: cv, baseline: bv, delta: bv !== null ? cv - bv : null }; });
+      }
+      let children = null;
+      if (childLevel) {
+        const cm = sumMap(pick(curScan, childLevel), ctx.metric), bm = baseScan ? sumMap(pick(baseScan, childLevel), ctx.metric) : null;
+        const keys = new Set([...cm.values.keys(), ...(bm ? bm.values.keys() : [])]);
+        const rows = [...keys].map((k) => { const c = cm.values.get(k), b = bm ? bm.values.get(k) : null;
+          const cv = Number.isFinite(c) ? c : 0, bv = bm ? (Number.isFinite(b) ? b : 0) : null;
+          return { key: k, current: cv, baseline: bv, delta: bv !== null ? cv - bv : null, deltaPct: FP.analysisContext.pctChange(cv, bv) }; })
+          .sort((a, b) => Math.abs(b.delta ?? b.current) - Math.abs(a.delta ?? a.current));
+        children = { level: childLevel, total: rows.length, sumCurrent: cm.total, sumBaseline: bm ? bm.total : null, rows: rows.slice(0, 12) };
+      }
+      let sku = nodeLevel === 'sku' ? nodes[nodes.length - 1].key : null;
+      if (!sku && childLevel === 'sku' && children && children.total === 1) sku = children.rows[0].key;
+      d.data = { nodes, nodeLevel, childLevel, summary, byChannel, children, byPeriod: [], records: null, context: { channel: ctx.channelLabel, period: ctx.focus.label, comparison: ci.text, level: DRILL_LABEL[an.level] || an.level, metric: ctx.metricLabel } };
+      d.loading = false; d.pending = true; d.step = 'Calculando el detalle temporal y los registros fuente…'; repaint();
+
+      // FASE B (en segundo plano): detalle temporal y registros fuente. La pantalla ya muestra lo principal.
+      const plist = an.periodsList || [];
+      let byPeriod = [];
+      if (plist.length) {
+        const shown = plist.slice(-12);
+        const fromSeries = (ser) => { const m = new Map((ser || []).map((x) => [x.period, x.value]));
+          return shown.map((p) => { const own = m.get(p.key); const v = Number.isFinite(own) ? own : (p.key === ctx.focus.key && summary.current > 0 ? summary.current : null);
+            return { key: p.key, from: p.from, to: p.to, partial: Boolean(p.partial), value: v }; }); };
+        if (rootRow && Array.isArray(rootRow.series)) byPeriod = fromSeries(rootRow.series);           // ya calculado por el análisis: no se vuelve a leer nada
+        else if (d.scope === 'total' && !d.path.length && an.share && Array.isArray(an.share.totalSeries)) byPeriod = fromSeries(an.share.totalSeries);
+        else {
+          const dayScan = await PS.aggregateScan({ from: plist[0].from, to: plist[plist.length - 1].to, channel: chan, filter, groupBys: ['date'] }); if (!mine()) return;
+          const dayMap = PS.mergeMaps([...dayScan.values()].map((m) => m.get('date'))); const sums = new Map();
+          dayMap.forEach((acc, date) => { const f = PS.finalize(acc, null); const v = f && f[ctx.metric] && Number.isFinite(f[ctx.metric].value) ? f[ctx.metric].value : null;
+            if (v !== null) { const k = TE.periodKey(date, ctx.periodType); sums.set(k, (sums.get(k) || 0) + v); } });
+          byPeriod = shown.map((p) => ({ key: p.key, from: p.from, to: p.to, partial: Boolean(p.partial), value: sums.has(p.key) ? sums.get(p.key) : null }));
+        }
+      }
+      let records = null;
+      if (sku) {
+        const from = base ? (base.from < cur.from ? base.from : cur.from) : cur.from;
+        const raw = await PS.skuTrace({ sku, from, to: cur.to, channel: chan }); if (!mine()) return;
+        const within = (r, rg) => rg && r.date >= rg.from && r.date <= rg.to;
+        const rows = raw.filter((r) => r.kind === 'sales' && (within(r, cur) || within(r, base))).map((r) => ({ date: r.date, channel: r.channel, revenue: r.revenue, orders: r.orders, units: r.units, file: r.fileName || null, row: r.row,
+          period: within(r, cur) ? 'actual' : 'comparación' }));
+        records = { sku, total: rows.length, rows: rows.slice(-40).reverse(), sumCurrent: rows.filter((r) => r.period === 'actual').reduce((s, r) => s + (Number.isFinite(r[ctx.metric]) ? r[ctx.metric] : 0), 0) };
+      }
+      d.data.byPeriod = byPeriod; d.data.records = records; d.pending = false; d.step = null;
+    } catch (e) { if (mine()) { d.error = e && e.message ? e.message : String(e); d.pending = false; } }
+    finally { clearTimeout(watchdog); if (mine()) { d.loading = false; repaint(); } }
+  }
+
   const finiteTrend = (v) => typeof v === 'number' && Number.isFinite(v);
 
   function activeItem() {
@@ -1706,7 +1850,7 @@
       if (!root.confirm('¿Borrar todos los datos guardados de esta app en este navegador? Incluye archivos importados, metas y ajustes.')) return;
       storage.clear();
       if (FP.productStore) FP.productStore.reset();
-      state.pa = { ...state.pa, result: null, counts: null, from: null, to: null, drill: [], geo: {}, next: null, trace: null };
+      state.pa = { ...state.pa, result: null, counts: null, from: null, to: null, periodType: null, drill: [], geo: {}, next: null, trace: null };
       state.an = { ...state.an, rows: [], selected: null, key: null, error: null, priorities: null, risks: null, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } };
       state.store = ST.createStore();
       state.staging = { items: [], activeId: null, issueFilter: 'all' };
@@ -1754,15 +1898,18 @@
     'set-period'(el) { state.filters.periodKey = el.value; render(); },
     'set-year'(el) { loadYearScoped(Number(el.value)); refresh(); resetPeriod(); render(); },
 
-    'an-period-type'(el) { state.an.periodType = el.value || 'month'; state.an.periodCount = state.an.periodType === 'day' ? 30 : state.an.periodType === 'year' ? 3 : 12; state.an.months = state.an.periodCount; state.an.focusKey = null; state.an.page = 1; state.an.rows = []; state.an.advanced = []; state.an.groups = []; state.an.selected = null; state.an.key = null; state.an.priorities = null; state.an.risks = null; state.an.forecast = null; state.an.temporal = null; state.an.assistant = { open: false, question: '', status: 'idle', result: null, errors: [], history: [] }; render(); },
-    'an-focus'(el) { state.an.focusKey = el.value || null; state.an.page = 1; state.an.rows = []; state.an.advanced = []; state.an.groups = []; state.an.selected = null; state.an.key = null; state.an.priorities = null; state.an.risks = null; state.an.forecast = null; state.an.temporal = null; state.an.assistant = { open: false, question: '', status: 'idle', result: null, errors: [], history: [] }; render(); },
-    'an-comparison'(el) { state.an.comparison = el.value || 'previous'; state.an.page = 1; state.an.rows = []; state.an.key = null; render(); },
-    'an-level'(el) { state.an.level = el.value || el.dataset.value; state.an.page = 1; state.an.rows = []; state.an.advanced = []; state.an.groups = []; state.an.selected = null; state.an.key = null; state.an.priorities = null; state.an.risks = null; state.an.forecast = null; state.an.assistant = { open: false, question: '', status: 'idle', result: null, errors: [], history: [] }; render(); },
-    'an-period-count'(el) { state.an.periodCount = Math.max(3, Math.min(state.an.periodType === 'day' ? 90 : 24, Number(el.value) || 12)); state.an.months = state.an.periodCount; state.an.page = 1; state.an.rows = []; state.an.advanced = []; state.an.groups = []; state.an.selected = null; state.an.key = null; state.an.priorities = null; state.an.risks = null; state.an.forecast = null; state.an.assistant = { open: false, question: '', status: 'idle', result: null, errors: [], history: [] }; render(); },
+    'an-period-type'(el) { const pt = el.value || 'month'; const pc = pt === 'day' ? 30 : pt === 'year' ? 3 : 12; resetAnalysis({ periodType: pt, periodCount: pc, months: pc, focusKey: null }); render(); },
+    'an-metric'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ metric: FP.analysisContext.normMetric(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
+    'an-focus'(el) { resetAnalysis({ focusKey: el.value || null }); render(); },
+    'an-comparison'(el) { resetAnalysis({ comparison: el.value || 'previous' }); render(); },
+    'an-level'(el) { resetAnalysis({ level: el.value || el.dataset.value }); render(); },
+    'an-period-count'(el) { const pc = Math.max(3, Math.min(state.an.periodType === 'day' ? 90 : 24, Number(el.value) || 12)); resetAnalysis({ periodCount: pc, months: pc }); render(); },
     'an-pattern'(el) { state.an.pattern = el.value || el.dataset.value || 'all'; state.an.page = 1; render(); },
+    'an-state'(el) { state.an.stateFilter = el.value || el.dataset.value || 'all'; state.an.page = 1; render(); },
     'an-signal'(el) { state.an.signal = el.value || el.dataset.value || 'all'; state.an.page = 1; render(); },
     'an-anomaly-direction'(el) { state.an.anomalyDirection = el.value || el.dataset.value || 'all'; state.an.page = 1; render(); },
     'an-entity-query'(el) { state.an.entityQuery = el.value || ''; state.an.page = 1; render(); },
+    'an-min-share'(el) { state.an.minSharePct = Math.max(0, Number(el.value) || 0); state.an.page = 1; render(); },
     'an-min-impact'(el) { state.an.minImpact = Math.max(0, Number(el.value) || 0); state.an.page = 1; render(); },
     'an-page'(el) {
       const a = state.an;
@@ -1772,6 +1919,7 @@
         if (a.anomalyDirection !== 'all' && !(r.anomaly && r.anomaly.direction === a.anomalyDirection)) return false;
         if (a.entityQuery && !String(r.entity || '').toLowerCase().includes(String(a.entityQuery).toLowerCase())) return false;
         if (a.minImpact > 0 && Math.abs(r.recentAbsoluteChange || 0) < a.minImpact) return false;
+        if (!FP.trendView.isMaterial(a, r)) return false;
         return true;
       });
       const size = Math.max(1, Number(state.an.pageSize) || 6);
@@ -1829,8 +1977,8 @@
         readyToNarrate: { performance: true },
         businessContext: FP.config?.businessContext || null,
         period: state.an.temporal?.focus || null,
-        channel: { id: 'total', label: 'Total' },
-        comparison: state.an.share?.comparisonLabel || null,
+        channel: { id: (state.an.context && state.an.context.channel) || 'total', label: (state.an.context && state.an.context.channelLabel) || 'Total digital' },
+        comparison: state.an.comparisonInfo ? state.an.comparisonInfo.text : (state.an.share?.comparisonLabel || null),
         sections
       };
       FP.cohereNarrative.narrate(payload, { apiKey: state.dx.apiKey, model: state.dx.model })
@@ -1843,8 +1991,51 @@
           if (state.view === 'analisis') FP.trendView.render(state);
         });
     },
-    'an-select'(el) { state.an.selected = state.an.rows.find((r) => r.entity === el.dataset.entity) || null; render(); setTimeout(() => { const detail = document.getElementById('an-entity-reading'); if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
-    'an-clear-selection'() { state.an.selected = null; render(); },
+    'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
+    'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'an-drill-down'(el) { const d = state.an.drill; if (!d) return; d.path = [...d.path, { level: el.dataset.level, key: el.dataset.key }]; d.loading = true; loadDrill(); render(); },
+    'an-drill-up'(el) { const d = state.an.drill; if (!d) return; const i = Number(el.dataset.index); d.path = d.path.slice(0, i + 1); d.loading = true; loadDrill(); render(); },
+    'an-drill-retry'() { const d = state.an.drill; if (!d) return; d.loading = true; loadDrill(); render(); },
+    'an-drill-close'() { state.an.drill = null; render(); },
+    'an-drill-channel'(el) { const d = state.an.drill; const keep = d ? { scope: d.scope, entity: d.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.dataset.channel) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : { scope: 'total' }; render(); },
+    'an-select'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const detail = document.getElementById('an-entity-reading'); if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    /* Lleva el periodo, canal y comparación del Análisis al Diagnóstico (mismo alcance; no cambia el Análisis). */
+    'an-diagnose'() {
+      const f = state.an.context && state.an.context.focus;
+      if (!f) { FP.ui.toast('No hay un periodo definido para diagnosticar.'); return; }
+      const pt = state.an.periodType;
+      // Se usa el contexto persistente de la app: al cambiar de vista, navigation.applyContext lo traslada al Diagnóstico.
+      const c = state.ux.ctx;
+      c.channel = FP.analysisContext.normChannel(state.an.channel);
+      c.comparison = state.an.comparison === 'year_ago' ? 'actual_vs_yoy' : 'actual_vs_previous';
+      if (pt === 'year') { c.periodType = 'year'; c.periodKey = String(f.key).slice(0, 4); }
+      else { c.periodType = 'month'; c.periodKey = String(f.to).slice(0, 7); }   // semana/día → el mes que los contiene
+      root.location.hash = '#diagnostico';
+      if (pt === 'week' || pt === 'day') FP.ui.toast('El Diagnóstico trabaja por mes o año: se abrió el mes que contiene ese periodo.');
+    },
+    'an-export-contrib'() {
+      const a = state.an, c = a.contribution;
+      if (!c || c.status !== 'available') { FP.ui.toast('No hay contribución para descargar.'); return; }
+      const visible = new Set((a._filteredRows || a.rows || []).map((r) => r.entity));
+      const q = (v) => { const t = v === null || v === undefined ? '' : String(v); return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const head = ['entidad', 'rol', 'ranking', 'base', 'actual', 'cambio', 'cambio_pct', 'aporte_cambio_neto_pct', 'peso_movimiento_pct', 'delta_share_pp'];
+      const rows = [...c.positive, ...c.negative].filter((r) => visible.has(r.entity)).map((r) => [r.entity, r.delta < 0 ? 'Arrastra' : r.delta > 0 ? 'Compensa' : 'Estable', r.rank,
+        r.baseline, r.current, r.delta, r.deltaPct, r.contributionPct, r.movementShare, r.shareChangePp]);
+      const ctx = a.context || {};
+      const meta = [['# periodo', ctx.focus ? ctx.focus.label : ''], ['# comparacion', c.baselinePeriod + ' -> ' + c.currentPeriod], ['# canal', ctx.channelLabel || ''], ['# metrica', ctx.metricLabel || ''], ['# materialidad_pct', a.minSharePct || 0]];
+      const csv = '\uFEFF' + [...meta.map((m) => m.map(q).join(',')), head.join(','), ...rows.map((r) => r.map(q).join(','))].join('\n');
+      FP.exporter.download(`contribucion_${(ctx.focus && ctx.focus.key) || 'periodo'}_${a.channel || 'total'}.csv`, csv, 'text/csv');
+    },
+    'an-export-reading'() {
+      const el = document.getElementById('an-entity-reading');
+      const r = state.an.selected;
+      if (!el || !r) { FP.ui.toast('Elige una entidad para descargar su lectura.'); return; }
+      const txt = el.innerText.replace(/\n{3,}/g, '\n\n').trim();
+      const name = String(r.entity).replace(/[^\w\-]+/g, '_').slice(0, 50);
+      FP.exporter.download(`lectura_${name}.txt`, txt, 'text/plain');
+    },
+    'an-clear-selection'() { state.an.selected = null; state.an.drill = null; render(); },
 
     /* ----- Fase 1: carga ----- */
     'pick-files'(el) { pickFiles(el); },
@@ -2013,7 +2204,7 @@
       try {
         const r = await PS.removeBatch(b.id);
         await refreshProductQuality();
-        state.pa = { ...state.pa, result: null, key: null, counts: null, from: null, to: null, drill: [], geo: {}, next: null, trace: null };
+        state.pa = { ...state.pa, result: null, key: null, counts: null, from: null, to: null, periodType: null, drill: [], geo: {}, next: null, trace: null };
         invalidatePlanning();
         refresh();
         render();
@@ -2149,7 +2340,7 @@
       const pa = state.pa, k = el.dataset.key;
       if (k === 'topN') { pa.topN = Number(el.value); pa.page = 1; render(); return; }
       if ((k === 'from' || k === 'to') && !Cal.isValidISODate(el.value)) { FP.ui.toast('Fecha inválida.'); render(); return; }
-      pa[k] = el.value; pa.note = null;
+      pa[k] = el.value; pa.note = null; if (k === 'from' || k === 'to') pa.periodType = null;
       if (k === 'channel') state.ux.ctx.channel = el.value;
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
@@ -2187,7 +2378,7 @@
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
       if (!x) return;
-      Object.assign(state.pa, { from: x.from, to: x.to, channel: x.channel, comparison: x.comparison, note: x.note, result: null });
+      Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note, result: null });
       render();
     },
     async 'pa-export'() {
@@ -2270,6 +2461,44 @@
       const id = el.dataset.id; const rc = state.rc;
       rc.selected = el.checked ? [...new Set([...rc.selected, id])] : rc.selected.filter((x) => x !== id);
       render();
+    },
+    /* Borrado de lo que el usuario eligió (escenarios guardados, acciones del plan, acciones propias del catálogo). Nunca las sugeridas. */
+    'rc-delete-scenario'(el) {
+      const rc = state.rc, sc = rc.scenarioStore.scenarios.find((s) => s.scenarioId === el.dataset.id);
+      if (!sc) return;
+      const linked = FP.actionPlan.actionsOfScenario(rc.plan, sc.scenarioId);
+      const newer = rc.scenarioStore.scenarios.filter((s) => s.supersedes === sc.scenarioId);
+      const msg = `¿Borrar el escenario "${sc.name}" (${sc.scenarioId})? Es una simulación: plan, forecast y reforecast no cambian.`
+        + (linked.length ? `\n\n${linked.length} acción(es) del plan están ligadas a este escenario (${linked.map((a) => a.actionId).join(', ')}): se conservan, pero quedarán sin escenario y ya no se podrán medir contra él.` : '')
+        + (newer.length ? `\n\nLa versión ${newer.map((s) => s.scenarioId).join(', ')} pasará a reemplazar a la versión anterior.` : '');
+      if (!root.confirm(msg)) return;
+      FP.scenarioEngine.deleteScenario(rc.scenarioStore, sc.scenarioId);
+      const n = FP.actionPlan.unlinkScenario(rc.plan, sc.scenarioId);
+      rc.selected = rc.selected.filter((x) => x !== sc.scenarioId);
+      if (rc.actionScenario === sc.scenarioId) { rc.actionScenario = ''; rc.ai = { status: 'idle', actions: [], errors: [] }; }
+      if (rc.draft && rc.draft.supersedes === sc.scenarioId) rc.draft = emptyDraft();
+      saveScenarios(); if (n) saveActionPlan();
+      render();
+      FP.ui.toast(`Escenario ${sc.scenarioId} borrado${n ? `; ${n} acción(es) quedaron sin escenario` : ''}.`);
+    },
+    'rc-delete-action'(el) {
+      const rc = state.rc, a = rc.plan.actions.find((x) => x.actionId === el.dataset.id);
+      if (!a) return;
+      const nm = FP.actionTracking.measurementsOf(rc.plan, a.actionId).length;
+      if (!root.confirm(`¿Borrar la acción ${a.actionId} "${a.title}" del plan?${nm ? ` También se borran sus ${nm} medición(es) y su historial.` : ' También se borra su historial.'} No afecta al escenario ligado.`)) return;
+      FP.actionPlan.deleteAction(rc.plan, a.actionId);
+      if (rc.treeActionId === a.actionId) rc.treeActionId = null;
+      saveActionPlan(); render();
+      FP.ui.toast(`Acción ${a.actionId} borrada.`);
+    },
+    'rc-delete-custom'(el) {
+      const rc = state.rc, a = rc.custom.find((x) => x.actionId === el.dataset.id);
+      if (!a) return;
+      const used = rc.plan.actions.filter((x) => x.catalogId === a.actionId).length;
+      if (!root.confirm(`¿Quitar "${a.name}" de tu catálogo de acciones propias?${used ? ` ${used} acción(es) del plan se hicieron con ella y se conservan.` : ''}`)) return;
+      rc.custom = FP.actionLibrary.removeCustom(rc.custom, a.actionId).custom;
+      storage.save(K.actionLibraryCustom, rc.custom);
+      render(); FP.ui.toast('Acción propia quitada del catálogo.');
     },
     'rc-action-scenario'(el) { state.rc.actionScenario = el.value; state.rc.ai = { status: 'idle', actions: [], errors: [] }; render(); },
     'rc-library-driver'(el) { state.rc.libraryDriver = el.value; render(); },
@@ -2591,7 +2820,7 @@
       loadYearScoped(ty); refresh(); resetPeriod(); location.hash = '#resumen'; render();
     },
 
-    'seg-dim'(el) { (state.seg || (state.seg = {})).dimension = el.value; render(); },
+    'seg-dim'(el) { (state.seg || (state.seg = {})).dimension = el.value || el.dataset.value; render(); },
     /**
      * Tráfico y conversión · parte 3: lleva una oportunidad de segmento a Recovery Center. Los escenarios trabajan con el canal completo,
      * así que el segmento se traduce a su equivalente en el canal: los pedidos extra de llevarlo al CR del total, como % del CR de los

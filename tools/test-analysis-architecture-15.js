@@ -10,10 +10,8 @@ t('Señal tercera',A.layers[2].id==='signal' && A.layers[2].modules.includes('Pr
 t('Hipótesis cuarta',A.layers[3].id==='hypothesis' && A.layers[3].modules.includes('¿Por qué? Diagnóstico'));
 t('Proyección y ciclo de vida posteriores',A.layers[4].id==='projection' && A.layers[5].id==='lifecycle');
 const trend=fs.readFileSync('js/ui/trend-view.js','utf8');
-t('mapa visible en análisis',trend.includes('Cómo leer este análisis')&&trend.includes('analysisMapPanel()'));
+t('el mapa «Cómo leer este análisis» se retiró de la página (repetía lo que ya dicen los títulos)',!trend.includes('Cómo leer este análisis')&&!trend.includes('analysisMapPanel()'));
 t('Lectura de entidad tras hecho',trend.indexOf('entity-reading-panel')>trend.indexOf('trend-table-wrap'));
-t('Driver antes de Señal',trend.indexOf('contributionPanel(a))')>0&&trend.indexOf('contributionPanel(a))')<trend.indexOf('priorityPanel(a))'));
-t('Hipótesis enlaza a Diagnóstico',trend.includes('data-nav="diagnostico"'));
+t('Contribución (driver) antes del forecast plegado (proyección)',trend.indexOf('contributionPanel(a))')>0&&trend.indexOf('contributionPanel(a))')<trend.indexOf('forecastPanel(a))'));
 const css=fs.readFileSync('css/styles.css','utf8');
-t('responsive del mapa',css.includes('.analysis-map__grid')&&css.includes('@media (max-width: 600px)'));
 console.log(`${checks.filter(x=>x.ok).length}/${checks.length} checks Fase 15`);checks.forEach(x=>console.log(`${x.ok?'PASS':'FAIL'} ${x.n}`));if(checks.some(x=>!x.ok))process.exit(1);

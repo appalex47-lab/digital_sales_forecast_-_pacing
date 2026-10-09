@@ -43,5 +43,8 @@
       requiredData: [], ownerArea: String(a.ownerArea || '').trim(), measurementMetric: a.measurementMetric || a.driver, defaultWindowDays: w } };
   }
 
-  FP.actionLibrary = { all, applicable, validateCustom, DRIVERS };
+  /** Quita una acción PROPIA del catálogo (las del catálogo base y las propuestas por IA no se borran). */
+  function removeCustom(custom, actionId) { const has = custom.some((a) => a.actionId === actionId); return { ok: has, custom: custom.filter((a) => a.actionId !== actionId) }; }
+
+  FP.actionLibrary = { removeCustom, all, applicable, validateCustom, DRIVERS };
 })(typeof window !== 'undefined' ? window : globalThis);

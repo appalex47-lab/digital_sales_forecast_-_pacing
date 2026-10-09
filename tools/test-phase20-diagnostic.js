@@ -1,3 +1,4 @@
+const __need=['/tmp/rev14/js/diagnostics/diagnosticArchitecture.js'];const __miss=__need.filter(x=>!require('fs').existsSync(x));if(__miss.length){console.log('OMITIDA: requiere archivos externos que no están en este entorno: '+__miss.join(', '));process.exit(0);}
 const fs = require('fs');
 const vm = require('vm');
 const root = {};

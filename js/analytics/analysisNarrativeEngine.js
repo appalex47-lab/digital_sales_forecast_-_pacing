@@ -23,7 +23,9 @@
     {id:'projection',label:'PROYECCIÓN',question:'¿Qué puede pasar después?'},
     {id:'lifecycle',label:'CICLO DE VIDA',question:'¿Cómo se comporta a través del tiempo?'}
   ];
-  function build({rows=[],risks=null,forecast=null,contribution=null,share=null,cohort=null,diagnostic=null,level='product'}={}){
+  function build({rows=[],risks=null,forecast=null,contribution=null,share=null,cohort=null,diagnostic=null,level='product',context=null}={}){
+    const cmpText=context&&context.comparison&&context.comparison.text?context.comparison.text:null;
+    const scopeText=context?`${context.channelLabel||'Total digital'}${cmpText?` · ${cmpText}`:''}`:null;
     const valid=Array.isArray(rows)?rows:[];
     const sections={fact:[],driver:[],signal:[],hypothesis:[],projection:[],lifecycle:[]};
     const layerStatus={};
@@ -31,7 +33,7 @@
     if(!valid.length)return {schema:'analysis-narrative',schemaVersion:2,ready:false,level,layers:layerMeta,layerStatus,executiveSummary:'No hay suficiente histórico para construir una narrativa.',sections,claims:[],nextQuestion:'Carga suficiente histórico para iniciar la lectura analítica.',note:'La narrativa usa únicamente resultados calculados por Análisis.'};
 
     const growth=valid.filter(r=>r.direction==='growth').length, decline=valid.filter(r=>r.direction==='decline').length;
-    sections.fact.push(claim('fact','hecho',`Se analizaron ${valid.length} entidades en el nivel ${level}.`,{module:'analysisNarrativeEngine',field:'rows.length'},[valid.length]));
+    sections.fact.push(claim('fact','hecho',`${scopeText?`[${scopeText}] `:''}Se analizaron ${valid.length} entidades en el nivel ${level}.`,{module:'analysisNarrativeEngine',field:'rows.length'},[valid.length]));
     if(growth||decline){
       const dir=growth>=decline?'crecimiento':'deterioro';
       const n=dir==='crecimiento'?growth:decline;
@@ -44,7 +46,7 @@
       const negatives=Array.isArray(contribution.negative)?contribution.negative:[];
       const list=contribution.direction==='decline'?negatives:positives;
       if(list[0]) sections.driver.push(claim('driver','driver',`${list[0].entity} concentra la mayor contribución matemática al movimiento observado (${money(list[0].delta)}); esto describe atribución del movimiento, no causalidad.`,{module:'contributionEngine',field:'topContributor',entity:list[0].entity},[list[0].delta]));
-      if(finite(contribution.totalDelta)) sections.driver.push(claim('driver','reconciliacion',`El movimiento neto conciliado es ${money(contribution.totalDelta)}.`,{module:'contributionEngine',field:'totalDelta'},[contribution.totalDelta]));
+      if(finite(contribution.totalDelta)) sections.driver.push(claim('driver','reconciliacion',`El movimiento neto conciliado${cmpText?` (${cmpText})`:''} es ${money(contribution.totalDelta)}.`,{module:'contributionEngine',field:'totalDelta'},[contribution.totalDelta]));
       layerStatus.driver=sections.driver.length?'available':'insufficient';
     }
 
@@ -68,7 +70,7 @@
 
     const s=cohort&&cohort.summary;
     if(cohort&&cohort.status==='available'&&s){
-      sections.lifecycle.push(claim('lifecycle','hecho',`En el último período completo se observaron ${s.newCount||0} entidades nuevas, ${s.retainedCount||0} retenidas, ${s.reactivatedCount||0} reactivadas y ${s.lostCount||0} perdidas.`,{module:'cohortEngine',field:'summary',period:cohort.latestPeriod},[s.newCount,s.retainedCount,s.reactivatedCount,s.lostCount]));
+      sections.lifecycle.push(claim('lifecycle','hecho',`En el último período completo se observaron ${s.newCount||0} entidades nuevas, ${s.retainedCount||0} con continuidad, ${s.reactivatedCount||0} reactivadas y ${s.lostCount||0} perdidas (entidades de producto, no clientes).`,{module:'cohortEngine',field:'summary',period:cohort.latestPeriod},[s.newCount,s.retainedCount,s.reactivatedCount,s.lostCount]));
       if(finite(s.retentionRate)) sections.lifecycle.push(claim('lifecycle','calculo',`La continuidad observada frente al período anterior fue de ${pct(s.retentionRate)}.`,{module:'cohortEngine',field:'retentionRate'},[s.retentionRate]));
       layerStatus.lifecycle='available';
     }
@@ -79,11 +81,11 @@
     const signalText=sections.signal[0]?.text||'';
     const lifecycleText=sections.lifecycle[0]?.text||'';
     const projectionText=sections.projection[0]?.text||'';
-    const executiveSummary=[factText,driverText,signalText,lifecycleText,projectionText].filter(Boolean).slice(0,4).join(' ');
+    const executiveSummary=(scopeText&&!factText.startsWith('['+scopeText)?`[${scopeText}] `:'')+[factText,driverText,signalText,lifecycleText,projectionText].filter(Boolean).slice(0,4).join(' ');
     const nextQuestion=sections.hypothesis.length&&sections.hypothesis[0].level==='hipotesis'
       ? '¿Qué evidencia externa permitiría validar o descartar la hipótesis antes de tomar acción?'
       : sections.signal.length?'¿Qué dato operativo permite investigar la señal prioritaria?':'¿Qué variable adicional conviene contrastar para explicar el movimiento?';
-    return {schema:'analysis-narrative',schemaVersion:2,ready:true,level,layers:layerMeta,layerStatus,executiveSummary,sections,claims,nextQuestion,note:'La narrativa es descriptiva y trazable: reutiliza cálculos existentes, no inventa cifras ni establece causalidad.'};
+    return {schema:'analysis-narrative',schemaVersion:2,ready:true,level,context:context||null,layers:layerMeta,layerStatus,executiveSummary,sections,claims,nextQuestion,note:'La narrativa es descriptiva y trazable: reutiliza cálculos existentes, no inventa cifras ni establece causalidad.'};
   }
   FP.analysisNarrativeEngine={build,layerMeta:Object.freeze(layerMeta)};
 })(typeof window!=='undefined'?window:globalThis);

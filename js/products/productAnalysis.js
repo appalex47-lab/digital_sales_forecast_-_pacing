@@ -23,11 +23,33 @@
   const addDays = (d, n) => FP.calendar.addDays(d, n);
   const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000) + 1;
 
-  /** Periodo de referencia: 'previous' (misma duración, inmediatamente antes) o 'yoy' (mismas fechas, año anterior). */
-  function baselinePeriod({ from, to }, comparison = 'previous') {
+  /**
+   * Periodo de referencia. Misma definición que Análisis (temporalEngine): si el rango es un periodo de calendario
+   * (mes/año completos, o parcial que arranca al inicio del periodo — `periodType` explícito) se compara contra el periodo
+   * de calendario anterior con los mismos días (Sep 1–30 → Ago 1–31; Oct 1–5 → Sep 1–5). Para rangos libres, 'previous'
+   * son los N días inmediatamente anteriores. 'yoy' = mismas fechas del año anterior.
+   */
+  function calendarType(from, to, periodType) {
+    const TE = FP.temporalEngine; if (!TE) return null;
+    const types = periodType && ['year', 'month', 'week'].includes(periodType) ? [periodType] : ['year', 'month'];
+    for (const t of types) {
+      if (from !== TE.startOf(from, t)) continue;
+      const end = TE.endOf(from, t);
+      if (periodType ? to <= end : to === end) return { t, partial: to < end };
+    }
+    return null;
+  }
+  function baselinePeriod({ from, to, periodType = null }, comparison = 'previous') {
+    const cal = calendarType(from, to, periodType), TE = FP.temporalEngine;
     if (comparison === 'yoy') {
+      if (cal) { const r = TE.shiftRange({ from, to }, 'year', -1, cal.partial); return { from: r.from, to: r.to, label: 'mismo periodo del año anterior' }; }
       const shift = (d) => { const y = +d.slice(0, 4) - 1; const md = d.slice(5); return md === '02-29' ? `${y}-02-28` : `${y}-${md}`; };
       return { from: shift(from), to: shift(to), label: 'mismo periodo del año anterior' };
+    }
+    if (cal) {
+      const r = TE.shiftRange({ from, to }, cal.t, -1, cal.partial);
+      const nm = { year: 'año anterior', month: 'mes anterior', week: 'semana anterior' }[cal.t];
+      return { from: r.from, to: r.to, label: cal.partial ? `${nm} (mismos días)` : nm, calendar: cal.t };
     }
     const n = daysBetween(from, to);
     return { from: addDays(from, -n), to: addDays(from, -1), label: `${n} días anteriores` };
@@ -203,9 +225,11 @@
    * Corre el análisis de un nivel con filtros (drilldown y filtros de geografía) sobre IndexedDB.
    * @param {object} p { from, to, comparison, channel, level, filter, next }
    */
-  async function run({ from, to, comparison = 'previous', channel = 'total', level = 'category', filter = {}, next = undefined, withGeoSignals = true }) {
-    const base = baselinePeriod({ from, to }, comparison);
+  async function run({ from, to, periodType = null, comparison = 'previous', channel = 'total', level = 'category', filter = {}, next = undefined, withGeoSignals = true }) {
     const m = PS().meta || {};
+    // Periodo de calendario aún en curso: se acota al último día con datos de producto para comparar los mismos días (como Análisis).
+    if (periodType && m.dateMax && to > m.dateMax && from <= m.dateMax) to = m.dateMax;
+    const base = baselinePeriod({ from, to, periodType }, comparison);
     const mapped = { sales: m.mappedMetrics && m.mappedMetrics.length ? m.mappedMetrics : C().products.metrics, funnel: m.funnelMetrics || [] };
     const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const [cur, prev] = [await PS().aggregate({ from, to, channel, groupBy: level, filter }), await PS().aggregate({ from: base.from, to: base.to, channel, groupBy: level, filter })];
@@ -221,7 +245,7 @@
     if (!diag || !diag.period) return null;
     const per = FP.scenarioEngine ? FP.scenarioEngine.resolvePeriod(diag.period, +String(diag.period.key || diag.period.start).slice(0, 4)) : diag.period;
     const cmp = diag.comparison && diag.comparison.id === 'actual_vs_yoy' ? 'yoy' : 'previous';
-    return { from: per.start, to: per.end, channel: diag.channel ? diag.channel.id || diag.channel : 'total', comparison: cmp,
+    return { from: per.start, to: per.end, periodType: diag.period.type || null, channel: diag.channel ? diag.channel.id || diag.channel : 'total', comparison: cmp,
       note: diag.comparison && ['actual_vs_plan', 'forecast_vs_plan', 'reforecast_vs_forecast'].includes(diag.comparison.id)
         ? 'No existe plan por producto: el desglose de productos compara contra el periodo anterior.' : null };
   }

@@ -50,7 +50,7 @@
           <td>${esc(DRIVER[a.driver])}${a.signalMatch ? '<span class="cell-sub">hay señales de este driver</span>' : ''}</td><td>${esc(a.ownerArea)}</td>
           <td>${esc(C().metrics[a.measurementMetric] ? C().metrics[a.measurementMetric].label : a.measurementMetric)}${a.defaultWindowDays ? `<span class="cell-sub">${a.defaultWindowDays} días</span>` : ''}</td>
           <td>${a.dataAvailable ? H().pill('ok', 'Disponibles') : H().pill('warning', 'Faltan') + `<span class="cell-sub">${esc(a.missingData.join(', '))}</span>`}</td>
-          <td><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : 'disabled'}>Agregar al plan</button></td></tr>`).join('')}</tbody></table></div>
+          <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : 'disabled'}>Agregar al plan</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
       <details class="disclosure"><summary>Agregar una acción propia al catálogo</summary><div class="panel__body">
         <div class="settings-grid">
           <div class="field"><label for="rc-cu-name" class="field__hint">Nombre</label><input id="rc-cu-name" type="text"></div>
@@ -98,11 +98,12 @@
             <td class="num">${esc(signedMoney(a.expectedImpact ? a.expectedImpact.incrementalValue : null))}<span class="cell-sub"><span class="ds-badge ds-badge--scenario">simulado</span></span></td>
             <td><span class="cell-sub">Impacto simulado: ${esc(p.simulatedImpact || 'n/d')} · Exposición: ${esc(p.exposure || 'n/d')} · Urgencia: ${esc(p.urgency || 'n/d')} · Evidencia: ${esc(p.evidence || 'n/d')} · ${esc(p.constraints || '')}</span></td>
             <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-measure" data-id="${esc(a.actionId)}">Medir</button>
-              <button type="button" class="btn btn--small btn--ghost" data-action="rc-tree-action" data-id="${esc(a.actionId)}">Ver cadena</button></div>
+              <button type="button" class="btn btn--small btn--ghost" data-action="rc-tree-action" data-id="${esc(a.actionId)}">Ver cadena</button>
+              <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-action" data-id="${esc(a.actionId)}" aria-label="Borrar la acción ${esc(a.actionId)}">Borrar</button></div>
               ${last ? `<span class="cell-sub">${esc(CONS[last.consistency][1])}</span>` : ''}
               <details><summary class="cell-sub">Historial (${a.history.length})</summary><ul class="plain-list">${a.history.map((h) => `<li class="cell-sub">${esc(h.at.slice(0, 16).replace('T', ' '))} · ${esc(h.field)}: ${esc(String(h.from ?? '—'))} → ${esc(String(h.to ?? '—'))}</li>`).join('')}</ul></details></td></tr>`;
         }).join('')}</tbody></table></div>
-      <p class="field__hint">La prioridad es descriptiva (factores cuantitativos), no indica cuál acción es mejor. Los cambios quedan en el historial; nada se borra.</p>`;
+      <p class="field__hint">La prioridad es descriptiva (factores cuantitativos), no indica cuál acción es mejor. Los cambios quedan en el historial. Puedes borrar las acciones que tú agregaste (se pide confirmación); las del catálogo base y las propuestas no se borran.</p>`;
   }
 
   function renderTracking(state) {

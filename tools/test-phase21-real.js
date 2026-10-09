@@ -1,3 +1,4 @@
+const __need=['/mnt/data/analisis/Venta Productos 2026.csv', '/tmp/phase21/js/analytics/trendEngine.js'];const __miss=__need.filter(x=>!require('fs').existsSync(x));if(__miss.length){console.log('OMITIDA: requiere archivos externos que no están en este entorno: '+__miss.join(', '));process.exit(0);}
 const fs=require('fs'),vm=require('vm'),csv=fs.readFileSync('/mnt/data/analisis/Venta Productos 2026.csv','utf8');
 const ctx=vm.createContext({FP:{},console});
 vm.runInContext(fs.readFileSync('/tmp/phase21/js/analytics/trendEngine.js','utf8'),ctx);

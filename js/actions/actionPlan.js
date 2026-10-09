@@ -48,7 +48,7 @@
   }
 
   function createAction(plan, a) {
-    const n = plan.actions.length + 1;
+    const n = plan.actions.reduce((m, x) => Math.max(m, Number(String(x.actionId).replace(/\D/g, '')) || 0), 0) + 1;   // máximo, no conteo: tras borrar no se repiten ids
     const now = new Date().toISOString();
     const action = {
       actionId: `ACT_${String(n).padStart(3, '0')}`,
@@ -84,5 +84,23 @@
     return { ok: true, action: a };
   }
 
-  FP.actionPlan = { STATUSES, createPlan, hydratePlan, priorityFactors, createAction, updateAction };
+  /** Borra una acción del plan y sus mediciones. Devuelve cuántas mediciones se fueron con ella. */
+  function deleteAction(plan, actionId) {
+    const i = plan.actions.findIndex((a) => a.actionId === actionId);
+    if (i < 0) return { ok: false, error: 'Acción inexistente.' };
+    const [removed] = plan.actions.splice(i, 1);
+    const before = plan.measurements.length;
+    for (let k = plan.measurements.length - 1; k >= 0; k--) if (plan.measurements[k].actionId === actionId) plan.measurements.splice(k, 1);
+    return { ok: true, removed, removedMeasurements: before - plan.measurements.length };
+  }
+  /** Acciones que dependen de un escenario (para avisar antes de borrarlo). */
+  function actionsOfScenario(plan, scenarioId) { return plan.actions.filter((a) => a.scenarioId === scenarioId); }
+  /** Al borrar un escenario, las acciones ligadas se conservan pero quedan sin escenario (queda en su historial). */
+  function unlinkScenario(plan, scenarioId) {
+    const now = new Date().toISOString(); let n = 0;
+    plan.actions.forEach((a) => { if (a.scenarioId === scenarioId) { a.history.push({ at: now, field: 'scenarioId', from: scenarioId, to: null, note: 'Escenario borrado' }); a.scenarioId = null; n++; } });
+    return n;
+  }
+
+  FP.actionPlan = { deleteAction, actionsOfScenario, unlinkScenario, STATUSES, createPlan, hydratePlan, priorityFactors, createAction, updateAction };
 })(typeof window !== 'undefined' ? window : globalThis);
