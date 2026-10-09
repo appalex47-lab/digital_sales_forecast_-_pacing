@@ -2246,6 +2246,16 @@
     'why'(el) {
       FP.explain.open(el.dataset.kind, state, { channel: el.dataset.channel || 'total', periodKey: el.dataset.period || null, metric: el.dataset.metric || 'revenue' });
     },
+    /** Resumen general de Inicio: elegir un canal de la tabla cambia el Canal de todo Inicio (igual que el selector de arriba). */
+    'home-pick-channel'(el) { const h = state.ux.home; h.channel = el.dataset.ch; state.ux.ctx.channel = el.dataset.ch; state.ux.ctxNote = null; render(); },
+    /** Resumen general de Inicio: abre Segmentos en la dimensión elegida, con el canal y el periodo de Inicio (el contexto ya lo traslada). */
+    'home-seg'(el) {
+      const h = state.ux.home, c = state.ux.ctx;
+      (state.seg || (state.seg = { dimension: null })).dimension = el.dataset.dim;
+      c.channel = h.channel || 'total'; c.comparison = 'actual_vs_previous';
+      if (h.periodType === 'month' && h.periodKey) { c.periodType = 'month'; c.periodKey = h.periodKey; } else { c.periodType = 'year'; c.periodKey = String(state.year); }
+      root.location.hash = '#segmentos';
+    },
     'home-setting'(el) {
       const h = state.ux.home;
       if (el.dataset.key === 'channel') { h.channel = el.value; state.ux.ctx.channel = el.value; }

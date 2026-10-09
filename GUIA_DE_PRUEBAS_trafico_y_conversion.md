@@ -35,3 +35,10 @@ Si algo no cuadra, mándame captura del valor en RevNavigator y el mismo valor e
 1. **Calidad del tráfico.** En Tráfico y conversión, abre Fuente/medio y Dispositivo × Fuente/medio. Si aparece «Revisa la calidad de este tráfico», comprueba en GA4 que ese segmento realmente tenga ese salto de sesiones y ese CR. Dime si los avisos te parecen demasiados o muy pocos (umbrales: tráfico ×2 y CR a menos de la mitad).
 2. **Diagnosticar esto.** En Análisis, selecciona una entidad y pulsa «Diagnosticar esto»: el Diagnóstico debe abrir el mismo canal, periodo y comparación.
 3. **Descargas.** «Descargar CSV» en Contribución: la suma de la columna «cambio» debe ser el cambio total del periodo.
+
+## Añadido 2026-10-09 · Inicio con resumen general
+1. Con venta real de dos meses seguidos, abre Inicio, elige el mes y un canal con sesiones (Ecommerce o App): la cascada debe sumar el cambio de venta y «Compara N de N días por canal» debe coincidir con los días con venta en ambos meses.
+2. Elige «Total digital»: si WhatsApp o Llamadas no traen sesiones, el bloque lo dice y solo muestra el cambio de venta.
+3. En «Cómo va cada canal», las cifras deben coincidir con Pacing. Al hacer clic en un canal, el selector Canal de Inicio cambia.
+4. En «Dónde mirar hoy», «Diagnosticar» debe abrir Segmentos en esa dimensión, con el mismo canal y periodo.
+Pruebas: `tools/regression/batch_home_summary.py` (H0–H10) y R-8/R-9 en `batch_real_ga4.py` (necesita el export real).

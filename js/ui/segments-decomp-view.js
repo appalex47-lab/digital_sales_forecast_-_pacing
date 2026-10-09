@@ -124,5 +124,5 @@
       <p class="field__hint">Cada dimensión parte la misma venta en sus propios segmentos, así que los efectos pueden diferir un poco entre filas: es normal (una dimensión agrupa el tráfico de otra manera). Si todas apuntan al mismo efecto, el problema no depende de cómo se corte.</p></div>`;
   }
 
-  FP.segmentsDecompView = { card, dimsCard, waterfall };
+  FP.segmentsDecompView = { card, dimsCard, waterfall, qualityBlock };
 })(typeof window !== 'undefined' ? window : globalThis);
