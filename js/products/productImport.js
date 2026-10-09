@@ -79,7 +79,7 @@
     const kind = staged.kind || 'sales';
     const mappingIssues = PS().validateMapping(staged.mapping, kind);
     if (mappingIssues.length) return { draft: null, mappingIssues, canImport: false, summary: null, elapsedMs: 0 };
-    const draft = PS().createDraft(staged.headers, staged.mapping, { kind, dateFormat: settings.dateFormat || 'auto', numberFormat: settings.numberFormat || 'dot' });
+    const draft = PS().createDraft(staged.headers, staged.mapping, { kind, dateFormat: settings.dateFormat || 'auto', numberFormat: settings.numberFormat || 'dot', sumSameKey: settings.sumSameKey !== false });
     const text = staged.text, delim = staged.delimiter, total = text.length;
     let pos = staged.headerEnd, line = staged.headerLine, n = 0;
     const expected = staged.headers.length;
@@ -130,14 +130,14 @@
   function previewRecords(staged, settings = {}) {
     const kind = staged.kind || 'sales';
     if (PS().validateMapping(staged.mapping, kind).some((i) => ['date', 'channel', 'sku'].includes(i.field) && i.type === 'MISSING_REQUIRED_COLUMN')) return [];
-    const d = PS().createDraft(staged.headers, staged.mapping, { ...settings, kind });
+    const d = PS().createDraft(staged.headers, staged.mapping, { ...settings, kind, sumSameKey: settings.sumSameKey !== false });
     return staged.preview.map((r) => {
       const before = { ...d.summary };
       const ex = d.issues.examples.length;
       d.addRow(r.line, r.cells);
       const issues = d.issues.examples.slice(ex);
       const accepted = d.summary.accepted > before.accepted;
-      const dup = d.summary.exactDuplicates > before.exactDuplicates ? 'exact' : d.summary.conflicts > before.conflicts ? 'conflict' : null;
+      const dup = d.summary.summedRows > (before.summedRows || 0) ? 'summed' : d.summary.exactDuplicates > before.exactDuplicates ? 'exact' : d.summary.conflicts > before.conflicts ? 'conflict' : null;
       const idx = d.idx;
       const get = (k) => (idx[k] === undefined ? '' : String(r.cells[idx[k]] || '').trim());
       const metrics = {};

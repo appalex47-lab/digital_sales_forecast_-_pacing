@@ -32,8 +32,8 @@ def eff(a, b):
     c0 = a[1] / a[0]; c1 = b[1] / b[0] if b[0] > 0 else 0; k0 = a[2] / a[1]
     tr = (b[0] - a[0]) * c0 * k0; cr = b[0] * (c1 - c0) * k0; av = b[0] * c1 * (b[2] / b[1] - k0) if b[1] else 0
     return tr, cr + (d - tr - cr - av), av
-def total_eff(segs):
-    T1 = sum(b[0] for a, b in segs.values() if b); mn = max(500, math.ceil(.01 * T1))
+def total_eff(segs, mn=None):
+    T1 = sum(b[0] for a, b in segs.values() if b); mn = mn or max(500, math.ceil(.01 * T1))
     big = [x for x in segs.values() if (x[1] and x[1][0] >= mn) or (x[0] and x[0][0] >= mn)]; small = [x for x in segs.values() if x not in big]
     mg = lambda i: (lambda m: tuple(sum(z[j] for z in m) for j in range(3)) if m else None)([x[i] for x in small if x[i]])
     items = big + ([(mg(0), mg(1))] if small else []); t = [0, 0, 0]
@@ -52,7 +52,7 @@ async def main():
         await q.wait_for_function("document.querySelectorAll('#view-carga .staging__head').length === 0", timeout=900000)
         bt = await q.evaluate("(()=>{const x=FP.app.state.store.segments.batches[0]; return {rows:x.rowCount, acc:x.accepted, rej:x.rejected, dup:x.summary.duplicates, inv:x.summary.invalidKey}})()")
         chk('R-1 ninguna fila rechazada ni con llave duplicada (la página «/» y las variantes de texto no se pierden)', bt['rej'] == 0 and bt['dup'] == 0 and bt['inv'] == 0, bt)
-        seg = await asyncio.wait_for(q.evaluate("""(()=>{const r=FP.app.state.store.segments.records,o={};for(const x of r){const mo=x.date.slice(0,7); if(mo!=='2026-08'&&mo!=='2026-09')continue; const k=[mo,x.channel,x.dimension,x.segment].join('|'); const a=o[k]||(o[k]=[0,0,0]); const m=x.metrics; a[0]+=m.trafficVolume.value||0;a[1]+=m.orders.value||0;a[2]+=m.revenue.value||0;} return o})()"""), 180)
+        seg = await asyncio.wait_for(q.evaluate("""(()=>{const r=FP.app.state.store.segments.records,o={};for(const x of r){const mo=x.date.slice(0,7); if(mo!=='2026-08'&&mo!=='2026-09')continue; const sk=FP.normalize.normalizeHeader(x.segment)||('sym_'+Array.from(x.segment).map(c=>c.codePointAt(0).toString(16)).join('_')); const k=[mo,x.channel,x.dimension,sk].join('|'); const a=o[k]||(o[k]=[0,0,0]); const m=x.metrics; a[0]+=m.trafficVolume.value||0;a[1]+=m.orders.value||0;a[2]+=m.revenue.value||0;} return o})()"""), 180)
         dims = sorted({k.split('|')[2] for k in seg})
         chk('R-2 las 7 dimensiones llegan', len(dims) == 7, dims)
         bad = []
@@ -80,6 +80,19 @@ async def main():
                 if ch == 'ecommerce' and dim == 'landing':
                     note = await q.evaluate("(document.querySelector('.sgd-others')||{innerText:''}).innerText")
                     chk('R-5 Landing en Ecommerce: avisa que «Otros» reúne la mayor parte del tráfico', 'Otros» reúne el' in note, note)
+        # Selector de mínimo de sesiones con datos reales: Ecommerce · Landing con mínimo 250 (el automático es 3,727)
+        await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'channel'},value:'ecommerce'})"); await q.wait_for_timeout(1200)
+        await q.select_option('#sg-dim', 'landing'); await q.wait_for_timeout(1500)
+        await q.select_option('#sg-min', '250'); await q.wait_for_timeout(2500)
+        foot = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tfoot td')].map(c=>c.innerText.trim())")
+        S = {}
+        for k, v in seg.items():
+            mo, c, d, sg_ = k.split('|', 3)
+            if c == 'ecommerce' and d == 'landing': S.setdefault(sg_, [None, None])[0 if mo == '2026-08' else 1] = tuple(v)
+        te, ns, mn = total_eff({k: tuple(v) for k, v in S.items()}, 250)
+        chk(f'R-6 Ecommerce · Landing con mínimo 250: totales de efectos = cálculo aparte {[money(x) for x in te]}', foot[2:] == [money(x) for x in te], (foot, te))
+        note = await q.evaluate("(document.querySelector('.sgd-others')||{innerText:''}).innerText")
+        chk('R-7 con mínimo 250, «Otros» reúne menos tráfico que con el automático (el aviso baja de 64 % a menos)', ('Otros» reúne el' not in note) or ('64 %' not in note), note)
         chk('Sin errores de página', not errs, errs[:2])
         await b.close()
 asyncio.run(main())

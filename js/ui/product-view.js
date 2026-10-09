@@ -20,7 +20,7 @@
   const ISSUE = {
     MISSING_DATE: 'Falta fecha', INVALID_DATE: 'Fecha inválida', AMBIGUOUS_DATE: 'Fecha ambigua', MISSING_CHANNEL: 'Falta canal', INVALID_CHANNEL: 'Canal no reconocido',
     MISSING_SKU: 'Falta SKU', MISSING_PRODUCT: 'SKU sin producto', MISSING_CATEGORY: 'Producto sin categoría', MISSING_SUBCATEGORY: 'Producto sin subcategoría',
-    SKU_ATTRIBUTE_MISMATCH: 'SKU con atributos distintos', EXACT_DUPLICATE: 'Duplicado exacto', CONFLICT: 'Conflicto (misma llave, métricas distintas)',
+    SKU_ATTRIBUTE_MISMATCH: 'SKU con atributos distintos', EXACT_DUPLICATE: 'Duplicado exacto', SUMMED_SAME_KEY: 'Misma llave: sumada', CONFLICT: 'Conflicto (misma llave, métricas distintas)',
     VALID_MULTIPLICITY: 'Multiplicidad válida', PERIOD_INCOMPLETE: 'Periodo incompleto', MALFORMED_ROW: 'Fila con columnas de más o de menos',
     INVALID_REVENUE: 'Venta inválida', INVALID_ORDERS: 'Pedidos inválidos', INVALID_UNITS: 'Unidades inválidas', INVALID_VIEWS: 'Vistas inválidas',
     NEGATIVE_REVENUE: 'Venta negativa', NEGATIVE_ORDERS: 'Pedidos negativos', NEGATIVE_UNITS: 'Unidades negativas', NEGATIVE_VIEWS: 'Vistas negativas',
@@ -62,7 +62,7 @@
       ${kind === 'sales' ? `<td class="wrap">${esc(p.product)}<span class="cell-sub">${esc([p.category, p.subcategory].filter(Boolean).join(' › '))}</span></td>
       <td class="wrap">${esc([p.region, p.state, p.city].filter(Boolean).join(' › ') || geoMissing())}<span class="cell-sub">${esc(p.branch || geoMissing())} · ${esc(p.delivery || geoMissing())}</span></td>` : ''}
       ${ms.map((m) => `<td class="num">${stateCell(p.metrics[m])}</td>`).join('')}
-      <td>${!p.accepted && !p.duplicate ? H().pill('error', 'Se rechaza') : p.duplicate === 'exact' ? H().pill('na', 'Duplicado exacto') : p.duplicate === 'conflict' ? H().pill('warning', 'Conflicto') : p.issues.length ? H().pill('warning', 'Advertencia') : H().pill('ok', '✓ Válida')}</td></tr>`).join('');
+      <td>${!p.accepted && !p.duplicate ? H().pill('error', 'Se rechaza') : p.duplicate === 'summed' ? H().pill('ok', 'Se suma a la fila con la misma llave') : p.duplicate === 'exact' ? H().pill('na', 'Duplicado exacto') : p.duplicate === 'conflict' ? H().pill('warning', 'Conflicto') : p.issues.length ? H().pill('warning', 'Advertencia') : H().pill('ok', '✓ Válida')}</td></tr>`).join('');
     let body;
     if (item.status === 'processing') {
       body = `<p class="note">Validando el archivo completo… ${Math.round((item.progress || 0) * 100)} %</p><div class="progress"><span style="width:${Math.round((item.progress || 0) * 100)}%"></span></div>`;
@@ -80,6 +80,7 @@
           <div><dt>Conflictos</dt><dd class="num">${F().integer(sm.conflicts)}</dd><small>no se eliminan: se marcan</small></div>
           <div><dt>Multiplicidad válida</dt><dd class="num">${F().integer(sm.multiplicity)}</dd><small>se suman por SKU-día</small></div>
         </dl>
+        ${sm.summedRows ? `<p class="note" data-summed="${sm.summedRows}"><strong>${F().integer(sm.summedRows)} filas se sumaron</strong> a otra fila con la misma llave (${F().integer(sm.summedKeys)} llaves): el archivo se trata como transaccional, con varias líneas por SKU, día, canal y ubicación. Si en tu archivo una misma llave debe aparecer una sola vez, desactiva «Sumar filas con la misma llave» en Opciones de lectura.</p>` : ''}
         <p class="field__hint">${F().integer(sm.skus)} SKU · ${F().integer(sm.dates)} días (${esc(sm.dateMin || '—')} a ${esc(sm.dateMax || '—')}) · canales ${esc(sm.channels.join(', '))} ·
           ${kind === 'sales' ? `${F().integer(sm.states)} estados · ${F().integer(sm.branches)} sucursales · ${esc(sm.deliveries.join(' y '))} · ` : ''}
           métricas mapeadas: ${esc(sm.mappedMetrics.map((m) => PS().label(m)).join(', '))} · validado en ${F().integer(r.elapsedMs)} ms.</p>

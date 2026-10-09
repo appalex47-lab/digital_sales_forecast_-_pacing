@@ -57,6 +57,28 @@ async def main():
             a, bb = DS[nm]; ee = effects(a, bb)
             okr &= r[1] == sg(bb[2] - a[2]) and r[2].startswith(sg(ee[0]) if round(ee[0]) else '$0') and r[3].startswith(sg(ee[1]) if round(ee[1]) else '$0') and r[4].startswith(sg(ee[2]) if round(ee[2]) else '$0')
         chk('DS-3 las 4 celdas grandes coinciden en Δ y en los tres efectos', okr and sum(1 for r in fx for n in big if r[0].startswith(n)) == 4, fx)
+        # --- Selector de mínimo de sesiones ---
+        lab = await q.evaluate("[...document.querySelectorAll('#sg-min option')].map(o=>o.innerText.trim())")
+        T1 = sum(bb[0] for a, bb in DS.values()); auto = max(500, math.ceil(.01 * T1))
+        chk(f'MS-1 el selector existe y su opción automática muestra el mínimo vigente ({auto})', lab and lab[0] == f'Automático ({auto})', lab)
+        def want_for(segs, mn):
+            big = [x for x in segs.values() if x[0][0] >= mn or x[1][0] >= mn]; small = [x for x in segs.values() if x not in big]
+            mg = lambda i: tuple(sum(z[i][j] for z in small) for j in range(3))
+            items = big + ([(mg(0), mg(1))] if small else [])
+            e = [effects(a, bb) for a, bb in items]; return [sum(x[i] for x in e) for i in range(3)]
+        await q.select_option('#sg-min', '25'); await q.wait_for_timeout(900)
+        foot25 = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tfoot td')].map(c=>c.innerText.trim())")
+        names25 = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tbody tr th')].map(r=>r.innerText.trim())")
+        w25 = want_for(DS, 25)
+        chk('MS-2 con mínimo 25 los 5 segmentos salen por separado (incluida la celda de 350 sesiones) y no hay «Otros»', len(names25) == 5 and not any(n.startswith('Otros') for n in names25) and any(n.startswith('Escritorio · blog') for n in names25), names25)
+        chk('MS-3 con mínimo 25 los totales de efectos coinciden con el cálculo aparte (el total depende de la granularidad)', foot25[2:] == [sg(w25[0]), sg(w25[1]), sg(w25[2])], (foot25, w25))
+        chk('MS-4 con un solo segmento dentro de «Otros», agruparlo no cambia los efectos (no hay nada que mezclar)', [round(x) for x in w25] == [round(x) for x in want_for(DS, auto)], (w25, want_for(DS, auto)))
+        st = await q.evaluate("FP.app.state.seg.minByDim")
+        chk('MS-5 el mínimo se recuerda por dimensión', st == {'device_source': 25}, st)
+        await q.select_option('#sg-min', ''); await q.wait_for_timeout(900)
+        footA = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tfoot td')].map(c=>c.innerText.trim())")
+        wA = want_for(DS, auto)
+        chk('MS-6 volver a «Automático» restablece los totales de antes', footA[2:] == [sg(wA[0]), sg(wA[1]), sg(wA[2])], (footA, wA))
         qt = await q.evaluate("[...document.querySelectorAll('.sgd-quality li')].map(x=>x.innerText.trim())")
         chk('DS-4 aviso de calidad: marca la celda tipo bot (tráfico x3, CR de 3.00 % a 0.50 %) y solo ella', len(qt) == 1 and 'bot-farm' in qt[0] and '3.00 % → 0.50 %' in qt[0] and '+4,000' in qt[0], qt)
         txt = await q.evaluate("(document.querySelector('.sgd-quality')||{innerText:''}).innerText")

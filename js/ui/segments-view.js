@@ -279,19 +279,24 @@
     const dimSelect = `<div class="field"><label for="sg-dim" class="field__hint">Dimensión</label>
           <select id="sg-dim" data-action="seg-dim">${dims.map((d) => `<option value="${esc(d)}" ${d === sg.dimension ? 'selected' : ''}>${esc(lbl(d))}</option>`).join('')}</select></div>`;
     const dctx = { esc, money, pct, F, signedPp };
-    const decOf = (r, key) => memo(`segdec|${key}`, () => FP.trafficConversionEngine.analyze(r));
-    const dec = res.rows.length ? decOf(res, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`) : null;
+    // Mínimo de sesiones para mostrar un segmento por separado: automático (el mayor entre 500 y el 1 % del tráfico) o el que elija la persona, recordado por dimensión.
+    const minOf = (d) => { const v = sg.minByDim && sg.minByDim[d]; return fin(v) && v > 0 ? v : null; };
+    const decOf = (r, key, d) => memo(`segdec|${key}|${minOf(d) || 'auto'}`, () => FP.trafficConversionEngine.analyze(r, minOf(d) ? { minSessions: minOf(d) } : {}));
+    const dec = res.rows.length ? decOf(res, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`, sg.dimension) : null;
+    const MIN_OPTS = [25, 50, 100, 250, 500, 1000, 2500, 5000];
+    const minSelect = dec ? `<div class="field"><label for="sg-min" class="field__hint">Mínimo de sesiones por segmento</label>
+          <select id="sg-min" data-action="seg-min"><option value="" ${minOf(sg.dimension) ? '' : 'selected'}>Automático (${esc(F.integer(dec.minSessions))})</option>${MIN_OPTS.map((v) => `<option value="${v}" ${minOf(sg.dimension) === v ? 'selected' : ''}>${esc(F.integer(v))}</option>`).join('')}</select></div>` : '';
     const decHtml = dec ? FP.segmentsDecompView.card(dec, dctx) : '';
     const dimsHtml = res.rows.length && dims.length > 1 ? FP.segmentsDecompView.dimsCard(dims.map((d) => {
       const r2 = d === sg.dimension ? res : memo(`segsum|${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: d, periodType: s.periodType }));
-      return { dim: d, label: lbl(d), active: d === sg.dimension, dec: r2.rows.length ? decOf(r2, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`) : null };
+      return { dim: d, label: lbl(d), active: d === sg.dimension, dec: r2.rows.length ? decOf(r2, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`, d) : null };
     }), dctx) : '';
     const disc = res.rows.length ? discovery(ins, { esc, money, pct, F, decHtml, dimsHtml, trend: (() => { const tk = ins.rows.filter((r) => r.relevant).sort((a, b) => b.current.traffic - a.current.traffic).slice(0, 5).map((r) => r.key); return memo(`segtrend|${range.to}|${s.channel}|${sg.dimension}|${tk.join('~')}`, () => weeklyTrend(recs, { to: range.to, channel: s.channel, dimension: sg.dimension, keys: tk })); })(), split: present.includes('customer_type') ? memo(`segsplit|${range.from}|${range.to}|${s.channel}`, () => FP.segmentInsights.customerSplit(summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: 'customer_type' }))) : null }) : { nav: [], html: '' };
     const navAll = [...disc.nav, ['sg-table', 'Detalle por segmento']].filter((x, i, arr) => arr.findIndex((y) => y[0] === x[0]) === i);
     const navHtml = res.rows.length ? `<nav class="sgnav" aria-label="Ir a una sección"><span class="sgnav__lbl">Ir a</span>${navAll.map(([id, l]) => `<a class="btn btn--small" href="#${id}" data-sgjump="${id}">${esc(l)}</a>`).join('')}</nav>` : '';
     $('segments-view').innerHTML = `${head}
       <div class="panel__body stack">
-        ${FP.narrativeView.contextControls(state, 'sg', 'dx-setting', 'dx-period-type', dimSelect)}
+        ${FP.narrativeView.contextControls(state, 'sg', 'dx-setting', 'dx-period-type', dimSelect + minSelect)}
         <p class="field__hint">Periodo ${esc(res.period.from)} a ${esc(res.period.to)} contra ${esc(res.baseline.from)} a ${esc(res.baseline.to)} (${esc(res.baseline.label || 'periodo anterior')}: los segmentos no tienen plan). Periodo y canal son la misma selección de Diagnóstico.</p>
         ${res.rows.length ? kpiCards(ins, { money, pct, F }) : ''}
         ${navHtml}

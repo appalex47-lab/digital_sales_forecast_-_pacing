@@ -49,6 +49,10 @@
             Importar también filas con errores en métricas</label>
           <span class="field__hint">El valor inválido se guarda marcado como inválido. Filas sin fecha o canal válidos nunca se importan.</span></div>
         <div class="field field--check">
+          <label><input type="checkbox" data-action="set-setting" data-key="sumSameKey" ${s.sumSameKey !== false ? 'checked' : ''}>
+            Sumar filas con la misma llave (archivo de productos transaccional)</label>
+          <span class="field__hint">Llave = fecha · canal · SKU · estado · sucursal · entrega · ciudad. Si hay varias filas con la misma llave, se suman (venta, pedidos y unidades). Si lo apagas, se conserva la primera y las demás se marcan como duplicado o conflicto.</span></div>
+        <div class="field field--check">
           <label><input type="checkbox" data-action="set-setting" data-key="enableAI" ${s.enableAI !== false ? 'checked' : ''}>
             Habilitar normalización asistida por IA (Cohere)</label>
           <span class="field__hint">Solo se consulta cuando el diccionario estático deja cabeceras sin mapear o campos obligatorios faltantes.</span>

@@ -159,6 +159,7 @@
     return {
       ...IMP.defaultSettings(),
       includeErrorRows: false,
+      sumSameKey: true,   // archivo de productos transaccional: filas con la misma llave completa se suman
       enableAI: C.import.enableAI !== false,
       customAIPrompt: C.import.customAIPrompt || ''
     };
@@ -2095,7 +2096,7 @@
         const v = FP.normalize.normalizeNumber(el.value).value;
         if (v === null || v < 0 || v > 50) { FP.ui.toast('La tolerancia debe estar entre 0 % y 50 %.'); render(); return; }
         state.settings.tolerance = v / 100;
-      } else if (key === 'includeErrorRows' || key === 'enableAI') state.settings[key] = el.checked;
+      } else if (key === 'includeErrorRows' || key === 'enableAI' || key === 'sumSameKey') state.settings[key] = el.checked;
       else state.settings[key] = el.value;
       saveSettings();
       reprocessAll();
@@ -2820,6 +2821,7 @@
       loadYearScoped(ty); refresh(); resetPeriod(); location.hash = '#resumen'; render();
     },
 
+    'seg-min'(el) { const sg = state.seg || (state.seg = {}); const d = sg.dimension; sg.minByDim = { ...(sg.minByDim || {}), [d]: el.value === '' || el.value === undefined ? null : Math.max(1, Number(el.value) || 0) || null }; render(); },
     'seg-dim'(el) { (state.seg || (state.seg = {})).dimension = el.value || el.dataset.value; render(); },
     /**
      * Tráfico y conversión · parte 3: lleva una oportunidad de segmento a Recovery Center. Los escenarios trabajan con el canal completo,
