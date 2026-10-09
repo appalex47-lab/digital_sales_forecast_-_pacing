@@ -1363,3 +1363,15 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 .panel__actions .btn--ghost{border-color:var(--ds-border-strong);background:transparent}
 .panel__actions .btn--ghost:hover{border-color:var(--ds-accent)}
 .sgd-others{margin:12px 0}
+
+/* Inicio · resumen general (4 bloques debajo de «¿Qué está pasando?») */
+.home-sum__sep { border-top: 2px dashed var(--ds-border-strong); padding-top: var(--ds-s3); }
+.home-sum__item { display: flex; gap: var(--ds-s3); justify-content: space-between; align-items: center; flex-wrap: wrap; border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); padding: var(--ds-s3) var(--ds-s4); margin-bottom: var(--ds-s2); }
+.home-sum__item > div { flex: 1; min-width: 220px; }
+.home-sum .sgd-quality { margin-top: var(--ds-s3); }
+.home-sum__how { margin-top: var(--ds-s4); }
+.home-sum .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ds-accent); cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.home-sum .link-btn:hover { text-decoration-thickness: 2px; }
+.home-sum .link-btn:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; border-radius: 3px; }
+.home-sum tr.is-selected { background: var(--ds-accent-soft); }
+.home-sum .sgd-wf__cols { height: 240px; }

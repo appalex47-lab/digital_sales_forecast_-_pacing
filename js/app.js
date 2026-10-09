@@ -159,6 +159,7 @@
     return {
       ...IMP.defaultSettings(),
       includeErrorRows: false,
+      sumSameKey: true,   // archivo de productos transaccional: filas con la misma llave completa se suman
       enableAI: C.import.enableAI !== false,
       customAIPrompt: C.import.customAIPrompt || ''
     };
@@ -2095,7 +2096,7 @@
         const v = FP.normalize.normalizeNumber(el.value).value;
         if (v === null || v < 0 || v > 50) { FP.ui.toast('La tolerancia debe estar entre 0 % y 50 %.'); render(); return; }
         state.settings.tolerance = v / 100;
-      } else if (key === 'includeErrorRows' || key === 'enableAI') state.settings[key] = el.checked;
+      } else if (key === 'includeErrorRows' || key === 'enableAI' || key === 'sumSameKey') state.settings[key] = el.checked;
       else state.settings[key] = el.value;
       saveSettings();
       reprocessAll();
@@ -2244,6 +2245,16 @@
     /** "¿Por qué este número?": explica la cifra con la corrida real del motor, en el panel de ayuda de Fase 7. */
     'why'(el) {
       FP.explain.open(el.dataset.kind, state, { channel: el.dataset.channel || 'total', periodKey: el.dataset.period || null, metric: el.dataset.metric || 'revenue' });
+    },
+    /** Resumen general de Inicio: elegir un canal de la tabla cambia el Canal de todo Inicio (igual que el selector de arriba). */
+    'home-pick-channel'(el) { const h = state.ux.home; h.channel = el.dataset.ch; state.ux.ctx.channel = el.dataset.ch; state.ux.ctxNote = null; render(); },
+    /** Resumen general de Inicio: abre Segmentos en la dimensión elegida, con el canal y el periodo de Inicio (el contexto ya lo traslada). */
+    'home-seg'(el) {
+      const h = state.ux.home, c = state.ux.ctx;
+      (state.seg || (state.seg = { dimension: null })).dimension = el.dataset.dim;
+      c.channel = h.channel || 'total'; c.comparison = 'actual_vs_previous';
+      if (h.periodType === 'month' && h.periodKey) { c.periodType = 'month'; c.periodKey = h.periodKey; } else { c.periodType = 'year'; c.periodKey = String(state.year); }
+      root.location.hash = '#segmentos';
     },
     'home-setting'(el) {
       const h = state.ux.home;
@@ -2820,6 +2831,7 @@
       loadYearScoped(ty); refresh(); resetPeriod(); location.hash = '#resumen'; render();
     },
 
+    'seg-min'(el) { const sg = state.seg || (state.seg = {}); const d = sg.dimension; sg.minByDim = { ...(sg.minByDim || {}), [d]: el.value === '' || el.value === undefined ? null : Math.max(1, Number(el.value) || 0) || null }; render(); },
     'seg-dim'(el) { (state.seg || (state.seg = {})).dimension = el.value || el.dataset.value; render(); },
     /**
      * Tráfico y conversión · parte 3: lleva una oportunidad de segmento a Recovery Center. Los escenarios trabajan con el canal completo,

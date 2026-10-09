@@ -277,7 +277,7 @@
   /**
    * Borrador de un archivo (venta o funnel). `addRow(line, cells)` valida y acumula por llave.
    */
-  function createDraft(headers, mapping, { kind = 'sales', dateFormat = 'auto', numberFormat = 'dot' } = {}) {
+  function createDraft(headers, mapping, { kind = 'sales', dateFormat = 'auto', numberFormat = 'dot', sumSameKey = false } = {}) {
     if (!dims.states.length) resetDims();
     const idx = {};
     headers.forEach((h, i) => { if (mapping[h]) idx[mapping[h]] = i; });
@@ -287,7 +287,8 @@
       kind, headers, mapping, idx, mappedMetrics: metrics.filter((m) => idx[m] !== undefined),
       hasExtra: kind === 'sales' && idx.extraDimension !== undefined,
       parts: new Map(), catalog: new Map(), issues: newIssues(), conflicts: [],
-      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0 },
+      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0 },
+      sumSameKey: kind === 'sales' && Boolean(sumSameKey),
       dates: new Set(), channels: new Set(), states: new Set(), branches: new Set(), deliveries: new Set(), cities: new Set(),
       geoObs: { stateRegion: new Map(), branchRegion: new Map(), branch: new Map() },
       settings: { dateFormat, numberFormat }
@@ -370,6 +371,20 @@
       const nc = { sku, stateIdx: sIdx, branch: bLabel, deliveryIdx: dIdx, city: cLabel, geoFlags: gFlags, extra, values: vals, states: sts, line, conflict: false };
       const key = `${cellKey(kind, nc)}\u0001${extra}`;
       const cell = part.get(key);
+      if (cell && d.sumSameKey) {
+        // Archivo transaccional: varias líneas con la misma llave completa son ventas distintas y SE SUMAN (también las idénticas: dos pedidos iguales son dos pedidos).
+        d.summary.summedRows++; if (!cell.summed) { cell.summed = true; d.summary.summedKeys++; }
+        cell.values = cell.values.slice(); cell.states = cell.states.slice();
+        for (let i = 0; i < cell.states.length; i++) {
+          const a = cell.states[i], b = sts[i];
+          if (a === ST.invalid || b === ST.invalid) { cell.states[i] = ST.invalid; cell.values[i] = NaN; }
+          else if (a === ST.observed && b === ST.observed) cell.values[i] += vals[i];
+          else if (b === ST.observed) { cell.states[i] = ST.observed; cell.values[i] = vals[i]; }
+        }
+        const fk = [date, channel, sku, dims.states[sIdx], bLabel, dims.deliveries[dIdx], cLabel, extra || null].filter(Boolean).join(' · ');
+        d.issues.add('SUMMED_SAME_KEY', 'info', line, 'llave', fk, `Misma llave completa que la fila ${cell.line}: se sumó (archivo transaccional).`);
+        return;
+      }
       if (cell) {
         // Llave completa (la que realmente se compara): fecha · canal · SKU + estado · sucursal · entrega · ciudad · otra dimensión
         const fullKey = [date, channel, sku, kind === 'sales' ? dims.states[sIdx] : null, kind === 'sales' ? bLabel : null, kind === 'sales' ? dims.deliveries[dIdx] : null, kind === 'sales' ? cLabel : null, extra || null].filter(Boolean).join(' · ');

@@ -19,7 +19,7 @@ HOME = """()=>{const h=document.getElementById('home');const now=h.querySelector
   cta:(now?.querySelector('.empty__next .btn')||{}).innerText||null,ctaView:(now?.querySelector('.empty__next .btn')||{dataset:{}}).dataset.view||null,
   cards:[...(now?.querySelectorAll('.metric-card')||[])].map(c=>({tag:(c.querySelector('.state-tag')||{}).innerText||'',label:(c.querySelector('.metric-card__label')||{}).innerText||'',val:(c.querySelector('.metric-card__value')||{}).innerText||'',cmp:(c.querySelector('.metric-card__compare')||{}).innerText||''})),
   msgs:[...(now?.querySelectorAll('.headline li')||[])].map(l=>l.innerText),
-  order:[...h.querySelectorAll('section.ds-card')].map(x=>x.getAttribute('aria-labelledby'))}}"""
+  order:[...h.querySelectorAll('section.ds-card:not(.home-sum)')].map(x=>x.getAttribute('aria-labelledby'))}}"""
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); q = await b.new_page(viewport={'width': 1280, 'height': 900}); u = f'http://127.0.0.1:{port}/index.html'

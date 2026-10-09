@@ -148,7 +148,7 @@ ${cards}
     // Vacío (sin plan/forecast): primeros pasos y preparación → recorrido → qué está pasando.
     // Con datos: recorrido → qué está pasando → preparación y siguiente paso (al final).
     const body = f && !planOnly
-      ? `${flowBlock}\n\n${nowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
+      ? `${flowBlock}\n\n${nowBlock}\n\n${FP.homeSummaryView ? FP.homeSummaryView.render(state, h) : ''}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
       : `${setupBlock(nextCard + '\n' + readyCard)}\n\n${flowBlock}\n\n${nowBlock}`;
     $('home').innerHTML = `<div class="home">
       <header class="home__head">

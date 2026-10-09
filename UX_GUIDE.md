@@ -597,3 +597,8 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 - El aviso «Revisa la calidad de este tráfico» señala patrones (sesiones sin pedidos, pico con CR a la baja, tráfico nuevo de baja conversión); nunca afirma que sea tráfico no humano.
 - Si «Otros» reúne el 25 % o más del tráfico, la tarjeta de efectos lo dice con el porcentaje; sus efectos se leen como bloque.
 - Contribución respeta la materialidad elegida y avisa cuántas entidades oculta; el cambio neto incluye todas.
+
+## Añadido 2026-10-09 · Inicio con resumen general
+- Debajo de «¿Qué está pasando?» (que no cambia) hay cuatro bloques: **Por qué cambió la venta** (cascada tráfico → conversión → ticket, mismos días en ambos periodos), **Dónde mirar hoy** (segmento que más pesó por dimensión de GA4 y aviso de calidad del tráfico, con «Diagnosticar»), **Cómo va cada canal** (venta acumulada, cumplimiento, forecast vs meta y estado de pacing; elegir un canal cambia el Canal de Inicio) y **Confianza de los datos** (venta real hasta, días comparados, calidad y fechas de segmentos/productos).
+- Cada bloque trae «De dónde sale y qué pasa sin datos» (desplegable). Sin periodo anterior (por ejemplo, el año completo sin año anterior) el bloque 1 lo dice; con «Total digital» y un canal sin sesiones (WhatsApp, Llamadas) muestra solo el cambio de venta y explica por qué no separa tráfico y conversión.
+- Los estados de canal usan las etiquetas de pacing existentes (Arriba del plan, En plan, Debajo del plan); no hay umbrales nuevos.
