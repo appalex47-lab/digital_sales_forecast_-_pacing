@@ -49,7 +49,7 @@ async def main():
             await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=90000); await q.click('[data-action="commit-staged"]')
             await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=180000)
         # API key recordada y negocio con nombre (no deben viajar)
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(600)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(600); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(300)
         await q.fill('#dx-key-input', SECRET); await q.press('#dx-key-input', 'Tab'); await q.check('#st-ia [data-action="dx-remember"]'); await q.wait_for_timeout(300)
         await q.click('#st-negocio [data-action="bc-seed"]'); await q.wait_for_timeout(300)
         await q.fill('#bc-form [data-path="business.name"]', 'Farmacia Secreta XYZ'); await q.press('#bc-form [data-path="business.name"]', 'Tab'); await q.wait_for_timeout(300)

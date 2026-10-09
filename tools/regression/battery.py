@@ -61,6 +61,7 @@ async def main():
         if os.environ.get('CHROME_PATH'): kw['executable_path'] = os.environ['CHROME_PATH']
         b = await p.chromium.launch(**kw); errs = []
         ctx = await b.new_context(viewport={'width': 1280, 'height': 900})
+        await ctx.clock.set_fixed_time('2026-10-07T09:00:00')   # reloj fijo: las vistas muestran «hoy»; sin esto la batería cambia de un día a otro
         pg = await ctx.new_page()
         pg.on('pageerror', lambda e: errs.append('PAGEERR ' + str(e)))
         pg.on('console', lambda m: errs.append('CONSOLE ' + m.text) if m.type == 'error' else None)
@@ -113,7 +114,7 @@ async def main():
         # T7/T11 anchos y capturas
         R['overflow'] = {}
         for w in WIDTHS:
-            c = await b.new_context(viewport={'width': w, 'height': 900}); q = await c.new_page()
+            c = await b.new_context(viewport={'width': w, 'height': 900}); await c.clock.set_fixed_time('2026-10-07T09:00:00'); q = await c.new_page()
             q.on('pageerror', lambda e: errs.append('PAGEERR ' + str(e)))
             await q.goto(url + '#resumen'); await q.wait_for_timeout(700)
             try: await q.click('[data-action="generate-mock"]', timeout=2000); await q.wait_for_timeout(1200)

@@ -68,7 +68,7 @@ async def main():
                     bad.append((dim, r[0], got, ex))
         chk('R-2 septiembre: tráfico, pedidos, venta, CR y AOV por segmento coinciden con las sumas del archivo (Dispositivo, Fuente, Tipo de cliente)', not bad, bad[:2])
         hint = await q.evaluate("[...document.querySelectorAll('#view-segmentos .panel__body.stack > .field__hint')].find(e=>/contra/.test(e.innerText)).innerText")
-        chk('R-2 compara contra el periodo anterior de la misma duración (2026-08-02 a 2026-08-31) y lo dice', '2026-09-01 a 2026-09-30 contra 2026-08-02 a 2026-08-31' in hint, hint)
+        chk('R-2 compara contra el mes anterior de calendario (2026-08-01 a 2026-08-31) y lo dice', '2026-09-01 a 2026-09-30 contra 2026-08-01 a 2026-08-31 (mes anterior' in hint, hint)
         await q.select_option('#sg-dim', 'device'); await q.select_option('#sg-ch', 'app'); await q.wait_for_timeout(500)
         r0 = (await q.evaluate(TBL))[0]; ex = expect('dispositivo', r0[0], 'App')
         chk('R-3 filtro de canal (App): las cifras son solo de App', abs(num(r0[1]) - ex['traffic']) < 0.5 and abs(num(r0[8]) - ex['revenue']) < 1, (r0, ex))

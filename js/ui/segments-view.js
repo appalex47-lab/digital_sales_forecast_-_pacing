@@ -51,9 +51,13 @@
   }
 
   /** Resumen de una dimensión: segmentos del periodo contra el periodo anterior de la misma duración. */
-  function summarize(recs, { from, to, channel, dimension }) {
-    const n = daysBetween(from, to);
-    const base = { from: addDays(from, -n), to: addDays(from, -1) };
+  function summarize(recs, { from, to, channel, dimension, periodType = null }) {
+    // Misma definición de referencia que Diagnóstico › productos, Producto y Análisis (mes anterior de calendario; rango libre = N días previos).
+    if (periodType && ['month', 'week', 'year'].includes(periodType)) { // periodo en curso: hasta el último día con datos de segmentos
+      let mx = ''; if (Array.isArray(recs)) recs.forEach((r) => { if (r.dimension === dimension && r.date > mx) mx = r.date; }); else { const bd = recs.byDim.get(dimension); if (bd) bd.forEach((_, d) => { if (d > mx) mx = d; }); }
+      if (mx && to > mx && from <= mx) to = mx;
+    }
+    const base = FP.productAnalysis.baselinePeriod({ from, to, periodType }, 'previous');
     const cur = sumBy(recs, { from, to, channel, dimension }), prev = sumBy(recs, { ...base, channel, dimension });
     const totTraffic = [...cur.values()].reduce((s, a) => s + a.traffic, 0);
     const keys = new Set([...cur.keys(), ...prev.keys()]);
@@ -137,14 +141,16 @@
       </div>`;
   }
 
-  function discovery(ins, { esc, money, pct, F, split, trend }) {
+  function discovery(ins, { esc, money, pct, F, split, trend, decHtml, dimsHtml }) {
     const list = (rows, val) => rows.length ? `<ol class="sgrank__list">${rows.map((r) => `<li><span>${esc(r.label)}</span><strong>${val(r)}</strong></li>`).join('')}</ol>` : '<p class="field__hint">Sin segmentos con volumen suficiente.</p>';
-    const nav = [['sg-h', 'Lo que destaca'], ['sg-m', 'Mapa'], ['sg-opp', 'Oportunidad'], ['sg-chg', 'Qué cambió'], ['sg-oth', 'Ticket y clientes']];   // una entrada por tarjeta
+    const nav = [...(decHtml ? [['sg-dec', 'Qué explica el cambio']] : []), ...(dimsHtml ? [['sg-dims', 'Todas las dimensiones']] : []), ['sg-h', 'Lo que destaca'], ['sg-m', 'Mapa'], ['sg-opp', 'Oportunidad'], ...(trend ? [['sg-chg', 'CR semanal']] : []), ['sg-oth', 'Ticket y clientes']];   // una entrada por tarjeta
     const cap = (t) => t;
     const hasChanges = true;
     return {
       nav,
       html: [
+        decHtml ? card('sg-dec', 'Qué explica el cambio de la venta', 'Tráfico, conversión y ticket: cuánto aportó cada uno y cada segmento al cambio contra el periodo anterior.', decHtml) : '',
+        dimsHtml ? card('sg-dims', 'Todas las dimensiones', 'El mismo cambio de venta visto desde cada dimensión del archivo.', dimsHtml) : '',
         card('sg-h', 'Lo que destaca', 'Lo más relevante del periodo, calculado de los datos (sin IA).', `
           <ul class="sghl">${ins.highlights.map((h) => { const t = HL_TAG[h.kind] || ['na', 'Dato']; return `<li class="sghl__item sghl__item--${h.kind}"><span class="sghl__tag">${H().pill(t[0], t[1])}</span><span class="sghl__text">${esc(h.text).replace(/«([^»]+)»/g, '«<strong>$1</strong>»')}</span></li>`; }).join('')}</ul>
           <p class="field__hint">Diferencias matemáticas entre segmentos, no causas: cualquier explicación es una hipótesis por validar.</p>`),
@@ -163,9 +169,7 @@
             <div><h4>Menor CR (bajo el total)</h4>${list(ins.rankings.worstCr, (r) => pct(r.current.cr, 2))}</div>
             <div><h4>Menor AOV (bajo el total)</h4>${list(ins.rankings.worstAov, (r) => money(r.current.aov))}</div>
           </div></section>`),
-        card('sg-chg', 'Qué cambió', 'Qué explica el cambio contra el periodo anterior y cómo viene el CR semana a semana.', `
-          ${changesBlock(ins, { esc, money, pct })}
-          ${trend ? trendBlock(trend, { esc, pct }) : ''}`),
+        trend ? card('sg-chg', 'CR semanal', 'Cómo viene el CR semana a semana en los segmentos con más tráfico.', trendBlock(trend, { esc, pct })) : '',
         card('sg-oth', 'Ticket y clientes', 'Segmentos con ticket bajo y la diferencia entre clientes nuevos y recurrentes.', `
           ${lowAovBlock(ins, { esc, money, pct, F })}
           ${split ? splitBlock(split, { esc, money, pct }) : ''}`)
@@ -211,26 +215,8 @@
           <tbody>${t.series.map((x) => `<tr><th scope="row">${esc(x.label)}</th><td>${spark(x.cr)}</td><td class="num">${typeof x.crPrev === 'number' ? pct(x.crPrev, 2) : '—'}</td><td class="num">${typeof x.crLast === 'number' ? pct(x.crLast, 2) : '—'}</td><td><span class="sgtrend sgtrend--${x.dir}">${DIR[x.dir]}</span></td></tr>`).join('')}</tbody></table></div></section>`;
   }
 
-  const EFFECT = { traffic: 'Tráfico', cr: 'CR', aov: 'AOV' };
-  const sMoney = (money, v) => (v > 0 ? '+' : v < 0 ? '−' : '') + money(Math.abs(v || 0));
 
   /** 5) Qué explica el cambio contra el periodo anterior: ganadores y perdedores con su descomposición tráfico → CR → AOV. */
-  function changesBlock(ins, { esc, money, pct }) {
-    const c = ins.changes;
-    if (!c.hasBaseline) return '<section aria-labelledby="sg-c"><h3 class="panel__title" id="sg-c">Qué explica el cambio</h3><p class="field__hint">No hay datos del periodo anterior para comparar.</p></section>';
-    const rowsOf = (list) => list.map((m) => `<tr><th scope="row">${esc(m.label)}${m.status === 'new' ? ' <span class="cell-sub">nuevo en este periodo</span>' : m.status === 'gone' ? ' <span class="cell-sub">ya no aparece</span>' : ''}</th>
-        <td class="num">${sMoney(money, m.delta)}</td><td class="num">${m.weight != null ? pct(m.weight) : '—'}</td>
-        ${m.effects ? ['traffic', 'cr', 'aov'].map((k) => `<td class="num">${sMoney(money, m.effects[k])}</td>`).join('') : '<td class="num">—</td><td class="num">—</td><td class="num">—</td>'}
-        <td>${m.main ? esc(EFFECT[m.main]) : '—'}</td></tr>`).join('');
-    const table = (list, label) => list.length ? `<div class="table-wrap"><table class="table ds-table" aria-label="${esc(label)}">
-        <thead><tr><th scope="col">Segmento</th><th scope="col" class="num">Δ venta</th><th scope="col" class="num">Peso en los movimientos</th><th scope="col" class="num">Efecto tráfico</th><th scope="col" class="num">Efecto CR</th><th scope="col" class="num">Efecto AOV</th><th scope="col">Lo que más pesó</th></tr></thead>
-        <tbody>${rowsOf(list)}</tbody></table></div>` : `<p class="field__hint">Sin ${label.toLowerCase()}.</p>`;
-    return `<section aria-labelledby="sg-c"><h3 class="panel__title" id="sg-c">Qué explica el cambio</h3>
-        <p class="field__hint">Cambio total de la venta contra el periodo anterior: <strong>${sMoney(money, c.total)}</strong>. Cada Δ se parte en tráfico, CR y AOV (en ese orden; la suma da el Δ). «Peso en los movimientos» = su parte de la suma de todos los cambios, con o sin signo.</p>
-        <h4>Ganadores</h4>${table(c.winners, 'Ganadores')}
-        <h4>Perdedores</h4>${table(c.losers, 'Perdedores')}</section>`;
-  }
-
   /** 6) AOV bajo con buen volumen. */
   function lowAovBlock(ins, { esc, money, pct, F }) {
     return `<section aria-labelledby="sg-a"><h3 class="panel__title" id="sg-a">AOV bajo con buen volumen</h3>
@@ -278,7 +264,7 @@
     if (!dims.includes(sg.dimension)) sg.dimension = dims[0];
     const s = state.dx.settings;
     const range = FP.app.periodRange(s.periodType, s.periodKey) || { from: `${state.year}-01-01`, to: `${state.year}-12-31` };
-    const res = memo(`segsum|${range.from}|${range.to}|${s.channel}|${sg.dimension}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: sg.dimension }));
+    const res = memo(`segsum|${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: sg.dimension, periodType: s.periodType }));
     const lbl = (d) => (dimsCfg[d] && dimsCfg[d].label) || d;
     const ins = FP.segmentInsights.analyze(res);
     const byKey = new Map(ins.rows.map((r) => [r.key, r]));
@@ -292,13 +278,21 @@
     const num = (a, k) => (a && a.has[k === 'traffic' ? 'traffic' : k] ? F.integer(a[k]) : '—');
     const dimSelect = `<div class="field"><label for="sg-dim" class="field__hint">Dimensión</label>
           <select id="sg-dim" data-action="seg-dim">${dims.map((d) => `<option value="${esc(d)}" ${d === sg.dimension ? 'selected' : ''}>${esc(lbl(d))}</option>`).join('')}</select></div>`;
-    const disc = res.rows.length ? discovery(ins, { esc, money, pct, F, trend: (() => { const tk = ins.rows.filter((r) => r.relevant).sort((a, b) => b.current.traffic - a.current.traffic).slice(0, 5).map((r) => r.key); return memo(`segtrend|${range.to}|${s.channel}|${sg.dimension}|${tk.join('~')}`, () => weeklyTrend(recs, { to: range.to, channel: s.channel, dimension: sg.dimension, keys: tk })); })(), split: present.includes('customer_type') ? memo(`segsplit|${range.from}|${range.to}|${s.channel}`, () => FP.segmentInsights.customerSplit(summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: 'customer_type' }))) : null }) : { nav: [], html: '' };
+    const dctx = { esc, money, pct, F, signedPp };
+    const decOf = (r, key) => memo(`segdec|${key}`, () => FP.trafficConversionEngine.analyze(r));
+    const dec = res.rows.length ? decOf(res, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`) : null;
+    const decHtml = dec ? FP.segmentsDecompView.card(dec, dctx) : '';
+    const dimsHtml = res.rows.length && dims.length > 1 ? FP.segmentsDecompView.dimsCard(dims.map((d) => {
+      const r2 = d === sg.dimension ? res : memo(`segsum|${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: d, periodType: s.periodType }));
+      return { dim: d, label: lbl(d), active: d === sg.dimension, dec: r2.rows.length ? decOf(r2, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`) : null };
+    }), dctx) : '';
+    const disc = res.rows.length ? discovery(ins, { esc, money, pct, F, decHtml, dimsHtml, trend: (() => { const tk = ins.rows.filter((r) => r.relevant).sort((a, b) => b.current.traffic - a.current.traffic).slice(0, 5).map((r) => r.key); return memo(`segtrend|${range.to}|${s.channel}|${sg.dimension}|${tk.join('~')}`, () => weeklyTrend(recs, { to: range.to, channel: s.channel, dimension: sg.dimension, keys: tk })); })(), split: present.includes('customer_type') ? memo(`segsplit|${range.from}|${range.to}|${s.channel}`, () => FP.segmentInsights.customerSplit(summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: 'customer_type' }))) : null }) : { nav: [], html: '' };
     const navAll = [...disc.nav, ['sg-table', 'Detalle por segmento']].filter((x, i, arr) => arr.findIndex((y) => y[0] === x[0]) === i);
     const navHtml = res.rows.length ? `<nav class="sgnav" aria-label="Ir a una sección"><span class="sgnav__lbl">Ir a</span>${navAll.map(([id, l]) => `<a class="btn btn--small" href="#${id}" data-sgjump="${id}">${esc(l)}</a>`).join('')}</nav>` : '';
     $('segments-view').innerHTML = `${head}
       <div class="panel__body stack">
         ${FP.narrativeView.contextControls(state, 'sg', 'dx-setting', 'dx-period-type', dimSelect)}
-        <p class="field__hint">Periodo ${esc(res.period.from)} a ${esc(res.period.to)} contra ${esc(res.baseline.from)} a ${esc(res.baseline.to)} (periodo anterior de la misma duración: los segmentos no tienen plan). Periodo y canal son la misma selección de Diagnóstico.</p>
+        <p class="field__hint">Periodo ${esc(res.period.from)} a ${esc(res.period.to)} contra ${esc(res.baseline.from)} a ${esc(res.baseline.to)} (${esc(res.baseline.label || 'periodo anterior')}: los segmentos no tienen plan). Periodo y canal son la misma selección de Diagnóstico.</p>
         ${res.rows.length ? kpiCards(ins, { money, pct, F }) : ''}
         ${navHtml}
       </div></section>

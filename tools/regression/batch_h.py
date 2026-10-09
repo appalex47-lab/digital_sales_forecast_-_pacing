@@ -2,7 +2,7 @@
 Uso: python3 batch_h.py <raiz> <vista[,vista...]>   Sale 1 si alguna falla. Se ejecuta ANTES y DESPUÉS de cada lote."""
 import asyncio, sys, os, threading, functools, http.server, socketserver, json
 from playwright.async_api import async_playwright
-ROOT, VIEWS = os.path.abspath(sys.argv[1]), sys.argv[2].split(',')
+ROOT, VIEWS = os.path.abspath(sys.argv[1]), (sys.argv[2] if len(sys.argv) > 2 else 'inicio,pacing,reforecast,diagnostico,narrativa').split(',')
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 def serve():

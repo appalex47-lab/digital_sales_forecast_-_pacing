@@ -185,6 +185,8 @@
       else if (dimensionId === 'device') label = AL.device(label) || label;
     }
     let key = normalizeHeader(label);
+    // Segmentos hechos solo de símbolos (p. ej. la página de inicio «/» en Página de destino) no se pierden: llave determinista a partir de sus caracteres.
+    if (!key && label) key = 'sym_' + Array.from(label).map((c) => c.codePointAt(0).toString(16)).join('_');
     if (dimensionId === 'customer_type') {
       const al = C().diagnostics.customerTypeAliases;
       const hit = Object.keys(al).find((k) => al[k].includes(key));

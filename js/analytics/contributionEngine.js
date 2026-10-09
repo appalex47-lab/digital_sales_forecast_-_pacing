@@ -44,7 +44,8 @@
       contributors: totalDelta < 0 ? neg.slice(0,c.topN) : pos.slice(0,c.topN),
       positive: pos.slice(0,c.topN), negative: neg.slice(0,c.topN),
       concentration: { positive: coverage(pos), negative: coverage(neg) },
-      compensation: { positiveDelta: pos.reduce((s,r) => s+r.delta,0), negativeDelta: neg.reduce((s,r)=>s+r.delta,0) },
+      compensation: { positiveDelta: positive.reduce((s,r) => s+r.delta,0), negativeDelta: negative.reduce((s,r)=>s+r.delta,0) },   // lista COMPLETA (no solo top N): Σ = variación total
+      counts: { positive: positive.length, negative: negative.length, total: usable.length },
       evidence: { entities: usable.map(r => r.entity || r.key), deltas: usable.map(r => r.delta) }
     };
   }

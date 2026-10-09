@@ -89,6 +89,11 @@
     return req(source(db, store, index).getAll(range, limit));
   }
 
+  /** Llaves primarias de un rango SIN cargar los valores (mucho más rápido que recorrer con cursor). */
+  async function keys(db, store, { index = null, range = null } = {}) {
+    return req(source(db, store, index).getAllKeys(range));
+  }
+
   async function count(db, store, { index = null, range = null } = {}) {
     return req(source(db, store, index).count(range));
   }
@@ -138,5 +143,5 @@
     } catch (e) { return { supported: false, persisted: false }; }
   }
 
-  FP.idb = { available, open, put, get, del, putMany, getAll, count, iterate, clear, deleteDatabase, estimate, persist, yieldToUI };
+  FP.idb = { available, open, put, get, del, putMany, getAll, keys, count, iterate, clear, deleteDatabase, estimate, persist, yieldToUI };
 })(typeof window !== 'undefined' ? window : globalThis);

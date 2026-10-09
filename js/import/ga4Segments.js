@@ -120,6 +120,18 @@
    * Es el núcleo común de translate() (que arma el CSV) y translateRows() (que entrega las filas sin pasar por texto).
    * @returns {{ agg: object[], stats: object }}
    */
+  const KEY_MEMO = new Map();
+  /** Misma llave que usa la app al importar un segmento (normalizeHeader; símbolos puros → llave por caracteres). Memoizada por texto. */
+  function segKey(seg) {
+    let k = KEY_MEMO.get(seg);
+    if (k === undefined) {
+      k = FP.normalize.normalizeHeader(seg);
+      if (!k && seg) k = 'sym_' + Array.from(seg).map((c) => c.codePointAt(0).toString(16)).join('_');
+      if (KEY_MEMO.size > 400000) KEY_MEMO.clear();
+      KEY_MEMO.set(seg, k);
+    }
+    return k;
+  }
   function translateCore(text) {
     const lines = dataLines(text);
     const sep = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ';' : ',';
@@ -157,13 +169,26 @@
       stats.totals.sessions += ses; stats.totals.orders += ped; stats.totals.revenue += ven;
       stats.rowsIn++; stats.platforms[plat] = (stats.platforms[plat] || 0) + 1;
       dims.forEach(([, dim, fn]) => {
-        const seg = fn(r); const k = `${date}|${canal}|${dim}|${seg}`;
-        const a = agg.get(k) || { date, canal, dim, seg, venta: 0, pedidos: 0, sesiones: 0 };
-        a.venta += ven; a.pedidos += ped; a.sesiones += ses; agg.set(k, a);
+        const seg = fn(r);
+        // Variantes del mismo texto que la app trata como UN segmento (mayúsculas, «/» final, signos: «?q=Mounjaro» y «?q=mounjaro») se suman aquí:
+        // si no, al guardar solo sobreviviría la última y se perdería su tráfico y su venta.
+        const k = `${date}|${canal}|${dim}|${segKey(seg)}`;
+        const a = agg.get(k) || { date, canal, dim, seg, venta: 0, pedidos: 0, sesiones: 0, variants: null, best: -1 };
+        a.venta += ven; a.pedidos += ped; a.sesiones += ses;
+        if (a.variants === null && a.seg !== seg) { a.variants = new Map([[a.seg, a.firstSes === undefined ? 0 : a.firstSes]]); }
+        if (a.variants) a.variants.set(seg, (a.variants.get(seg) || 0) + ses);
+        else a.firstSes = (a.firstSes || 0) + ses;
+        agg.set(k, a);
       });
     }
     // Intl.Collator() con la configuración regional predeterminada ordena igual que String.localeCompare, pero sin crear un
     // comparador por cada comparación (con 300 mil filas era buena parte de los 7 s de la traducción).
+    // Si una llave juntó variantes de texto, el rótulo es el de la variante con más sesiones del día (determinista: en empate, la primera vista).
+    for (const a of agg.values()) {
+      if (!a.variants) continue;
+      let best = a.seg, bs = -1; a.variants.forEach((v, t) => { if (v > bs) { bs = v; best = t; } });
+      a.seg = best; stats.mergedKeys = (stats.mergedKeys || 0) + 1;
+    }
     const coll = new Intl.Collator();
     const list = [...agg.values()].map((a) => [a.date + a.canal + a.dim + a.seg, a]);
     list.sort((x, y) => coll.compare(x[0], y[0]));

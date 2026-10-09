@@ -180,7 +180,8 @@
       <td class="wrap"><span class="cell-sub">${s.links.hypothesisId ? `${esc(s.links.hypothesisId)}: ${esc((s.links.hypothesis || '').slice(0, 80))}` : 'Sin hipótesis'}</span></td>
       <td class="num">${esc(signedMoney(s.expectedImpact.incrementalValue))}</td>
       <td class="num">${esc(fin(s.expectedImpact.recoveryPercent) ? pct(s.expectedImpact.recoveryPercent) : '—')}</td>
-      <td><button type="button" class="btn btn--small btn--ghost" data-action="rc-edit-scenario" data-id="${esc(s.scenarioId)}">Nueva versión</button></td></tr>`).join('');
+      <td><button type="button" class="btn btn--small btn--ghost" data-action="rc-edit-scenario" data-id="${esc(s.scenarioId)}">Nueva versión</button>
+        <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-scenario" data-id="${esc(s.scenarioId)}" aria-label="Borrar escenario ${esc(s.name)}">Borrar</button></td></tr>`).join('');
 
     // Plan / actual / forecast / reforecast / escenarios (líneas de cierre)
     const scope = FP.scenarioEngine.scopeOf(ctx);

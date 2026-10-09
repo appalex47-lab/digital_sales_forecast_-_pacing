@@ -6,7 +6,8 @@
   'use strict';
   const FP = (root.FP = root.FP || {});
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-  const DEFAULTS = { minShare: 0, significantPp: 0.01 };
+  /* significantPp está en PUNTOS PORCENTUALES: un cambio de participación menor a 0.25 pp se considera «estable» (antes 0.01 pp ≈ cualquier variación). */
+  const DEFAULTS = { minShare: 0, significantPp: 0.25 };
   const nz = (v) => finite(v) ? v : 0;
   const cfg = (o = {}) => ({ ...DEFAULTS, ...(o || {}) });
   function share(v, total) { return finite(v) && finite(total) && total > 0 ? v / total : null; }
@@ -23,7 +24,7 @@
       status: 'available', baselinePeriod: first.period, currentPeriod: last.period,
       baselineShare: first.share, currentShare: last.share,
       shareChange: last.share - first.share, shareChangePp: (last.share - first.share) * 100,
-      mixDirection: last.share - first.share > c.significantPp ? 'gaining' : last.share - first.share < -c.significantPp ? 'losing' : 'stable',
+      mixDirection: (last.share - first.share) * 100 > c.significantPp ? 'gaining' : (last.share - first.share) * 100 < -c.significantPp ? 'losing' : 'stable',
       points,
       evidence: { periods: valid.map(x => x.period), shares: valid.map(x => x.share), values: valid.map(x => x.value), totals: valid.map(x => x.total) }
     };

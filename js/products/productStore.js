@@ -371,11 +371,15 @@
       const key = `${cellKey(kind, nc)}\u0001${extra}`;
       const cell = part.get(key);
       if (cell) {
+        // Llave completa (la que realmente se compara): fecha · canal · SKU + estado · sucursal · entrega · ciudad · otra dimensión
+        const fullKey = [date, channel, sku, kind === 'sales' ? dims.states[sIdx] : null, kind === 'sales' ? bLabel : null, kind === 'sales' ? dims.deliveries[dIdx] : null, kind === 'sales' ? cLabel : null, extra || null].filter(Boolean).join(' · ');
+        const fmtV = (vs, ss, i) => (ss[i] === ST.observed ? String(vs[i]) : ss[i] === ST.invalid ? 'inválido' : 'vacío');
         const identical = cell.states.every((s, i) => s === sts[i] && (s !== ST.observed || cell.values[i] === vals[i]));
-        if (identical) { d.summary.exactDuplicates++; d.issues.add('EXACT_DUPLICATE', 'info', line, 'llave', `${date} · ${channel} · ${sku}`, `Duplicado exacto de la fila ${cell.line}: se conserva una vez.`); return; }
+        if (identical) { d.summary.exactDuplicates++; d.issues.add('EXACT_DUPLICATE', 'info', line, 'llave', fullKey, `Duplicado exacto de la fila ${cell.line} (misma llave y mismas métricas): se conserva una vez.`); return; }
         d.summary.conflicts++; cell.conflict = true;
         d.conflicts.push({ date, channel, sku, state: kind === 'sales' ? dims.states[sIdx] : null, branch: bLabel || null, delivery: kind === 'sales' ? dims.deliveries[dIdx] : null, extra, keptLine: cell.line, line, kept: metricsObj(kind, cell.values, cell.states), other: metricsObj(kind, vals, sts) });
-        d.issues.add('CONFLICT', 'warning', line, 'llave', `${date} · ${channel} · ${sku}`, `Misma llave que la fila ${cell.line} con métricas distintas: se conserva la primera y se marca para revisión.`);
+        const diffs = metricsOf(kind).map((m, i) => (cell.states[i] === sts[i] && (sts[i] !== ST.observed || cell.values[i] === vals[i]) ? null : `${label(m).toLowerCase()}: ${fmtV(cell.values, cell.states, i)} (fila ${cell.line}) vs ${fmtV(vals, sts, i)} (fila ${line})`)).filter(Boolean);
+        d.issues.add('CONFLICT', 'warning', line, 'llave', fullKey, `Misma llave completa que la fila ${cell.line} pero con métricas distintas (${diffs.join('; ')}). Se conserva la primera y NO se suma la segunda; si son líneas distintas de la misma venta, mapea la columna que las distingue como «otra dimensión» para que se sumen.`);
         return;
       }
       part.set(key, nc);
@@ -892,7 +896,8 @@
   /** Llaves día × canal con datos (de venta o funnel) en un rango. */
   async function keysIn({ from, to, channel = null }) {
     const set = new Set();
-    for (const store of ['productDays', 'productFunnel']) await IDB().iterate(repo.db, store, chanRange(channel, from, to), (p) => { set.add(`${p.date}|${p.channel}`); });
+    // sólo llaves (date, channel): no hace falta deserializar cada bloque para saber qué días hay
+    for (const store of ['productDays', 'productFunnel']) (await IDB().keys(repo.db, store, chanRange(channel, from, to))).forEach((k) => set.add(`${k[0]}|${k[1]}`));
     return [...set].sort();
   }
 
@@ -930,6 +935,46 @@
       if (++k % 40 === 0) await IDB().yieldToUI();
     }
     return map;
+  }
+
+  /**
+   * Agregado en UNA sola pasada para varios grupos a la vez, separado por canal (lo usa el detalle del Análisis: antes eran ~15 pasadas).
+   * Cada bloque día × canal se lee una vez. Sin funnel: sólo venta, pedidos y unidades. Devuelve Map canal → Map grupo → Map(llave → acumulador).
+   * Con grupos de nivel resumido y sin filtros se usan los resúmenes guardados (igual que aggregate).
+   */
+  async function aggregateScan({ from, to, channel = null, filter = null, groupBys = ['total'], onProgress = null }) {
+    const out = new Map();
+    if (!available()) return out;
+    const f = filter || {};
+    const slot = (ch, g) => { if (!out.has(ch)) out.set(ch, new Map()); const m = out.get(ch); if (!m.has(g)) m.set(g, new Map()); return m.get(g); };
+    const noFilter = !['category', 'subcategory', 'product', 'sku', ...GEO].some((k) => f[k]);
+    const viaRollup = noFilter ? groupBys.filter((g) => LEVELS.includes(g)) : [];
+    const viaScan = groupBys.filter((g) => !viaRollup.includes(g));
+    for (const g of viaRollup) {
+      await IDB().iterate(repo.db, 'productRollups', { index: 'level_key_date', range: IDBKeyRange.bound([g, '', from], [g, '\uffff', to]) }, (r) => {
+        if (r.date < from || r.date > to) return;
+        if (channel && channel !== 'total' && r.channel !== channel) return;
+        const m = slot(r.channel, g), a = accFromRollup(r);
+        if (m.has(r.key)) mergeAcc(m.get(r.key), a); else m.set(r.key, a);
+      });
+    }
+    if (viaScan.length) {
+      const keys = (await IDB().keys(repo.db, 'productDays', chanRange(channel, from, to))).map((x) => `${x[0]}|${x[1]}`).sort();   // sin bloque de venta no hay nada que sumar (el funnel no se usa aquí)
+      let k = 0;
+      for (const key of keys) {
+        const [d, ch] = key.split('|');
+        const s = await IDB().get(repo.db, 'productDays', [d, ch]);
+        for (const g of viaScan) accumulateJoint(slot(ch, g), s, null, { groupBy: g, filter: f });
+        if (++k % 20 === 0) { if (onProgress) onProgress(k, keys.length); await IDB().yieldToUI(); }
+      }
+    }
+    return out;
+  }
+  /** Une los Map(llave → acumulador) de varios canales en uno solo (no modifica los originales). */
+  function mergeMaps(maps) {
+    const out = new Map();
+    maps.forEach((m) => { if (m) m.forEach((a, key) => { if (!out.has(key)) out.set(key, mergeAcc(newAcc(), a)); else mergeAcc(out.get(key), a); }); });
+    return out;
   }
 
   /**
@@ -1045,7 +1090,7 @@
     absorbGeo, deriveGeo, entity, geoOptions, rowRegion,
     suggestMapping, detectKind, validateMapping, label, numberCell, createDraft, combine, toPartition, mergePartitions, cellAt,
     newAcc, mergeAcc, accumulateJoint, accumulatePartition, finalize, rollupsOf, accFromRollup, GROUPS, funnelJoinable, upgradeV1Block,
-    catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, crossRevenue, skuTrace, listBatches, removeBatch, counts,
+    catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, aggregateScan, mergeMaps, crossRevenue, skuTrace, listBatches, removeBatch, counts,
     get meta() { return meta; },
     reset() { catalog.list = []; catalog.bySku = new Map(); meta = emptyMeta(); resetDims(); },
     _resetCatalog() { catalog.list = []; catalog.bySku = new Map(); resetDims(); }

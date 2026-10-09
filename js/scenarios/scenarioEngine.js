@@ -329,8 +329,10 @@
   function saveScenario(store, { ctx, result, name, type = 'custom', links = {}, supersedes = null }) {
     if (!result || !result.valid) throw new Error('Solo se guardan escenarios válidos.');
     const prev = supersedes ? store.scenarios.find((s) => s.scenarioId === supersedes) : null;
-    const family = prev ? prev.family : `SC_${String(store.scenarios.length + 1).padStart(3, '0')}`;
-    const version = prev ? store.scenarios.filter((s) => s.family === family).length + 1 : 1;
+    // ids por MÁXIMO existente (no por conteo): si se borra un escenario, un id nuevo nunca repite uno vigente
+    const famNum = (s) => Number(String(s.family).replace(/\D/g, '')) || 0;
+    const family = prev ? prev.family : `SC_${String(store.scenarios.reduce((m, s) => Math.max(m, famNum(s)), 0) + 1).padStart(3, '0')}`;
+    const version = prev ? store.scenarios.filter((s) => s.family === family).reduce((m, s) => Math.max(m, s.version || 0), 0) + 1 : 1;
     const sc = {
       scenarioId: `${family}_v${version}`, family, version, supersedes: prev ? prev.scenarioId : null,
       name: name || `Escenario ${family}`, type,
@@ -352,6 +354,18 @@
     return sc;
   }
 
+  /**
+   * Borra un escenario GUARDADO por el usuario. La cadena de versiones se repara: si otro escenario lo reemplazaba
+   * (supersedes), pasa a reemplazar al anterior del borrado. No toca plan, actual, forecast ni reforecast.
+   */
+  function deleteScenario(store, scenarioId) {
+    const i = store.scenarios.findIndex((s) => s.scenarioId === scenarioId);
+    if (i < 0) return { ok: false, error: 'Escenario inexistente.' };
+    const [removed] = store.scenarios.splice(i, 1);
+    store.scenarios.forEach((s, k) => { if (s.supersedes === scenarioId) store.scenarios[k] = deepFreeze({ ...s, supersedes: removed.supersedes || null }); });
+    return { ok: true, removed };
+  }
+
   /** Peso del alcance simulado en la venta digital (segmento: × su participación en el canal). */
   function exposureOf(result) {
     const dig = result.digital && result.digital.base ? result.digital.base.revenue : null;
@@ -371,5 +385,5 @@
   }
 
   FP.scenarioEngine = { scopeOf, allOf, chLabel, resolvePeriod, buildContext, summarizeChannel, segmentShares, availableTargets, applyChanges,
-    simulate, gapBlock, createScenarioStore, hydrateScenarioStore, saveScenario, primaryDriver, deepFreeze };
+    simulate, gapBlock, createScenarioStore, hydrateScenarioStore, saveScenario, deleteScenario, primaryDriver, deepFreeze };
 })(typeof window !== 'undefined' ? window : globalThis);

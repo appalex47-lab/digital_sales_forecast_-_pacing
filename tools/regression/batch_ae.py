@@ -71,7 +71,7 @@ async def main():
             await q.evaluate(f"FP.app.actions['dx-setting']({{dataset:{{key:'{k}'}},value:'{v}'}})");await q.wait_for_timeout(150)
         await q.select_option('#sg-dim','device');await q.wait_for_timeout(500)
         nav=await q.evaluate("[...document.querySelectorAll('.sgnav a')].map(a=>[a.innerText,a.dataset.sgjump,!!document.getElementById(a.dataset.sgjump)])")
-        chk('S-1 la navegación por secciones tiene 6 botones (uno por tarjeta) y cada uno apunta a una tarjeta que existe',len(nav)==6 and all(x[2] for x in nav),nav)   # rediseño: antes 9 enlaces, uno por sección
+        chk('S-1 la navegación por secciones tiene 8 botones (uno por tarjeta, con «Qué explica el cambio» y «Todas las dimensiones» al inicio) y cada uno apunta a una tarjeta que existe',len(nav)==8 and [x[1] for x in nav][:2]==['sg-dec','sg-dims'] and all(x[2] for x in nav),nav)   # rediseño: antes 9 enlaces, uno por sección
         await q.click('.sgnav a[data-sgjump="sg-opp"]');await q.wait_for_timeout(900)
         pos=await q.evaluate("(()=>{const r=document.getElementById('sg-opp').getBoundingClientRect();return [Math.round(r.top),document.activeElement&&document.activeElement.id,location.hash]})()")
         chk('S-1 al pulsar «Oportunidad» la página se desplaza hasta esa tarjeta, el foco queda en ella y el hash de la app no cambia',pos[0]<220 and pos[1]=='sg-opp' and pos[2]=='#segmentos',pos)
