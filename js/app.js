@@ -863,7 +863,8 @@
     FP.navigation.renderContextBar(state, status);
     const exp = document.getElementById(`ux-exp-${state.view}`);
     if (exp) exp.innerHTML = FP.help.explainer(state.view, u.mode);
-    if (state.view === 'diagnostico') FP.diagnosticGuide.render(state);
+    if (FP.whyHub) FP.whyHub.render(state.view);
+    if (state.view === 'diagnostico') { FP.diagnosticGuide.render(state); FP.diagnosticView.syncMore(); }
     const main = document.getElementById(`view-${state.view}`);
     FP.help.decorate(main);
     FP.help.enhanceEmpty(main, FP.contextEngine.requirements(state.view, status));

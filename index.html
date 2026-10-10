@@ -393,6 +393,7 @@
   <!-- ===================== Vista: Diagnóstico (Fase 5) ===================== -->
   <main class="app-main" data-view="diagnostico" id="view-diagnostico" hidden>
     <div class="ux-explainer" id="ux-exp-diagnostico"></div>
+    <div class="why-hub-slot" id="why-hub-diagnostico"></div>
     <section class="panel" aria-labelledby="t-dx">
       <div class="panel__head"><div>
         <h2 class="panel__title" id="t-dx">¿Por qué existe la brecha?</h2>
@@ -401,21 +402,42 @@
       <button type="button" class="btn" data-action="dx-export">Exportar analysis_export.json</button></div>
       <div class="panel__body" id="dx-controls"></div>
     </section>
-    <section class="panel panel--guide"><div class="panel__body" id="dx-why"></div></section>
+    <!-- 1 · La respuesta: el hecho, el driver, dónde investigar y qué hipótesis -->
     <section class="panel"><div class="panel__body" id="dx-result"></div></section>
     <section class="panel"><div class="panel__body" id="dx-level1"></div></section>
-    <section class="panel"><div class="panel__body" id="dx-tree"></div></section>
-    <!-- Fase 11 · pieza 1: la venta por categoría, producto y región, con los datos de Categoría → Producto -->
-    <section class="panel" id="dx-products-panel"><div class="panel__body" id="dx-products"></div></section>
     <section class="panel"><div class="panel__body" id="dx-signals"></div></section>
     <section class="panel"><div class="panel__body" id="dx-hyps"></div></section>
     <section class="panel" hidden><div class="panel__body" id="dx-recovery"></div></section>
+
+    <!-- 2 · Ver más: el mismo detalle de siempre, un clic abajo (ningún dato se omite) -->
+    <p class="home-layer dx-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
+    <details class="ds-accordion pacing-more dx-more" data-dx-more="why">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Cómo leer este diagnóstico</h3><p class="ds-accordion__d">Los pasos del razonamiento y qué significa cada parte</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+    <section class="panel panel--guide"><div class="panel__body" id="dx-why"></div></section>
+      </div></details>
+    <details class="ds-accordion pacing-more dx-more" data-dx-more="tree">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Árbol de drivers</h3><p class="ds-accordion__d">Volumen × conversión × ticket, nivel por nivel</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+    <section class="panel"><div class="panel__body" id="dx-tree"></div></section>
+      </div></details>
+    <details class="ds-accordion pacing-more dx-more" data-dx-more="products">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Categoría, producto y región</h3><p class="ds-accordion__d">Qué categorías, productos y regiones explican el cambio de la venta</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+    <!-- Fase 11 · pieza 1: la venta por categoría, producto y región, con los datos de Categoría → Producto -->
+    <section class="panel" id="dx-products-panel"><div class="panel__body" id="dx-products"></div></section>
+      </div></details>
+    <details class="ds-accordion pacing-more dx-more" data-dx-more="confidence">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Confianza del diagnóstico</h3><p class="ds-accordion__d">Qué tan sólido es y qué lo limita</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
     <section class="panel"><div class="panel__body" id="dx-confidence"></div></section>
+      </div></details>
   </main>
 
   <!-- ===================== Vista: Análisis → Evolución (Análisis 1) ===================== -->
   <main class="app-main" data-view="analisis" id="view-analisis" hidden>
     <div class="ux-explainer" id="ux-exp-analisis"></div>
+    <div class="why-hub-slot" id="why-hub-analisis"></div>
     <section class="panel" aria-labelledby="t-an">
       <div class="panel__head"><div>
         <h2 class="panel__title" id="t-an">Evolución y patrones</h2>
@@ -470,6 +492,7 @@
   <!-- ===================== Vista: Configuración de RevNavigator (revisión de uso) ===================== -->
   <!-- ===================== Vista: Tráfico y conversión por segmento (Fase 11) ===================== -->
   <main class="app-main" data-view="segmentos" id="view-segmentos" hidden>
+    <div class="why-hub-slot" id="why-hub-segmentos"></div>
     <div id="segments-view"></div>
   </main>
 
@@ -514,6 +537,7 @@
 
   <!-- ===================== Vista: Categoría → Producto (Fase 8.1) ===================== -->
   <main class="app-main" data-view="producto" id="view-producto" hidden>
+    <div class="why-hub-slot" id="why-hub-producto"></div>
     <section class="panel" aria-labelledby="t-pa">
       <div class="panel__head"><div>
         <h2 class="panel__title" id="t-pa">Categoría → Producto</h2>
@@ -660,6 +684,7 @@
   <script src="js/ui/guidance/navigation.js"></script>
   <script src="js/ui/guidance/tour.js"></script>
   <script src="js/ui/guidance/home-summary-view.js"></script>
+  <script src="js/ui/guidance/why-hub.js"></script>
   <script src="js/ui/guidance/home-view.js"></script>
   <script src="js/ui/guidance/measure-view.js"></script>
   <script src="js/ui/guidance/help-view.js"></script>

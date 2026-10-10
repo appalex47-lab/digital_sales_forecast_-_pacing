@@ -265,6 +265,17 @@
       </div>`;
   }
 
+  /** «Ver más» solo existe si hay algo que detallar: sin diagnóstico (o sin productos) no se muestran desplegables vacíos. */
+  function syncMore() {
+    const root = document.getElementById('view-diagnostico'); if (!root) return;
+    let any = false;
+    root.querySelectorAll('details.dx-more').forEach((d) => {
+      const has = [...d.querySelectorAll('.panel__body')].some((b) => b.textContent.trim()) && !d.querySelector('section[hidden]');
+      d.hidden = !has; if (has) any = true;
+    });
+    const layer = root.querySelector('.dx-layer'); if (layer) layer.hidden = !any;
+  }
+
   function render(state) {
     renderControls(state);
     const d = state.dx.run;
@@ -273,6 +284,7 @@
       $('dx-result').innerHTML = `<div class="empty"><strong>No hay diagnóstico todavía</strong>Se necesita un plan del año y venta real: guarda el plan distribuido en Plan e importa el real.</div>`;
       $('dx-recovery').closest('section').hidden = true;
       renderProducts(state);   // sin diagnóstico la sección se oculta
+      syncMore();
       return;
     }
     renderResult(d);
@@ -283,6 +295,7 @@
     renderHypotheses(state, d);
     renderRecovery(d);
     renderConfidence(state, d);
+    syncMore();
   }
 
   /**
@@ -342,5 +355,5 @@
       <p class="field__hint">Mismos cálculos que <a href="#producto" data-nav="producto">Categoría → Producto</a>, donde puedes bajar hasta SKU, estado o sucursal.</p>`;
   }
 
-  FP.diagnosticView = { render, periodOptions, renderProducts };
+  FP.diagnosticView = { render, periodOptions, syncMore, renderProducts: (state) => { renderProducts(state); syncMore(); } };
 })(typeof window !== 'undefined' ? window : globalThis);
