@@ -621,3 +621,7 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 ## Añadido 2026-10-09 · Diagnóstico y «¿Por qué?» (Fase 4 del plan de simplificación)
 - Una sola franja «¿Por qué?» arriba de Diagnóstico, Evolución y patrones, Tráfico y conversión y Categoría → Producto: elige cómo investigar sin buscar en el menú.
 - Diagnóstico muestra primero el resultado, el driver, las señales y las hipótesis; la guía de lectura, el árbol, productos y confianza van en **«Ver más»** con los mismos datos.
+
+## Añadido 2026-10-09 · Recovery y Reforecast (Fase 5 del plan de simplificación)
+- Reforecast: primero cuánto falta (resultado, canales y escenario de recuperación); horizonte, supuestos y métrica debajo; periodos, drivers, auditoría y versiones en **«Ver más»**.
+- Recovery Center: se ve el flujo brecha → escenario → acción → seguimiento. Archivos, restricciones, cálculo inverso y trazabilidad van en **«Ver más»**, con los mismos datos.

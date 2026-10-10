@@ -43,6 +43,7 @@ async def main():
         got = {}
         for v, sel in (('pacing', '[data-action="fc-export"]'), ('reforecast', '[data-action="rf-export"]'), ('diagnostico', '[data-action="dx-export"]'), ('narrativa', '[data-action="nx-export"]'), ('recovery', '[data-action="rc-export"]')):
             await q.goto(u + '#' + v); await q.wait_for_timeout(500)
+            await q.evaluate("document.querySelectorAll('#view-pacing details.pacing-more, #view-reforecast details.pacing-more, #view-recovery details.pacing-more').forEach(d=>d.open=true)")   # los exports de Pacing, Reforecast y Recovery viven en «Ver más»
             await q.evaluate("window.__dl=[];if(!window.__hook){window.__hook=1;const o=FP.exporter.download;FP.exporter.download=(n,obj)=>{window.__dl.push([n,JSON.stringify(obj)])};}")
             try:
                 await q.click(sel, timeout=2500); await q.wait_for_timeout(400)

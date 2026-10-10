@@ -380,3 +380,11 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 3. **Garantía.** `compare.py` abriendo todos los `<details>` contra la línea base: no desaparece ninguna palabra, tabla ni control.
 4. **Pruebas.** `batch_why4.py` (W0–W6): sin datos, franja en las 4 vistas, navegación, orden, desplegables, contenido al abrir y la brecha del resultado = suma de las tres contribuciones.
 5. **Límites.** Sin personas reales. El árbol de drivers y la confianza quedan detrás de un clic: si la persona los consulta a diario, son candidatos a volver arriba.
+
+## Adenda 15 · Fase 5: Recovery y Reforecast (2026-10-09)
+1. **Reforecast.** Orden: resultado (tres líneas y tarjetas) → por canal → escenario de recuperación → horizonte, supuestos y métrica (compactos y visibles, porque cambian el resultado) → gráfico → **«Ver más»** cerrado: Reforecast por periodo, Descomposición por driver, Auditoría y Versiones (incluye «Exportar reforecast_export.json»).
+2. **Recovery Center.** Arriba: canal, periodo y «Aplicar a», brecha y cadena, simulador, escenarios guardados, catálogo de acciones, plan de acción y seguimiento. En **«Ver más»**: diagnóstico de origen + importar/exportar + restricciones, el cálculo inverso («¿Qué tendría que cambiar?») y la cadena de trazabilidad. El aviso de «Trabajando sobre un archivo importado» sigue visible arriba.
+3. **Decisión.** Se separó del plan original: los filtros de canal y periodo no se pliegan (cambian la brecha) y el catálogo de acciones tampoco (es la única forma de agregar acciones al plan).
+4. **Garantía.** `compare.py` abriendo todos los `<details>`: ninguna palabra, tabla ni control desaparece. Los desplegables vacíos se ocultan sin datos (`syncMore`).
+5. **Pruebas.** `batch_rr5.py` (X0–X10): sin datos, orden, desplegables, contenido al abrir, el «Gap forecast» de Reforecast = el de Pacing, y lo abierto persiste al cambiar un filtro.
+6. **Límites.** El Recovery Center sigue siendo la pantalla más larga (~5,400 px con datos de prueba) porque el flujo completo vive arriba. Sin pruebas con personas.
