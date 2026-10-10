@@ -373,3 +373,10 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 3. **Garantía.** `compare.py` abriendo todos los `<details>` contra la línea base: no desaparece ninguna palabra, tabla ni control. Sin corrida (sin plan) el bloque «Ver más» se oculta, porque no habría nada que detallar.
 4. **Pruebas.** `batch_pacing3.py` (P1–P6): orden, seis desplegables cerrados, respuesta y ajustes visibles, tablas completas al abrir (13 filas de periodos, 4 métodos), cambio de métrica con lo abierto sigue abierto, total = suma de canales.
 5. **Límites.** Falta probar con personas reales y no se midió el móvil de esta vista. «Pacing por periodo» pasó a «Ver más» por decisión del plan: si resulta una consulta frecuente, es candidata a volver arriba.
+
+## Adenda 14 · Fase 4: Diagnóstico simplificado y entrada única «¿Por qué?» (2026-10-09)
+1. **Entrada única.** Franja «¿Por qué?» (`js/ui/guidance/why-hub.js`, solo navegación) arriba de Diagnóstico, Evolución y patrones, Tráfico y conversión y Categoría → Producto: cuatro formas de investigar, la actual marcada y las otras tres como enlaces. No duplica pantallas ni cálculos. El menú lateral no se tocó: reagruparlo es la fase 8.
+2. **Diagnóstico.** Arriba: resultado (el hecho), driver (volumen × CR × AOV), señales e hipótesis. En «Ver más» (cerrado): Cómo leer este diagnóstico, Árbol de drivers, Categoría/producto/región y Confianza del diagnóstico. Los ids no cambian. Sin diagnóstico (o sin productos) los desplegables vacíos se ocultan (`diagnosticView.syncMore`).
+3. **Garantía.** `compare.py` abriendo todos los `<details>` contra la línea base: no desaparece ninguna palabra, tabla ni control.
+4. **Pruebas.** `batch_why4.py` (W0–W6): sin datos, franja en las 4 vistas, navegación, orden, desplegables, contenido al abrir y la brecha del resultado = suma de las tres contribuciones.
+5. **Límites.** Sin personas reales. El árbol de drivers y la confianza quedan detrás de un clic: si la persona los consulta a diario, son candidatos a volver arriba.

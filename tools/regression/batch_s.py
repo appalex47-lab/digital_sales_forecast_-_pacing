@@ -90,7 +90,7 @@ async def main():
         # contra plan, los segmentos se comparan con el mismo periodo del año anterior (sin datos en esta prueba); contra el periodo anterior sí aplican
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'channel'},value:'total'})"); await q.wait_for_timeout(300)
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'comparison'},value:'actual_vs_previous'})"); await q.wait_for_timeout(1000)
-        tree = await q.evaluate("document.getElementById('dx-tree').innerText")
+        tree = await q.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true); document.getElementById('dx-tree').innerText")
         chk('S-4 el Diagnóstico (Actual vs periodo anterior) ya usa esas dimensiones: no lista Dispositivo, Fuente, Medio, Campaña, Landing ni Tipo de cliente como «no disponibles»', not any(w in tree.split('No disponible en los datos actuales:')[-1].split('.')[0] for w in ('Dispositivo', 'Fuente', 'Medio', 'Campaña', 'Landing', 'Tipo de cliente')), tree[-300:])
         chk('Sin errores de página', not errs, errs[:2])
         await b.close()

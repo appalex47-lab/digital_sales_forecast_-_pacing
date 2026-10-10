@@ -100,6 +100,7 @@ async def main():
             # el mes por defecto es el mes en curso; el 1.º de mes no tiene días con real: se fija el último mes con venta real (prueba independiente de la fecha)
             last = await q.evaluate("(FP.app.state.store.actual.records.map(r=>r.date).sort().pop()||'').slice(0,7)")
             if last: await q.evaluate(f"FP.app.actions['dx-setting']({{dataset:{{key:'periodKey'}},value:'{last}'}})"); await q.wait_for_timeout(900)
+            await q.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true)"); await q.wait_for_timeout(150)   # el Nivel 2 de productos vive en «Ver más»
             chain = await q.evaluate("""()=>{const o={};document.querySelectorAll('#view-diagnostico .ds-badge--chain').forEach(e=>{const k=[...e.classList].find(c=>/^ds-badge--(fact|driver|signal|hyp)$/.test(c));if(!k)return;const c=getComputedStyle(e);
               (o[k.replace('ds-badge--','')]=o[k.replace('ds-badge--','')]||[]).push({t:e.innerText.trim(),color:c.color,bg:c.backgroundColor,r:c.borderTopLeftRadius,bl:c.borderLeftWidth+' '+c.borderLeftStyle})});return o}""")
             words = {k: {x['t'] for x in v} for k, v in chain.items()}
@@ -108,6 +109,7 @@ async def main():
             chk('H-dx los 4 eslabones de la cadena tienen color propio (Hecho≠Driver≠Señal≠Hipótesis)', len(sig) == 4 and len(set(sig.values())) == 4, sig)
             state_r = await q.evaluate("(()=>{const e=document.createElement('span');e.className='ds-badge ds-badge--actual';document.body.appendChild(e);return getComputedStyle(e).borderTopLeftRadius})()")
             chk('H-dx la cadena de evidencia no se confunde con los estados: forma distinta (rectangular con borde izquierdo grueso, no píldora)', all(v[0]['r'] != state_r and v[0]['bl'].startswith('4px') for v in chain.values()) and len(chain) == 4, {'estado': state_r, 'cadena': {k: (v[0]['r'], v[0]['bl']) for k, v in chain.items()}})
+            await q.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true)"); await q.wait_for_timeout(150)   # la guía vive en «Ver más»
             steps = await q.evaluate("""()=>[...document.querySelectorAll('#dx-why .why-steps__n')].map(e=>{const k=[...e.classList].find(c=>/--(fact|driver|signal|hyp)$/.test(c))||'';return [e.innerText.trim(),k.replace('why-steps__n--',''),getComputedStyle(e).borderTopColor]})""")
             chk('H-dx pasos 1–4 de «¿Por qué…?» marcados como fact / driver / signal / hyp con color distinto', [x[1] for x in steps[:4]] == ['fact', 'driver', 'signal', 'hyp'] and len({x[2] for x in steps[:4]}) == 4 and all(x[1] == '' for x in steps[4:]), steps)
             cards = await q.evaluate("[...document.querySelectorAll('#dx-result .metric-card')].map(c=>({tag:((c.querySelector('.state-tag')||{}).innerText||'').trim(),label:c.querySelector('dt').innerText.replace('?','').trim()}))")

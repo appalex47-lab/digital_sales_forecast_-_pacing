@@ -2672,3 +2672,6 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Pacing & Forecast reordenado (2026-10-09)
 `index.html` (`#view-pacing`): respuesta (`#fc-kpis`, `#fc-channels`) → `#fc-alerts` → `#fc-controls` (sección `.pacing-adjust`) → `#fc-chart` → seis `<details class="ds-accordion home-more pacing-more" data-pacing-more=…>` con periodos, índices, métodos, eventos, versiones y parámetros. Los ids no cambian: `pacing-view.js` y `forecast-view.js` pintan igual. `pacingView.render` pone `hidden` a `.pacing-more` y a la etiqueta «Ver más» cuando no hay corrida. Inicio: `keyBlock` agrega la venta real (`[data-key-real]`) y el plan a la fecha.
+
+### Entrada «¿Por qué?» y Diagnóstico reordenado (2026-10-09)
+`ui/guidance/why-hub.js` (`FP.whyHub.render(view)`, llamado desde `app.js render()`) pinta `#why-hub-<vista>` en diagnostico, analisis, segmentos y producto. `#view-diagnostico`: resultado, driver, señales, hipótesis y recovery arriba; cuatro `<details class="ds-accordion pacing-more dx-more" data-dx-more=…>` (why, tree, products, confidence). `diagnosticView.syncMore()` oculta los vacíos (se llama al final de `render`, de `renderProducts` y después de `diagnosticGuide.render`).

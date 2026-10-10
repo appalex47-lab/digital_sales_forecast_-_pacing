@@ -617,3 +617,7 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 - Arriba va la respuesta: cumplimiento, gap y forecast del total y por canal, y las alertas. Fecha de referencia, método y métrica quedan compactos debajo (se ven siempre, porque cambian la respuesta).
 - El detalle va en **«Ver más»** con los mismos números: pacing por periodo, índices, métodos, eventos, versiones y parámetros. No se omite ningún dato.
 - Inicio: «¿Cómo voy?» incluye la **venta real en $** y el plan a la fecha.
+
+## Añadido 2026-10-09 · Diagnóstico y «¿Por qué?» (Fase 4 del plan de simplificación)
+- Una sola franja «¿Por qué?» arriba de Diagnóstico, Evolución y patrones, Tráfico y conversión y Categoría → Producto: elige cómo investigar sin buscar en el menú.
+- Diagnóstico muestra primero el resultado, el driver, las señales y las hipótesis; la guía de lectura, el árbol, productos y confianza van en **«Ver más»** con los mismos datos.
