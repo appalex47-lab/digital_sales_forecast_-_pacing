@@ -395,3 +395,9 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 3. **Sin datos,** «Herramientas» se abre sola una vez, y el aviso de la validación dice dónde está «Generar datos de prueba».
 4. **Garantía.** `compare.py` abriendo todos los `<details>`: ninguna palabra, tabla ni control desaparece. Se ajustaron 14 clics de prueba sobre «Generar datos de prueba» (abren «Ver más» como lo haría la persona).
 5. **Pruebas.** `batch_rs6.py` (Y0–Y6): estado sin datos, orden, desplegables, contenido al abrir, meta total = suma de canales y «Ejecutar pruebas del motor» desde «Ver más».
+
+## Adenda 17 · Fase 7: Configuración «Básico» y «Avanzado» (2026-10-10)
+1. **Básico (a la vista):** Estado de la herramienta, Modo de uso, Negocio (Business Setup) y Conexión con Cohere (API key, modelo). **Avanzado (cerrado, «Opciones avanzadas»):** Otras preferencias, Fuentes de datos, Equivalencias, Almacenamiento y el detalle de la IA (qué se envió, lo aprendido, datos personales).
+2. **Sin omitir nada.** Las 7 secciones siguen siendo las mismas, con los mismos controles; solo se agrupan en un desplegable. «Expandir todo» / «Contraer todo» y los enlaces del índice abren «Opciones avanzadas» cuando hace falta; su estado se conserva al repintar (`state.stOpen['st-adv']`).
+3. **Implementación.** `settings-view.js` pinta la parte A en `#settings-view` y la B en `#settings-view-b` (para dejar a Negocio, que vive en el HTML, entre ambas).
+4. **Pruebas.** `batch_adv7.py` (Z0–Z4). Se ajustaron `batch_al/aj/ak` (secciones dentro de Avanzado; `state='attached'`; resúmenes por `textContent`).

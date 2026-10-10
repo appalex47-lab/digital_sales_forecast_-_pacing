@@ -117,7 +117,7 @@ async def main():
             c, q, u, errs = await ctx(b, worker); allerrs += errs
             await q.evaluate("window.__ans.map={mappings:[{header:'Monto vendido',field:'revenue',confidence:0.95,reason:'x'}]}")
             await pick(q, sales('Monto vendido')); n1 = await q.evaluate("window.__req.length")
-            await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-ia-aprendido', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
+            await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-ia-aprendido', state='attached', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
             rows = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Columnas aprendidas por la IA\"] tbody tr')].map(r=>[r.cells[0].innerText.trim(),r.querySelector('select').value])")
             chk(f'H2 ({tag}) lo que la IA aprendió aparece en Ajustes: «monto_vendido» → Venta', rows == [['monto_vendido', 'revenue']] and n1 == 1, (rows, n1))
             await q.evaluate("FP.app.actions['learn-set']({dataset:{header:'monto_vendido'},value:'orders'})"); await q.wait_for_timeout(300)
@@ -141,7 +141,7 @@ async def main():
         # ---- Ajustes muestra el registro ----
         c, q, u, errs = await ctx(b, False); allerrs += errs
         await q.evaluate("window.__ans.map={mappings:[]}"); await q.evaluate("FP.aiAudit.clear()")
-        await pick(q, sales('Monto vendido', extra=[('Correo cliente', lambda i: f'p{i}@x.com')])); await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-ia-log', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
+        await pick(q, sales('Monto vendido', extra=[('Correo cliente', lambda i: f'p{i}@x.com')])); await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-ia-log', state='attached', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
         tb = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Consultas a Cohere\"] tbody tr')].map(r=>[...r.cells].map(c=>c.innerText.replace(/\\s+/g,' ').trim()))")
         chk('H1 Ajustes lista la consulta con «Mapeo de columnas», 2 columnas, 3 ejemplos enviados, la columna protegida con su motivo y «Respondió»', len(tb) == 1 and tb[0][1] == 'Mapeo de columnas' and tb[0][3] == '2' and tb[0][4] == '3' and 'Correo cliente' in tb[0][5] and 'nombre de la columna' in tb[0][5] and tb[0][7] == 'Respondió', tb)
         await q.click('[data-action="ia-log-clear"]'); await q.wait_for_timeout(300)

@@ -43,7 +43,7 @@ async def main():
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
         # ---------- sin datos ----------
         c = await b.new_context(viewport={'width': 1280, 'height': 900}); q = await c.new_page(); q.on('pageerror', lambda e: errs.append(str(e)[:200]))
-        await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); u = f'http://127.0.0.1:{port}/index.html'; await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-fuentes', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
+        await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); u = f'http://127.0.0.1:{port}/index.html'; await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-fuentes', state='attached', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
         src = await q.evaluate(TBL('Fuentes de datos'))
         chk('AK-1 el catálogo lista 6 fuentes en este orden: CSV y Excel, GA4 export, GA4 directa, Google Sheets, Excel/SharePoint y BigQuery', [r[0].split(' Carga')[0].split(' El CSV')[0] for r in src][:1] == ['Archivos CSV y Excel'] and len(src) == 6 and [r[1] for r in src] == ['Sin archivos', 'Sin archivos', 'No conectado', 'No conectado', 'No conectado', 'No conectado'], src)
         chk('AK-1 las fuentes aún no disponibles dicen en qué fase llegan y qué hace falta de tu lado (sin inventar una conexión)', all(f'Fase {ph}' in r[2] for r, ph in zip(src[2:], 'CDEF')) and 'Google Cloud' in src[2][2] and 'Azure' in src[4][2] and 'costos' in src[5][2], [r[2] for r in src[2:]])
@@ -54,7 +54,7 @@ async def main():
         c = await b.new_context(viewport={'width': 1280, 'height': 900}); q = await c.new_page(); q.on('pageerror', lambda e: errs.append(str(e)[:200]))
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); await q.goto(u + '#carga'); await q.wait_for_timeout(300)
         rtxt, nneg = real(); await up(q, 'actual', 'real.csv', rtxt); await up(q, 'segments', 'ga4.csv', GA4); await up(q, 'products', 'productos.csv', prods())
-        await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-fuentes', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
+        await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-fuentes', state='attached', timeout=20000); await q.evaluate("FP.app.actions['st-expand-all']()")
         src = await q.evaluate(TBL('Fuentes de datos'))
         chk('AK-1 con datos: CSV y Excel y GA4 export quedan «Con datos» (2 archivos propios y 1 de GA4), con su última sincronización y calidad; las 4 demás siguen «No conectado»', [r[1] for r in src] == ['Con datos', 'Con datos', 'No conectado', 'No conectado', 'No conectado', 'No conectado'] and '2 archivos' in src[0][2] and '1 archivo' in src[1][2] and 'hace' in src[0][2] and '/100' in src[0][4] and '/100' in src[1][4], src[:2])
         chk('AK-1 el periodo de CSV y Excel cubre 2026-09-01 a 2026-09-29 (venta real) y el de GA4 export 2026-09-01 a 2026-09-20 (segmentos)', '2026-09-01 a 2026-09-29' in src[0][3] and '2026-09-01 a 2026-09-20' in src[1][3], (src[0][3], src[1][3]))
