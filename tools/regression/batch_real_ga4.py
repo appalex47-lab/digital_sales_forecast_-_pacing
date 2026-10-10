@@ -95,8 +95,8 @@ async def main():
         chk('R-7 con mínimo 250, «Otros» reúne menos tráfico que con el automático (el aviso baja de 64 % a menos)', ('Otros» reúne el' not in note) or ('64 %' not in note), note)
         # Inicio · «Dónde mirar hoy» con el export real: sugiere segmentos y marca las fichas sin pedidos
         await q.goto(f'http://127.0.0.1:{port}/index.html#inicio'); await q.wait_for_selector('#h-now', state='attached', timeout=60000)
-        await q.select_option('#home-ch', 'ecommerce'); await q.select_option('#home-per', '2026-09'); await q.wait_for_selector('#hs-where', timeout=60000); await q.wait_for_timeout(2500)
-        hw = await q.evaluate("(()=>{const w=document.querySelector('#hs-where'); return {picks:[...w.querySelectorAll('[data-pick]')].map(e=>e.dataset.pick), q:(w.querySelector('.sgd-quality')||{innerText:''}).innerText}})()")
+        await q.select_option('#home-ch', 'ecommerce'); await q.select_option('#home-per', '2026-09'); await q.wait_for_selector('#hs-where', state='attached', timeout=60000); await q.wait_for_timeout(2500)
+        hw = await q.evaluate("(()=>{const w=document.querySelector('#hs-where'); return {picks:[...w.querySelectorAll('[data-pick]')].map(e=>e.dataset.pick), q:(w.querySelector('.sgd-quality')||{textContent:''}).textContent.replace(/\\s+/g,' ')}})()")
         chk('R-8 Inicio · Dónde mirar hoy: sugiere segmentos del export real (máx. 3, sin la combinación dispositivo × fuente)', 1 <= len(hw['picks']) <= 3 and 'device_source' not in hw['picks'], hw)
         chk('R-9 Inicio · avisa de las fichas con sesiones y sin pedidos (landing y «Sin dato (not set)»)', 'not set' in hw['q'] and 'saba-buenas-noches' in hw['q'], hw['q'][:300])
         chk('Sin errores de página', not errs, errs[:2])

@@ -612,3 +612,8 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 - El distintivo «Fase 9.1.x · Propósito y acción por vista» salió del encabezado y pasó al pie de la página (el dato sigue ahí).
 - «Siguiente paso» cuando la cadena está completa ya no se llama «Monitorear» (llevaba a Medir y aprender): ahora dice «Medir y aprender».
 - La advertencia de datos se muestra una sola vez como ficha (encabezado); la barra de contexto solo explica («Algunos cálculos pueden estar incompletos») y enlaza a Calidad de datos.
+
+## Añadido 2026-10-09 · Pacing & Forecast (Fase 3 del plan de simplificación)
+- Arriba va la respuesta: cumplimiento, gap y forecast del total y por canal, y las alertas. Fecha de referencia, método y métrica quedan compactos debajo (se ven siempre, porque cambian la respuesta).
+- El detalle va en **«Ver más»** con los mismos números: pacing por periodo, índices, métodos, eventos, versiones y parámetros. No se omite ningún dato.
+- Inicio: «¿Cómo voy?» incluye la **venta real en $** y el plan a la fecha.

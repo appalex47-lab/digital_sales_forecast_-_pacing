@@ -124,7 +124,7 @@
     const th = f.run.settings.pacingThresholds, pace = !future && fin(t.compliance) ? FP.pacingView.paceLabel(FP.gap.pacingStatus(t.compliance, th)) : '';
     const how = `<div class="home-key__col" data-key="how"><h4>¿Cómo voy?</h4><div class="home-key__big num">${future ? '—' : esc(F().percent(t.compliance, 1))}</div>
         <div class="ds-card__sub">cumplimiento del plan${pace ? ` · ${esc(pace)}` : ''}</div>
-        <ul class="home-key__list"><li>Gap <b>${future ? '—' : esc(FP.pacingView.signed('revenue', t.gap))}</b></li><li>Forecast de cierre <b>${esc(F().currency(p.forecast && p.forecast.revenue, 0))}</b></li><li>Forecast vs meta <b>${esc(fin(fg.gapPct) ? F().signedPercent(fg.gapPct, 1) : '—')}</b></li></ul></div>`;
+        <ul class="home-key__list"><li>Venta real <b data-key-real>${future ? '—' : esc(F().currency(p.actualToDate && p.actualToDate.revenue, 0))}</b><span class="field__hint home-key__sub">Plan a la fecha: ${future ? '—' : esc(F().currency(p.planToDate && p.planToDate.revenue, 0))}</span></li><li>Gap <b>${future ? '—' : esc(FP.pacingView.signed('revenue', t.gap))}</b></li><li>Forecast de cierre <b>${esc(F().currency(p.forecast && p.forecast.revenue, 0))}</b></li><li>Forecast vs meta <b>${esc(fin(fg.gapPct) ? F().signedPercent(fg.gapPct, 1) : '—')}</b></li></ul></div>`;
     const w = S.why;
     let whyHtml;
     if (w.status === 'ok' && w.effects) {

@@ -15,7 +15,7 @@
 |---|---|---|
 | 1 | **Inicio simplificado**: «Lo esencial» (¿Cómo voy? ¿Por qué? ¿Qué hago hoy?) + «Ver más» + «Metodología y ayuda» | Hecha en esta rama |
 | 2 | **Marco global limpio**: quitar el distintivo «Fase 9.1.x» del encabezado; ocultar «Siguiente paso» cuando apunta a la misma pantalla; mostrar la advertencia de datos una sola vez | Hecha en esta rama |
-| 3 | **Pacing y Forecast**: la respuesta (cumplimiento, gap, forecast) arriba; fecha de referencia, método y métrica compactos después; el detalle en «Ver más» | Pendiente |
+| 3 | **Pacing y Forecast**: la respuesta (cumplimiento, gap, forecast) arriba; fecha de referencia, método y métrica compactos después; el detalle en «Ver más» | Hecha en esta rama |
 | 4 | **Diagnóstico + entrada única «¿Por qué?»**: un punto de entrada para Diagnóstico, Análisis, Segmentos y Producto | Pendiente |
 | 5 | **Recovery y Reforecast**: resultado y brecha arriba; filtros, importar/exportar y restricciones plegados | Pendiente |
 | 6 | **Metas y motor**: separar «Herramientas» (datos de prueba, pruebas del motor, borrar datos) en una zona plegada | Pendiente |

@@ -366,3 +366,10 @@ Pruebas: `tools/test-trend-story.js` (21, incl. 300 series aleatorias), `tools/r
 
 ## Adenda 12 · Fase 2: marco global limpio (2026-10-09)
 Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recovery`) = nombre de la pantalla a la que lleva; ficha de calidad solo en el encabezado (la barra de contexto conserva la frase y el enlace). Prueba nueva `batch_marco.py` (M1–M4). Regresión: 48 lotes, 0 fallos; batería y comparación en verde. No se hizo el caso «el siguiente paso apunta a la misma pantalla»: ya estaba cubierto por la condición existente (`next.view !== view`).
+
+## Adenda 13 · Fase 3: Pacing y Forecast, y venta real en Inicio (2026-10-09)
+1. **Inicio.** «¿Cómo voy?» muestra ahora la **venta real en $** del periodo (acumulada a la fecha) y, debajo, el plan a la fecha. Sale de las mismas cifras de Pacing (`p.actualToDate.revenue`, `p.planToDate.revenue`). Prueba H16 contra una suma aparte (Ecommerce y App).
+2. **Pacing & Forecast.** Orden nuevo: encabezado → **la respuesta** (cifras del total y tabla por canal) → alertas → fecha de referencia, método y métrica (compactos, visibles porque cambian la respuesta) → gráfico → **«Ver más»** plegado: Pacing por periodo, Índices de desempeño, Métodos, Eventos y festivos, Versiones, Parámetros. Los ids no cambian (`#fc-kpis`, `#fc-channels`, `#fc-periods`, …), así que el recorrido guiado y las acciones siguen igual.
+3. **Garantía.** `compare.py` abriendo todos los `<details>` contra la línea base: no desaparece ninguna palabra, tabla ni control. Sin corrida (sin plan) el bloque «Ver más» se oculta, porque no habría nada que detallar.
+4. **Pruebas.** `batch_pacing3.py` (P1–P6): orden, seis desplegables cerrados, respuesta y ajustes visibles, tablas completas al abrir (13 filas de periodos, 4 métodos), cambio de métrica con lo abierto sigue abierto, total = suma de canales.
+5. **Límites.** Falta probar con personas reales y no se midió el móvil de esta vista. «Pacing por periodo» pasó a «Ver más» por decisión del plan: si resulta una consulta frecuente, es candidata a volver arriba.

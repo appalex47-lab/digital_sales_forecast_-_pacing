@@ -2669,3 +2669,6 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Inicio simplificado (2026-10-09)
 `FP.homeSummaryView.build(state, home, figures, next)` calcula una vez `homeSummaryEngine.compute` y devuelve `{ key, blocks }`; `keyBlock` arma «Lo esencial» con cifras de `periodFigures` (las mismas de las tarjetas) y del motor. `home-view.js` inserta `key` y envuelve cada bloque con `FP.homeSummaryView.more()` (`<details class="home-more" data-home-more>`); el estado abierto/cerrado se guarda en memoria con un `toggle` en captura. Las pruebas y la batería abren los desplegables antes de leer (el texto de un `<details>` cerrado no es visible, pero sí está en el DOM).
+
+### Pacing & Forecast reordenado (2026-10-09)
+`index.html` (`#view-pacing`): respuesta (`#fc-kpis`, `#fc-channels`) → `#fc-alerts` → `#fc-controls` (sección `.pacing-adjust`) → `#fc-chart` → seis `<details class="ds-accordion home-more pacing-more" data-pacing-more=…>` con periodos, índices, métodos, eventos, versiones y parámetros. Los ids no cambian: `pacing-view.js` y `forecast-view.js` pintan igual. `pacingView.render` pone `hidden` a `.pacing-more` y a la etiqueta «Ver más» cuando no hay corrida. Inicio: `keyBlock` agrega la venta real (`[data-key-real]`) y el plan a la fecha.

@@ -63,6 +63,7 @@ async def main():
             band = await q.evaluate("""()=>{const o={};document.querySelectorAll('#fc-channels th[data-state]').forEach(e=>{const c=getComputedStyle(e);o[e.dataset.state]=[c.borderTopStyle,c.borderTopColor]});return o}""")
             chk('H-pacing banda de Forecast punteada y de Plan/Actual continua (patrón, no solo color)', band.get('forecast', ['', ''])[0] == 'dashed' and band.get('plan', ['', ''])[0] == 'solid' and band.get('actual', ['', ''])[0] == 'solid', band)
             chk('H-pacing colores de banda distintos entre Plan, Actual y Forecast', len({v[1] for v in band.values()}) == len(band) and len(band) >= 3, band)
+            await q.evaluate("document.querySelectorAll('#view-pacing details.pacing-more').forEach(d=>d.open=true)"); await q.wait_for_timeout(150)   # el detalle vive en «Ver más»: se abre como lo haría la persona
             m = await q.evaluate("""()=>{const rows=[...document.querySelectorAll('#fc-methods tbody tr')];const bg=rows.map(r=>getComputedStyle(r.cells[0]).backgroundColor);return {n:rows.length,uniq:[...new Set(bg)].length,enUso:rows.filter(r=>/en uso/.test(r.innerText)).length}}""")
             chk('H-pacing métodos de forecast: ninguna fila destacada (mismo fondo) y «en uso» solo como texto', m['n'] >= 4 and m['uniq'] == 1 and m['enUso'] == 1, m)
             txt = await q.evaluate("document.getElementById('view-pacing').innerText")
