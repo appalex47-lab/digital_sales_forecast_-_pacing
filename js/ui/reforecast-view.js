@@ -362,9 +362,21 @@
       <p class="field__hint">Muestra cómo cambió el requerimiento entre versiones; no interpreta la causa.</p>`;
   }
 
+  /** «Ver más» solo existe si hay algo que detallar: sin datos no se muestran desplegables vacíos. */
+  function syncMore() {
+    const root = document.getElementById('view-reforecast'); if (!root) return;
+    let any = false;
+    root.querySelectorAll('details.rf-more').forEach((d) => {
+      const has = [...d.querySelectorAll('.panel__body')].some((b) => b.textContent.trim());
+      d.hidden = !has; if (has) any = true;
+    });
+    const layer = root.querySelector('.rf-layer'); if (layer) layer.hidden = !any;
+  }
+
   function renderEmpty(reason) {
     ['rf-summary', 'rf-recovery', 'rf-channels', 'rf-chart', 'rf-periods', 'rf-drivers', 'rf-audit', 'rf-versions'].forEach((id) => { $(id).innerHTML = ''; });
     $('rf-summary').innerHTML = `<div class="empty"><strong>No hay reforecast todavía</strong>${H().esc(reason)}</div>`;
+    syncMore();
   }
 
   function render(state) {
@@ -377,7 +389,8 @@
     renderPeriods(state);
     renderDrivers(state);
     renderAudit(state);
+    syncMore();
   }
 
-  FP.reforecastView = { render };
+  FP.reforecastView = { render, syncMore };
 })(typeof window !== 'undefined' ? window : globalThis);

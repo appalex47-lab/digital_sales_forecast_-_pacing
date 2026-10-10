@@ -54,7 +54,11 @@
         <div class="field"><label for="rc-apply" class="field__hint">Aplicar escenarios a</label>
           <select id="rc-apply" data-action="rc-setting" data-key="applyTo">
             <option value="future" ${s.applyTo === 'future' ? 'selected' : ''}>Días no cerrados (recuperación)</option>
-            <option value="all" ${s.applyTo === 'all' ? 'selected' : ''}>Todo el periodo (retrospectivo)</option></select></div>
+            <option value="all" ${s.applyTo === 'all' ? 'selected' : ''}>Todo el periodo (retrospectivo)</option></select></div>`}
+      </div>`;
+    $('rc-extra').innerHTML = `
+      <div class="filters">
+        ${imp ? '' : `
         <div class="field"><label for="rc-cmp" class="field__hint">Diagnóstico de origen</label>
           <select id="rc-cmp" data-action="rc-setting" data-key="comparison">${Object.entries(C().diagnostics.comparisons).map(([id, c]) =>
             `<option value="${id}" ${s.comparison === id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>`}
@@ -142,6 +146,17 @@
       </ol>`;
   }
 
+  /** «Ver más» solo existe si hay algo que detallar: sin datos no se muestran desplegables vacíos. */
+  function syncMore() {
+    const root = document.getElementById('view-recovery'); if (!root) return;
+    let any = false;
+    root.querySelectorAll('details.rc-more').forEach((d) => {
+      const has = [...d.querySelectorAll('.panel__body')].some((b) => b.textContent.trim());
+      d.hidden = !has; if (has) any = true;
+    });
+    const layer = root.querySelector('.rc-layer'); if (layer) layer.hidden = !any;
+  }
+
   function render(state) {
     renderContext(state);
     renderGap(state);
@@ -149,7 +164,8 @@
     FP.scenarioView.render(state);
     FP.actionPlanView.render(state);
     renderTree(state);
+    syncMore();
   }
 
-  FP.recoveryCenter = { render, NODE_BADGE };
+  FP.recoveryCenter = { render, syncMore, NODE_BADGE };
 })(typeof window !== 'undefined' ? window : globalThis);

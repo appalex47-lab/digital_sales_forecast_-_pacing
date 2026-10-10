@@ -895,8 +895,9 @@
     else if (state.view === 'recovery') {
       ensureRecovery();
       if (!state.rc.ctx) {
-        ['rc-gap', 'rc-chain', 'rc-simulator', 'rc-inverse', 'rc-saved', 'rc-library', 'rc-plan', 'rc-tracking', 'rc-tree'].forEach((id) => { document.getElementById(id).innerHTML = ''; });
+        ['rc-gap', 'rc-chain', 'rc-simulator', 'rc-inverse', 'rc-saved', 'rc-library', 'rc-plan', 'rc-tracking', 'rc-tree', 'rc-extra'].forEach((id) => { document.getElementById(id).innerHTML = ''; });
         document.getElementById('rc-context').innerHTML = '<div class="empty"><strong>Todavía no hay contexto de recuperación</strong>Se necesita un plan del año y venta real, o importar un analysis_export.json o reforecast_export.json.</div>';
+        FP.recoveryCenter.syncMore();
       } else FP.recoveryCenter.render(state);
     }
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }

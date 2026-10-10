@@ -2675,3 +2675,6 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Entrada «¿Por qué?» y Diagnóstico reordenado (2026-10-09)
 `ui/guidance/why-hub.js` (`FP.whyHub.render(view)`, llamado desde `app.js render()`) pinta `#why-hub-<vista>` en diagnostico, analisis, segmentos y producto. `#view-diagnostico`: resultado, driver, señales, hipótesis y recovery arriba; cuatro `<details class="ds-accordion pacing-more dx-more" data-dx-more=…>` (why, tree, products, confidence). `diagnosticView.syncMore()` oculta los vacíos (se llama al final de `render`, de `renderProducts` y después de `diagnosticGuide.render`).
+
+### Reforecast y Recovery Center reordenados (2026-10-09)
+`#view-reforecast`: `#rf-summary`, `#rf-channels`, `#rf-recovery`, `#rf-controls` (sección `.pacing-adjust`), `#rf-chart` y cuatro `<details class="ds-accordion pacing-more rf-more">` (periods, drivers, audit, versions). `#view-recovery`: filtros en `#rc-context`; flujo visible; tres `<details class="… rc-more">` (extra = `#rc-extra`, inverse, tree). `recoveryCenter.renderContext` escribe el banner y los filtros de canal/periodo en `#rc-context` y el diagnóstico de origen, los archivos y las restricciones en `#rc-extra`. `reforecastView.syncMore` y `recoveryCenter.syncMore` ocultan los desplegables vacíos.

@@ -17,7 +17,7 @@
 | 2 | **Marco global limpio**: quitar el distintivo «Fase 9.1.x» del encabezado; ocultar «Siguiente paso» cuando apunta a la misma pantalla; mostrar la advertencia de datos una sola vez | Hecha en esta rama |
 | 3 | **Pacing y Forecast**: la respuesta (cumplimiento, gap, forecast) arriba; fecha de referencia, método y métrica compactos después; el detalle en «Ver más» | Hecha en esta rama |
 | 4 | **Diagnóstico + entrada única «¿Por qué?»**: un punto de entrada para Diagnóstico, Análisis, Segmentos y Producto (una franja «¿Por qué?» con las cuatro formas de investigar; el menú lateral se reagrupa en la fase 8) | Hecha en esta rama |
-| 5 | **Recovery y Reforecast**: resultado y brecha arriba; filtros, importar/exportar y restricciones plegados | Pendiente |
+| 5 | **Recovery y Reforecast**: resultado y brecha arriba; archivos, restricciones y detalle plegados (los filtros de canal y periodo se quedan visibles porque cambian el resultado) | Hecha en esta rama |
 | 6 | **Metas y motor**: separar «Herramientas» (datos de prueba, pruebas del motor, borrar datos) en una zona plegada | Pendiente |
 | 7 | **Ajustes**: «Básico» y «Avanzado» (hoy 104 controles) | Pendiente |
 | 8 | **Menú por pregunta**: ¿Cómo voy? ¿Por qué? ¿Qué hago? ¿Funcionó? + Datos y Configuración (mismas pantallas, otra agrupación) | Pendiente (nombres por decidir) |

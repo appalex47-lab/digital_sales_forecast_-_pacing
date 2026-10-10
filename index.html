@@ -361,9 +361,9 @@
         <h2 class="panel__title" id="t-reforecast">Recovery &amp; Reforecast</h2>
         <p class="panel__desc">Con lo que ya ocurrió, ¿qué tendría que venderse en cada día futuro para llegar a la meta original? Plan, forecast y reforecast son realidades distintas: el plan nunca cambia.</p>
       </div></div>
-      <div class="panel__body" id="rf-controls"></div>
     </section>
 
+    <!-- 1 · La respuesta: cuánto falta, por canal y el escenario de recuperación -->
     <section class="panel"><div class="panel__body" id="rf-summary"></div></section>
 
     <section class="panel" aria-labelledby="t-rfch">
@@ -377,17 +377,37 @@
       <div class="panel__body" id="rf-recovery"></div>
     </section>
 
-    <section class="panel"><div class="panel__body" id="rf-chart"></div></section>
-
-    <section class="panel" aria-labelledby="t-rfper">
-      <div class="panel__head"><div><h2 class="panel__title" id="t-rfper">Reforecast por periodo</h2>
-        <p class="panel__desc">Plan original, actual, forecast y reforecast requerido por mes, semana o día.</p></div></div>
-      <div class="panel__body" id="rf-periods"></div>
+    <!-- 2 · Horizonte, supuestos y métrica: compactos, debajo de la respuesta (cambian la respuesta, por eso se ven) -->
+    <section class="panel pacing-adjust" aria-label="Horizonte, supuestos y métrica">
+      <div class="panel__body" id="rf-controls"></div>
     </section>
 
-    <section class="panel"><div class="panel__body" id="rf-drivers"></div></section>
-    <section class="panel"><div class="panel__body" id="rf-audit"></div></section>
-    <section class="panel"><div class="panel__body" id="rf-versions"></div></section>
+    <section class="panel"><div class="panel__body" id="rf-chart"></div></section>
+
+    <!-- 3 · Ver más: el mismo detalle de siempre, un clic abajo (ningún dato se omite) -->
+    <p class="home-layer rf-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
+    <details class="ds-accordion pacing-more rf-more" data-rf-more="periods">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Reforecast por periodo</h3><p class="ds-accordion__d">Plan original, actual, forecast y reforecast requerido por mes, semana o día</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <div class="panel__head"><div><h2 class="panel__title" id="t-rfper">Reforecast por periodo</h2>
+          <p class="panel__desc">Plan original, actual, forecast y reforecast requerido por mes, semana o día.</p></div></div>
+        <div class="panel__body" id="rf-periods"></div>
+      </div></details>
+    <details class="ds-accordion pacing-more rf-more" data-rf-more="drivers">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Descomposición por driver</h3><p class="ds-accordion__d">Cuánto del requerimiento sale de volumen, conversión y ticket</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <div class="panel__body" id="rf-drivers"></div>
+      </div></details>
+    <details class="ds-accordion pacing-more rf-more" data-rf-more="audit">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Auditoría del reforecast</h3><p class="ds-accordion__d">Cómo se construyó el requerimiento y qué cuadra</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <div class="panel__body" id="rf-audit"></div>
+      </div></details>
+    <details class="ds-accordion pacing-more rf-more" data-rf-more="versions">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Versiones y exportar</h3><p class="ds-accordion__d">Guardar el reforecast como versión y exportar reforecast_export.json</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <div class="panel__body" id="rf-versions"></div>
+      </div></details>
   </main>
 
   <!-- ===================== Vista: Diagnóstico (Fase 5) ===================== -->
@@ -457,14 +477,31 @@
       </div></div>
       <div class="panel__body" id="rc-context"></div>
     </section>
+    <!-- 1 · Brecha, cadena, escenario, acciones y seguimiento -->
     <section class="panel"><div class="panel__body" id="rc-gap"></div><div class="panel__body" id="rc-chain"></div></section>
     <section class="panel panel--sim"><div class="panel__body" id="rc-simulator"></div></section>
-    <section class="panel panel--sim"><div class="panel__body" id="rc-inverse"></div></section>
     <section class="panel panel--sim"><div class="panel__body" id="rc-saved"></div></section>
     <section class="panel"><div class="panel__body" id="rc-library"></div></section>
     <section class="panel"><div class="panel__body" id="rc-plan"></div></section>
     <section class="panel"><div class="panel__body" id="rc-tracking"></div></section>
-    <section class="panel"><div class="panel__body" id="rc-tree"></div></section>
+
+    <!-- 2 · Ver más: el mismo detalle de siempre, un clic abajo (ningún dato se omite) -->
+    <p class="home-layer rc-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
+    <details class="ds-accordion pacing-more rc-more" data-rc-more="extra">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Diagnóstico de origen, archivos y restricciones</h3><p class="ds-accordion__d">Importar analysis_export o reforecast_export, exportar el plan de acción y poner topes</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <div class="panel__body" id="rc-extra"></div>
+      </div></details>
+    <details class="ds-accordion pacing-more rc-more" data-rc-more="inverse">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">¿Qué tendría que cambiar?</h3><p class="ds-accordion__d">El cálculo inverso: cuánto moverse en cada driver para cerrar la brecha</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <section class="panel panel--sim"><div class="panel__body" id="rc-inverse"></div></section>
+      </div></details>
+    <details class="ds-accordion pacing-more rc-more" data-rc-more="tree">
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Cadena de trazabilidad</h3><p class="ds-accordion__d">De la brecha a la acción y su resultado, paso por paso</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <div class="ds-accordion__body">
+        <section class="panel"><div class="panel__body" id="rc-tree"></div></section>
+      </div></details>
   </main>
 
   <!-- ===================== Vista: Medir y aprender (Fase 7) ===================== -->
