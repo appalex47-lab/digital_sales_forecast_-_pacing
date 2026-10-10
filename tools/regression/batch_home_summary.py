@@ -115,6 +115,12 @@ async def main():
         await q.select_option('#home-ch', 'app'); await q.wait_for_timeout(900)
         op = await q.evaluate("document.querySelector('details[data-home-more=channels]').open"); chk('H14 al cambiar de canal, lo que la persona abrió sigue abierto', op is True, op)
         ch2 = await q.evaluate("[...document.querySelectorAll('.home-key__chips [data-chip]')].map(e=>e.dataset.chip)"); chk('H15 línea de estado por canal en lo esencial (4 canales)', ch2 == CH, ch2)
+        # 16 · venta real en $ de «¿Cómo voy?» = suma aparte del 1 al 22 de septiembre
+        for ch in ['ecommerce', 'app']:
+            await q.select_option('#home-ch', ch); await q.wait_for_timeout(900)
+            real = await ev("document.querySelector('[data-key-real]').textContent.trim()")
+            exp = sum(vals(ch, d)[2] for d in DAYS if d.month == 9)
+            chk(f'H16 venta real en $ de «¿Cómo voy?» ({ch}) = suma aparte de la venta del 1 al 22 de septiembre', real.replace(',', '').replace('$', '').split('.')[0] == f'{round(exp):d}', (real, round(exp)))
         chk('Sin errores de página', not errs, errs[:3])
         await b.close()
 asyncio.run(main())

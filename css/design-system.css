@@ -1380,6 +1380,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 .home-key__big { font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
 .home-key__list { list-style: none; margin: var(--ds-s2) 0 0; padding: 0; display: grid; gap: 4px; }
 .home-key__list b { float: right; }
+.home-key__sub { display: block; clear: both; font-size: var(--ds-fs-sm, .8125rem); }
 .home-key__list .is-neg { color: var(--ds-danger); } .home-key__list .is-pos { color: var(--ds-success); }
 .home-key__alert { background: var(--ds-warning-soft); color: var(--ds-warning); border-radius: var(--ds-r-md); padding: 6px 10px; font-size: var(--ds-fs-helper); }
 .home-key__chips { margin-top: var(--ds-s3); display: flex; gap: 6px; flex-wrap: wrap; }
