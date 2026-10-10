@@ -625,3 +625,6 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 ## Añadido 2026-10-09 · Recovery y Reforecast (Fase 5 del plan de simplificación)
 - Reforecast: primero cuánto falta (resultado, canales y escenario de recuperación); horizonte, supuestos y métrica debajo; periodos, drivers, auditoría y versiones en **«Ver más»**.
 - Recovery Center: se ve el flujo brecha → escenario → acción → seguimiento. Archivos, restricciones, cálculo inverso y trazabilidad van en **«Ver más»**, con los mismos datos.
+
+## Añadido 2026-10-10 · Metas y motor (Fase 6 del plan de simplificación)
+- Se ve primero la meta anual y la validación por canal. Datos de prueba, borrar datos guardados, casos límite y pruebas del motor están en **«Ver más»**, con los mismos datos. Sin datos cargados, «Herramientas» se abre sola.
