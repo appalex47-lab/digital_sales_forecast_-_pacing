@@ -10,7 +10,7 @@ def serve(root):
 JS="""(sel)=>[...document.querySelectorAll(sel)].map(e=>{const p=e.parentElement.getBoundingClientRect(),r=e.getBoundingClientRect();return [+((r.left-p.left)/p.width).toFixed(3),+(r.width/p.width).toFixed(3)]})"""
 async def grab(p,root):
     port=serve(root);b=await p.chromium.launch(args=['--no-sandbox']);q=await b.new_page(viewport={'width':1280,'height':900})
-    await q.goto(f'http://127.0.0.1:{port}/index.html#resumen');await q.click('[data-action="generate-mock"]');await q.wait_for_timeout(1300)
+    await q.goto(f'http://127.0.0.1:{port}/index.html#resumen');await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]');await q.wait_for_timeout(1300)
     try:await q.click('[data-action="sample-targets"]',timeout=1500);await q.wait_for_timeout(400)
     except Exception:pass
     await q.goto(f'http://127.0.0.1:{port}/index.html#plan');await q.wait_for_timeout(600)

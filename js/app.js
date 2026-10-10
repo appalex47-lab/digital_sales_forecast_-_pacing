@@ -883,6 +883,9 @@
       FP.ui.renderValidation(state);
       FP.ui.renderEngine(state);
       FP.ui.renderExport(state);
+      // sin datos, «Herramientas» (donde está «Generar datos de prueba») se abre una vez, para que la persona lo encuentre
+      const tools = document.querySelector('#view-resumen details[data-rs-more="tools"]');
+      if (tools && !tools.dataset.auto && (!state.dataset || !Object.keys(state.dataset.records).length)) { tools.open = true; tools.dataset.auto = '1'; }
     } else if (state.view === 'carga') FP.importView.render(state);
     else if (state.view === 'calidad') FP.qualityView.render(state);
     else if (state.view === 'datos') FP.dataView.render(state);

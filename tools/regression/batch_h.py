@@ -23,7 +23,7 @@ async def main():
         b = await p.chromium.launch(args=['--no-sandbox']); c = await b.new_context(viewport={'width': 1280, 'height': 900}); q = await c.new_page()
         errs = []; q.on('pageerror', lambda e: errs.append(str(e)))
         await q.goto(url + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
-        await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
+        await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
         try: await q.click('[data-action="sample-targets"]', timeout=1500); await q.wait_for_timeout(400)
         except Exception: pass
         await q.goto(url + '#plan'); await q.wait_for_timeout(600)

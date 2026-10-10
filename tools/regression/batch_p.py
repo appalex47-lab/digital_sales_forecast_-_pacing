@@ -18,7 +18,7 @@ async def fresh(b, when):
     c = await b.new_context(viewport={'width': 1280, 'height': 900}, accept_downloads=True); q = await c.new_page()
     await q.clock.set_fixed_time(when)
     u = f'http://127.0.0.1:{port}/index.html'
-    await q.goto(u + '#resumen'); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
+    await q.goto(u + '#resumen'); await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
     try: await q.click('[data-action="sample-targets"]', timeout=1500); await q.wait_for_timeout(300)
     except Exception: pass
     return c, q, u

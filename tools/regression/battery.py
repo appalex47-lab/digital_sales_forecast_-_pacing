@@ -69,7 +69,7 @@ async def main():
         # sin datos: estados vacíos
         R['empty_text'] = {v: await pg.evaluate(TEXT_JS, v) for v in ['pacing','reforecast','diagnostico','recovery','medir','narrativa','producto']}
         R['selftest'] = await pg.evaluate("(()=>{const r=FP.selfTest.run();return {passed:r.passed,total:r.total}})()")
-        await pg.click('[data-action="generate-mock"]'); await pg.wait_for_timeout(1500)
+        await pg.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await pg.click('[data-action="generate-mock"]'); await pg.wait_for_timeout(1500)
         await pg.click('[data-action="sample-targets"]'); await pg.wait_for_timeout(500)
         await pg.goto(url + '#plan'); await pg.wait_for_timeout(700)
         for a in ['plan-preview', 'plan-save']:
@@ -117,7 +117,7 @@ async def main():
             c = await b.new_context(viewport={'width': w, 'height': 900}); await c.clock.set_fixed_time('2026-10-07T09:00:00'); q = await c.new_page()
             q.on('pageerror', lambda e: errs.append('PAGEERR ' + str(e)))
             await q.goto(url + '#resumen'); await q.wait_for_timeout(700)
-            try: await q.click('[data-action="generate-mock"]', timeout=2000); await q.wait_for_timeout(1200)
+            try: await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]', timeout=2000); await q.wait_for_timeout(1200)
             except Exception: pass
             for v in VIEWS:
                 await q.goto(url + '#' + v); await q.wait_for_timeout(450)

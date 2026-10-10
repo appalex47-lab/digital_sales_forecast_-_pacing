@@ -4,7 +4,7 @@ Con los datos de prueba el diagnóstico no produce hipótesis, así que el ESCEN
 no toca la lógica de la app. La acción y la medición se hacen con los botones reales («Agregar al plan», fechas, «Medir»)."""
 async def prepare(q, url, mock_plan=True):
     await q.goto(url + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
-    await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
+    await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
     try: await q.click('[data-action="sample-targets"]', timeout=1500); await q.wait_for_timeout(400)
     except Exception: pass
     await q.goto(url + '#plan'); await q.wait_for_timeout(600)

@@ -5,7 +5,7 @@ async def get(root):
     async with async_playwright() as p:
         b=await p.chromium.launch(); pg=await b.new_page(); url=f'file://{root}/index.html'
         await pg.goto(url+'#resumen'); await pg.wait_for_timeout(900)
-        await pg.click('[data-action="generate-mock"]'); await pg.wait_for_timeout(1500)
+        await pg.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await pg.click('[data-action="generate-mock"]'); await pg.wait_for_timeout(1500)
         await pg.goto(url+'#pacing'); await pg.wait_for_timeout(700); await pg.evaluate(CAP)
         await pg.click('[data-action="fc-export"]'); await pg.wait_for_timeout(500)
         d=await pg.evaluate("window.__dl[0][1]"); await b.close(); return json.loads(d)

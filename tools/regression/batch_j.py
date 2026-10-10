@@ -72,7 +72,7 @@ async def main():
         chk('R-11 la sugerencia del histórico no estorba: con meta ya capturada o con plan guardado, se sigue adelante aunque falte histórico', ok['metaSinHist'][0] != 'load_historical' and ok['planSinHist'][0] != 'load_historical', ok)
         chk('R-11 los errores de calidad siguen teniendo prioridad sobre todo', ok['calidad'] == ['fix_quality', 'calidad'], ok)
         # con datos de prueba (histórico + real) → meta
-        await q.goto(u + '#resumen'); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
+        await q.goto(u + '#resumen'); await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
         cases['mock'] = await nextstep(q)
         chk('R-11 con los datos de prueba cargados (histórico + real) el siguiente paso ya no pide datos ni histórico: sigue con la meta / el plan', cases['mock'][0] not in ('load_data', 'load_historical'), cases['mock'])
         # la tarjeta de Inicio muestra el mismo paso
