@@ -20,7 +20,7 @@
   ];
 
   /* ---------- Desplegables: cada sección es un <details> con su título y un resumen que se ve aunque esté cerrada ---------- */
-  const SECTIONS = ['st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio'];
+  const SECTIONS = ['st-adv', 'st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio'];
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   /** Resumen de una línea de cada sección (estado actual), para decidir si hace falta abrirla. */
   function metaFor(state, id) {
@@ -28,6 +28,7 @@
     switch (id) {
       case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${st && st.passed === st.total ? 'operativo' : 'con fallas'}`; }
       case 'st-modo': { const m = (FP.guidanceConfig.MODES || []).find((x) => x[0] === state.ux.mode); return m ? esc(m[1]) : ''; }
+      case 'st-adv': return 'Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA';
       case 'st-otras': return plural(ELSEWHERE.length, 'preferencia', 'preferencias');
       case 'st-fuentes': { const b = FP.dataSources.build(state); return `${b.summary.activeSources} de ${b.summary.liveSources} fuentes con datos`; }
       case 'st-equivalencias': return plural(FP.aliases.rules().length, 'equivalencia', 'equivalencias');
@@ -178,15 +179,31 @@
         </div>
       </section>
 
-      <p class="stgroup stgroup--page">Herramienta</p>
+      <p class="stgroup stgroup--page">Básico · Herramienta</p>
       ${accStart(state, 'st-estado', 'Estado de la herramienta', 'El detalle de las píldoras del encabezado: año, meta anual, canales, estado de los datos y estado del motor.')}
         <div class="panel__body"><dl class="status-bar__list" id="status-bar"></dl></div>
       ${accEnd()}
 
       ${accStart(state, 'st-modo', 'Modo de uso', 'Cuánto detalle y ayuda se muestra en cada vista. Aprendiz explica más y te guía paso a paso; Analista muestra el detalle completo.')}
         <div class="panel__body">${H().segmented('ux-mode', FP.guidanceConfig.MODES, state.ux.mode)}</div>
+      ${accEnd()}`;
+    const advOpen = state.stOpen && state.stOpen['st-adv'] !== undefined ? state.stOpen['st-adv'] : false;
+    const bEl = $('settings-view-b');
+    if (bEl) bEl.innerHTML = `
+      ${accStart(state, 'st-ia', 'Conexión con Cohere (análisis con IA)', 'La usan Diagnóstico, Recovery Center, Narrativa y el mapeo semántico de importaciones. Todas comparten esta misma conexión de Cohere; no se crea otra API key. Cohere no calcula ni cambia cifras.')}
+        <div class="panel__body stack">
+          <div class="field"><label for="dx-key-input" class="field__hint">API key de Cohere</label>
+            <input id="dx-key-input" type="password" autocomplete="off" value="${esc(ai.apiKey || '')}" data-action="dx-key" placeholder="Pega tu API key"></div>
+          <div class="field field--check"><label><input type="checkbox" data-action="dx-remember" ${ai.rememberKey ? 'checked' : ''}> Recordar la key en este navegador</label>
+            <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta. Cualquiera con acceso a este navegador podría verla.</span></div>
+          <div class="field"><label for="dx-model" class="field__hint">Modelo</label>
+            <input id="dx-model" type="text" value="${esc(ai.model)}" data-action="dx-model"></div>
+        </div>
       ${accEnd()}
-
+      <p class="stgroup stgroup--page">Avanzado</p>
+      <details class="panel stacc" id="st-adv" data-st="st-adv" tabindex="-1" ${advOpen ? 'open' : ''}>
+        <summary class="stacc__sum"><h3 class="panel__title stacc__title">Opciones avanzadas</h3><span class="stacc__meta">${metaFor(state, 'st-adv')}</span></summary>
+        <div class="stacc__body">
       ${accStart(state, 'st-otras', 'Otras preferencias, en su vista', 'Siguen donde se usan: cambian el resultado de esa vista.')}
         <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table">
           <thead><tr><th scope="col">Qué</th><th scope="col">Para qué sirve</th><th scope="col">Dónde está</th></tr></thead>
@@ -202,17 +219,9 @@
       ${accEnd()}
 
       <p class="stgroup stgroup--page">Inteligencia artificial</p>
-      ${accStart(state, 'st-ia', 'Conexión con Cohere (análisis con IA)', 'La usan Diagnóstico, Recovery Center, Narrativa y el mapeo semántico de importaciones. Todas comparten esta misma conexión de Cohere; no se crea otra API key. Cohere no calcula ni cambia cifras.')}
-        <div class="panel__body stack">
-          <div class="field"><label for="dx-key-input" class="field__hint">API key de Cohere</label>
-            <input id="dx-key-input" type="password" autocomplete="off" value="${esc(ai.apiKey || '')}" data-action="dx-key" placeholder="Pega tu API key"></div>
-          <div class="field field--check"><label><input type="checkbox" data-action="dx-remember" ${ai.rememberKey ? 'checked' : ''}> Recordar la key en este navegador</label>
-            <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta. Cualquiera con acceso a este navegador podría verla.</span></div>
-          <div class="field"><label for="dx-model" class="field__hint">Modelo</label>
-            <input id="dx-model" type="text" value="${esc(ai.model)}" data-action="dx-model"></div>
+      ${aiControlPanels(state)}
         </div>
-      ${accEnd()}
-      ${aiControlPanels(state)}`;
+      </details>`;
     // Negocio vive en el HTML (no lo pinta esta función): su resumen y su estado abierto se sincronizan aquí
     const bz = FP.config.business || {}, nb = document.getElementById('st-negocio');
     const meta = document.getElementById('st-negocio-meta');
@@ -228,6 +237,7 @@
       e.preventDefault();
       const el = document.getElementById(a.dataset.jump);
       if (!el) return;
+      for (let up = el.parentElement && el.parentElement.closest('details'); up; up = up.parentElement && up.parentElement.closest('details')) { if (!up.open) up.open = true; }   // «Avanzado» también se abre
       if (el.tagName === 'DETAILS' && !el.open) el.open = true;   // dispara «toggle»: queda registrado en state.stOpen
       el.scrollIntoView({ block: 'start' });
       const sum = el.querySelector ? el.querySelector('summary') : null;

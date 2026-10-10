@@ -628,3 +628,6 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 
 ## Añadido 2026-10-10 · Metas y motor (Fase 6 del plan de simplificación)
 - Se ve primero la meta anual y la validación por canal. Datos de prueba, borrar datos guardados, casos límite y pruebas del motor están en **«Ver más»**, con los mismos datos. Sin datos cargados, «Herramientas» se abre sola.
+
+## Añadido 2026-10-10 · Configuración (Fase 7 del plan de simplificación)
+- Se ve primero lo básico: Estado, Modo de uso, Negocio y Conexión con Cohere. Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA están en **«Opciones avanzadas»** (cerrado), con los mismos controles.
