@@ -147,8 +147,19 @@ ${cards}
       </section>`;
     // Vacío (sin plan/forecast): primeros pasos y preparación → recorrido → qué está pasando.
     // Con datos: recorrido → qué está pasando → preparación y siguiente paso (al final).
-    const body = f && !planOnly
-      ? `${flowBlock}\n\n${nowBlock}\n\n${FP.homeSummaryView ? FP.homeSummaryView.render(state, h) : ''}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
+    // Con datos: «Lo esencial» siempre a la vista; todo lo demás sigue en la página, plegado en «Ver más» y «Metodología y ayuda» (nada se omite).
+    // Vacío o solo plan: primeros pasos y preparación → recorrido → qué está pasando (sin cambios).
+    let body;
+    if (f && !planOnly && FP.homeSummaryView) {
+      const sum = FP.homeSummaryView.build(state, h, f, next), more = FP.homeSummaryView.more;
+      body = `${sum.key}
+      <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
+      ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
+      ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}
+      <p class="home-layer"><strong>Metodología y ayuda</strong> · cómo se calcula y qué falta</p>
+      ${more('flow', 'Recorrido del sistema y preparación de datos', '6 etapas, % de preparación y siguiente paso completo', `${flowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`)}`;
+    } else body = f && !planOnly
+      ? `${flowBlock}\n\n${nowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
       : `${setupBlock(nextCard + '\n' + readyCard)}\n\n${flowBlock}\n\n${nowBlock}`;
     $('home').innerHTML = `<div class="home">
       <header class="home__head">

@@ -105,13 +105,71 @@
     return block('trust', 'Confianza de los datos', 'Calidad de datos', 'Para que nadie lea el titular sin saber qué lo respalda.', `<div class="metric-grid">${cards}</div>`, logic);
   }
 
-  /** HTML de los 4 bloques (cada uno aislado: si uno falla, los demás se muestran). */
-  function render(state, h) {
-    let S;
-    try { S = FP.homeSummaryEngine.compute(state, h); } catch (e) { return `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo calcular el resumen general: ${H().esc(String(e && e.message || e))}</p></section>`; }
-    const safe = (fn) => { try { return fn(S, {}); } catch (e) { return `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo mostrar este bloque: ${H().esc(String(e && e.message || e))}</p></section>`; } };
-    return `<div class="home-sum__sep ds-card__sub"><strong>Resumen general</strong> · el mismo canal y periodo de arriba.</div>${safe(whyBlock)}${safe(whereBlock)}${safe(channelsBlock)}${safe(trustBlock)}`;
+  /* ---------- Capa 1 · «Lo esencial» ---------- */
+  const CHEV = '<svg class="ds-accordion__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  /** Qué desplegables de «Ver más» dejó abiertos la persona (se recuerda al repintar Inicio al cambiar canal o periodo). */
+  const openState = {};
+  if (typeof document !== 'undefined') {
+    document.addEventListener('toggle', (e) => { const d = e.target; if (d && d.matches && d.matches('details[data-home-more]')) openState[d.dataset.homeMore] = d.open; }, true);
+  }
+  /** Desplegable «Ver más»: el dato sigue en la página (en el DOM), solo plegado. */
+  function more(id, title, hint, html) {
+    const { esc } = H();
+    return `<details class="ds-accordion home-more" data-home-more="${esc(id)}"${openState[id] ? ' open' : ''}><summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h4 class="ds-accordion__t">${esc(title)}</h4><p class="ds-accordion__d">${esc(hint)}</p></span>${CHEV}</summary>
+      <div class="ds-accordion__body">${html}</div></details>`;
   }
 
-  FP.homeSummaryView = { render };
+  function keyBlock(S, f, next) {
+    const { esc } = H(), p = f.p, t = p.toDate.revenue, fg = p.forecastGap.revenue, future = p.status === 'future';
+    const th = f.run.settings.pacingThresholds, pace = !future && fin(t.compliance) ? FP.pacingView.paceLabel(FP.gap.pacingStatus(t.compliance, th)) : '';
+    const how = `<div class="home-key__col" data-key="how"><h4>¿Cómo voy?</h4><div class="home-key__big num">${future ? '—' : esc(F().percent(t.compliance, 1))}</div>
+        <div class="ds-card__sub">cumplimiento del plan${pace ? ` · ${esc(pace)}` : ''}</div>
+        <ul class="home-key__list"><li>Gap <b>${future ? '—' : esc(FP.pacingView.signed('revenue', t.gap))}</b></li><li>Forecast de cierre <b>${esc(F().currency(p.forecast && p.forecast.revenue, 0))}</b></li><li>Forecast vs meta <b>${esc(fin(fg.gapPct) ? F().signedPercent(fg.gapPct, 1) : '—')}</b></li></ul></div>`;
+    const w = S.why;
+    let whyHtml;
+    if (w.status === 'ok' && w.effects) {
+      const e = w.effects, c = (v) => (v < -0.5 ? 'is-neg' : v > 0.5 ? 'is-pos' : '');
+      whyHtml = `<p><strong>La venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))}</strong> contra el periodo anterior.</p>
+        <ul class="home-key__list"><li>Tráfico <b class="${c(e.traffic)}">${esc(sMoney(e.traffic))}</b></li><li>Conversión <b class="${c(e.cr)}">${esc(sMoney(e.cr))}</b></li><li>Ticket <b class="${c(e.aov)}">${esc(sMoney(e.aov))}</b></li></ul>`;
+    } else if (w.status === 'ok') {
+      whyHtml = `<p><strong>La venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))}</strong> contra el periodo anterior.</p><p class="field__hint">No se separa en tráfico, conversión y ticket: ${S.channel === 'total' ? 'un canal no trae sesiones. Elige Ecommerce o App.' : 'este canal no trae sesiones.'}</p>`;
+    } else whyHtml = '<p class="field__hint">Sin periodo anterior con venta real para comparar. Elige un mes o carga más historia.</p>';
+    const why = `<div class="home-key__col" data-key="why"><h4>¿Por qué?</h4>${whyHtml}</div>`;
+    const Wh = S.where, pick = Wh.status === 'ok' && Wh.picks[0];
+    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><button type="button" class="link-btn" data-action="go" data-view="${esc(next.view)}">${esc(next.label)}</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
+    const todo = `<div class="home-key__col" data-key="todo"><h4>¿Qué hago hoy?</h4>${nextTxt}${pick ? `<p><span class="field__hint">Dónde mirar</span><br><strong>${esc(pick.dimensionLabel)} · ${esc(pick.segment)}</strong> <span class="field__hint">(${esc(sMoney(pick.delta))})</span></p>` : ''}${Wh.status === 'ok' && Wh.quality.length ? `<p class="home-key__alert">Revisa el tráfico de «${esc(Wh.quality[0].label)}»</p>` : ''}</div>`;
+    const chips = S.channels.status === 'ok' ? S.channels.rows.map((r) => `<span class="ds-badge" data-chip="${esc(r.id)}">${esc(r.label)} · ${r.state === 'ok' ? esc(FP.pacingView.paceLabel(r.pacing)) : r.state === 'no_plan' ? 'Sin plan' : 'Sin venta real'}</span>`).join(' ') : '';
+    const T = S.trust, cov = T.coverage;
+    return `<section class="ds-card home-key" aria-labelledby="hk-t" data-block="key">
+      <div class="home__row"><h3 class="ds-section-title" id="hk-t">Lo esencial</h3></div>
+      <p class="ds-card__sub">${esc(FP.navigation.contextLabel({ channel: f.ch }))} · ${esc(f.label)}</p>
+      <div class="home-key__grid">${how}${why}${todo}</div>
+      ${chips ? `<div class="home-key__chips" aria-label="Estado por canal">${chips}</div>` : ''}
+      <p class="field__hint home-key__trust">Respaldo: venta real hasta <b>${esc(T.lastActual || '—')}</b> · <b>${cov ? `${cov.paired} de ${cov.expected}` : '—'}</b> días comparados · calidad: <b>${esc(T.quality ? (T.quality.text || T.quality.status) : '—')}</b>. Todo el detalle está abajo, en «Ver más».</p></section>`;
+  }
+
+  const BLOCKS = [
+    ['why', whyBlock, 'Por qué cambió la venta, con cascada', 'Tráfico → conversión → ticket, días comparados y cuadre'],
+    ['where', whereBlock, 'Dónde mirar: segmentos y avisos de calidad', 'Un segmento por dimensión de GA4, con «Diagnosticar»'],
+    ['channels', channelsBlock, 'Cómo va cada canal', 'Venta acumulada, cumplimiento, forecast vs meta y estado de pacing'],
+    ['trust', trustBlock, 'Confianza de los datos', 'Hasta dónde llega la venta real, días comparados, calidad y archivos cargados']
+  ];
+
+  /** Calcula una vez y devuelve las piezas: { key, blocks:[{id,title,hint,html}] } (html = bloque completo, igual que antes). */
+  function build(state, h, f, next) {
+    let S;
+    try { S = FP.homeSummaryEngine.compute(state, h); } catch (e) { const msg = `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo calcular el resumen general: ${H().esc(String((e && e.message) || e))}</p></section>`; return { key: '', blocks: [{ id: 'error', title: 'Resumen general', hint: 'No se pudo calcular', html: msg }] }; }
+    const safe = (fn) => { try { return fn(S, {}); } catch (e) { return `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo mostrar este bloque: ${H().esc(String((e && e.message) || e))}</p></section>`; } };
+    let key = '';
+    try { key = f ? keyBlock(S, f, next) : ''; } catch (e) { key = `<section class="ds-card home-key" data-block="error"><p class="field__hint">No se pudo mostrar lo esencial: ${H().esc(String((e && e.message) || e))}</p></section>`; }
+    return { key, blocks: BLOCKS.map(([id, fn, title, hint]) => ({ id, title, hint, html: safe(fn) })) };
+  }
+
+  /** HTML de los 4 bloques sin plegar (para pruebas y para quien los quiera sueltos). */
+  function render(state, h) {
+    const b = build(state, h, null, null);
+    return `<div class="home-sum__sep ds-card__sub"><strong>Resumen general</strong> · el mismo canal y periodo de arriba.</div>${b.blocks.map((x) => x.html).join('')}`;
+  }
+
+  FP.homeSummaryView = { render, build, more, keyBlock };
 })(typeof window !== 'undefined' ? window : globalThis);

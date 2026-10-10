@@ -11,6 +11,10 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
+async def home_state(q):
+    # «Ver más» viene cerrado: el dato sigue en la página; se abre para leerlo como lo haría la persona
+    await q.evaluate("document.querySelectorAll('details.home-more').forEach(d=>d.open=true)"); await q.wait_for_timeout(150)
+    return await q.evaluate(HOME)
 HOME = """()=>{const h=document.getElementById('home');const now=h.querySelector('[aria-labelledby="h-now"]');
  const li=[...h.querySelectorAll('.readiness__list li')].map(l=>({t:l.innerText.replace(/\\s+/g,' ').trim(),done:l.classList.contains('is-done'),badge:!!l.querySelector('.ds-badge'),hint:!!l.querySelector('.readiness__hint'),ir:!!l.querySelector('a')}));
  return {pct:h.querySelector('.readiness__bar')?.getAttribute('aria-valuenow'),li,empty:!!now?.querySelector('.ds-empty'),
@@ -25,7 +29,7 @@ async def main():
         b = await p.chromium.launch(args=['--no-sandbox']); q = await b.new_page(viewport={'width': 1280, 'height': 900}); u = f'http://127.0.0.1:{port}/index.html'
         errs = []; q.on('pageerror', lambda e: errs.append(str(e)))
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
-        A = await q.evaluate(HOME)
+        A = await home_state(q)
         lab = [x['t'] for x in A['li']]
         want = ['Histórico cargado (mejora la estacionalidad)', 'Venta real cargada', 'Cobertura reciente de venta real', 'Meta anual definida', 'Plan distribuido', 'Sin errores de calidad']
         chk('R-13 «Preparación de datos» sigue el orden del recorrido: 1 Histórico, 2 Venta real, 3 Cobertura, 4 Meta anual, 5 Plan, 6 Sin errores de calidad', len(lab) == 6 and all(lab[i].replace('— ', '').startswith(want[i]) for i in range(6)), lab)
@@ -49,14 +53,14 @@ async def main():
         try: await q.click('[data-action="sample-targets"]', timeout=1500); await q.wait_for_timeout(500)
         except Exception: pass
         await q.goto(u + '#inicio'); await q.wait_for_timeout(600)
-        B = await q.evaluate(HOME)
+        B = await home_state(q)
         chk('R-14 con solo la meta capturada: ese paso se marca ✓, el botón pasa a la venta real y sigue el estado vacío (no hay plan)', B['empty'] and B['steps'][2].startswith('✓') and B['ctaView'] == 'carga', (B['steps'], B['ctaView']))
         # meta + plan, sin venta real → «solo plan»
         await q.goto(u + '#plan'); await q.wait_for_timeout(500)
         for a in ('plan-preview', 'plan-save'):
             await q.click(f'[data-action="{a}"]'); await q.wait_for_timeout(900)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
-        C = await q.evaluate(HOME)
+        C = await home_state(q)
         labels = [c['label'] for c in C['cards']]
         chk('R-15 con plan pero sin venta real, Inicio ya muestra algo: 5 tarjetas del plan (meta del periodo, pedidos, volumen, CR, AOV) con etiqueta «Plan»', not C['empty'] and labels == ['Meta del periodo', 'Pedidos del plan', 'Volumen del plan', 'CR del plan', 'AOV del plan'] and all(c['tag'] == 'Plan' for c in C['cards']), (labels, [c['tag'] for c in C['cards']]))
         chk('R-15 la meta del periodo es la del plan y, sin histórico, pedidos/volumen/CR/AOV muestran «—» con «Sin histórico: el plan no lo proyecta»', C['cards'][0]['val'].startswith('$261') and all(c['val'] == '—' and 'Sin histórico' in c['cmp'] for c in C['cards'][1:]), C['cards'])
@@ -68,8 +72,8 @@ async def main():
         # con venta real (datos de prueba): Inicio completo como siempre
         await q.goto(u + '#resumen'); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
-        D = await q.evaluate(HOME)
-        chk('R-15 con venta real Inicio vuelve al modo completo (7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast, presión) y las tarjetas de datos van primero', len(D['cards']) == 7 and D['cards'][0]['label'] == 'Venta acumulada' and D['order'] == ['h-flow', 'h-now', 'h-ready', 'h-next'], (len(D['cards']), D['order']))
+        D = await home_state(q)
+        chk('R-15 con venta real Inicio vuelve al modo completo (7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast, presión) y las tarjetas de datos van primero', len(D['cards']) == 7 and D['cards'][0]['label'] == 'Venta acumulada' and D['order'] == ['hk-t', 'h-now', 'h-flow', 'h-ready', 'h-next'], (len(D['cards']), D['order']))
         chk('R-13 con datos de prueba (venta real y plan, sin histórico) se ve la nota del histórico y ✓ en venta real, meta y plan', D['li'][0]['hint'] and D['li'][1]['done'] and D['li'][3]['done'] and D['li'][4]['done'], [(x['done'], x['hint']) for x in D['li']])
         # otras vistas: su lista de requisitos no cambió
         await q.goto(u + '#carga'); await q.wait_for_timeout(300)
