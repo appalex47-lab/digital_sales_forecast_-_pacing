@@ -388,3 +388,10 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 4. **Garantía.** `compare.py` abriendo todos los `<details>`: ninguna palabra, tabla ni control desaparece. Los desplegables vacíos se ocultan sin datos (`syncMore`).
 5. **Pruebas.** `batch_rr5.py` (X0–X10): sin datos, orden, desplegables, contenido al abrir, el «Gap forecast» de Reforecast = el de Pacing, y lo abierto persiste al cambiar un filtro.
 6. **Límites.** El Recovery Center sigue siendo la pantalla más larga (~5,400 px con datos de prueba) porque el flujo completo vive arriba. Sin pruebas con personas.
+
+## Adenda 16 · Fase 6: Metas y motor con «Herramientas» plegadas (2026-10-10)
+1. **Arriba:** Meta anual (total y por canal) y Validación por canal. **En «Ver más» (cerrado):** Herramientas (Generar datos de prueba, Ejecutar pruebas del motor, Borrar datos guardados y los datos cargados), Casos límite y Pruebas del motor. El contrato de `forecast_export.json` conserva su desplegable propio.
+2. **Decisión.** «Herramientas» se queda en la misma pantalla (no en Ayuda): quedan cerca de la meta y de los datos. «Borrar datos guardados» deja de estar a un clic de «Guardar metas».
+3. **Sin datos,** «Herramientas» se abre sola una vez, y el aviso de la validación dice dónde está «Generar datos de prueba».
+4. **Garantía.** `compare.py` abriendo todos los `<details>`: ninguna palabra, tabla ni control desaparece. Se ajustaron 14 clics de prueba sobre «Generar datos de prueba» (abren «Ver más» como lo haría la persona).
+5. **Pruebas.** `batch_rs6.py` (Y0–Y6): estado sin datos, orden, desplegables, contenido al abrir, meta total = suma de canales y «Ejecutar pruebas del motor» desde «Ver más».

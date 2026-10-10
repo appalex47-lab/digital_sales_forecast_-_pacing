@@ -11,7 +11,7 @@ async def main():
         pg.on('pageerror',lambda e:errs.append(str(e)))
         url=f'file://{ROOT}/index.html'
         await pg.goto(url+'#resumen'); await pg.wait_for_timeout(900)
-        await pg.click('[data-action="generate-mock"]',timeout=5000); await pg.wait_for_timeout(1500)
+        await pg.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await pg.click('[data-action="generate-mock"]',timeout=5000); await pg.wait_for_timeout(1500)
         # hashes de exports (se quitan campos de fecha/hora)
         ex={}
         for view,act in [('pacing','fc-export'),('reforecast','rf-export'),('diagnostico','dx-export'),('narrativa','nx-export')]:

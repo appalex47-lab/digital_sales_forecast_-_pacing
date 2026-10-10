@@ -19,7 +19,7 @@ async def main():
         for w in (1280, 768, 390):
             c = await b.new_context(viewport={'width': w, 'height': 900}); q = await c.new_page()
             await q.goto(url + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
-            await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
+            await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
             try: await q.click('[data-action="sample-targets"]', timeout=1500); await q.wait_for_timeout(400)
             except Exception: pass
             await q.goto(url + '#plan'); await q.wait_for_timeout(600)

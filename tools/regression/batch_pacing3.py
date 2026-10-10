@@ -37,7 +37,7 @@ async def main():
         u = f'http://127.0.0.1:{port}/index.html'; await prepare(q, u)
         await q.goto(u + '#pacing'); await q.wait_for_selector('#fc-kpis .metric-card', timeout=60000); await q.wait_for_timeout(600)
         top = lambda sel: q.evaluate(f"(()=>{{const e=document.querySelector('{sel}'); return e? e.getBoundingClientRect().top + window.scrollY : null}})()")
-        order = {k: await top(s) for k, s in [('kpis', '#fc-kpis'), ('channels', '#fc-channels'), ('alerts', '#fc-alerts'), ('controls', '#fc-controls'), ('chart', '#fc-chart'), ('more', '.pacing-more')]}
+        order = {k: await top(s) for k, s in [('kpis', '#fc-kpis'), ('channels', '#fc-channels'), ('alerts', '#fc-alerts'), ('controls', '#fc-controls'), ('chart', '#fc-chart'), ('more', '#view-pacing .pacing-more')]}
         chk('P1 orden: respuesta (cifras y canales) → alertas → ajustes → gráfico → «Ver más»', all(order[a] is not None for a in order) and order['kpis'] < order['channels'] < order['alerts'] < order['controls'] < order['chart'] < order['more'], order)
         st = await q.evaluate("(()=>{const d=[...document.querySelectorAll('#view-pacing details.pacing-more')]; return {n:d.length, open:d.filter(x=>x.open).length, ids:d.map(x=>x.dataset.pacingMore), layer:!document.querySelector('#view-pacing .home-layer').hidden}})()")
         chk('P2 seis «Ver más» cerrados (periodos, índices, métodos, eventos, versiones, parámetros)', st['n'] == 6 and st['open'] == 0 and st['ids'] == ['periods', 'indices', 'methods', 'events', 'versions', 'params'] and st['layer'], st)

@@ -225,7 +225,7 @@
     const f = state.filters;
 
     if (!state.dataset || !Object.keys(state.dataset.records).length) {
-      box.innerHTML = `<div class="empty"><strong>No hay datos para validar</strong>Usa “Generar datos de prueba” para cargar septiembre 2026.</div>`;
+      box.innerHTML = `<div class="empty"><strong>No hay datos para validar</strong>Usa “Generar datos de prueba” (abajo, en «Ver más → Herramientas») para cargar septiembre 2026.</div>`;
       issuesBox.innerHTML = '';
       return;
     }

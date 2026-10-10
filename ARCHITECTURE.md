@@ -2678,3 +2678,6 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Reforecast y Recovery Center reordenados (2026-10-09)
 `#view-reforecast`: `#rf-summary`, `#rf-channels`, `#rf-recovery`, `#rf-controls` (sección `.pacing-adjust`), `#rf-chart` y cuatro `<details class="ds-accordion pacing-more rf-more">` (periods, drivers, audit, versions). `#view-recovery`: filtros en `#rc-context`; flujo visible; tres `<details class="… rc-more">` (extra = `#rc-extra`, inverse, tree). `recoveryCenter.renderContext` escribe el banner y los filtros de canal/periodo en `#rc-context` y el diagnóstico de origen, los archivos y las restricciones en `#rc-extra`. `reforecastView.syncMore` y `recoveryCenter.syncMore` ocultan los desplegables vacíos.
+
+### Metas y motor reordenado (2026-10-10)
+`#view-resumen`: `#targets-form` y `#validation-table` arriba; tres `<details class="ds-accordion pacing-more rs-more" data-rs-more=…>` (tools, edge, engine) y el contrato de `forecast_export.json`. `app.js renderView` abre `tools` una sola vez cuando no hay datos (`data-auto`).

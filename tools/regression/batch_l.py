@@ -70,7 +70,7 @@ async def main():
         chk('R-15 en modo «solo plan» los pasos que faltan siguen arriba (siguiente paso + preparación primero), como sin datos', C['order'][:2] == ['h-next', 'h-ready'], C['order'])
         chk('R-15 la preparación marca meta y plan ✓ y el porcentaje es 35 %', C['pct'] == '35' and C['li'][3]['done'] and C['li'][4]['done'], (C['pct'], [x['done'] for x in C['li']]))
         # con venta real (datos de prueba): Inicio completo como siempre
-        await q.goto(u + '#resumen'); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
+        await q.goto(u + '#resumen'); await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
         D = await home_state(q)
         chk('R-15 con venta real Inicio vuelve al modo completo (7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast, presión) y las tarjetas de datos van primero', len(D['cards']) == 7 and D['cards'][0]['label'] == 'Venta acumulada' and D['order'] == ['hk-t', 'h-now', 'h-flow', 'h-ready', 'h-next'], (len(D['cards']), D['order']))

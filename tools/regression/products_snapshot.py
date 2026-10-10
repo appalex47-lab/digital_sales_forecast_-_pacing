@@ -27,7 +27,7 @@ async def main():
             c = await b.new_context(viewport={'width': w, 'height': 900}); q = await c.new_page()
             q.on('pageerror', lambda e: errs.append(str(e))); q.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
             await q.goto(url + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
-            await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
+            await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
             await q.goto(url + '#producto'); await q.wait_for_timeout(500)
             await q.click('[data-action="p-mock"]'); await q.wait_for_timeout(700)
             for k in (1, 2):

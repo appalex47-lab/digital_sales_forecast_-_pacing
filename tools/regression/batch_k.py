@@ -83,7 +83,7 @@ async def main():
         for touch in (False, True):
             for w in (1024, 861, 860, 800, 761, 760, 600, 360, 340, 320):
                 c2 = await b.new_context(viewport={'width': w, 'height': 800}, has_touch=touch, is_mobile=touch); p2 = await c2.new_page()
-                await p2.goto(u + '#resumen'); await p2.click('[data-action="generate-mock"]'); await p2.wait_for_timeout(600); await p2.goto(u + '#pacing'); await p2.wait_for_timeout(400)
+                await p2.goto(u + '#resumen'); await p2.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await p2.click('[data-action="generate-mock"]'); await p2.wait_for_timeout(600); await p2.goto(u + '#pacing'); await p2.wait_for_timeout(400)
                 r = await p2.evaluate("""()=>{const h=document.querySelector('.app-header').getBoundingClientRect(),n=document.getElementById('app-nav').getBoundingClientRect();
                   return {gap:Math.round(h.bottom-n.top),pills:[...document.querySelectorAll('#topbar-status > *')].map(e=>Math.round(e.getBoundingClientRect().height)),sw:document.documentElement.scrollWidth-innerWidth,
                   coarse:matchMedia('(pointer: coarse)').matches}}""")
