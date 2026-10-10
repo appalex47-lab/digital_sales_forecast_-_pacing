@@ -215,7 +215,7 @@
         ${['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'].includes(view) || q === 'invalid' || q === 'warnings' ? `<div class="ux-context__meta">
           ${['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'].includes(view) ? `<p class="ux-context__chips">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
             ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>` : ''}
-          ${q === 'invalid' || q === 'warnings' ? `<p class="ux-context__warn">${H().pill(q === 'invalid' ? 'error' : 'warning', status.data.qualityText || 'Calidad')}
+          ${q === 'invalid' || q === 'warnings' ? `<p class="ux-context__warn" data-quality="${q}" role="status">
             Algunos cálculos pueden estar incompletos. <a href="#calidad">Revisar calidad de datos</a></p>` : ''}
         </div>` : ''}
       </div>

@@ -151,7 +151,7 @@
     const r = RULES.find((x) => x.when(status));
     if (r) return { id: r.id, text: `Siguiente paso: ${r.text.toLowerCase()}.`, label: r.text, reason: r.reason, view: r.view, priority: r.priority };
     return hasGap(status)
-      ? { id: 'monitor_recovery', text: 'Siguiente paso: dar seguimiento a las acciones y al pacing.', label: 'Monitorear', reason: 'La cadena está completa.', view: 'medir', priority: 11 }
+      ? { id: 'monitor_recovery', text: 'Siguiente paso: dar seguimiento a las acciones y al pacing.', label: 'Medir y aprender', reason: 'La cadena está completa: da seguimiento a las acciones y mide su efecto.', view: 'medir', priority: 11 }
       : { id: 'monitor', text: 'Siguiente paso: monitorear el pacing.', label: 'Monitorear', reason: 'Sin brecha contra el plan.', view: 'pacing', priority: 11 };
   }
 
