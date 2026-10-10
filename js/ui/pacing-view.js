@@ -311,6 +311,9 @@
   function render(state) {
     renderControls(state);
     const run = state.fc.run;
+    const hasRun = Boolean(run && run.plan.source !== 'none');
+    // «Ver más» (detalle) solo existe cuando hay una corrida que detallar: sin plan, la vista muestra únicamente el aviso
+    document.querySelectorAll('#view-pacing .pacing-more, #view-pacing .home-layer').forEach((e) => { e.hidden = !hasRun; });
     if (!run || run.plan.source === 'none') {
       renderEmpty(state, 'Se necesita un plan del año: guarda el plan distribuido en Plan o importa un Plan / Meta en Carga de datos.');
       return false;

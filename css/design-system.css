@@ -1389,3 +1389,9 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 .home-layer { margin: var(--ds-s2) 0 0; color: var(--ds-text-muted); font-size: var(--ds-fs-helper); border-top: 2px dashed var(--ds-border-strong); padding-top: var(--ds-s3); }
 .home-more > .ds-accordion__body > section.ds-card, .home-more > .ds-accordion__body > .home__top { margin: 0; }
 .home-more > .ds-accordion__body > section.ds-card { box-shadow: none; border: 0; padding: 0; }
+
+/* Fase 3 · Pacing & Forecast: la respuesta arriba, ajustes compactos y el detalle plegado en «Ver más» */
+#view-pacing .pacing-more { margin: var(--ds-s3) 0 0; }
+#view-pacing .pacing-more > .ds-accordion__body > .panel__head, #view-pacing .pacing-more > .ds-accordion__body > .panel__body { padding-left: 0; padding-right: 0; }
+#view-pacing .pacing-adjust .panel__body { padding-top: var(--ds-s3); padding-bottom: var(--ds-s3); }
+#view-pacing .pacing-adjust .filters { gap: var(--ds-s3); }
