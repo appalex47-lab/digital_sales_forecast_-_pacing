@@ -602,3 +602,13 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 - Debajo de «¿Qué está pasando?» (que no cambia) hay cuatro bloques: **Por qué cambió la venta** (cascada tráfico → conversión → ticket, mismos días en ambos periodos), **Dónde mirar hoy** (segmento que más pesó por dimensión de GA4 y aviso de calidad del tráfico, con «Diagnosticar»), **Cómo va cada canal** (venta acumulada, cumplimiento, forecast vs meta y estado de pacing; elegir un canal cambia el Canal de Inicio) y **Confianza de los datos** (venta real hasta, días comparados, calidad y fechas de segmentos/productos).
 - Cada bloque trae «De dónde sale y qué pasa sin datos» (desplegable). Sin periodo anterior (por ejemplo, el año completo sin año anterior) el bloque 1 lo dice; con «Total digital» y un canal sin sesiones (WhatsApp, Llamadas) muestra solo el cambio de venta y explica por qué no separa tráfico y conversión.
 - Los estados de canal usan las etiquetas de pacing existentes (Arriba del plan, En plan, Debajo del plan); no hay umbrales nuevos.
+
+## Añadido 2026-10-09 · Inicio simplificado (Fase 1 del plan de simplificación)
+- Con venta real, Inicio abre con **«Lo esencial»**: ¿Cómo voy? (cumplimiento, gap, forecast de cierre, forecast vs meta), ¿Por qué? (tráfico, conversión y ticket) y ¿Qué hago hoy? (siguiente paso, dónde mirar y aviso de calidad), más el estado de cada canal y el respaldo (venta real hasta, días comparados, calidad).
+- Todo lo demás sigue en la página, plegado en **«Ver más»** (todas las cifras, cascada, segmentos, canales, confianza) y **«Metodología y ayuda»** (recorrido, preparación de datos, siguiente paso y convenciones). Lo que la persona abre se mantiene abierto al cambiar de canal o periodo.
+- Regla del proyecto: no se omite ningún dato; si algo no es clave, va en «Ver más» con los mismos números. Sin datos o solo con plan, Inicio sigue como antes.
+
+## Añadido 2026-10-09 · Marco global limpio (Fase 2 del plan de simplificación)
+- El distintivo «Fase 9.1.x · Propósito y acción por vista» salió del encabezado y pasó al pie de la página (el dato sigue ahí).
+- «Siguiente paso» cuando la cadena está completa ya no se llama «Monitorear» (llevaba a Medir y aprender): ahora dice «Medir y aprender».
+- La advertencia de datos se muestra una sola vez como ficha (encabezado); la barra de contexto solo explica («Algunos cálculos pueden estar incompletos») y enlaza a Calidad de datos.

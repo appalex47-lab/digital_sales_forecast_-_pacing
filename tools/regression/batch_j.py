@@ -77,7 +77,7 @@ async def main():
         chk('R-11 con los datos de prueba cargados (histórico + real) el siguiente paso ya no pide datos ni histórico: sigue con la meta / el plan', cases['mock'][0] not in ('load_data', 'load_historical'), cases['mock'])
         # la tarjeta de Inicio muestra el mismo paso
         await q.goto(u + '#inicio'); await q.wait_for_timeout(600)
-        card = await q.evaluate("(document.querySelector('#view-inicio .home__next, #view-inicio [class*=\"next\"]')||{innerText:''}).innerText.replace(/\\s+/g,' ').slice(0,160)")
+        card = await q.evaluate("(document.querySelector('#view-inicio .home__next, #view-inicio [class*=\"next\"]')||{textContent:''}).textContent.replace(/\\s+/g,' ').slice(0,160)")
         chk('R-11 la tarjeta «Siguiente paso» de Inicio se sigue mostrando', 'Siguiente paso' in card, card)
         # recorrido guiado: empieza por los datos
         tour = await q.evaluate("FP.guidanceConfig.TOUR.map(t=>[t.id,t.view,t.chapter])")

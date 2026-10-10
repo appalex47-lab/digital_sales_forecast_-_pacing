@@ -21,8 +21,7 @@
     document.querySelector('[data-bind="app-name"]').textContent = a.name;
     const biz = C().business;
     document.querySelector('[data-bind="app-subtitle"]').textContent = biz && biz.configured ? `${a.subtitle} · ${biz.name}` : a.subtitle;
-    document.querySelector('[data-bind="app-phase"]').textContent = a.phaseLabel;
-    $('app-footer').textContent = `${a.name}, versión ${a.version}. Contrato de datos ${C().schemaVersion}. Cálculos determinísticos en el navegador; sin backend.`;
+    $('app-footer').textContent = `${a.name}, versión ${a.version} · ${a.phaseLabel}. Contrato de datos ${C().schemaVersion}. Cálculos determinísticos en el navegador; sin backend.`;
   }
 
   /** Aviso que NO desaparece mientras un guardado esté fallido: los datos están solo en la memoria de esta pestaña. */

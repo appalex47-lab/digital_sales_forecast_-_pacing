@@ -357,3 +357,12 @@ Pruebas: `tools/test-trend-story.js` (21, incl. 300 series aleatorias), `tools/r
 2. **Decisiones por defecto (a validar).** El estado por canal usa las etiquetas de pacing ya configuradas; elegir un canal en la tabla cambia el Canal de Inicio; el desplegable «De dónde sale…» se queda; el aviso de calidad va dentro de «Dónde mirar hoy».
 3. **Limitaciones.** «Total digital» no separa tráfico/conversión/ticket si algún canal no trae sesiones. «Dónde mirar hoy» usa solo Segmentos (no hay productos/categorías todavía: el análisis de producto es asíncrono y pesado). No se midió el tiempo de cálculo de Inicio con la carga completa de productos.
 4. **Pruebas.** `batch_home_summary.py` (H0–H10): cascada, días comparados, canales y segmentos contra un cálculo aparte; R-8/R-9 con el export real (el aviso marca la ficha `/saba-buenas-noches-…` y «Sin dato (not set)»).
+
+## Adenda 11 · Plan de simplificación y Fase 1: Inicio simplificado (2026-10-09)
+1. **Plan.** `PLAN_DE_SIMPLIFICACION.md`: ocho fases con la regla «no se omite ningún dato» (lo esencial arriba, «Ver más» plegado, «Metodología y ayuda»).
+2. **Fase 1 construida.** «Lo esencial» + desplegables. Altura de Inicio con datos de prueba: ~3,280 px → ~1,720 px con todo cerrado; el contenido sigue en la página.
+3. **Garantía.** `compare.py` contra la línea base anterior (abre todos los `<details>`): ninguna palabra, tabla ni control desaparece (solo se permiten palabras nuevas). `batch_home_summary.py` H11–H15 comparan lo esencial con las tarjetas y la cascada.
+4. **Pruebas ajustadas.** Las que asumían las tarjetas visibles ahora abren «Ver más» (como la persona) o leen `textContent`; el orden esperado de R-15 pasó a lo esencial → todas las cifras → recorrido → preparación → siguiente paso.
+
+## Adenda 12 · Fase 2: marco global limpio (2026-10-09)
+Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recovery`) = nombre de la pantalla a la que lleva; ficha de calidad solo en el encabezado (la barra de contexto conserva la frase y el enlace). Prueba nueva `batch_marco.py` (M1–M4). Regresión: 48 lotes, 0 fallos; batería y comparación en verde. No se hizo el caso «el siguiente paso apunta a la misma pantalla»: ya estaba cubierto por la condición existente (`next.view !== view`).
