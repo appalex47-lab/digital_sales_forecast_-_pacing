@@ -1395,3 +1395,17 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 #view-pacing .pacing-more > .ds-accordion__body > .panel__head, #view-pacing .pacing-more > .ds-accordion__body > .panel__body { padding-left: 0; padding-right: 0; }
 #view-pacing .pacing-adjust .panel__body { padding-top: var(--ds-s3); padding-bottom: var(--ds-s3); }
 #view-pacing .pacing-adjust .filters { gap: var(--ds-s3); }
+
+/* Fase 4 · Entrada única «¿Por qué?» */
+.why-hub { border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); background: var(--ds-surface); padding: var(--ds-s3) var(--ds-s4); margin: 0 0 var(--ds-s4); }
+.why-hub__t { margin: 0 0 var(--ds-s2); font-size: var(--ds-fs-helper); color: var(--ds-text-muted); }
+.why-hub__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--ds-s3); }
+.why-hub__item { display: grid; gap: 2px; padding: var(--ds-s2) var(--ds-s3); border-radius: var(--ds-r-sm, 6px); border: 1px solid transparent; }
+.why-hub__item span { font-size: var(--ds-fs-helper); color: var(--ds-text-muted); }
+.why-hub__item.is-current { background: var(--ds-accent-soft); border-color: var(--ds-accent); }
+.why-hub .link-btn { justify-self: start; font-weight: 650; }
+#view-diagnostico .pacing-more { margin: var(--ds-s3) 0 0; }
+#view-diagnostico .pacing-more > .ds-accordion__body > .panel { box-shadow: none; border: 0; background: none; }
+#view-diagnostico .pacing-more > .ds-accordion__body > .panel > .panel__body { padding-left: 0; padding-right: 0; }
+.why-hub .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 650; color: var(--ds-accent); cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.why-hub .link-btn:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; border-radius: 3px; }

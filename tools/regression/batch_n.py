@@ -61,6 +61,7 @@ async def main():
         bad = []
         for w in (1920, 1600, 1280, 1100, 768, 560, 390, 320):
             c2 = await b.new_context(viewport={'width': w, 'height': 900}); p2 = await c2.new_page(); await prepare(p2, u); await p2.goto(u + '#diagnostico'); await p2.wait_for_timeout(800)
+            await p2.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true)"); await p2.wait_for_timeout(200)   # el árbol vive en «Ver más»
             t = await p2.evaluate(TREE)
             if len(t) != 3 or [x['title'] for x in t] != ['Volumen', 'CR', 'AOV'] or any(x['lines'] != 1 or x['over'] > 0 or x['tw'] < x['textW'] or x['cls'] != 'driver-node' for x in t): bad.append((w, t))
             await c2.close()

@@ -155,6 +155,7 @@ async def main():
         k = await q.evaluate("[FP.app.state.dx.apiKey, FP.app.state.dx.model, FP.app.state.dx.rememberKey, !!localStorage.getItem(Object.keys(localStorage).find(x=>x.includes('cohereApiKey'))||'')]")
         chk('R-3 IA: la API key, el modelo y «recordar» se guardan desde Configuración', k[0] == 'clave-de-prueba-123' and k[1] == 'modelo-de-prueba' and k[2] is True and k[3] is True, k)
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(800)
+        await q.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true)"); await q.wait_for_timeout(150)   # la IA vive en «Ver más → Confianza»
         dxs = await q.evaluate("""()=>{const v=document.getElementById('view-diagnostico');const inp=v.querySelector('#dx-key-input');return {visibleKeyInput:!!(inp&&inp.offsetParent),pill:/API key configurada/.test(v.innerText),link:!!v.querySelector('a[data-nav="ajustes"]'),btn:!!v.querySelector('[data-action="dx-ai"]')}}""")
         chk('R-3 Diagnóstico ya no pide la API key: muestra «API key configurada», enlaza a Configuración y conserva el botón «Generar hipótesis»', dxs['visibleKeyInput'] is False and dxs['pill'] and dxs['link'] and dxs['btn'], dxs)
         await q.evaluate("FP.app.state.dx.apiKey = ''; FP.app.state.dx.rememberKey = false; FP.app.actions['dx-remember']({checked:false})")
