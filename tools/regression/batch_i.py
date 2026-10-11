@@ -31,6 +31,7 @@ async def main():
             await q.goto(u + '#pacing'); await q.wait_for_timeout(300)
             try: await q.click(f'.app-nav [data-action="ux-mode"][data-value="{mode}"]', timeout=1200)
             except Exception: pass
+            await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
             for v in VIEWS:
                 await q.goto(u + '#' + v); await q.wait_for_timeout(350)
                 r = await q.evaluate("()=>{const d=document.querySelector('.app-main:not([hidden]) details.explainer');return d?{open:d.open,vis:d.getBoundingClientRect().height>0}:null}")
@@ -55,7 +56,7 @@ async def main():
         FIRST = {'planear': 'carga', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'medir': 'medir'}
         await q.goto(u + '#inicio'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
-        chk('R-5 6 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Planear', 'Monitorear', 'Diagnosticar', 'Análisis', 'Recuperar', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
+        chk('R-5 5 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
         chk('R-5 en Inicio todas las secciones están cerradas y su contenido no ocupa espacio', all(x['exp'] == 'false' and x['hidden'] and not x['vis'] for x in n), n)
         ini = await q.evaluate("[...document.querySelectorAll('.app-nav > .snav__group:not(.snav__group--foldable) .snav__item')].map(a=>[a.innerText.trim(),a.getBoundingClientRect().height>0])")
         chk('R-5 «Inicio» queda suelto y visible', ini and ini[0][0] == 'Inicio' and ini[0][1], ini)
@@ -144,6 +145,7 @@ async def main():
         # Modo de uso desde Configuración
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
         await q.click('#st-modo [data-action="ux-mode"][data-value="learner"]'); await q.wait_for_timeout(400)
+        await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         m1 = await q.evaluate("FP.app.state.ux.mode")
         await q.click('#st-modo [data-action="ux-mode"][data-value="analyst"]'); await q.wait_for_timeout(300)
         m2 = await q.evaluate("FP.app.state.ux.mode")

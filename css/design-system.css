@@ -1463,3 +1463,15 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 @media (max-width: 380px) { .topbar__actions .avatar { display: none; } }
 .learn-panel .learning-bar__body { display: block; }
 @media (min-width: 900px) { .learn-panel__cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Alineación del encabezado con las fichas: mismo ancho máximo que .app-main y las líneas usan todo el ancho (sin partir texto en 2 líneas con espacio libre) */
+.ux-wrap, .ux-next-wrap { max-width: 1400px; }
+.ux-head { max-width: none; }
+.ux-head__line, .ux-head .ux-context__purpose, .ux-head .ux-context__action { max-width: none; }
+
+/* Ventana que ofrece el recorrido guiado al activar el Modo Aprendiz */
+.tour-offer { max-width: 420px; width: calc(100% - 32px); border: 1px solid var(--ds-border, #d1d5db); border-radius: 12px; padding: 20px 22px; box-shadow: 0 12px 40px rgba(15,23,42,.25); color: var(--ds-text, #111827); background: var(--ds-surface, #fff); }
+.tour-offer::backdrop { background: rgba(15,23,42,.45); }
+.tour-offer h2 { margin: 0 0 8px; font-size: 20px; }
+.tour-offer p { margin: 0 0 16px; font-size: 15px; line-height: 1.45; }
+.tour-offer__btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

@@ -37,6 +37,7 @@ async def main():
         await q.click('[data-action="st-expand-all"]'); await q.wait_for_timeout(250)
         chk('Z3 «Expandir todo» abre Avanzado y sus secciones', all([await q.evaluate(OPEN, x) for x in ['st-adv'] + need]))
         await q.evaluate("FP.app.actions['ux-mode']({dataset:{value:'learner'}})"); await q.wait_for_timeout(300)
+        await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         chk('Z4 el estado de Avanzado se conserva al repintar', await q.evaluate(OPEN, 'st-adv') and await q.evaluate(OPEN, 'st-fuentes'))
         await q.goto(u + '#carga'); await q.wait_for_timeout(300); await q.goto(u + '#ajustes'); await q.wait_for_timeout(400)
         chk('Z4 y al salir y volver', await q.evaluate(OPEN, 'st-adv'))

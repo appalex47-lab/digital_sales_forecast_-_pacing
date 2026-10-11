@@ -44,7 +44,7 @@ async def main():
         e = await q.evaluate("document.getElementById('view-segmentos').innerText.replace(/\\s+/g,' ')")
         nav = await q.evaluate("[...document.querySelectorAll('#snav-g-diagnosticar .snav__item')].map(a=>a.innerText.trim())")
         chk('R-1 sin segmentos: estado vacío con las columnas del archivo y enlace a Carga de datos', 'Todavía no hay segmentos cargados' in e and 'fecha, canal, dimension, segmento' in e and await q.evaluate("!!document.querySelector('#view-segmentos a[data-nav=\"carga\"]')"), e[:200])
-        chk('R-3 la vista «Tráfico y conversión» está en «Diagnosticar», después de Categoría → Producto', nav == ['¿Por qué? Diagnóstico', 'Categoría → Producto', 'Tráfico y conversión'], nav)
+        chk('R-3 la vista «Tráfico y conversión» está en «Diagnosticar», después de Categoría → Producto', nav[:3] == ['¿Por qué? Diagnóstico', 'Categoría → Producto', 'Tráfico y conversión'], nav)
         await q.goto(u + '#carga'); await q.wait_for_selector('input[data-action="pick-files"][data-type="segments"]', state='attached')
         await q.set_input_files('input[data-action="pick-files"][data-type="segments"]', files=[{'name': 'segmentos.csv', 'mimeType': 'text/csv', 'buffer': CSV.encode()}])
         await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000); await q.click('[data-action="commit-staged"]')

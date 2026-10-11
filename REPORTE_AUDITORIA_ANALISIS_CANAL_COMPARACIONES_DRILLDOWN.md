@@ -419,3 +419,9 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 Las 21 vistas comparten el mismo encabezado (`FP.navigation.renderContextBar`): migas, título con estado, «Qué hay aquí», «Qué hago aquí», «Detalle» (título y descripción propios de la vista, que quedan ocultos con `data-own-head` pero conservados), contexto (solo inicio/pacing/reforecast/diagnóstico/recovery) y aviso de calidad (oculto en inicio, ayuda, ajustes y negocio; Inicio lo enlaza desde «Respaldo»).
 Cambios intencionales de texto: la frase de calidad ya no aparece en esas 4 vistas; «¿Qué hago ahora?» del Modo Aprendiz se fusiona con la franja «Siguiente paso» y «¿Qué hago aquí?» solo se repite si difiere del encabezado; los tres botones de ayuda pasan a un menú «Ayuda ▾» (en celular, «?»); «Siguiente paso» pasa al final de la página; en celular ≤640 px se oculta la campana deshabilitada y ≤380 px el avatar.
 Modo Aprendiz: «Aprender en esta vista» siempre inicia cerrado (se reinicia al cambiar de vista). Cobertura: `tools/regression/batch_head9.py`.
+
+## Adenda 21 · Ajustes tras revisión visual (2026-10-11)
+1. El encabezado homologado queda alineado con las fichas (mismo ancho máximo, 1400 px, que el contenido) y sus líneas usan todo el ancho, sin partir el texto en 2 líneas con espacio libre.
+2. «Análisis» (Evolución y patrones) deja de ser un grupo del menú y pasa a **Diagnosticar** (ahora: Diagnóstico, Categoría → Producto, Tráfico y conversión, Evolución y patrones). La vista conserva su id (`analisis`) y su enlace `#analisis`.
+3. Al activar el Modo Aprendiz aparece una ventana que ofrece el recorrido guiado («Usar recorrido guiado» / «Ahora no»).
+Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
