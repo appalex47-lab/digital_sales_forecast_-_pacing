@@ -313,6 +313,33 @@
         whatsapp:  { conversionRate: null, aov: null },
         llamadas:  { conversionRate: null, aov: null }
       },
+      /** Origen de cada supuesto de CR/AOV: 'manual' (default), 'benchmark' (referencia de industria) o 'lines' (AOV por producto/servicio). */
+      assumptionOrigin: {
+        ecommerce: { conversionRate: null, aov: null }, app: { conversionRate: null, aov: null },
+        whatsapp: { conversionRate: null, aov: null }, llamadas: { conversionRate: null, aov: null }
+      },
+      /**
+       * Forma estándar (SUPUESTO del usuario) para planear sin histórico. Solo se usa en el componente
+       * que NO tenga histórico suficiente; en cuanto hay histórico, el histórico manda. Todo 1 = sin efecto.
+       * dayOfWeek: 7 factores lunes→domingo; monthly: 12 factores ene→dic; events: claves 'event:<nombre>' / 'holiday:<nombre>'.
+       */
+      standardShape: {
+        enabled: false,
+        byChannel: {
+          ecommerce: { dayOfWeek: [1, 1, 1, 1, 1, 1, 1], monthly: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
+          app:       { dayOfWeek: [1, 1, 1, 1, 1, 1, 1], monthly: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
+          whatsapp:  { dayOfWeek: [1, 1, 1, 1, 1, 1, 1], monthly: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
+          llamadas:  { dayOfWeek: [1, 1, 1, 1, 1, 1, 1], monthly: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }
+        },
+        events: {}
+      },
+      /** AOV por producto o servicio y canal: [{ name, aov, share }] (share = % de pedidos). El AOV ponderado es un supuesto. */
+      aovLines: { ecommerce: [], app: [], whatsapp: [], llamadas: [] },
+      /** Referencia de industria por canal (la captura el usuario; la app NO trae cifras). */
+      benchmarks: {
+        ecommerce: { conversionRate: null, aov: null, source: '' }, app: { conversionRate: null, aov: null, source: '' },
+        whatsapp: { conversionRate: null, aov: null, source: '' }, llamadas: { conversionRate: null, aov: null, source: '' }
+      },
       /** Dinero se distribuye en centavos exactos; pedidos y volumen en unidades enteras. */
       moneyDecimals: 2
     },

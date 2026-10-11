@@ -310,6 +310,16 @@
       if (v && typeof v === 'object' && !Array.isArray(v) && merged[k] && typeof merged[k] === 'object') merged[k] = { ...merged[k], ...v };
       else if (v !== undefined) merged[k] = v;
     });
+    if (settings && settings.standardShape) {
+      const dss = d.standardShape, u = settings.standardShape;
+      merged.standardShape = { enabled: Boolean(u.enabled), events: { ...(u.events || {}) }, byChannel: {} };
+      C().channelIds.forEach((ch) => { merged.standardShape.byChannel[ch] = { ...dss.byChannel[ch], ...((u.byChannel || {})[ch] || {}) }; });
+    }
+    ['aovLines', 'benchmarks', 'assumptionOrigin'].forEach((k) => {
+      if (settings && settings[k]) C().channelIds.forEach((ch) => {
+        merged[k][ch] = Array.isArray(d[k][ch]) ? (settings[k][ch] || []).slice() : { ...d[k][ch], ...(settings[k][ch] || {}) };
+      });
+    });
     if (settings && settings.assumptions) {
       C().channelIds.forEach((ch) => { merged.assumptions[ch] = { ...d.assumptions[ch], ...(settings.assumptions[ch] || {}) }; });
     }
