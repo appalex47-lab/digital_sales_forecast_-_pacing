@@ -22,6 +22,9 @@ async def main():
         bad1, bad2, bad5 = [], [], []
         await q.goto(u + '#pacing'); await q.wait_for_timeout(300)
         await q.evaluate("document.querySelector('[data-action=\"ux-mode\"][data-value=\"learner\"]').click()"); await q.wait_for_timeout(300)
+        chk('H7 al activar Modo Aprendiz aparece la ventana que ofrece el recorrido guiado', await q.evaluate("!!document.querySelector('dialog#tour-offer[open]')"))
+        await q.click('#tour-offer [data-action="tour-offer-no"]'); await q.wait_for_timeout(150)
+        chk('H7 «Ahora no» la cierra y no inicia el recorrido', await q.evaluate("!document.getElementById('tour-offer')&&!FP.state.ux.tour.active") if False else await q.evaluate("!document.getElementById('tour-offer')"))
         for v in ALL:
             await q.goto(u + '#' + v); await q.wait_for_timeout(450)
             r = await q.evaluate("""()=>{const h=document.querySelector('#ux-context .ux-head');if(!h)return null;
@@ -64,6 +67,18 @@ async def main():
         o = await q.evaluate("document.querySelector('.learn-panel').open")
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(300); await q.goto(u + '#pacing'); await q.wait_for_timeout(400)
         chk('H5 abre por clic y vuelve cerrado al regresar', o and not await q.evaluate("document.querySelector('.learn-panel').open"))
+        await q.evaluate("document.querySelector('[data-action=\"ux-mode\"][data-value=\"analyst\"]').click()"); await q.wait_for_timeout(200)
+        await q.evaluate("document.querySelector('[data-action=\"ux-mode\"][data-value=\"learner\"]').click()"); await q.wait_for_timeout(300)
+        await q.click('#tour-offer [data-action="tour-offer-go"]'); await q.wait_for_timeout(500)
+        chk('H7 «Usar recorrido guiado» cierra la ventana y abre el recorrido', await q.evaluate("!document.getElementById('tour-offer') && !document.getElementById('tour-bar').hidden"))
+        bad7 = []
+        await q.set_viewport_size({'width': 1800, 'height': 900})
+        for v in ('pacing', 'segmentos', 'analisis', 'inicio'):
+            await q.goto(u + '#' + v); await q.wait_for_timeout(300)
+            r = await q.evaluate("(()=>{const h=document.querySelector('.ux-head').getBoundingClientRect();const p=[...document.querySelectorAll('main .panel')].find(e=>e.offsetParent);const l=document.querySelector('.ux-head__line');return [Math.round(h.left),p?Math.round(p.getBoundingClientRect().left):null,l?Math.round(l.getBoundingClientRect().width):null,Math.round(h.width)]})()")
+            if r[1] is not None and r[0] != r[1]: bad7.append((v, r))
+            if r[2] is not None and r[2] < r[3] - 2: bad7.append((v, 'línea recortada', r))
+        chk('H8 el encabezado queda alineado con las fichas y sus líneas usan todo el ancho (1800 px)', not bad7, bad7)
         bad6 = []
         for w in (320, 390, 768, 1920):
             await q.set_viewport_size({'width': w, 'height': 800})

@@ -36,6 +36,7 @@ async def main():
         meta = {x['id']: x['meta'] for x in sec}
         chk('AL-6 los resúmenes dicen el estado real: modo Analista, sin API key, 0 consultas, 0 columnas aprendidas, 0 equivalencias, fuentes con datos y negocio sin configurar', meta['st-modo'] == 'Analista' and 'Sin API key' in meta['st-ia'] and meta['st-ia-log'].startswith('0 consultas') and meta['st-ia-aprendido'].startswith('0 columnas') and meta['st-equivalencias'].startswith('0 equivalencias') and 'fuentes con datos' in meta['st-fuentes'] and 'Sin configurar' in meta['st-negocio'] and 'motor operativo' in meta['st-estado'], meta)
         await q.evaluate("FP.app.state.dx.apiKey='k'; FP.importer.setLearnedMappings({monto_vendido:'revenue',importe:'revenue'}); FP.app.state.settings.piiColumns=['a']; FP.app.actions['ux-mode']({dataset:{value:'learner'}})"); await q.wait_for_timeout(300)
+        await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(400)
         m2 = {x['id']: x['meta'] for x in await q.evaluate(SEC)}
         chk('AL-6 los resúmenes se actualizan: Aprendiz, API key en uso, 2 columnas aprendidas y 1 marcada a mano', m2['st-modo'] == 'Aprendiz' and 'API key en uso' in m2['st-ia'] and m2['st-ia-aprendido'].startswith('2 columnas') and m2['st-ia-privacidad'].startswith('1 columna marcada'), m2)
@@ -54,6 +55,7 @@ async def main():
         chk('AL-3 también al salir de Configuración y volver', op2['st-ia'] and op2['st-fuentes'] and not op2['st-estado'], op2)
         await q.click('[data-action="st-collapse-all"]'); await q.click('#st-negocio > summary'); await q.wait_for_timeout(250)
         await q.evaluate("FP.app.actions['ux-mode']({dataset:{value:'learner'}})"); await q.wait_for_timeout(300)
+        await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         chk('AL-3 Negocio (bloque del HTML) conserva su estado abierto al repintar', (await q.evaluate("document.getElementById('st-negocio').open")) is True)
         await q.click('[data-action="st-collapse-all"]'); await q.wait_for_timeout(200)
         # ---- AL-4 enlaces ----

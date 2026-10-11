@@ -2242,10 +2242,14 @@
       // Un solo estado de modo (Fase 7 + Aprendiz de Fase 9.1). Cambiar de modo solo cambia la presentación:
       // filtros, contexto, vista y resultados se conservan.
       const v = el.dataset.value;
+      const was = state.ux.mode;
       state.ux.mode = FP.guidanceConfig.MODES.some(([id]) => id === v) ? v : 'analyst';
       if (state.ux.mode !== 'learner') state.ux.lesson = null;
       render();
+      if (state.ux.mode === 'learner' && was !== 'learner' && !state.ux.tour.active) offerTour();
     },
+    'tour-offer-go'() { closeTourOffer(); tourGo(0); },
+    'tour-offer-no'() { closeTourOffer(); },
     'nav-toggle'() { document.body.classList.toggle('nav-open'); },
     'lesson-dismiss'() { state.ux.lesson = null; render(); },
     /** "¿Por qué este número?": explica la cifra con la corrida real del motor, en el panel de ayuda de Fase 7. */
@@ -2978,6 +2982,17 @@
   }
 
   /** Recorrido guiado: activa el paso y navega a su vista. */
+  /** Al activar el Modo Aprendiz se ofrece el recorrido guiado (ventana con foco atrapado; Esc o «Ahora no» la cierran). */
+  function closeTourOffer() { const d = document.getElementById('tour-offer'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
+  function offerTour() {
+    closeTourOffer();
+    const d = document.createElement('dialog');
+    d.id = 'tour-offer'; d.className = 'tour-offer'; d.setAttribute('aria-labelledby', 'tour-offer-t');
+    d.innerHTML = '<h2 id="tour-offer-t">Modo Aprendiz activado</h2><p>Te recomendamos usar el recorrido guiado: te lleva paso a paso por las pantallas, en el orden en que se usan.</p><div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="tour-offer-go">Usar recorrido guiado</button><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
+    d.addEventListener('close', () => d.remove());
+    document.body.appendChild(d);
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
   function tourGo(i) {
     state.ux.tour = { active: true, step: i };
     const v = FP.tour.steps()[i].view;
