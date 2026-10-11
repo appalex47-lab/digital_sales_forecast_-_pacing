@@ -631,3 +631,6 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 
 ## Añadido 2026-10-10 · Configuración (Fase 7 del plan de simplificación)
 - Se ve primero lo básico: Estado, Modo de uso, Negocio y Conexión con Cohere. Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA están en **«Opciones avanzadas»** (cerrado), con los mismos controles.
+
+## Añadido 2026-10-10 · Menú por pregunta (Fase 8)
+- Cada grupo del menú conserva su nombre y muestra debajo la pregunta que responde; la ruta (migas) también la dice. Mismas pantallas y mismo orden.

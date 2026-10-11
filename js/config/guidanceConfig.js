@@ -23,19 +23,19 @@
   /* ---------- Navegación agrupada ---------- */
 
   const GROUPS = [
-    { id: 'inicio', label: 'Inicio', views: ['inicio'] },
-    { id: 'planear', label: 'Planear', verb: 'Planea',
+    { id: 'inicio', question: '¿Qué está pasando hoy?', label: 'Inicio', views: ['inicio'] },
+    { id: 'planear', question: '¿Qué quiero alcanzar?', label: 'Planear', verb: 'Planea',
       description: 'Describe el negocio, prepara datos, metas, estacionalidad y el plan distribuido.',
       views: ['carga', 'calidad', 'resumen', 'plan', 'estacionalidad', 'datos', 'configuracion', 'proyeccion'] },   // orden acordado: cargar → validar → metas → plan → estacionalidad → datos normalizados → configuración del plan
-    { id: 'monitorear', label: 'Monitorear', verb: 'Compara y proyecta',
+    { id: 'monitorear', question: '¿Cómo voy?', label: 'Monitorear', verb: 'Compara y proyecta',
       description: 'Plan contra actual, gap, cumplimiento, forecast y alertas.', views: ['pacing'] },
-    { id: 'diagnosticar', label: 'Diagnosticar', verb: 'Diagnostica',
+    { id: 'diagnosticar', question: '¿Por qué?', label: 'Diagnosticar', verb: 'Diagnostica',
       description: 'Qué driver explica la brecha, dónde ocurre y qué hipótesis investigar.', views: ['diagnostico', 'producto', 'segmentos'] },
-    { id: 'analizar', label: 'Análisis', verb: 'Analiza',
+    { id: 'analizar', question: '¿Qué patrones hay?', label: 'Análisis', verb: 'Analiza',
       description: 'Descubre evolución, patrones y cambios persistentes antes de investigar causas.', views: ['analisis'] },
-    { id: 'recuperar', label: 'Recuperar', verb: 'Simula y actúa',
+    { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
       description: 'Reforecast, escenarios y plan de acción.', views: ['reforecast', 'recovery'] },
-    { id: 'medir', label: 'Medir y aprender', verb: 'Mide',
+    { id: 'medir', question: '¿Funcionó?', label: 'Medir y aprender', verb: 'Mide',
       description: 'Seguimiento, baseline vs escenario vs observado, trazabilidad, aprendizajes, narrativa ejecutiva y paquete de análisis.', views: ['medir', 'narrativa', 'paquete'] }
   ];
 

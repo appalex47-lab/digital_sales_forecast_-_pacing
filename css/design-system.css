@@ -1412,3 +1412,9 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 #view-resumen .pacing-more { margin: var(--ds-s3) 0 0; }
 #view-resumen .pacing-more > .ds-accordion__body > .panel { box-shadow: none; border: 0; background: none; }
 #view-resumen .pacing-more > .ds-accordion__body > .panel > .panel__head, #view-resumen .pacing-more > .ds-accordion__body > .panel > .panel__body { padding-left: 0; padding-right: 0; }
+
+.snav__tl { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; }
+.snav__q { font-size: var(--ds-fs-xs, 12px); font-weight: 400; color: var(--ds-text-muted, #6b7280); letter-spacing: 0; text-transform: none; }
+.snav__toggle { min-height: 48px; }
+
+.crumb-q { color: var(--ds-text-muted, #6b7280); font-weight: 400; }

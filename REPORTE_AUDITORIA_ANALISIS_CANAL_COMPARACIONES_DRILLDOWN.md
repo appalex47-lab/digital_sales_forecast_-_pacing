@@ -408,3 +408,8 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 3. **Análisis (productos).** Cuello de botella real: con 300 mil filas (27 MB) cada consulta tardaba ~16 s. Causa: 109 llamadas a `productStore.aggregate` por consulta releían los mismos bloques de IndexedDB; el cálculo del análisis (tendencias, cohortes, patrones) tarda milisegundos.
 4. **Corrección.** `productStore.js`: caché de bloques día × canal (acotada a 3 millones de filas) y caché de agregados ya calculados (120 entradas); ambas se vacían al cargar, quitar un archivo o reiniciar el almacén. Primera consulta 16 s → ~6 s; cambiar métrica/canal/periodo ya calculado → ~0.5 s.
 5. **Pendiente (no corregido).** Confirmar la carga de productos tarda ~150 s con 300 mil filas y ~134 s con 1.5 millones (escritura de resúmenes en IndexedDB por cada día × canal; la página no se congela). La primera consulta fría sigue siendo ~6 s (cálculo de 109 agregados).
+
+## Adenda 19 · Fase 8: menú con la pregunta de cada grupo (2026-10-10)
+1. **Decisión de la persona usuaria:** conservar los nombres actuales y agregar la pregunta. Planear ¿Qué quiero alcanzar? · Monitorear ¿Cómo voy? · Diagnosticar ¿Por qué? · Análisis ¿Qué patrones hay? · Recuperar ¿Qué hago? · Medir y aprender ¿Funcionó?
+2. **Qué cambió:** `GROUPS[].question` (guidanceConfig.js); `navigation.js` pinta la pregunta bajo el nombre del grupo (`.snav__q`) y en la ruta (`.crumb-q`). Las pantallas, su orden y los enlaces no cambian.
+3. **Pruebas:** `batch_menuq8.py` (M1–M4). `batch_i.py` R-5 ajustado (el nombre accesible del botón ahora incluye la pregunta). Regresión completa y Node 24/24 en verde.
