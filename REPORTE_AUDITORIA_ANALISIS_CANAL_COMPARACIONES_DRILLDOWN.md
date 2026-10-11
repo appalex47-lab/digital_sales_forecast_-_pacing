@@ -442,3 +442,16 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - Cambiar de pantalla a mitad: el paso y los micro-pasos se conservan; la tarjeta dice «Estás en otra pantalla. Tu avance se conserva (n de m)» y el botón pasa a «Ir a …». Sin «Es aquí» fuera de su pantalla.
 - Guardar el plan nunca lo hace el recorrido; el micro-paso avisa que el primer plan guardado se congela como original.
 - Cobertura: `batch_tour10.py` (T10–T13).
+
+
+## Adenda 24 · Fase 12: pregunta inicial y rutas del recorrido (2026-10-11)
+
+**Problema.** El recorrido preguntaba «¿tienes histórico?», «¿tienes real?», «¿tienes meta?» paso por paso y no modelaba una empresa con cero datos: recorría 15 pasos de los cuales la mayoría (Pacing, Forecast, Gap, Drivers…) no tiene sentido sin venta real, y podía guardarse el plan original sin volumen, AOV ni CR (se congela y no se rehace).
+
+**Cambio.**
+- Una sola pregunta al inicio, «¿Con qué datos cuentas hoy?», guarda la ruta en `ux.tour.path` (`A`/`B`/`C`; sin ruta guardada = A, para quien ya usaba el recorrido). Cada paso del catálogo declara en qué rutas aparece (`paths`).
+- Ruta C agrega el paso «Cuando tengas tus primeras ventas» (qué subir primero). El paso Plan avisa cuando no hay histórico: «se congela sin volumen, AOV ni CR». Es aviso, no bloqueo.
+- «No tengo histórico» en la ruta B pasa a la ruta C. Al detectar datos, la tarjeta *propone* pasar a la ruta más completa («Sí, pasar» / «No por ahora»); nunca cambia sola.
+- En micro-pasos de revisión (con botón manual), «Mostrarme dónde» deja la tarjeta abierta y compacta hasta «Ya lo vi» o «Siguiente»; si el siguiente micro-paso también es de revisión, la marca «Es aquí» se mueve y la tarjeta se queda. Solo se oculta cuando hay que actuar en la pantalla (elegir archivo, llenar, guardar).
+
+**Pruebas.** `tools/regression/batch_route12.py` (R1–R12).

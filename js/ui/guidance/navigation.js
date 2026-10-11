@@ -192,7 +192,7 @@
   function renderHelpMenu(state) {
     const el = $('topbar-help'); if (!el) return;
     const v = G().VIEWS[state.view] || {};
-    const tour = state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/${G().TOUR.length})` : 'Recorrido guiado';
+    const tour = state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/${FP.tour.steps().length})` : 'Recorrido guiado';
     el.innerHTML = `<div class="hmenu">
       <button type="button" class="hmenu__btn" id="help-menu-btn" data-action="help-menu" aria-haspopup="menu" aria-expanded="${helpOpen}" aria-controls="help-menu" aria-label="Ayuda"><span class="hmenu__txt">Ayuda</span><span class="hmenu__q" aria-hidden="true">?</span>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>

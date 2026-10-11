@@ -70,7 +70,7 @@
       ctxNote: null,
       visited: {},
       lastByGroup: {},
-      tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '' },
+      tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '', path: null, compact: false, upDismissed: '' },
       tourOffered: false,
       home: { channel: 'total', periodType: 'year', periodKey: null },
       measureAction: null,
@@ -800,6 +800,9 @@
     const u = state.ux;
     ['mode', 'visited', 'lastByGroup', 'tour', 'home', 'ctx', 'learned', 'tourOffered'].forEach((k) => { if (d[k] !== undefined) u[k] = typeof d[k] === 'object' && !Array.isArray(d[k]) ? { ...u[k], ...d[k] } : d[k]; });
     u.tour.active = Boolean(d.tour && d.tour.active);
+    if (!FP.tour.PATHS[u.tour.path]) u.tour.path = null;
+    u.tour.compact = false;
+    FP.tour.setPath(u.tour.path);
     // el modo Ejecutivo ya no existe: quien lo tenía guardado pasa a Analista
     if (!FP.guidanceConfig.MODES.some(([id]) => id === u.mode)) u.mode = 'analyst';
   }
@@ -876,7 +879,9 @@
       if (adv && adv.stay) {   // cambió el micro-paso dentro del mismo paso: la tarjeta reaparece con el aviso
         const t = state.ux.tour; t.lastMicro = adv.record.key; t.lastMicroTitle = adv.record.title;
         if (adv.flash) t.flash = adv.flash;
-        if (t.went && adv.flash) { t.went = false; t.collapsed = false; }
+        const nm = FP.tour.currentMicro(state);
+        if (t.compact && t.went && nm && nm.manual) { /* tarjeta compacta: sigue abierta en el siguiente micro-paso de revisión */ }
+        else { t.compact = false; if (t.went && adv.flash) { t.went = false; t.collapsed = false; } }
       }
     }
     FP.tour.render(state);
@@ -1884,7 +1889,7 @@
       state.dx.run = null;
       loadYearScoped(state.year);
       refresh();
-      state.ux.visited = {}; state.ux.tour = { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '' }; state.ux.lastByGroup = {};
+      state.ux.visited = {}; state.ux.tour = { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '', path: null, compact: false, upDismissed: '' }; FP.tour.setPath(null); state.ux.lastByGroup = {};
       render();
       FP.ui.toast('Datos borrados');
     },
@@ -2261,7 +2266,18 @@
       render();
       if (state.ux.mode === 'learner' && was !== 'learner' && !state.ux.tour.active) offerTour();
     },
-    'tour-offer-go'() { closeTourOffer(); state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null }; tourGo(0); },
+    /** Pregunta inicial (Fase 12): la ruta decide qué pasos se muestran. Misma ruta = solo cierra. */
+    'tour-path'(el) {
+      closeTourOffer();
+      const p = el.dataset.path; if (!FP.tour.PATHS[p]) return;
+      const t = state.ux.tour;
+      if (t.active && t.path === p) { render(); return; }
+      state.ux.tour = { ...t, path: p, skipped: {}, ended: null, upDismissed: '' }; FP.tour.setPath(p); tourGo(0);
+    },
+    'tour-change-path'() { offerTour(true); },
+    'tour-path-up'(el) { const p = el.dataset.path; if (!FP.tour.PATHS[p]) return; state.ux.tour = { ...state.ux.tour, path: p, ended: null, upDismissed: '' }; FP.tour.setPath(p); tourGo(0); },
+    'tour-up-dismiss'(el) { state.ux.tour.upDismissed = el.dataset.key || ''; render(); },
+    'tour-compact-off'() { const t = state.ux.tour; t.compact = false; t.went = false; render(); },
     'tour-offer-no'() { closeTourOffer(); },
     'nav-toggle'() { document.body.classList.toggle('nav-open'); },
     'lesson-dismiss'() { state.ux.lesson = null; render(); },
@@ -2288,7 +2304,7 @@
       render();
     },
     'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); },
-    'tour-start'() { tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
+    'tour-start'() { if (!state.ux.tour.path) { offerTour(true); return; } tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
     'tour-restart'() { state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null, micro: {} }; tourGo(0); },
     'tour-next'() {
       const t = state.ux.tour; const status = FP.contextEngine.collectStatus(state);
@@ -2301,18 +2317,28 @@
     /** Paso de acción: lleva a la pantalla y deja el recorrido esperando el dato (se detecta solo). */
     'tour-cta'() {
       const t = state.ux.tour; const v = FP.tour.steps()[t.step].view;
-      t.went = true; t.flash = ''; t.collapsed = true;   // la tarjeta se oculta mientras el usuario actúa; reaparece sola al detectar el dato
+      // Si el micro-paso actual es de revisión (manual), la tarjeta queda abierta y compacta hasta «Ya lo vi»/«Siguiente».
+      // Si hay que actuar en la pantalla (elegir archivo, llenar, guardar), se oculta y reaparece sola al detectar el resultado.
+      const cm = FP.tour.currentMicro(state); const manual = Boolean(cm && cm.manual && root.location.hash === `#${v}`);
+      t.went = true; t.flash = ''; t.compact = manual; t.collapsed = !manual;
       if (root.location.hash === `#${v}`) render(); else root.location.hash = v;
     },
     /** «No tengo X»: se marca omitido y se sigue; sin meta el recorrido queda en pausa con su resumen. */
     'tour-skip'() {
       const t = state.ux.tour; const s = FP.tour.steps()[t.step];
+      if (t.path === 'B' && s.id === 'datos') { state.ux.tour = { ...t, path: 'C', upDismissed: '' }; FP.tour.setPath('C'); tourGo(0, 'Pasamos a la ruta de empresa nueva: sin histórico, empezamos por la meta.'); return; }
       t.skipped = { ...(t.skipped || {}), [s.id]: true };
       if (s.id === 'meta') { state.ux.tour = { ...t, ended: 'nometa', went: false, flash: '', collapsed: false }; render(); return; }
       const status = FP.contextEngine.collectStatus(state);
       tourGo(FP.tour.nextIdx(state, status, t.step));
     },
-    'tour-micro-done'(el) { FP.tour.mark(state, el.dataset.key, false); const t = state.ux.tour; t.went = false; t.collapsed = false; render(); },
+    'tour-micro-done'(el) {
+      const t = state.ux.tour; const was = t.compact; FP.tour.mark(state, el.dataset.key, false);
+      const nm = FP.tour.currentMicro(state);
+      // desde la tarjeta compacta, si el siguiente micro-paso también es de revisión, la tarjeta se queda y la marca «Es aquí» se mueve
+      if (was && nm && nm.manual) { t.went = true; t.compact = true; t.collapsed = false; t.flash = ''; } else { t.went = false; t.compact = false; t.collapsed = false; }
+      render();
+    },
     'tour-pause'() { state.ux.tour.collapsed = true; render(); },
     'tour-expand'() { state.ux.tour.collapsed = false; render(); },
     'tour-close'() { state.ux.tour = { ...state.ux.tour, active: false, collapsed: false, ended: null, step: 0 }; render(); },
@@ -3027,14 +3053,18 @@
     closeTourOffer();
     const d = document.createElement('dialog');
     d.id = 'tour-offer'; d.className = modal ? 'tour-offer' : 'tour-offer tour-offer--soft'; d.setAttribute('aria-labelledby', 'tour-offer-t');
-    d.innerHTML = `<h2 id="tour-offer-t">${modal ? 'Modo Aprendiz activado' : 'Bienvenido a RevNavigator'}</h2>` + '<p>Te recomendamos usar el recorrido guiado: te lleva paso a paso por las pantallas, en el orden en que se usan.</p><div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="tour-offer-go">Usar recorrido guiado</button><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
+    const cur = state.ux.tour.active ? state.ux.tour.path : null;
+    const opt = (p, t1, t2, t3) => `<button type="button" class="tour-opt${cur === p ? ' is-cur' : ''}" data-action="tour-path" data-path="${p}"${cur === p ? ' aria-current="true"' : ''}><b>${t1}</b><span>${t2}</span><em>${t3}</em></button>`;
+    d.innerHTML = `<p class="tour-offer__eyebrow">${modal ? 'Recorrido guiado' : 'Bienvenido a RevNavigator'}</p><h2 id="tour-offer-t">¿Con qué datos cuentas hoy?</h2><p>Con tu respuesta te muestro solo los pasos que te sirven. Puedes cambiarla cuando quieras.</p>`
+      + `<div class="tour-offer__opts">${opt('A', 'Ya tengo datos', 'Cuento con histórico y venta real del año.', `Recorrido completo · ${FP.guidanceConfig.TOUR.filter((x) => x.paths.includes('A')).length} pasos`)}${opt('B', 'Solo tengo histórico', 'Empiezo el año o aún no tengo venta real.', 'Histórico → Meta → Plan → Pacing en espera')}${opt('C', 'Soy una empresa nueva', 'Todavía no tengo datos de venta.', 'Meta → Plan → Cómo empezar a cargar datos')}</div>`
+      + '<div class="tour-offer__btns"><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
     d.addEventListener('close', () => d.remove());
     document.body.appendChild(d);
     if (modal && typeof d.showModal === 'function') d.showModal(); else if (typeof d.show === 'function') d.show(); else d.setAttribute('open', '');
   }
   let tourSyncDepth = 0;
   function tourGo(i, flash) {
-    state.ux.tour = { ...state.ux.tour, active: true, step: i, collapsed: false, went: false, flash: flash || '', ended: null, lastMicro: '', lastMicroTitle: '' };
+    state.ux.tour = { ...state.ux.tour, active: true, step: i, collapsed: false, went: false, compact: false, flash: flash || '', ended: null, lastMicro: '', lastMicroTitle: '' };
     const v = FP.tour.steps()[i].view;
     if (root.location.hash === `#${v}` || state.view === v && !root.location.hash) render(); else root.location.hash = v;
   }

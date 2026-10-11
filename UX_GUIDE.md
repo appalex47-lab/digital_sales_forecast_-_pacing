@@ -646,3 +646,12 @@ El recorrido pregunta por tus datos: «Cargar histórico» / «No tengo históri
 
 ## Añadido 2026-10-11 · Micro-pasos del recorrido (Fase 11)
 Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por ejemplo, en Plan: generar vista previa → revisarla → guardar plan → ver el plan distribuido). «Mostrarme dónde» oculta la tarjeta y marca con «Es aquí» el elemento exacto; al hacerlo, el recorrido avanza solo, o con un botón «Ya revisé…» cuando no hay nada que detectar. «Calcular metas desde el histórico» se sugiere solo si hay datos para calcular.
+
+
+## Añadido 2026-10-11 · Pregunta inicial y rutas del recorrido (Fase 12)
+
+- **Pregunta inicial** (ventana al activar el Modo Aprendiz o en la primera visita): «¿Con qué datos cuentas hoy?» → A «Ya tengo datos» (completo), B «Solo tengo histórico», C «Soy una empresa nueva». Se puede cambiar en cualquier momento con «Ruta: … · Cambiar» en la tarjeta.
+- **Qué muestra cada ruta:** A los 15 pasos; B Histórico → Meta → Plan → Pacing (en espera de venta real); C Meta → Plan → Cómo empezar a cargar datos.
+- **Aviso en Plan sin histórico:** el plan original se congela sin volumen, AOV ni CR y no se puede rehacer. Es un aviso; no bloquea el guardado.
+- **Propuesta de ruta más completa:** cuando se detectan datos, la tarjeta pregunta si se quiere pasar; si se dice «No por ahora» no vuelve a insistir con esa misma propuesta.
+- **Tarjeta compacta:** en pasos de revisión «Mostrarme dónde» no cierra la tarjeta; queda con título, texto y «Ya lo vi» / «Siguiente».

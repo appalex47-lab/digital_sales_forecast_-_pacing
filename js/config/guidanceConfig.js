@@ -480,7 +480,7 @@
   /* ---------- Recorrido guiado ---------- */
 
   const TOUR = [
-    { id: 'datos', view: 'carga', target: '#up-historical', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical',
+    { id: 'datos', view: 'carga', target: '#up-historical', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical', paths: 'AB', skipLabelB: 'Todavía no tengo histórico',
       micro: [
         { key: 'file', title: 'Elige tu archivo', desc: 'En la tarjeta «Histórico» pulsa «Seleccionar CSV» (o arrastra el archivo sobre ella).', target: '#up-historical', box: 'panel' },
         { key: 'review', title: 'Revisa la validación', desc: 'Antes de importar, la app muestra errores y advertencias. Revisa que no haya errores.', target: '#staging', box: 'panel', manual: 'Ya revisé' },
@@ -498,7 +498,7 @@
       cta: 'Ir a cargar venta real', skipLabel: 'No tengo venta real', done: 'Venta real cargada.', waiting: 'Esperando tu archivo de venta real. Cuando se importe sin errores, paso solo al siguiente.',
       what: 'La venta que realmente ocurrió este año, cargada desde archivos.', why: 'Sin real no hay pacing ni forecast.',
       lookFor: 'Que la calidad de datos no tenga errores y la fecha de corte sea la esperada.', next: 'Capturar la meta.' },
-    { id: 'meta', view: 'resumen', target: '#targets-form', title: 'Meta', kind: 'action', detect: 'target',
+    { id: 'meta', view: 'resumen', target: '#targets-form', title: 'Meta', kind: 'action', detect: 'target', paths: 'ABC',
       micro: [
         { key: 'calc', when: 'data', title: 'Calcula tu meta desde el histórico', desc: 'Si no tienes una meta definida, abre «Calcular metas desde el histórico» y pulsa «Usar propuesta».', target: '.targets-assist', box: 'self' },
         { key: 'total', when: 'nodata', title: 'Escribe tu meta anual total', desc: 'Sin histórico ni venta real no se puede calcular; escríbela directamente (ej. 261M).', target: '.targets-form__total', box: 'self' },
@@ -508,7 +508,7 @@
       cta: 'Ir a capturar la meta', skipLabel: 'Aún no tengo meta', done: 'Meta guardada.', waiting: 'Esperando que guardes la meta. Cuando se guarde, paso solo al siguiente.',
       what: 'La meta anual por canal: el Original Target.', why: 'Todo se mide contra ella y nunca se modifica.',
       lookFor: 'Que el total y los canales estén capturados y cuadren.', next: 'Revisar el plan.' },
-    { id: 'plan', view: 'plan', target: '#view-plan', kind: 'micro', done: 'Plan guardado y revisado.', cta: 'Ir a Plan', title: 'Plan', chapter: 'Planear',
+    { id: 'plan', view: 'plan', target: '#view-plan', paths: 'ABC', kind: 'micro', done: 'Plan guardado y revisado.', cta: 'Ir a Plan', title: 'Plan', chapter: 'Planear',
       micro: [
         { key: 'gen', title: 'Genera la vista previa', desc: 'Pulsa «Generar vista previa»: calcula cómo se reparte la meta en meses, semanas y días.', target: '#plan-targets .btn-row', box: 'self' },
         { key: 'review', title: 'Revisa la vista previa', desc: 'Mira que los meses fuertes y débiles tengan sentido antes de guardar.', target: '#plan-body', box: 'self', manual: 'Ya la revisé' },
@@ -517,7 +517,7 @@
       ],
       what: 'La meta repartida en meses, semanas y días con la estacionalidad.', why: 'Dice cuánto debería llevarse en cada fecha, no solo al cierre.',
       lookFor: 'Que los días fuertes y débiles tengan sentido para el negocio.', next: 'Ver cómo vamos contra el plan.' },
-    { id: 'pacing', view: 'pacing', target: '#fc-channels', kind: 'micro', done: 'Pacing revisado.', cta: 'Ir a Pacing', title: 'Pacing',
+    { id: 'pacing', view: 'pacing', target: '#fc-channels', paths: 'AB', kind: 'micro', done: 'Pacing revisado.', cta: 'Ir a Pacing', title: 'Pacing',
       micro: [
         { key: 'channels', title: 'Lee cumplimiento y gap por canal', desc: 'Cada tarjeta compara el plan acumulado con lo real; busca canales debajo de 100 %.', target: '#fc-channels', box: 'self', manual: 'Ya lo vi' },
         { key: 'alerts', title: 'Revisa las alertas', desc: 'Las alertas de pacing dicen dónde mirar primero.', target: '#fc-alerts', box: 'panel', manual: 'Ya las revisé' }
@@ -557,8 +557,16 @@
       lookFor: 'Consistencia y factores que afectan la comparación.', next: 'Leer la narrativa ejecutiva.' },
     { id: 'narrativa', view: 'narrativa', target: '#nx-summary', title: 'Narrativa', chapter: 'Medir',
       what: 'Todo lo anterior, convertido en una explicación con nivel de certeza y fuente en cada frase.', why: 'Es más fácil de comunicar que diez pantallas sueltas.',
-      lookFor: 'Que cada afirmación tenga su "¿Por qué dices eso?" y que las hipótesis no se lean como hechos.', next: 'Volver a monitorear el siguiente periodo.' }
+      lookFor: 'Que cada afirmación tenga su "¿Por qué dices eso?" y que las hipótesis no se lean como hechos.', next: 'Volver a monitorear el siguiente periodo.' },
+    // Solo ruta C (empresa nueva): qué subir primero cuando haya ventas. Pacing, forecast y diagnóstico se alimentan de la venta real.
+    { id: 'empezar', view: 'carga', target: '#up-actual', title: 'Cuando tengas tus primeras ventas', kind: 'micro', paths: 'C', cta: 'Ir a Carga de datos', done: 'Listo.',
+      micro: [
+        { key: 'where', title: 'Mira dónde se carga la venta real', desc: 'Lo primero que conviene subir es la venta real por día y canal, en la tarjeta «Venta real / Actual». Con una semana ya se activa el pacing.', target: '#up-actual', box: 'panel', manual: 'Ya lo vi' }
+      ],
+      what: 'Pacing, forecast y diagnóstico se alimentan de la venta real: se activan cuando la cargues.', why: 'Sin ventas no hay contra qué comparar tu plan. Si además tienes o consigues histórico, súbelo para que el plan proyecte volumen, AOV y CR.',
+      lookFor: 'Que la venta real tenga día, canal e importe.', next: 'Cuando detecte datos te propongo pasar al recorrido completo.' }
   ];
+  TOUR.forEach((t) => { t.paths = t.paths || 'A'; });
 
   /* ---------- Modos Aprendiz / Analista ---------- */
 
@@ -588,7 +596,7 @@
 
   // Capítulos del recorrido (para retomarlo por partes, no todo en una sesión)
   const CH = { datos: 'Planear', meta: 'Planear', plan: 'Planear', real: 'Planear', pacing: 'Monitorear', forecast: 'Monitorear', gap: 'Monitorear',
-    drivers: 'Diagnosticar', senales: 'Diagnosticar', hipotesis: 'Diagnosticar', recovery: 'Recuperar', escenario: 'Recuperar', accion: 'Recuperar', medicion: 'Medir', narrativa: 'Medir' };
+    drivers: 'Diagnosticar', senales: 'Diagnosticar', hipotesis: 'Diagnosticar', recovery: 'Recuperar', escenario: 'Recuperar', accion: 'Recuperar', medicion: 'Medir', narrativa: 'Medir', empezar: 'Planear' };
   TOUR.forEach((t) => { t.chapter = t.chapter || CH[t.id] || null; });
 
   FP.guidanceConfig = { GROUPS, VIEWS, STATES, HELP, TRIGGERS, EXPLAINERS, TOUR, ANALYST_ONLY, HOW_IT_WORKS, READ_DIAGNOSIS, READINESS,

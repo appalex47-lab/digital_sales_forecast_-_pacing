@@ -1529,3 +1529,27 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 .tour-micro__t { display: grid; gap: 3px; min-width: 0; }
 .tour-micro__d { font-size: 14px; line-height: 1.4; color: #374151; font-weight: 400; }
 .tour-cond--info { background: #eef2ff; border-color: #c7d2fe; color: #1e3a8a; }
+
+/* Fase 12 — pregunta inicial con 3 rutas, tarjeta compacta y propuesta de cambio de ruta */
+.tour-offer:has(.tour-offer__opts) { max-width: 560px; }
+.tour-offer__eyebrow { margin: 0 0 4px !important; font-size: 12px !important; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: .05em; }
+.tour-offer__opts { display: grid; gap: 8px; margin: 0 0 12px; }
+.tour-opt { display: grid; gap: 2px; text-align: left; background: var(--ds-surface, #fff); border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 10px 14px; min-height: 44px; font: inherit; color: inherit; cursor: pointer; }
+.tour-opt:hover, .tour-opt:focus-visible { border-color: #1d4ed8; background: #eef4ff; }
+.tour-opt.is-cur { border-color: #1d4ed8; background: #dbe6ff; }
+.tour-opt b { font-size: 16px; }
+.tour-opt span { font-size: 13px; color: #475569; }
+.tour-opt em { font-style: normal; font-size: 12px; font-weight: 600; color: #1d4ed8; }
+.tour-bar__row .tour-link { margin-left: auto; font-size: 12px; }
+.tour-up { background: #ecfdf3; border: 1px solid #86d9a6; border-radius: 10px; padding: 9px 11px; }
+.tour-up p { margin: 0 0 6px; font-size: 13px; line-height: 1.4; }
+.tour-bar__inner--compact { gap: 8px; }
+.tour-compact__txt { margin: 0; font-size: 14px; line-height: 1.4; }
+.tour-compact__hint { margin: 0; font-size: 12px; color: #64748b; }
+/* primera visita (ventana flotante que no bloquea): versión corta, solo los 3 títulos; las descripciones están en la ventana modal */
+.tour-offer--soft:has(.tour-offer__opts) { max-width: 420px; padding: 14px 16px; }
+.tour-offer--soft .tour-opt span, .tour-offer--soft .tour-opt em { display: none; }
+.tour-offer--soft .tour-opt { padding: 8px 12px; }
+.tour-offer--soft h2 { font-size: 18px; margin-bottom: 4px; }
+.tour-offer--soft > p:not(.tour-offer__eyebrow) { margin-bottom: 8px; font-size: 14px; }
+.tour-offer--soft .tour-offer__opts { margin-bottom: 8px; }
