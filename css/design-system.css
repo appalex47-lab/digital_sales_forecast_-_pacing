@@ -1515,3 +1515,17 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 /* «Es aquí»: zona que el usuario debe llenar en el paso de acción del recorrido */
 .tour-target--here { position: relative; outline: 4px solid #f59e0b; outline-offset: 4px; border-radius: 12px; scroll-margin-top: 140px; scroll-margin-bottom: 120px; }
 .tour-target--here::after { content: "Es aquí"; position: absolute; top: -16px; left: 16px; background: #f59e0b; color: #1f1300; font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px; box-shadow: 0 2px 6px rgba(15, 23, 42, .25); z-index: 5; }
+
+/* Micro-pasos dentro de un paso del recorrido */
+.tour-micro__n { margin: 0; font-size: 13px; color: var(--ds-text-2, #475569); }
+.tour-micro { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tour-micro__li { display: flex; gap: 10px; align-items: flex-start; padding: 2px 10px; border-radius: 8px; font-size: 14px; color: #64748b; }
+.tour-micro__li.is-cur { background: #eef4ff; border: 1px solid #bfd0fb; padding: 8px 10px; color: var(--ds-text, #111827); }
+.tour-micro__li.is-done { color: #475569; }
+.tour-micro__li.is-done .tour-micro__t b { text-decoration: line-through; font-weight: 600; }
+.tour-micro__dot { width: 18px; height: 18px; border-radius: 50%; flex: none; margin-top: 1px; background: #e2e8f0; display: inline-flex; align-items: center; justify-content: center; color: #fff; box-sizing: border-box; }
+.is-done .tour-micro__dot { background: #15803d; }
+.is-cur .tour-micro__dot { background: #1d4ed8; box-shadow: 0 0 0 3px #bfd0fb; }
+.tour-micro__t { display: grid; gap: 3px; min-width: 0; }
+.tour-micro__d { font-size: 14px; line-height: 1.4; color: #374151; font-weight: 400; }
+.tour-cond--info { background: #eef2ff; border-color: #c7d2fe; color: #1e3a8a; }

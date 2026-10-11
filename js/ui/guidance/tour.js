@@ -47,15 +47,63 @@
     return '';
   }
 
-  /** Si el paso actual es de acción y su dato ya existe, devuelve a dónde avanzar (lo llama render()). */
+  /**
+   * Micro-pasos del paso: se CALCULAN del estado de la app (archivo en revisión, meta guardada, vista previa, plan guardado), no se guardan,
+   * así no se desincronizan al cambiar de pantalla o recargar. Los que no tienen resultado detectable (revisar) llevan un botón manual
+   * y se guardan en `tour.micro`. Un micro-paso posterior hecho implica los anteriores.
+   */
+  function microList(state, status, s) {
+    if (!s || !s.micro) return [];
+    const t = state.ux.tour; const mk = t.micro || {}; const h = has(status);
+    const hasData = status.data.historical > 0 || status.data.actual > 0;
+    const ps = state.planning || {}; const reg = ps.registry || {}; const hasOriginal = Boolean(reg.originalPlanId);
+    const items = (state.staging && state.staging.items) || [];
+    const list = s.micro.filter((m) => !m.when || (m.when === 'data') === hasData);
+    const own = list.map((m) => {
+      const marked = Boolean(mk[`${s.id}.${m.key}`]);
+      const staged = items.some((i) => i.staged && i.staged.dataType === s.detect);
+      // una marca manual solo vale mientras exista lo que se revisó (la vista previa y el archivo en revisión no sobreviven a recargar)
+      let manual = marked;
+      if ((s.id === 'datos' || s.id === 'real') && m.key === 'review') manual = marked && (staged || Boolean(h[s.detect]));
+      if (s.id === 'plan' && m.key === 'review') manual = marked && (Boolean(ps.preview) || hasOriginal);
+      if (s.id === 'plan' && m.key === 'view') manual = marked && hasOriginal;
+      if (m.key === 'file') return staged || manual;
+      if (m.key === 'commit') return Boolean(h[s.detect]);
+      if (s.id === 'meta' && m.key === 'save') return h.target;
+      if (s.id === 'plan' && m.key === 'gen') return Boolean(ps.preview) || hasOriginal;
+      if (s.id === 'plan' && m.key === 'save') return hasOriginal;
+      return manual;
+    });
+    let later = false; const dn = new Array(list.length);
+    for (let i = list.length - 1; i >= 0; i--) { dn[i] = own[i] || later; later = later || dn[i]; }
+    const curI = dn.indexOf(false);
+    return list.map((m, i) => ({ ...m, done: dn[i], cur: i === curI }));
+  }
+  const curMicro = (list) => list.find((m) => m.cur) || null;
+  /** Marca un micro-paso manual («Ya revisé…», o hecho en pantalla sin estado: calcular/escribir meta). */
+  function mark(state, fullKey, soft) {
+    const t = state.ux.tour; t.micro = { ...(t.micro || {}), [fullKey]: true };
+    if (soft && t.active) render(state);
+  }
+
+  /** Dónde avanzar (lo llama render()): paso de acción con su dato listo, paso de micro-pasos terminado, o cambio de micro-paso dentro del mismo paso. */
   function syncTarget(state, status) {
     const t = state.ux.tour;
     if (!t.active || t.ended) return null;
     const s = current(state);
-    if (!s || s.kind !== 'action' || !done(state, status, s)) return null;
-    const n = nextIdx(state, status, steps().indexOf(s));
-    if (n < 0) return null;
-    return { idx: n, flash: `${s.done} Siguiente: ${steps()[n].title}.` };
+    if (!s) return null;
+    const i = steps().indexOf(s);
+    const adv = () => { const n = nextIdx(state, status, i); return n < 0 ? null : { idx: n, flash: `${s.done} Siguiente: ${steps()[n].title}.` }; };
+    const ml = microList(state, status, s);
+    if (s.kind === 'action' && done(state, status, s)) return adv();
+    if (s.kind === 'micro' && ml.length && ml.every((m) => m.done)) return adv();
+    const cm = curMicro(ml);
+    const k = cm ? `${s.id}.${cm.key}` : '';
+    if (cm && t.lastMicro !== k) {
+      const prev = t.lastMicro && t.lastMicro.startsWith(`${s.id}.`) ? t.lastMicroTitle : '';
+      return { stay: true, record: { key: k, title: cm.title }, flash: prev ? `Hecho: ${prev}.` : '' };
+    }
+    return null;
   }
 
   function summaryRows(state, status) {
@@ -71,14 +119,18 @@
   }
 
   let lastScrollKey = '';
-  /** Resalta la zona del paso. Con la acción ya pulsada se marca «Es aquí» y se desplaza a ella. */
+  /** Resalta la zona del paso (contorno suave) y, con la acción ya pulsada, la del micro-paso con «Es aquí». */
   function highlight(state, s, here, quiet) {
-    const target = s.target ? document.querySelector(s.target) : null;
+    const status = FP.contextEngine.collectStatus(state);
+    const cm = curMicro(microList(state, status, s));
+    const sel = here && cm ? cm.target : s.target;
+    const target = sel ? document.querySelector(sel) : null;
     if (!target || state.view !== s.view) return;
-    const box = target.closest('section.panel') || target;
+    const mode = here && cm ? cm.box : 'panel';
+    const box = mode === 'self' ? target : mode === 'row' ? (target.closest('.btn-row') || target) : (target.closest('section.panel') || target);
     box.classList.add('tour-target');
     if (here) box.classList.add('tour-target--here');
-    const key = `${s.id}:${here}`;   // se desplaza solo al activar el paso o al pulsar la acción, no en cada re-dibujo (escribir en un campo)
+    const key = `${s.id}:${cm ? cm.key : ''}:${here}`;   // se desplaza solo al activar el paso, el micro-paso o la acción; no en cada re-dibujo (escribir en un campo)
     if (box.scrollIntoView && !quiet && key !== lastScrollKey) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
     lastScrollKey = key;
   }
@@ -97,8 +149,8 @@
 
     if (t.collapsed) {
       bar.classList.add('tour-bar--pill');
-      if (s.kind === 'action' && t.went && !t.ended) highlight(state, s, true, false);
-      bar.innerHTML = `<button type="button" class="btn btn--primary tour-pill" data-action="tour-expand">${t.ended ? 'Ver resumen del recorrido' : t.went && s.kind === 'action' ? `Recorrido en espera · paso ${i + 1} de ${n} · Abrir` : `Retomar recorrido · paso ${i + 1} de ${n}`}</button>`;
+      if ((s.kind === 'action' || s.kind === 'micro') && t.went && !t.ended) highlight(state, s, true, false);
+      bar.innerHTML = `<button type="button" class="btn btn--primary tour-pill" data-action="tour-expand">${t.ended ? 'Ver resumen del recorrido' : t.went && (s.kind === 'action' || s.kind === 'micro') ? `Recorrido en espera · paso ${i + 1} de ${n} · Abrir` : `Retomar recorrido · paso ${i + 1} de ${n}`}</button>`;
       return;
     }
     bar.classList.remove('tour-bar--pill');
@@ -130,6 +182,9 @@
     const ready = FP.contextEngine.dataReadiness(status);
     const note = noteFor(state, status, s);
     const action = s.kind === 'action';
+    const ml = microList(state, status, s); const cm = curMicro(ml);
+    const away = state.view !== s.view;
+    const guided = action || s.kind === 'micro';
     bar.innerHTML = `
       <div class="tour-bar__inner" role="region" aria-label="Recorrido guiado">
         <div class="tour-bar__row">${head}</div>
@@ -150,20 +205,25 @@
           <div><dt>Por qué importa</dt><dd>${esc(s.why)}</dd></div>
         </dl>
         ${note ? `<p class="tour-cond">${esc(note)}</p>` : ''}
-        ${action && t.went ? `<p class="tour-wait"><span aria-hidden="true"></span>${esc(s.waiting)}</p>` : ''}
+        ${ml.length ? `<p class="tour-micro__n">Micro-paso ${ml.indexOf(cm) + 1} de ${ml.length}</p>
+        <ol class="tour-micro">${ml.map((m) => `<li class="tour-micro__li${m.done ? ' is-done' : ''}${m.cur ? ' is-cur' : ''}"><span class="tour-micro__dot" aria-hidden="true">${m.done ? '<svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M2 6.5l2.6 2.6L10 3.5"/></svg>' : ''}</span>
+          <span class="tour-micro__t"><b>${esc(m.title)}${m.done ? ' (hecho)' : ''}</b>${m.cur ? `<span class="tour-micro__d">${esc(m.desc)}</span>` : ''}</span></li>`).join('')}</ol>` : ''}
+        ${away && guided ? `<p class="tour-cond tour-cond--info">Estás en otra pantalla. Tu avance se conserva (${ml.filter((m) => m.done).length} de ${ml.length || 0}).</p>` : ''}
+        ${action && t.went && !ml.length ? `<p class="tour-wait"><span aria-hidden="true"></span>${esc(s.waiting)}</p>` : ''}
         <details class="tour-more"><summary>Qué buscar y qué sigue</summary>
           <dl class="tour-bar__body"><div><dt>Qué buscar</dt><dd>${esc(s.lookFor)}</dd></div><div><dt>Qué sigue</dt><dd>${esc(s.next)}</dd></div></dl>
         </details>
         <div class="btn-row">
-          ${action ? `<button type="button" class="btn btn--small btn--primary" data-action="tour-cta">${esc(s.cta)}</button>
-            <button type="button" class="btn btn--small" data-action="tour-skip">${esc(s.skipLabel)}</button>`
+          ${guided ? `<button type="button" class="btn btn--small btn--primary" data-action="tour-cta">${esc(away ? (s.cta || 'Ir a la pantalla') : 'Mostrarme dónde')}</button>
+            ${cm && cm.manual && !away ? `<button type="button" class="btn btn--small" data-action="tour-micro-done" data-key="${esc(s.id + '.' + cm.key)}">${esc(cm.manual)}</button>` : ''}
+            ${action ? `<button type="button" class="btn btn--small" data-action="tour-skip">${esc(s.skipLabel)}</button>` : `<button type="button" class="btn btn--small btn--ghost" data-action="tour-next">Siguiente</button>`}`
         : `<button type="button" class="btn btn--small btn--primary" data-action="tour-next">${i === n - 1 ? 'Terminar' : 'Siguiente'}</button>`}
           <button type="button" class="btn btn--small btn--ghost" data-action="tour-prev" ${i === 0 ? 'disabled' : ''}>Atrás</button>
           ${ctl}
         </div>
       </div>`;
-    highlight(state, s, action && t.went, action && !t.went);
+    highlight(state, s, guided && t.went, guided && !t.went);
   }
 
-  FP.tour = { steps, current, render, syncTarget, nextIdx, noteFor, has, idxOf, summaryRows };
+  FP.tour = { steps, current, render, syncTarget, nextIdx, noteFor, has, idxOf, summaryRows, microList, mark };
 })(typeof window !== 'undefined' ? window : globalThis);

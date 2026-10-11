@@ -642,3 +642,7 @@ Toda pantalla abre igual: ruta, título con estado, «Qué hay aquí», «Qué h
 
 ## Añadido 2026-10-11 · Recorrido guiado interactivo (Fase 10)
 El recorrido pregunta por tus datos: «Cargar histórico» / «No tengo histórico», luego venta real y meta. Cuando el dato se carga, el recorrido avanza solo. Si falta algo, el paso lo explica y sigue. Sin meta queda en pausa con un resumen para retomar. Se puede pausar (queda un botón «Retomar recorrido») y salir sin perder el paso.
+
+
+## Añadido 2026-10-11 · Micro-pasos del recorrido (Fase 11)
+Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por ejemplo, en Plan: generar vista previa → revisarla → guardar plan → ver el plan distribuido). «Mostrarme dónde» oculta la tarjeta y marca con «Es aquí» el elemento exacto; al hacerlo, el recorrido avanza solo, o con un botón «Ya revisé…» cuando no hay nada que detectar. «Calcular metas desde el histórico» se sugiere solo si hay datos para calcular.
