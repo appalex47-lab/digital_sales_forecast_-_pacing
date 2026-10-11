@@ -313,6 +313,25 @@
         whatsapp:  { conversionRate: null, aov: null },
         llamadas:  { conversionRate: null, aov: null }
       },
+      /**
+       * AOV general (supuesto del usuario) para planear sin histórico. Los canales lo heredan; si un canal tiene AOV propio
+       * (assumptions[canal].aov), los demás se ajustan para que el total digital siga en el AOV general (ponderado por la meta de cada canal).
+       * mode 'manual' usa `value`; mode 'lines' lo genera: Σ(share de pedidos × AOV de la línea) / Σ share. La app NO trae cifras de industria:
+       * `source` ('own' | 'benchmark' | 'estimate') y `ref` (fuente y año) los captura el usuario.
+       */
+      generalAov: { mode: 'manual', value: null, lines: [], source: 'estimate', ref: '' },
+      /** Origen declarado del CR supuesto por canal ('own' | 'benchmark' | 'estimate') y su fuente. */
+      crSource: {
+        ecommerce: { type: 'estimate', ref: '' }, app: { type: 'estimate', ref: '' },
+        whatsapp: { type: 'estimate', ref: '' }, llamadas: { type: 'estimate', ref: '' }
+      },
+      /**
+       * Forma estándar (SUPUESTO del usuario) para planear sin histórico. Solo actúa en el componente del método elegido
+       * que NO tenga histórico suficiente; en cuanto hay histórico, el histórico manda. Todo 1 y sin eventos = sin efecto.
+       * dayOfWeek: 7 factores lunes→domingo. events: [{ name, from: 'MM-DD', to: 'MM-DD', factor }] (se repite cada año; admite rango que cruza fin de año).
+       * El peso de cada mes se deriva de la suma de los factores de sus días.
+       */
+      standardShape: { enabled: false, dayOfWeek: [1, 1, 1, 1, 1, 1, 1], events: [] },
       /** Dinero se distribuye en centavos exactos; pedidos y volumen en unidades enteras. */
       moneyDecimals: 2
     },

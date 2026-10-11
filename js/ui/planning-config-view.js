@@ -29,6 +29,7 @@
     const hp = cfg.historicalPeriod;
 
     $('plan-config').innerHTML = `
+      ${FP.startupAssumptionsView.render(state)}
       <div class="settings-grid">
         <div class="field"><label for="pc-method">Método de distribución aplicado</label>
           <select id="pc-method" data-action="plan-setting" data-key="method">
@@ -59,15 +60,9 @@
         ${COMPONENTS.map(([k, l]) => numberField(`pc-w-${k}`, l, cfg.componentWeights[k], { key: 'componentWeights', sub: k, min: 0, max: 1, step: 0.1 })).join('')}
       </div>
       <p class="field__hint">1 = factor histórico completo; 0 = sin efecto. Se aplica como exponente (f<sup>α</sup>); en el mensual, como mezcla con la distribución por días.</p>
-      <h3 class="h4">Supuestos manuales de CR y AOV</h3>
-      <p class="field__hint">Solo se usan si el canal no tiene histórico. Déjalos vacíos para no suponer nada.</p>
-      <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Canal</th><th>CR (fracción, ej. 0.012)</th><th>AOV (${C().currency})</th></tr></thead><tbody>
-        ${C().channels.map((c) => `<tr><td>${esc(c.label)}</td>
-          <td><input type="number" min="0" max="1" step="0.0001" aria-label="CR ${esc(c.label)}" value="${cfg.assumptions[c.id].conversionRate ?? ''}" data-action="plan-assumption" data-channel="${c.id}" data-key="conversionRate"></td>
-          <td><input type="number" min="0" step="0.01" aria-label="AOV ${esc(c.label)}" value="${cfg.assumptions[c.id].aov ?? ''}" data-action="plan-assumption" data-channel="${c.id}" data-key="aov"></td></tr>`).join('')}
-      </tbody></table></div>
       <div class="btn-row"><button type="button" class="btn btn--quiet" data-action="plan-settings-reset">Restablecer valores por defecto</button></div>`;
 
+    FP.startupAssumptionsView.bind();
     renderComparison(state, cfg);
   }
 

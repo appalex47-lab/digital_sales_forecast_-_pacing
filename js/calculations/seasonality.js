@@ -310,6 +310,22 @@
       if (v && typeof v === 'object' && !Array.isArray(v) && merged[k] && typeof merged[k] === 'object') merged[k] = { ...merged[k], ...v };
       else if (v !== undefined) merged[k] = v;
     });
+    const u = settings && settings.standardShape;
+    if (u) {
+      const dd = d.standardShape;
+      merged.standardShape = {
+        enabled: Boolean(u.enabled),
+        dayOfWeek: Array.isArray(u.dayOfWeek) && u.dayOfWeek.length === 7 ? u.dayOfWeek.map((x) => (x > 0 ? x : 1)) : dd.dayOfWeek.slice(),
+        events: Array.isArray(u.events) ? u.events.map((e) => ({ ...e })) : []
+      };
+    }
+    if (settings && settings.generalAov) {
+      const g = settings.generalAov;
+      merged.generalAov = { ...d.generalAov, ...g, lines: Array.isArray(g.lines) ? g.lines.map((l) => ({ ...l })) : [] };
+    }
+    if (settings && settings.crSource) {
+      C().channelIds.forEach((ch) => { merged.crSource[ch] = { ...d.crSource[ch], ...(settings.crSource[ch] || {}) }; });
+    }
     if (settings && settings.assumptions) {
       C().channelIds.forEach((ch) => { merged.assumptions[ch] = { ...d.assumptions[ch], ...(settings.assumptions[ch] || {}) }; });
     }

@@ -87,16 +87,27 @@
   /* ---------- Pesos ---------- */
 
   /** Factor de un día (sin normalizar) y su desglose, según los componentes del método. */
+  /** ¿El día MM-DD cae dentro del rango [from, to]? Admite rangos que cruzan fin de año (12-01 → 02-28). */
+  function inMMDD(md, from, to) {
+    if (!from || !to) return false;
+    return from <= to ? md >= from && md <= to : md >= from || md <= to;
+  }
+
   function dayWeight(date, tag, profile, components, cfg) {
     const a = Cal().getDateAttributes(date);
     const dom = +date.slice(8, 10);
     const f = { dayOfWeek: 1, calendar: 1, event: 1, season: 1 };
     const used = [];
     const warnings = [];
+    let assumed = false;
     const α = cfg.componentWeights;
+    const ss = cfg.standardShape && cfg.standardShape.enabled ? cfg.standardShape : null;
     if (components.includes('dayOfWeek') && profile.dayOfWeek.available) {
       f.dayOfWeek = W().applyIntensity(profile.dayOfWeek.factors[a.dayOfWeekIndex - 1], α.dayOfWeek);
       used.push(profile.dayOfWeek.confidence);
+    } else if (components.includes('dayOfWeek') && ss) {
+      const v = Number(ss.dayOfWeek[a.dayOfWeekIndex - 1]);
+      if (v > 0 && v !== 1) { f.dayOfWeek = v; assumed = true; }
     }
     if (components.includes('calendar') && profile.calendar.available) {
       f.calendar = W().applyIntensity(profile.calendar.factors[dom - 1], α.calendar);
@@ -113,20 +124,34 @@
       }
       if (g && g.applied) { f.event = W().applyIntensity(g.factor, α.events); used.push(g.confidence); }
     }
+    if (components.includes('events') && ss && f.event === 1) {
+      const md = date.slice(5);
+      (ss.events || []).forEach((e) => {
+        const v = Number(e.factor);
+        if (v > 0 && v !== 1 && inMMDD(md, e.from, e.to)) { f.event *= v; assumed = true; }
+      });
+    }
     if (components.includes('season') && tag && tag.season) {
       const g = profile.seasons[`season:${S().keyOf(tag.season)}`];
       if (g && g.applied) { f.season = W().applyIntensity(g.factor, α.season); used.push(g.confidence); }
     }
-    return { weight: f.dayOfWeek * f.calendar * f.event * f.season, factors: f, confidences: used, warnings };
+    return { weight: f.dayOfWeek * f.calendar * f.event * f.season, factors: f, confidences: used, warnings, assumed };
   }
 
   /** Peso de cada mes (sin normalizar): índice histórico mezclado por intensidad × días del mes. */
-  function monthWeights(year, profile, components, cfg) {
+  function monthWeights(year, profile, components, cfg, byMonthDays) {
     const useHist = components.includes('monthly') && profile.monthly.available;
+    const ss = cfg.standardShape && cfg.standardShape.enabled ? cfg.standardShape : null;
     const α = cfg.componentWeights.monthly;
     return Array.from({ length: 12 }, (_, i) => {
       const days = Cal().daysInMonth(year, i + 1);
       const idx = useHist ? α * profile.monthly.index[i] + (1 - α) : 1;
+      if (!useHist && ss && components.includes('monthly') && byMonthDays) {
+        // Peso del mes = suma de los factores estándar de sus días (mismos componentes que usará el reparto diario).
+        const dayComps = components.filter((c) => c === 'dayOfWeek' || c === 'events');
+        const ws = byMonthDays[i].map((d) => dayWeight(d, null, profile, dayComps, cfg));
+        if (ws.some((x) => x.assumed)) return { weight: ws.reduce((a, x) => a + x.weight, 0), source: 'user_assumption', confidence: 'limited' };
+      }
       return { weight: idx * days, source: useHist ? 'historical_seasonality' : 'fallback',
         confidence: useHist ? profile.monthly.confidence : components.includes('monthly') ? 'insufficient' : null };
     });
@@ -134,13 +159,61 @@
 
   /* ---------- Supuestos de CR y AOV ---------- */
 
-  function metricAssumption(profile, cfg, channel, month, metric) {
+  /**
+   * AOV general (supuesto) repartido a los canales.
+   *   - Canal con AOV propio (assumptions[canal].aov) o con AOV histórico: queda fijo.
+   *   - Los demás comparten el AOV que falta para que el total digital siga en el AOV general:
+   *       pedidos totales = meta total ÷ AOV general;  AOV libre = meta de los canales libres ÷ (pedidos totales − pedidos de los fijos).
+   *   - Sin canales fijos, todos heredan el AOV general.
+   * Devuelve { general, byChannel: { canal: { value, kind: 'inherited'|'adjusted' } }, issue }.
+   */
+  function generalAovValue(g) {
+    if (!g) return null;
+    if (g.mode === 'lines') {
+      const lines = (g.lines || []).filter((l) => Number(l.aov) > 0 && Number(l.share) > 0);
+      const sum = lines.reduce((a, l) => a + Number(l.share), 0);
+      return sum > 0 ? lines.reduce((a, l) => a + Number(l.share) * Number(l.aov), 0) / sum : null;
+    }
+    return Number(g.value) > 0 ? Number(g.value) : null;
+  }
+
+  function resolveGeneralAov({ cfg, year, targets, explicit, profiles }) {
+    const general = generalAovValue(cfg.generalAov);
+    const out = { general, byChannel: {}, issue: null };
+    if (!general) return out;
+    const days = Cal().daysOfYear(year);
+    const rev = {};
+    C().channelIds.forEach((ch) => { rev[ch] = generateAnnualPlan({ ch, year, targets, explicit: explicit[ch], days }).value; });
+    const channels = C().channelIds.filter((ch) => rev[ch] !== null && rev[ch] > 0);
+    if (!channels.length) return out;
+    const fixed = {};
+    channels.forEach((ch) => {
+      const own = cfg.assumptions[ch] && cfg.assumptions[ch].aov;
+      const hist = profiles && profiles[ch] && profiles[ch].metrics.overall.aov;
+      if (own > 0) fixed[ch] = own; else if (hist > 0) fixed[ch] = hist;
+    });
+    const total = channels.reduce((a, ch) => a + rev[ch], 0);
+    const free = channels.filter((ch) => !fixed[ch]);
+    if (!free.length) return out;
+    if (!Object.keys(fixed).length) { free.forEach((ch) => { out.byChannel[ch] = { value: general, kind: 'inherited' }; }); return out; }
+    const remaining = total / general - Object.keys(fixed).reduce((a, ch) => a + rev[ch] / fixed[ch], 0);
+    if (!(remaining > 0)) { out.issue = 'Los AOV propios o históricos ya explican más pedidos de los que permite el AOV general; no hay margen para los demás canales.'; return out; }
+    const aov = free.reduce((a, ch) => a + rev[ch], 0) / remaining;
+    free.forEach((ch) => { out.byChannel[ch] = { value: aov, kind: 'adjusted' }; });
+    return out;
+  }
+
+  function metricAssumption(profile, cfg, channel, month, metric, derived = null) {
     const byM = profile.metrics.byMonth[month - 1][metric];
     if (byM !== null && byM > 0) return { value: byM, source: 'historical_average', status: 'calculated', confidence: profile.monthly.available ? profile.monthly.confidence : 'limited', note: 'Histórico del mismo mes' };
     const all = profile.metrics.overall[metric];
     if (all !== null && all > 0) return { value: all, source: 'historical_average', status: 'calculated_with_assumption', confidence: 'limited', note: 'Promedio histórico del canal (sin datos del mes)' };
     const u = cfg.assumptions[channel] && cfg.assumptions[channel][metric];
     if (u !== null && u !== undefined && u > 0) return { value: u, source: 'user_assumption', status: 'calculated_with_assumption', confidence: 'limited', note: 'Supuesto capturado por el usuario' };
+    if (metric === 'aov' && derived && derived.value > 0) {
+      return { value: derived.value, source: 'user_assumption', status: 'calculated_with_assumption', confidence: 'limited',
+        note: derived.kind === 'adjusted' ? 'AOV general ajustado por la meta de cada canal' : 'Hereda el AOV general' };
+    }
     return { value: null, source: 'insufficient_data', status: 'insufficient_data', confidence: 'insufficient', note: 'Sin histórico ni supuesto' };
   }
 
@@ -165,9 +238,10 @@
     const explicit = p.explicit || (cfg.useExplicitPlan ? explicitPlan(p.store, year) : explicitPlan(null, year));
     const targets = p.targets || FP.dataModel.createTargets(year);
 
+    const genAov = resolveGeneralAov({ cfg, year, targets, explicit, profiles });
     const channels = {};
     C().channelIds.forEach((ch) => {
-      channels[ch] = generateChannelPlan({ ch, year, cfg, components, profile: profiles[ch], tags: tags[ch], explicit: explicit[ch], targets });
+      channels[ch] = generateChannelPlan({ ch, year, cfg, components, profile: profiles[ch], tags: tags[ch], explicit: explicit[ch], targets, derivedAov: genAov.byChannel[ch] || null });
     });
 
     const totalTarget = targets.annual && targets.annual.revenue !== null && targets.annual.revenue !== undefined
@@ -182,6 +256,7 @@
         byChannel: Object.fromEntries(C().channelIds.map((ch) => [ch, channels[ch].annualTarget]))
       },
       channels,
+      assumptions: { generalAov: genAov.general, byChannel: genAov.byChannel, issue: genAov.issue },
       total: aggregate(C().channelIds.map((ch) => channels[ch].annual)),
       profiles
     };
@@ -190,7 +265,7 @@
     return plan;
   }
 
-  function generateChannelPlan({ ch, year, cfg, components, profile, tags, explicit, targets }) {
+  function generateChannelPlan({ ch, year, cfg, components, profile, tags, explicit, targets, derivedAov = null }) {
     const issues = [];
     const days = Cal().daysOfYear(year);
     const byMonthDays = Array.from({ length: 12 }, () => []);
@@ -213,7 +288,7 @@
     });
 
     // 4. Métricas de volumen: pedidos y tráfico
-    applyVolumeMetrics({ ch, cfg, profile, months, dayRows });
+    applyVolumeMetrics({ ch, cfg, profile, months, dayRows, derivedAov });
 
     // 5. Resúmenes
     months.forEach((m, i) => {
@@ -236,7 +311,7 @@
   }
 
   function generateMonthlyPlan({ ch, year, cfg, components, profile, targets, explicit, byMonthDays, annualTarget, issues }) {
-    const weights = monthWeights(year, profile, components, cfg);
+    const weights = monthWeights(year, profile, components, cfg, byMonthDays);
     const months = weights.map((w, i) => {
       const key = mk(year, i + 1);
       const userT = targets.byMonth && targets.byMonth[key] && targets.byMonth[key].byChannel && targets.byMonth[key].byChannel[ch];
@@ -294,10 +369,13 @@
         const parts = D().distributeTarget(remaining, freeRows.map((r) => r.weightInfo.weight), { decimals: cfg.moneyDecimals });
         const conf = W().worstConfidence([monthPlan.confidence, ...freeRows[0].weightInfo.confidences]);
         const hist = monthPlan.source === 'historical_seasonality' || freeRows.some((r) => r.weightInfo.confidences.length);
+        const assumedMonth = monthPlan.source === 'user_assumption';
         freeRows.forEach((r, j) => {
           r.values.revenue = parts[j];
-          r.cells.revenue = cell(parts[j], hist ? 'historical_seasonality' : 'fallback', 'calculated',
-            W().worstConfidence([conf, ...r.weightInfo.confidences]), r.weightInfo.warnings.join(' ') || null);
+          const asm = r.weightInfo.assumed || assumedMonth;
+          r.cells.revenue = cell(parts[j], asm ? 'user_assumption' : hist ? 'historical_seasonality' : 'fallback', asm ? 'calculated_with_assumption' : 'calculated',
+            W().worstConfidence([conf, ...r.weightInfo.confidences, asm ? 'limited' : null]),
+            [...r.weightInfo.warnings, asm ? 'Forma estándar (supuesto tuyo), no histórico.' : null].filter(Boolean).join(' ') || null);
         });
       }
     } else if (Math.abs(remaining) >= 0.005) {
@@ -309,10 +387,10 @@
   }
 
   /** Pedidos y volumen enteros por mes (mayor residuo); CR y AOV diarios recalculados. */
-  function applyVolumeMetrics({ ch, cfg, profile, months, dayRows }) {
+  function applyVolumeMetrics({ ch, cfg, profile, months, dayRows, derivedAov = null }) {
     months.forEach((m) => {
       const rows = dayRows.filter((r) => r.month === m.month);
-      const aovA = metricAssumption(profile, cfg, ch, m.month, 'aov');
+      const aovA = metricAssumption(profile, cfg, ch, m.month, 'aov', derivedAov);
       const crA = metricAssumption(profile, cfg, ch, m.month, 'conversionRate');
       m.assumptions = { aov: aovA, conversionRate: crA };
 
@@ -484,7 +562,8 @@
       confidence: W().worstConfidence(usedConf),
       settings: { smoothing: cfg.smoothing, outlierMadK: cfg.outlierMadK, minSamples: cfg.minSamples, shrinkageK: cfg.shrinkageK,
         calendarEvidenceZ: cfg.calendarEvidenceZ, eventFactorBounds: cfg.eventFactorBounds, monthMinCoverage: cfg.monthMinCoverage,
-        historicalPeriod: cfg.historicalPeriod },
+        historicalPeriod: cfg.historicalPeriod,
+        standardShape: cfg.standardShape, generalAov: cfg.generalAov },
       dataSources: {
         explicitPlanDays: C().channelIds.reduce((a, ch) => a + plan.channels[ch].days.filter((r) => r.explicit).length, 0),
         configuredEvents: (p.events || []).length
@@ -650,8 +729,8 @@
   }
 
   FP.planning = {
-    buildTags, explicitPlan, dayWeight, monthWeights, metricAssumption,
-    generatePlan, generateAnnualPlan, generateMonthlyPlan, generateDailyPlan, generateWeeklyPlan,
+    buildTags, explicitPlan, inMMDD, dayWeight, monthWeights, metricAssumption,
+    generatePlan, resolveGeneralAov, generalAovValue, generateAnnualPlan, generateMonthlyPlan, generateDailyPlan, generateWeeklyPlan,
     aggregate, validatePlanClosure, compareMethods,
     createPlanRegistry, toVersion, fromVersion, savePlan, getOriginalPlan, hydratePlanRegistry, planValuesMap,
     distributeTarget: (...a) => D().distributeTarget(...a), normalizeDistribution: (...a) => D().normalizeDistribution(...a)
