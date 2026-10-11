@@ -655,3 +655,9 @@ Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por e
 - **Aviso en Plan sin histórico:** el plan original se congela sin volumen, AOV ni CR y no se puede rehacer. Es un aviso; no bloquea el guardado.
 - **Propuesta de ruta más completa:** cuando se detectan datos, la tarjeta pregunta si se quiere pasar; si se dice «No por ahora» no vuelve a insistir con esa misma propuesta.
 - **Tarjeta compacta:** en pasos de revisión «Mostrarme dónde» no cierra la tarjeta; queda con título, texto y «Ya lo vi» / «Siguiente».
+
+## Añadido 2026-10-11 · Reparto por canal con monto o % (Fase 13)
+
+- En «Metas y motor», después de la **meta anual total**, cada canal acepta su **monto** (`151M`, `151,400,000`) o su **porcentaje** del total (`58%`). El % exige haber capturado antes la meta anual; si no, se avisa.
+- Junto a cada canal aparece su equivalente (`$151.4 M, 58.0% del total`) y debajo un resumen en vivo: `Asignado $245.3 M (94.0%). Falta $15.7 M (6.0%) para Llamadas.` / «el reparto cuadra» / «Se excede por …».
+- Lo que se guarda siempre es el **monto** (el % se redondea a centavos). No se completa solo el último canal ni se reparte el resto.

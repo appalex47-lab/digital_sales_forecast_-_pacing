@@ -2699,3 +2699,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - `FP.guidanceConfig.TOUR` es el catálogo completo (16); cada paso tiene `paths` (string con las rutas donde aparece; por defecto `'A'`). `FP.tour.steps()` devuelve solo los de la ruta activa (`FP.tour.setPath(p)`, que llaman `loadUx`, las acciones de ruta y `syncTarget/render`). Todo índice de paso (`tour.step`) es relativo a esa lista filtrada.
 - `FP.tour.upgradeFor(state, status)` calcula la ruta más completa sugerida; `FP.tour.currentMicro(state)` devuelve el micro-paso actual (lo usan `tour-cta` y `tour-micro-done` para decidir entre ocultar o dejar la tarjeta compacta).
 - Acciones nuevas: `tour-path`, `tour-change-path`, `tour-path-up`, `tour-up-dismiss`, `tour-compact-off`. Se retiró `tour-offer-go`.
+
+## Fase 13 · Reparto por canal con monto o %
+
+- `FP.format.parseShareInput(raw, total)` → `{value, kind:'amount'|'pct', error?}`; con `%` usa `Math.round(total*n)/100`; errores `invalid` y `no_total`.
+- `FP.ui.updateTargetHints()` pinta `[data-share-hint]` por canal y el resumen `#t-split` (`role=status`); se llama al renderizar, en cada `input` de `#targets-form` y tras `ta-fill`.
+- `saveTargetsFromForm` (app.js) parsea los canales con `parseShareInput` contra la meta anual; no cambia el modelo guardado (siempre montos). Prueba: `tools/regression/batch_share13.py`.

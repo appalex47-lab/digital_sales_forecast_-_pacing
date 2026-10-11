@@ -62,6 +62,24 @@
     return base * mult;
   }
 
+  /**
+   * Monto de un canal (Fase 13): el usuario puede escribir el monto («151M») o su parte del total («58%»).
+   * El porcentaje se convierte a monto sobre la meta anual total; lo que se guarda siempre es el monto.
+   * @returns {{value:number|null, kind:'amount'|'pct'|null, error?:'invalid'|'no_total'}}
+   */
+  function parseShareInput(raw, total) {
+    const s = String(raw ?? '').trim();
+    if (!s) return { value: null, kind: null };
+    if (/%$/.test(s)) {
+      const n = M().toNumberOrNull(s.replace(/%$/, '').replace(/\s+/g, ''));
+      if (n === null || n < 0 || n > 100) return { value: null, kind: 'pct', error: 'invalid' };
+      if (!(total > 0)) return { value: null, kind: 'pct', error: 'no_total' };
+      return { value: Math.round(total * n) / 100, kind: 'pct' };
+    }
+    const v = parseAmountInput(s);
+    return v === null ? { value: null, kind: 'amount', error: 'invalid' } : { value: v, kind: 'amount' };
+  }
+
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -70,5 +88,5 @@
   const STATUS_LABELS = { ok: 'Correcto', pass: 'Correcto', warning: 'Advertencia', error: 'Error', empty: 'Sin datos', na: 'N/D' };
 
   FP.format = { DASH, currency, currencyCompact, integer, decimal, percent, signedPercent, metric,
-    parseAmountInput, escapeHtml, SOURCE_LABELS, STATUS_LABELS };
+    parseAmountInput, parseShareInput, escapeHtml, SOURCE_LABELS, STATUS_LABELS };
 })(typeof window !== 'undefined' ? window : globalThis);
