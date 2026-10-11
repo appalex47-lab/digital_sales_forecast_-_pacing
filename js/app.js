@@ -70,7 +70,7 @@
       ctxNote: null,
       visited: {},
       lastByGroup: {},
-      tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null },
+      tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '' },
       tourOffered: false,
       home: { channel: 'total', periodType: 'year', periodKey: null },
       measureAction: null,
@@ -872,7 +872,12 @@
     FP.navigation.applyMode(state);
     if (tourSyncDepth < 20) {
       const adv = FP.tour.syncTarget(state, status);
-      if (adv) { tourSyncDepth++; try { tourGo(adv.idx, adv.flash); } finally { tourSyncDepth--; } return; }
+      if (adv && adv.idx !== undefined) { tourSyncDepth++; try { tourGo(adv.idx, adv.flash); } finally { tourSyncDepth--; } return; }
+      if (adv && adv.stay) {   // cambió el micro-paso dentro del mismo paso: la tarjeta reaparece con el aviso
+        const t = state.ux.tour; t.lastMicro = adv.record.key; t.lastMicroTitle = adv.record.title;
+        if (adv.flash) t.flash = adv.flash;
+        if (t.went && adv.flash) { t.went = false; t.collapsed = false; }
+      }
     }
     FP.tour.render(state);
     saveUx();
@@ -1879,7 +1884,7 @@
       state.dx.run = null;
       loadYearScoped(state.year);
       refresh();
-      state.ux.visited = {}; state.ux.tour = { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null }; state.ux.lastByGroup = {};
+      state.ux.visited = {}; state.ux.tour = { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '' }; state.ux.lastByGroup = {};
       render();
       FP.ui.toast('Datos borrados');
     },
@@ -1895,6 +1900,8 @@
       set('annual', s.total);
       C.channelIds.forEach((ch) => set(ch, s.byChannel[ch]));
       document.getElementById('targets-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      { const t = state.ux.tour; FP.tour.mark(state, 'meta.calc', false);   // sin render() completo: borraría lo que acaba de llenarse en el formulario
+        if (t.active && t.step === FP.tour.idxOf('meta')) { t.went = false; t.collapsed = false; t.flash = 'Hecho: Calcula tu meta desde el histórico.'; t.lastMicro = 'meta.channels'; t.lastMicroTitle = 'Revisa el reparto por canal'; FP.tour.render(state); } }
       FP.ui.toast('Formulario lleno con la propuesta. Revisa y pulsa "Guardar metas" para confirmarla.');
     },
 
@@ -2282,7 +2289,7 @@
     },
     'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); },
     'tour-start'() { tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
-    'tour-restart'() { state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null }; tourGo(0); },
+    'tour-restart'() { state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null, micro: {} }; tourGo(0); },
     'tour-next'() {
       const t = state.ux.tour; const status = FP.contextEngine.collectStatus(state);
       const n = FP.tour.nextIdx(state, status, t.step);
@@ -2305,6 +2312,7 @@
       const status = FP.contextEngine.collectStatus(state);
       tourGo(FP.tour.nextIdx(state, status, t.step));
     },
+    'tour-micro-done'(el) { FP.tour.mark(state, el.dataset.key, false); const t = state.ux.tour; t.went = false; t.collapsed = false; render(); },
     'tour-pause'() { state.ux.tour.collapsed = true; render(); },
     'tour-expand'() { state.ux.tour.collapsed = false; render(); },
     'tour-close'() { state.ux.tour = { ...state.ux.tour, active: false, collapsed: false, ended: null, step: 0 }; render(); },
@@ -3026,7 +3034,7 @@
   }
   let tourSyncDepth = 0;
   function tourGo(i, flash) {
-    state.ux.tour = { ...state.ux.tour, active: true, step: i, collapsed: false, went: false, flash: flash || '', ended: null };
+    state.ux.tour = { ...state.ux.tour, active: true, step: i, collapsed: false, went: false, flash: flash || '', ended: null, lastMicro: '', lastMicroTitle: '' };
     const v = FP.tour.steps()[i].view;
     if (root.location.hash === `#${v}` || state.view === v && !root.location.hash) render(); else root.location.hash = v;
   }
@@ -3129,6 +3137,12 @@
       const el = e.target.closest('select[data-action], input[data-action], textarea[data-action]');
       if (el && el.type === 'checkbox' && el.dataset.action === 'rc-select') { actions['rc-select'](el); return; }
       if (el && actions[el.dataset.action]) actions[el.dataset.action](el);
+    });
+    document.addEventListener('input', (e) => {   // meta escrita a mano (sin histórico): avanza el micro-paso sin volver a dibujar el formulario
+      if (e.target && e.target.id === 't-annual' && String(e.target.value).trim() !== '' && state.ux.tour.active && !(state.ux.tour.micro || {})['meta.total']) {
+        FP.tour.mark(state, 'meta.total', false); const t = state.ux.tour; t.went = false; t.collapsed = false; t.flash = 'Hecho: Escribe tu meta anual total.'; t.lastMicro = 'meta.channels'; t.lastMicroTitle = 'Revisa el reparto por canal';
+        FP.tour.render(state);
+      }
     });
     document.addEventListener('submit', (e) => {
       if (e.target.id === 'targets-form') { e.preventDefault(); saveTargetsFromForm(e.target); }

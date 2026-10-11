@@ -434,3 +434,11 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - Tarjeta flotante (hoja inferior en celular). Pausar colapsa a un botón «Retomar recorrido · paso N de 15»; Salir guarda el paso.
 - Se ofrece una sola vez en la primera visita sin datos (ventana no modal, `ux.tourOffered`) y al activar el Modo Aprendiz. Cobertura: `batch_tour10.py`.
 - Decisiones del plan que se tomaron por defecto: tarjeta no bloqueante; resumen en pausa sin meta; el recorrido llega hasta Medición con todos los pasos existentes (no se recortó a 8).
+
+
+## Adenda 23 · Fase 11: micro-pasos del recorrido (2026-10-11)
+- `TOUR[i].micro` = lista de micro-pasos (`key`, `title`, `desc`, `target`, `box`, `manual`, `when`). Pasos con micro-pasos: datos, real, meta (variante `data`/`nodata` según haya histórico o venta real), plan, pacing, forecast. El resto de pasos no cambia.
+- Los micro-pasos se CALCULAN del estado (archivo en revisión `state.staging`, dato importado, meta guardada, `planning.preview`, `registry.originalPlanId`); solo los de revisión manual («Ya revisé…», «Ya lo vi») y los hechos en pantalla sin estado («Usar propuesta», meta escrita) se guardan en `ux.tour.micro`. Una marca manual vale solo mientras exista lo revisado (la vista previa y el archivo en revisión no sobreviven a recargar). Un micro-paso posterior hecho implica los anteriores.
+- Cambiar de pantalla a mitad: el paso y los micro-pasos se conservan; la tarjeta dice «Estás en otra pantalla. Tu avance se conserva (n de m)» y el botón pasa a «Ir a …». Sin «Es aquí» fuera de su pantalla.
+- Guardar el plan nunca lo hace el recorrido; el micro-paso avisa que el primer plan guardado se congela como original.
+- Cobertura: `batch_tour10.py` (T10–T13).

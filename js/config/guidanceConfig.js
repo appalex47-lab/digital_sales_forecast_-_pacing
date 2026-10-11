@@ -481,24 +481,54 @@
 
   const TOUR = [
     { id: 'datos', view: 'carga', target: '#up-historical', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical',
+      micro: [
+        { key: 'file', title: 'Elige tu archivo', desc: 'En la tarjeta «Histórico» pulsa «Seleccionar CSV» (o arrastra el archivo sobre ella).', target: '#up-historical', box: 'panel' },
+        { key: 'review', title: 'Revisa la validación', desc: 'Antes de importar, la app muestra errores y advertencias. Revisa que no haya errores.', target: '#staging', box: 'panel', manual: 'Ya revisé' },
+        { key: 'commit', title: 'Confirma la importación', desc: 'Pulsa «Importar» en «Revisión antes de importar»; el recorrido avanza solo.', target: '#staging', box: 'panel' }
+      ],
       cta: 'Ir a cargar histórico', skipLabel: 'No tengo histórico', done: 'Histórico cargado.', waiting: 'Esperando tu archivo de histórico. Cuando se importe sin errores, paso solo al siguiente.',
       what: 'Los archivos con tu histórico: la venta de años anteriores, por día y canal.', why: 'Con el histórico, al capturar la meta el plan proyecta volumen, AOV y CR. Si capturas la meta antes, el plan original queda sin esos indicadores y no se puede rehacer.',
       lookFor: 'Que el histórico cargue sin errores. Si tu empresa no tiene histórico, usa «No tengo histórico» y sigue con la venta real. Si ya tienes datos, revisa que estén completos y sigue.', next: 'Cargar la venta real.' },
     { id: 'real', view: 'carga', target: '#up-actual', title: 'Real', kind: 'action', detect: 'actual',
+      micro: [
+        { key: 'file', title: 'Elige tu archivo', desc: 'En la tarjeta «Venta real / Actual» pulsa «Seleccionar CSV» (o arrastra el archivo sobre ella).', target: '#up-actual', box: 'panel' },
+        { key: 'review', title: 'Revisa la validación', desc: 'Antes de importar, la app muestra errores y advertencias. Revisa que no haya errores.', target: '#staging', box: 'panel', manual: 'Ya revisé' },
+        { key: 'commit', title: 'Confirma la importación', desc: 'Pulsa «Importar» en «Revisión antes de importar»; el recorrido avanza solo.', target: '#staging', box: 'panel' }
+      ],
       cta: 'Ir a cargar venta real', skipLabel: 'No tengo venta real', done: 'Venta real cargada.', waiting: 'Esperando tu archivo de venta real. Cuando se importe sin errores, paso solo al siguiente.',
       what: 'La venta que realmente ocurrió este año, cargada desde archivos.', why: 'Sin real no hay pacing ni forecast.',
       lookFor: 'Que la calidad de datos no tenga errores y la fecha de corte sea la esperada.', next: 'Capturar la meta.' },
     { id: 'meta', view: 'resumen', target: '#targets-form', title: 'Meta', kind: 'action', detect: 'target',
+      micro: [
+        { key: 'calc', when: 'data', title: 'Calcula tu meta desde el histórico', desc: 'Si no tienes una meta definida, abre «Calcular metas desde el histórico» y pulsa «Usar propuesta».', target: '.targets-assist', box: 'self' },
+        { key: 'total', when: 'nodata', title: 'Escribe tu meta anual total', desc: 'Sin histórico ni venta real no se puede calcular; escríbela directamente (ej. 261M).', target: '.targets-form__total', box: 'self' },
+        { key: 'channels', title: 'Revisa el reparto por canal', desc: 'Mira cuánto le toca a cada canal y ajusta lo que necesites.', target: '.targets-form__channels', box: 'self', manual: 'Ya revisé los canales' },
+        { key: 'save', title: 'Guarda las metas', desc: 'Pulsa «Guardar metas»: quedan como tu Original Target.', target: '#targets-form > .btn-row', box: 'self' }
+      ],
       cta: 'Ir a capturar la meta', skipLabel: 'Aún no tengo meta', done: 'Meta guardada.', waiting: 'Esperando que guardes la meta. Cuando se guarde, paso solo al siguiente.',
       what: 'La meta anual por canal: el Original Target.', why: 'Todo se mide contra ella y nunca se modifica.',
       lookFor: 'Que el total y los canales estén capturados y cuadren.', next: 'Revisar el plan.' },
-    { id: 'plan', view: 'plan', target: '#view-plan', title: 'Plan', chapter: 'Planear',
+    { id: 'plan', view: 'plan', target: '#view-plan', kind: 'micro', done: 'Plan guardado y revisado.', cta: 'Ir a Plan', title: 'Plan', chapter: 'Planear',
+      micro: [
+        { key: 'gen', title: 'Genera la vista previa', desc: 'Pulsa «Generar vista previa»: calcula cómo se reparte la meta en meses, semanas y días.', target: '#plan-targets .btn-row', box: 'self' },
+        { key: 'review', title: 'Revisa la vista previa', desc: 'Mira que los meses fuertes y débiles tengan sentido antes de guardar.', target: '#plan-body', box: 'self', manual: 'Ya la revisé' },
+        { key: 'save', title: 'Guarda el plan', desc: 'Pulsa «Guardar plan». El primer plan guardado se congela como plan original y no se puede rehacer.', target: '#plan-body [data-action="plan-save"]', box: 'row' },
+        { key: 'view', title: 'Mira el plan distribuido', desc: 'Al guardar aparece el plan por mes, semana y día. Aquí se consulta y se exporta.', target: '#plan-body', box: 'self', manual: 'Ya lo vi' }
+      ],
       what: 'La meta repartida en meses, semanas y días con la estacionalidad.', why: 'Dice cuánto debería llevarse en cada fecha, no solo al cierre.',
       lookFor: 'Que los días fuertes y débiles tengan sentido para el negocio.', next: 'Ver cómo vamos contra el plan.' },
-    { id: 'pacing', view: 'pacing', target: '#fc-channels', title: 'Pacing',
+    { id: 'pacing', view: 'pacing', target: '#fc-channels', kind: 'micro', done: 'Pacing revisado.', cta: 'Ir a Pacing', title: 'Pacing',
+      micro: [
+        { key: 'channels', title: 'Lee cumplimiento y gap por canal', desc: 'Cada tarjeta compara el plan acumulado con lo real; busca canales debajo de 100 %.', target: '#fc-channels', box: 'self', manual: 'Ya lo vi' },
+        { key: 'alerts', title: 'Revisa las alertas', desc: 'Las alertas de pacing dicen dónde mirar primero.', target: '#fc-alerts', box: 'panel', manual: 'Ya las revisé' }
+      ],
       what: 'Plan acumulado vs actual acumulado por canal.', why: 'Dice si vamos arriba o debajo del plan de los días transcurridos.',
       lookFor: 'Canales con cumplimiento menor a 100 % y su gap.', next: 'Ver el forecast de cierre.' },
-    { id: 'forecast', view: 'pacing', target: '#fc-kpis', title: 'Forecast',
+    { id: 'forecast', view: 'pacing', target: '#fc-kpis', kind: 'micro', done: 'Forecast revisado.', cta: 'Ir a Pacing', title: 'Forecast',
+      micro: [
+        { key: 'kpis', title: 'Mira el forecast de cierre', desc: 'Dónde terminarías el año si continúa el comportamiento actual, y el gap contra la meta.', target: '#fc-kpis', box: 'self', manual: 'Ya lo vi' },
+        { key: 'controls', title: 'Revisa fecha de referencia y método', desc: 'Si lo necesitas, cambia la fecha de referencia o el método del forecast.', target: '#fc-controls', box: 'panel', manual: 'Listo' }
+      ],
       what: 'Dónde terminaríamos si continúa el comportamiento proyectado.', why: 'Separa lo que ya pasó de lo que se espera.',
       lookFor: 'El método en uso y el gap forecast.', next: 'Cuantificar la brecha.' },
     { id: 'gap', view: 'reforecast', target: '#rf-summary', title: 'Gap y recuperación',
