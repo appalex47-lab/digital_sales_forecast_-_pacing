@@ -165,7 +165,7 @@
         if (!foldable(g)) return `<div class="snav__group" role="group" aria-label="${esc(g.label)}">${g.views.map((v) => item(v, G().VIEWS[v].title)).join('')}</div>`;
         const open = !!navOpen[g.id];
         return `<div class="snav__group snav__group--foldable" role="group" aria-label="${esc(g.label)}">
-        <button type="button" class="snav__toggle" data-action="nav-group" data-value="${esc(g.id)}" aria-expanded="${open}" aria-controls="snav-g-${esc(g.id)}"><span>${esc(g.label)}</span>${CHEV}</button>
+        <button type="button" class="snav__toggle" data-action="nav-group" data-value="${esc(g.id)}" aria-expanded="${open}" aria-controls="snav-g-${esc(g.id)}"><span class="snav__tl"><span>${esc(g.label)}</span>${g.question ? `<span class="snav__q">${esc(g.question)}</span>` : ''}</span>${CHEV}</button>
         <div class="snav__items" id="snav-g-${esc(g.id)}" ${open ? '' : 'hidden'}>${g.views.map((v) => item(v, G().VIEWS[v].title)).join('')}</div></div>`;
       }).join('')}
       <div class="snav__foot">
@@ -197,7 +197,9 @@
         <div class="ux-context__top">
           <nav aria-label="Ruta" class="breadcrumbs"><ol>${[...crumbs, ...extra].map((c, i, arr) => {
             const target = i === 0 ? 'inicio' : i === 1 && G().GROUPS.find((g) => g.label === c) ? (state.ux.lastByGroup[G().GROUPS.find((g) => g.label === c).id] || G().GROUPS.find((g) => g.label === c).views[0]) : null;
-            return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}</li>`;
+            const grp = i === 1 ? G().GROUPS.find((g) => g.label === c) : null;
+            const qn = grp && grp.question ? `<span class="crumb-q"> · ${esc(grp.question)}</span>` : '';
+            return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
           }).join('')}</ol></nav>
           <div class="ux-context__actions btn-row">
             ${(v.help || []).length ? `<button type="button" class="btn btn--small" data-action="help-section">Ayuda de esta sección</button>` : ''}

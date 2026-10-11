@@ -20,7 +20,7 @@
 | 5 | **Recovery y Reforecast**: resultado y brecha arriba; archivos, restricciones y detalle plegados (los filtros de canal y periodo se quedan visibles porque cambian el resultado) | Hecha en esta rama |
 | 6 | **Metas y motor**: separar «Herramientas» (datos de prueba, pruebas del motor, borrar datos) en una zona plegada dentro de la misma pantalla | Hecha en esta rama |
 | 7 | **Ajustes**: «Básico» y «Avanzado» (hoy 104 controles) | Hecha en esta rama |
-| 8 | **Menú por pregunta**: ¿Cómo voy? ¿Por qué? ¿Qué hago? ¿Funcionó? + Datos y Configuración (mismas pantallas, otra agrupación) | Pendiente (nombres por decidir) |
+| 8 | **Menú por pregunta (versión acordada)**: se conservan los nombres de grupo y las pantallas; cada grupo muestra su pregunta (Planear ¿Qué quiero alcanzar?, Monitorear ¿Cómo voy?, Diagnosticar ¿Por qué?, Análisis ¿Qué patrones hay?, Recuperar ¿Qué hago?, Medir y aprender ¿Funcionó?) en el menú y en la ruta | Hecha en esta rama |
 | P | **Prueba de usuario** (`PRUEBA_DE_USUARIO_inicio.md`) | Después de las fases 1 y 5, y al final |
 
 ## Cómo se ejecuta cada fase
