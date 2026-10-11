@@ -137,8 +137,8 @@
 
   function render(state) {
     const tour = state.ux.tour;
-    $('help-view').innerHTML = `<div class="learn">
-      <div>
+    $('help-view').innerHTML = `<div class=\"learn\">
+      <div data-own-head>
         <nav aria-label="Ruta" class="breadcrumbs"><ol><li><a href="#inicio">Inicio</a></li><li><span aria-current="location">¿Cómo funciona?</span></li></ol></nav>
         <h2 class="ds-page-title">¿Cómo funciona RevNavigator?</h2>
         <p class="ds-lede">RevNavigator te ayuda a planear, comparar, proyectar, diagnosticar, recuperar y medir el desempeño de ventas. Calcula con fórmulas determinísticas; la IA (Cohere) es opcional, solo redacta y nunca calcula ni navega.</p>

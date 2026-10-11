@@ -34,6 +34,7 @@
         <!-- Estado de la herramienta: solo las píldoras. El detalle vive en Configuración de RevNavigator -->
         <div class="topbar__status" id="topbar-status" role="group" aria-label="Estado de la herramienta"></div>
         <div class="topbar__actions">
+          <div class="topbar__help" id="topbar-help"></div>
           <button type="button" class="icon-btn" disabled aria-label="Notificaciones (próximamente)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 004 0"/></svg><span class="icon-btn__dot"></span></button>
           <span class="avatar" role="img" aria-label="Usuario (próximamente)">RN</span>
         </div>
@@ -234,7 +235,7 @@
   <main class="app-main" data-view="datos" id="view-datos" hidden>
     <section class="panel" aria-labelledby="t-data">
       <div class="panel__head">
-        <div>
+        <div data-own-head>
           <h2 class="panel__title" id="t-data">Datos normalizados</h2>
           <p class="panel__desc">El modelo canónico con el que trabaja la app. Cada métrica indica su origen: sin marca = cargada, "calc." = calculada, "falta" = sin dato, "inválido" = no se pudo leer.</p>
         </div>
@@ -267,7 +268,7 @@
   <!-- ===================== Vista: Estacionalidad (Fase 2) ===================== -->
   <main class="app-main" data-view="estacionalidad" id="view-estacionalidad" hidden>
     <section class="panel" aria-labelledby="t-season">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-season">Estacionalidad</h2>
         <p class="panel__desc">Patrones calculados del histórico por canal: mes, día de la semana, día del mes, eventos, festivos y temporadas. Cada factor muestra sus muestras y su confianza.</p>
       </div></div>
@@ -278,7 +279,7 @@
   <!-- ===================== Vista: Plan (Fase 2) ===================== -->
   <main class="app-main" data-view="plan" id="view-plan" hidden>
     <section class="panel" aria-labelledby="t-plan-targets">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-plan-targets">Metas y generación del plan</h2>
         <p class="panel__desc">Meta original (Original Target) por canal y plan distribuido en meses, semanas y días.</p>
       </div></div>
@@ -290,7 +291,7 @@
   <!-- ===================== Vista: Configuración de planeación (Fase 2) ===================== -->
   <main class="app-main" data-view="configuracion" id="view-configuracion" hidden>
     <section class="panel" aria-labelledby="t-plan-config">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-plan-config">Configuración de planeación</h2>
         <p class="panel__desc">Parámetros del motor. Se guardan en este navegador y cada plan registra los valores con los que se generó.</p>
       </div></div>
@@ -306,7 +307,7 @@
   <main class="app-main" data-view="pacing" id="view-pacing" hidden>
     <div class="ux-explainer" id="ux-exp-pacing"></div>
     <section class="panel" aria-labelledby="t-pacing">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-pacing">Pacing &amp; Forecast</h2>
         <p class="panel__desc">Plan original (solo lectura) contra el real, gap a la fecha y forecast de cierre. Plan, actual y forecast son estados separados: el forecast nunca modifica el plan.</p>
       </div></div>
@@ -371,7 +372,7 @@
   <main class="app-main" data-view="reforecast" id="view-reforecast" hidden>
     <div class="ux-explainer" id="ux-exp-reforecast"></div>
     <section class="panel" aria-labelledby="t-reforecast">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-reforecast">Recovery &amp; Reforecast</h2>
         <p class="panel__desc">Con lo que ya ocurrió, ¿qué tendría que venderse en cada día futuro para llegar a la meta original? Plan, forecast y reforecast son realidades distintas: el plan nunca cambia.</p>
       </div></div>
@@ -429,7 +430,7 @@
     <div class="ux-explainer" id="ux-exp-diagnostico"></div>
     <div class="why-hub-slot" id="why-hub-diagnostico"></div>
     <section class="panel" aria-labelledby="t-dx">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-dx">¿Por qué existe la brecha?</h2>
         <p class="panel__desc">Primero se demuestra la brecha, después se cuantifica el driver, después se busca la señal y al final se formula la hipótesis. Nunca se salta un paso. Nada aquí es una causa ni una recomendación.</p>
       </div>
@@ -473,7 +474,7 @@
     <div class="ux-explainer" id="ux-exp-analisis"></div>
     <div class="why-hub-slot" id="why-hub-analisis"></div>
     <section class="panel" aria-labelledby="t-an">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-an">Evolución y patrones</h2>
         <p class="panel__desc">No solo muestra si una entidad cayó o creció: identifica desde cuándo, cuánto tiempo lleva, si acelera o desacelera y si existe recuperación. Los resultados son descriptivos y trazables.</p>
       </div></div>
@@ -485,7 +486,7 @@
   <main class="app-main" data-view="recovery" id="view-recovery" hidden>
     <div class="ux-explainer" id="ux-exp-recovery"></div>
     <section class="panel" aria-labelledby="t-rc">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-rc">Recovery Center</h2>
         <p class="panel__desc">Brecha → driver → señal → hipótesis → escenario → acción → impacto simulado → resultado observado. Los escenarios son simulaciones, no predicciones; ninguna acción se ejecuta desde aquí.</p>
       </div></div>
@@ -591,7 +592,7 @@
   <main class="app-main" data-view="producto" id="view-producto" hidden>
     <div class="why-hub-slot" id="why-hub-producto"></div>
     <section class="panel" aria-labelledby="t-pa">
-      <div class="panel__head"><div>
+      <div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-pa">Categoría → Producto</h2>
         <p class="panel__desc">Negocio → canal → categoría → subcategoría → producto → SKU. Qué grupos pesan (participación) y cuáles explican el cambio (contribución). Datos diarios por SKU guardados en IndexedDB.</p>
       </div></div>
@@ -607,6 +608,8 @@
     </section>
     <section class="panel"><div class="panel__body" id="pa-trace"></div></section>
   </main>
+
+  <section class="ux-next-wrap" id="ux-next" aria-label="Siguiente paso"></section>
 
   <footer class="app-footer" id="app-footer"></footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

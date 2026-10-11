@@ -26,7 +26,7 @@
     const last = state.pkg && state.pkg.last;
     $('package-view').innerHTML = `
       <section class="panel" aria-labelledby="t-pkg">
-        <div class="panel__head"><div>
+        <div class="panel__head"><div data-own-head>
           <h2 class="panel__title" id="t-pkg">Paquete de análisis</h2>
           <p class="panel__desc">Un solo archivo .zip con los 7 exports que la herramienta ya calcula y un índice. No calcula nada nuevo: cada archivo es el mismo que se descarga desde su vista.</p>
         </div></div>

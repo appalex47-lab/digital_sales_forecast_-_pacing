@@ -2683,3 +2683,7 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 `#view-resumen`: `#targets-form` y `#validation-table` arriba; tres `<details class="ds-accordion pacing-more rs-more" data-rs-more=…>` (tools, edge, engine) y el contrato de `forecast_export.json`. `app.js renderView` abre `tools` una sola vez cuando no hay datos (`data-auto`).
 
 - Fase 7 (Configuración): `settings-view.js` divide el render en parte A (`#settings-view`: Estado, Modo) y parte B (`#settings-view-b`: Cohere y `<details id="st-adv">` «Opciones avanzadas» con Otras preferencias, Datos e IA). `SECTIONS` incluye `st-adv`; el manejador `data-jump` abre todos los `<details>` ancestros.
+
+
+## Encabezado homologado (Fase 9)
+`navigation.js` (`renderContextBar`) lee del DOM el título/descripción propios de la vista (marcados `data-own-head`, ocultos por CSS) y los muestra en «Detalle». Renderiza en `#ux-context` (cabecera), `#ux-next` (siguiente paso) y `#topbar-help` (menú Ayuda). `help.js` `learningBar` devuelve un `<details class="learn-panel">`; su estado abierto se guarda en `learnOpenView` y se reinicia al cambiar de vista.

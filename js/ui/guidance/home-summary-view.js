@@ -145,7 +145,7 @@
       <p class="ds-card__sub">${esc(FP.navigation.contextLabel({ channel: f.ch }))} · ${esc(f.label)}</p>
       <div class="home-key__grid">${how}${why}${todo}</div>
       ${chips ? `<div class="home-key__chips" aria-label="Estado por canal">${chips}</div>` : ''}
-      <p class="field__hint home-key__trust">Respaldo: venta real hasta <b>${esc(T.lastActual || '—')}</b> · <b>${cov ? `${cov.paired} de ${cov.expected}` : '—'}</b> días comparados · calidad: <b>${esc(T.quality ? (T.quality.text || T.quality.status) : '—')}</b>. Todo el detalle está abajo, en «Ver más».</p></section>`;
+      <p class="field__hint home-key__trust">Respaldo: venta real hasta <b>${esc(T.lastActual || '—')}</b> · <b>${cov ? `${cov.paired} de ${cov.expected}` : '—'}</b> días comparados · calidad: <b>${esc(T.quality ? (T.quality.text || T.quality.status) : '—')}</b>. Todo el detalle está abajo, en «Ver más».${T.quality && ['warnings', 'invalid'].includes(T.quality.status) ? ' <a href="#calidad">Revisar calidad de datos</a>' : ''}</p></section>`;
   }
 
   const BLOCKS = [

@@ -151,7 +151,9 @@
    * Modo Aprendiz (Fase 9.1): dónde está la vista dentro de la metodología, qué pregunta responde y qué hacer
    * ahora. "Qué hacer ahora" es el mismo siguiente paso determinista de Fase 7 (contextEngine), no otro.
    */
-  function learningBar(view, next, status) {
+  /** Panel «Aprender en esta vista» (Modo Aprendiz): plegado y cerrado al entrar. Los textos «¿Qué hago aquí?» y «¿Qué hago ahora?» ya están en el
+   *  encabezado y en «Siguiente paso»: solo se repiten aquí si dicen algo distinto, para no perder ni duplicar ningún texto. */
+  function learningBar(view, next, status, hd = {}) {
     const G_ = G();
     const esc = H().esc;
     const stepId = G_.VIEW_STEP[view];
@@ -160,23 +162,31 @@
     const cur = G_.METHODOLOGY[idx];
     const h = cur.help ? entry(cur.help) : null;
     const v = G_.VIEWS[view];
+    const same = (a, b) => String(a || '').replace(/\s+/g, ' ').trim() === String(b || '').replace(/\s+/g, ' ').trim();
     // "¿Qué necesito?" reutiliza requirements()/NEEDS (la misma lista del estado vacío y de "Preparación de
     // datos"): nunca una segunda lista de "qué falta". Si no hay pendientes, se muestra "obtienes" en su lugar.
     const req = status ? FP.contextEngine.requirements(view, status) : [];
     const pending = req.find((r) => !r.done);
-    return `<section class="learning-bar" aria-label="Aprender en esta vista">
+    const card = (q, body) => `<div class="learn-panel__card"><b>${q}</b><span>${body}</span></div>`;
+    const cards = [
+      h && h.purpose ? card('¿Para qué sirve?', esc(t(h.purpose))) : '',
+      h && h.decision ? card('¿Qué decisión ayuda a tomar?', esc(t(h.decision))) : '',
+      pending ? card('¿Qué necesito?', `${esc(pending.label)} <a href="#${pending.view}">Ir</a>`)
+        : v && v.produces ? card('¿Qué obtengo?', esc(t(v.produces))) : ''
+    ].join('');
+    const keepAction = v && v.action && !same(v.action, hd.todo);
+    const keepNext = next && !hd.showNext;   // cuando «Siguiente paso» está al final de la página, ahí vive «¿Qué hago ahora?»
+    return `<details class="learning-bar learn-panel" data-learn="${esc(view)}" ${hd.open ? 'open' : ''}>
+      <summary class="learn-panel__sum">Aprender en esta vista <span class="learn-panel__here">Estás en: ${esc(cur.label)}</span></summary>
       <ol class="learning-bar__path">${G_.METHODOLOGY.map((m, i) => `<li class="${i === idx ? 'is-here' : i < idx ? 'is-before' : ''}${m.upcoming ? ' is-upcoming' : ''}"
         title="${esc(m.question)}${m.upcoming ? ' (fase futura)' : ''}">${esc(m.label)}</li>`).join('')}</ol>
       <div class="learning-bar__body">
         <p><strong>Estás en: ${esc(cur.label)}.</strong> ${esc(cur.question)} ${h ? esc(t(h.shortDescription)) : ''}</p>
-        ${v && v.action ? `<p><span class="learning-bar__q">¿Qué hago aquí?</span> ${esc(t(v.action))}</p>` : ''}
-        ${h && h.purpose ? `<p><span class="learning-bar__q">¿Para qué sirve?</span> ${esc(t(h.purpose))}</p>` : ''}
-        ${h && h.decision ? `<p><span class="learning-bar__q">¿Qué decisión ayuda a tomar?</span> ${esc(t(h.decision))}</p>` : ''}
-        ${pending ? `<p><span class="learning-bar__q">¿Qué necesito?</span> ${esc(pending.label)} <a href="#${pending.view}">Ir</a></p>`
-          : v && v.produces ? `<p><span class="learning-bar__q">¿Qué obtengo?</span> ${esc(t(v.produces))}</p>` : ''}
-        ${next ? `<p><span class="learning-bar__q">¿Qué hago ahora?</span> ${esc(next.label)}: ${esc(next.reason)}</p>` : ''}
+        ${keepAction ? `<p><span class="learning-bar__q">¿Qué hago aquí?</span> ${esc(t(v.action))}</p>` : ''}
+        <div class="learn-panel__cards">${cards}</div>
+        ${keepNext ? `<p><span class="learning-bar__q">¿Qué hago ahora?</span> ${esc(next.label)}: ${esc(next.reason)}</p>` : ''}
         ${h ? `<button type="button" class="btn btn--small" data-action="help" data-id="${h.id}">¿Cómo funciona?</button>` : ''}
-      </div></section>`;
+      </div></details>`;
   }
 
   /** Microlearning (Fase 9.1): una idea breve, descartable, que no se repite. */

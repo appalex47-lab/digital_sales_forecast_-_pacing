@@ -165,7 +165,7 @@
     const link = (id, label) => `<li><a href="#${id}" data-jump="${id}">${esc(label)}</a></li>`;
     $('settings-view').innerHTML = `
       <section class="panel" aria-labelledby="t-settings">
-        <div class="panel__head"><div>
+        <div class="panel__head"><div data-own-head>
           <h2 class="panel__title" id="t-settings">Configuración de RevNavigator</h2>
           <p class="panel__desc">Lo que configuras una vez y vale para toda la herramienta. Cada sección es un desplegable: ábrela para ver o cambiar lo que contiene; el resumen de cada una se ve aunque esté cerrada. Tu plan se configura aparte, en Configuración de planeación.</p>
         </div></div>

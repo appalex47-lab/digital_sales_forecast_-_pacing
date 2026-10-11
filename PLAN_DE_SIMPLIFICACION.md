@@ -21,6 +21,7 @@
 | 6 | **Metas y motor**: separar «Herramientas» (datos de prueba, pruebas del motor, borrar datos) en una zona plegada dentro de la misma pantalla | Hecha en esta rama |
 | 7 | **Ajustes**: «Básico» y «Avanzado» (hoy 104 controles) | Hecha en esta rama |
 | 8 | **Menú por pregunta (versión acordada)**: se conservan los nombres de grupo y las pantallas; cada grupo muestra su pregunta (Planear ¿Qué quiero alcanzar?, Monitorear ¿Cómo voy?, Diagnosticar ¿Por qué?, Análisis ¿Qué patrones hay?, Recuperar ¿Qué hago?, Medir y aprender ¿Funcionó?) en el menú y en la ruta | Hecha en esta rama |
+| 9 | **Encabezado homologado en las 21 vistas**: migas → título + estado → «Qué hay aquí» → «Qué hago aquí» → «Detalle» (título y descripción propios de la vista, sin perder texto) → contexto → aviso de calidad (solo donde aplica); ayudas en un menú «Ayuda ▾»; «Siguiente paso» al final de la página; Modo Aprendiz con un panel «Aprender en esta vista» siempre cerrado al entrar | Hecha en esta rama |
 | P | **Prueba de usuario** (`PRUEBA_DE_USUARIO_inicio.md`) | Después de las fases 1 y 5, y al final |
 
 ## Cómo se ejecuta cada fase

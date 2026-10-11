@@ -634,3 +634,7 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 
 ## Añadido 2026-10-10 · Menú por pregunta (Fase 8)
 - Cada grupo del menú conserva su nombre y muestra debajo la pregunta que responde; la ruta (migas) también la dice. Mismas pantallas y mismo orden.
+
+
+## Añadido 2026-10-11 · Encabezado homologado (Fase 9)
+Toda pantalla abre igual: ruta, título con estado, «Qué hay aquí», «Qué hago aquí», «Detalle». Ayuda (sección, glosario, recorrido) está en el menú «Ayuda ▾» de la barra superior. «Siguiente paso» está al final de la página. En Modo Aprendiz, «Aprender en esta vista» es un panel plegable que siempre empieza cerrado.

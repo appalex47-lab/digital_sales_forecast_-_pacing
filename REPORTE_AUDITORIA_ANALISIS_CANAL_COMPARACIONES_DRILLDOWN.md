@@ -413,3 +413,9 @@ Cambios: fase del encabezado al pie; etiqueta del siguiente paso (`monitor_recov
 1. **Decisión de la persona usuaria:** conservar los nombres actuales y agregar la pregunta. Planear ¿Qué quiero alcanzar? · Monitorear ¿Cómo voy? · Diagnosticar ¿Por qué? · Análisis ¿Qué patrones hay? · Recuperar ¿Qué hago? · Medir y aprender ¿Funcionó?
 2. **Qué cambió:** `GROUPS[].question` (guidanceConfig.js); `navigation.js` pinta la pregunta bajo el nombre del grupo (`.snav__q`) y en la ruta (`.crumb-q`). Las pantallas, su orden y los enlaces no cambian.
 3. **Pruebas:** `batch_menuq8.py` (M1–M4). `batch_i.py` R-5 ajustado (el nombre accesible del botón ahora incluye la pregunta). Regresión completa y Node 24/24 en verde.
+
+
+## Adenda 20 · Fase 9: encabezado homologado (2026-10-11)
+Las 21 vistas comparten el mismo encabezado (`FP.navigation.renderContextBar`): migas, título con estado, «Qué hay aquí», «Qué hago aquí», «Detalle» (título y descripción propios de la vista, que quedan ocultos con `data-own-head` pero conservados), contexto (solo inicio/pacing/reforecast/diagnóstico/recovery) y aviso de calidad (oculto en inicio, ayuda, ajustes y negocio; Inicio lo enlaza desde «Respaldo»).
+Cambios intencionales de texto: la frase de calidad ya no aparece en esas 4 vistas; «¿Qué hago ahora?» del Modo Aprendiz se fusiona con la franja «Siguiente paso» y «¿Qué hago aquí?» solo se repite si difiere del encabezado; los tres botones de ayuda pasan a un menú «Ayuda ▾» (en celular, «?»); «Siguiente paso» pasa al final de la página; en celular ≤640 px se oculta la campana deshabilitada y ≤380 px el avatar.
+Modo Aprendiz: «Aprender en esta vista» siempre inicia cerrado (se reinicia al cambiar de vista). Cobertura: `tools/regression/batch_head9.py`.

@@ -180,49 +180,108 @@
     document.body.dataset.view = cur;
   }
 
+  /* ---------- Encabezado homologado de cada pantalla ----------
+     Mismo orden en las 21 vistas: ceja (grupo · pregunta) → título (nombre del menú) + frase de estado → «Qué hay aquí» → «Qué hago aquí» →
+     «Detalle» (el título y la descripción propios de la pantalla, sin perder texto) → contexto → aviso de calidad. El siguiente paso va al final de la página. */
+  const CTX_VIEWS = ['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'];
+  const NO_QUALITY = ['inicio', 'ayuda', 'ajustes', 'negocio'];     // en Inicio el enlace vive en «Respaldo»; en Ayuda y Configuración el aviso no aplica
+  const NO_NEXT = ['inicio', 'ayuda', 'ajustes', 'negocio'];         // Inicio ya trae «¿Qué hago hoy?»; Ayuda y Configuración no son parte del recorrido
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, ' ').trim();
+  let learnOpenView = null, lastCtxView = null, helpOpen = false;
+
+  function renderHelpMenu(state) {
+    const el = $('topbar-help'); if (!el) return;
+    const v = G().VIEWS[state.view] || {};
+    const tour = state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/${G().TOUR.length})` : 'Recorrido guiado';
+    el.innerHTML = `<div class="hmenu">
+      <button type="button" class="hmenu__btn" id="help-menu-btn" data-action="help-menu" aria-haspopup="menu" aria-expanded="${helpOpen}" aria-controls="help-menu" aria-label="Ayuda"><span class="hmenu__txt">Ayuda</span><span class="hmenu__q" aria-hidden="true">?</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="hmenu__list" id="help-menu" role="menu" aria-labelledby="help-menu-btn" ${helpOpen ? '' : 'hidden'}>
+        ${(v.help || []).length ? '<button type="button" role="menuitem" class="hmenu__item" data-action="help-section">Ayuda de esta sección</button>' : ''}
+        <button type="button" role="menuitem" class="hmenu__item" data-action="glossary">Glosario</button>
+        <button type="button" role="menuitem" class="hmenu__item" data-action="tour-start">${esc2(tour)}</button>
+      </div></div>`;
+  }
+  const esc2 = (x) => H().esc(x);
+  function setHelpMenu(open, focusBtn) {
+    helpOpen = !!open;
+    const btn = $('help-menu-btn'), list = $('help-menu');
+    if (!btn || !list) return;
+    btn.setAttribute('aria-expanded', String(helpOpen)); list.hidden = !helpOpen;
+    if (helpOpen) { const first = list.querySelector('[role="menuitem"]'); if (first) first.focus(); } else if (focusBtn) btn.focus();
+  }
+  function toggleHelpMenu() { setHelpMenu(!helpOpen, false); }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', (e) => {
+      if (!helpOpen) return;
+      const inside = e.target.closest && e.target.closest('#topbar-help');
+      const item = e.target.closest && e.target.closest('.hmenu__item');
+      if (!inside || item) setHelpMenu(false, false);
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      const list = $('help-menu'); if (!list) return;
+      const items = [...list.querySelectorAll('[role="menuitem"]')];
+      if (helpOpen && e.key === 'Escape') { e.preventDefault(); setHelpMenu(false, true); return; }
+      if (!helpOpen && e.target && e.target.id === 'help-menu-btn' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setHelpMenu(true); return; }
+      if (helpOpen && items.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault(); const i = items.indexOf(document.activeElement); const n = e.key === 'ArrowDown' ? (i + 1) % items.length : (i <= 0 ? items.length - 1 : i - 1); items[n].focus();
+      }
+      if (helpOpen && e.key === 'Tab') setHelpMenu(false, false);
+    });
+    document.addEventListener('toggle', (e) => {
+      const d = e.target; if (d && d.classList && d.classList.contains('learn-panel')) learnOpenView = d.open ? d.dataset.learn : null;
+    }, true);
+  }
+
   function renderContextBar(state, status) {
     const esc = H().esc;
     const view = state.view;
+    if (view !== lastCtxView) { learnOpenView = null; lastCtxView = view; }   // «Aprender en esta vista» entra siempre cerrado
     const d = FP.contextEngine.describe(view, status);
     const crumbs = FP.contextEngine.breadcrumbs(view);
     const extra = state.ux.crumbExtra && state.ux.crumbExtra[view] ? state.ux.crumbExtra[view] : [];
     const v = G().VIEWS[view] || {};
     const next = d.nextStep;
     const q = status.data.quality;
-    // I-final: misma información y los mismos controles, en el orden en que se leen (migas y acciones → qué veo y qué hago → siguiente paso → contexto y calidad).
-    // El orden del DOM coincide con el visual, así que el orden de tabulación no salta.
-    const showNext = next.view !== view && view !== 'inicio';   // en Inicio el siguiente paso vive en su propia tarjeta
-    $('ux-context').innerHTML = `
-      <div class="ux-context__inner${showNext ? '' : ' ux-context__inner--solo'}">
-        <div class="ux-context__top">
-          <nav aria-label="Ruta" class="breadcrumbs"><ol>${[...crumbs, ...extra].map((c, i, arr) => {
-            const target = i === 0 ? 'inicio' : i === 1 && G().GROUPS.find((g) => g.label === c) ? (state.ux.lastByGroup[G().GROUPS.find((g) => g.label === c).id] || G().GROUPS.find((g) => g.label === c).views[0]) : null;
-            const grp = i === 1 ? G().GROUPS.find((g) => g.label === c) : null;
-            const qn = grp && grp.question ? `<span class="crumb-q"> · ${esc(grp.question)}</span>` : '';
-            return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
-          }).join('')}</ol></nav>
-          <div class="ux-context__actions btn-row">
-            ${(v.help || []).length ? `<button type="button" class="btn btn--small" data-action="help-section">Ayuda de esta sección</button>` : ''}
-            <button type="button" class="btn btn--small" data-action="glossary">Glosario</button>
-            <button type="button" class="btn btn--small" data-action="tour-start">${state.ux.tour.step ? `Retomar recorrido (${state.ux.tour.step + 1}/${G().TOUR.length})` : 'Recorrido guiado'}</button>
-          </div>
-        </div>
-        <div class="ux-context__text">
-          <p class="ux-context__purpose">${esc(term(d.whatAmISeeing))}${d.whatDoesItMean ? ` <strong>${esc(d.whatDoesItMean)}</strong>` : ''}</p>
-          ${d.whatToDo ? `<p class="ux-context__action">${esc(term(d.whatToDo))}</p>` : ''}
-        </div>
-        ${next.view !== view ? `<div class="next-step"><span class="next-step__label">Siguiente paso</span>
-          <strong>${esc(next.label)}</strong><span class="cell-sub">${esc(next.reason)}</span>
-          <button type="button" class="btn btn--primary btn--small" data-action="go" data-view="${next.view}">Ir</button></div>` : ''}
-        ${['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'].includes(view) || q === 'invalid' || q === 'warnings' ? `<div class="ux-context__meta">
-          ${['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'].includes(view) ? `<p class="ux-context__chips">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
-            ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>` : ''}
-          ${q === 'invalid' || q === 'warnings' ? `<p class="ux-context__warn" data-quality="${q}" role="status">
-            Algunos cálculos pueden estar incompletos. <a href="#calidad">Revisar calidad de datos</a></p>` : ''}
-        </div>` : ''}
+    const grp = G().GROUPS.find((g) => g.id === v.group && g.id !== 'ayuda');
+    // título y descripción propios de la pantalla (marcados con data-own-head en su HTML): se muestran aquí, en «Detalle», y ahí se ocultan
+    const own = document.querySelector('main:not([hidden]) [data-own-head]');
+    const ownTitle = own && own.querySelector('h1,h2') ? own.querySelector('h1,h2').textContent.replace(/\s+/g, ' ').trim() : '';
+    const ownDesc = own && own.querySelector('.panel__desc,.ds-lede') ? own.querySelector('.panel__desc,.ds-lede').textContent.replace(/\s+/g, ' ').trim() : '';
+    // frase de estado: la primera oración de «qué significa»; el resto de lo que decía la banda pasa a «Qué hay aquí»
+    const meaning = d.whatDoesItMean ? String(d.whatDoesItMean).trim() : '';
+    const sentences = meaning.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
+    const headline = sentences[0] ? sentences[0].replace(/\.$/, '') : '';
+    const rest = sentences.slice(1).join(' ');
+    const what = [term(d.whatAmISeeing), rest].filter(Boolean).join(' ');
+    const tone = /por debajo|debajo del plan|requiere/i.test(headline) ? 'neg' : /por encima|encima del plan/i.test(headline) ? 'pos' : 'info';
+    const detail = ownDesc && !norm(what).includes(norm(ownDesc).slice(0, 60)) ? `${ownTitle && norm(ownTitle) !== norm(v.title) ? `${ownTitle}. ` : ''}${ownDesc}` : '';
+    const showQuality = (q === 'invalid' || q === 'warnings') && !NO_QUALITY.includes(view);
+    const showNext = next.view !== view && !NO_NEXT.includes(view);
+    const ctxHtml = CTX_VIEWS.includes(view) ? `<p class="ux-head__ctx">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
+            ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>` : '';
+    renderHelpMenu(state);
+    $('ux-context').innerHTML = `<div class="ux-wrap">
+      <div class="ux-head" data-tone="${tone}">
+        ${view === 'inicio' ? '' : `<nav aria-label="Ruta" class="breadcrumbs ux-head__eyebrow"><ol>${['Inicio', ...(grp ? [grp.label] : []), ...extra].map((c, i, arr) => {
+          const g = i === 1 ? grp : null;
+          const target = i === 0 ? 'inicio' : g ? (state.ux.lastByGroup[g.id] || g.views[0]) : null;
+          const qn = g && g.question ? `<span class="crumb-q"> · ${esc(g.question)}</span>` : '';
+          return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
+        }).join('')}</ol></nav>`}
+        <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
+        ${what ? `<p class="ux-head__line ux-context__purpose"><b>Qué hay aquí</b> ${esc(what)}</p>` : ''}
+        ${d.whatToDo ? `<p class="ux-head__line ux-context__action"><b>Qué hago aquí</b> ${esc(term(d.whatToDo))}</p>` : ''}
+        ${detail ? `<p class="ux-head__line ux-head__line--detail"><b>Detalle</b> ${esc(detail)}</p>` : ''}
+        ${ctxHtml}
+        ${showQuality ? `<p class="ux-context__warn ux-head__warn" data-quality="${q}" role="status">
+          Algunos cálculos pueden estar incompletos. <a href="#calidad">Revisar calidad de datos</a></p>` : ''}
       </div>
-      ${state.ux.mode === 'learner' ? FP.help.learningBar(view, next, status) : ''}
-      ${state.ux.mode === 'learner' && state.ux.lesson ? FP.help.lessonCard(state.ux.lesson) : ''}`;
+      ${state.ux.mode === 'learner' ? FP.help.learningBar(view, next, status, { todo: d.whatToDo, showNext, open: learnOpenView === view }) : ''}
+      ${state.ux.mode === 'learner' && state.ux.lesson ? FP.help.lessonCard(state.ux.lesson) : ''}</div>`;
+    $('ux-next').innerHTML = showNext ? `<div class="next-step"><span class="next-step__label">Siguiente paso</span>
+          <strong>${esc(next.label)}</strong><span class="cell-sub">${esc(next.reason)}</span>
+          <button type="button" class="btn btn--primary btn--small" data-action="go" data-view="${next.view}">Ir</button></div>` : '';
   }
 
   /** Marca los bloques técnicos (una vez). Sin efecto visible desde que se retiró el modo Ejecutivo. */
@@ -240,5 +299,5 @@
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
   }
 
-  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, toggleGroup, renderContextBar, markAnalystBlocks, applyMode };
+  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, toggleGroup, renderContextBar, toggleHelpMenu, markAnalystBlocks, applyMode };
 })(typeof window !== 'undefined' ? window : globalThis);
