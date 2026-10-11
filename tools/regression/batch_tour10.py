@@ -79,7 +79,7 @@ async def main():
         r = await q.evaluate("(()=>{const s=FP.app.state;return FP.tour.nextIdx(s,FP.contextEngine.collectStatus(s),FP.tour.idxOf('plan'))})()")
         rec = await q.evaluate("FP.tour.idxOf('recovery')")
         chk('T8 sin venta real (omitida) después de Plan se salta a Recuperar', r == rec, (r, rec))
-        chk('T8 los 15 pasos y sus textos «Qué buscar / Qué sigue» se conservan', await q.evaluate("FP.guidanceConfig.TOUR.length===15 && FP.guidanceConfig.TOUR.every(t=>t.what&&t.why&&t.lookFor&&t.next)"))
+        chk('T8 los 15 pasos de la ruta completa (más el de empresa nueva) y sus textos «Qué buscar / Qué sigue» se conservan', await q.evaluate("FP.guidanceConfig.TOUR.length===16 && FP.tour.steps().length===15 && FP.guidanceConfig.TOUR.every(t=>t.what&&t.why&&t.lookFor&&t.next)"))
 
         # ---- micro-pasos (Fase 10.1): Meta con datos, Plan, Pacing, pantalla ajena ----
         await q.evaluate("FP.app.actions['generate-mock']()"); await q.wait_for_timeout(2500)

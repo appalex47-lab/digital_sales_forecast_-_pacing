@@ -69,7 +69,7 @@ async def main():
         chk('H5 abre por clic y vuelve cerrado al regresar', o and not await q.evaluate("document.querySelector('.learn-panel').open"))
         await q.evaluate("document.querySelector('[data-action=\"ux-mode\"][data-value=\"analyst\"]').click()"); await q.wait_for_timeout(200)
         await q.evaluate("document.querySelector('[data-action=\"ux-mode\"][data-value=\"learner\"]').click()"); await q.wait_for_timeout(300)
-        await q.click('#tour-offer [data-action="tour-offer-go"]'); await q.wait_for_timeout(500)
+        await q.click('#tour-offer [data-action="tour-path"][data-path="A"]'); await q.wait_for_timeout(500)
         chk('H7 «Usar recorrido guiado» cierra la ventana y abre el recorrido', await q.evaluate("!document.getElementById('tour-offer') && !document.getElementById('tour-bar').hidden"))
         bad7 = []
         await q.set_viewport_size({'width': 1800, 'height': 900})

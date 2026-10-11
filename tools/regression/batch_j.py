@@ -83,7 +83,7 @@ async def main():
         chk('R-11 la tarjeta «Siguiente paso» de Inicio se sigue mostrando', 'Siguiente paso' in card, card)
         # recorrido guiado: empieza por los datos
         tour = await q.evaluate("FP.guidanceConfig.TOUR.map(t=>[t.id,t.view,t.chapter])")
-        chk('R-11 el recorrido guiado empieza por los datos (Carga de datos), luego Real, Meta, Plan… y conserva todos los pasos anteriores en el mismo orden', tour[0][:2] == ['datos', 'carga'] and [t[0] for t in tour[1:6]] == ['real', 'meta', 'plan', 'pacing', 'forecast'] and len(tour) == 15 and all(t[2] for t in tour), tour[:4])
+        chk('R-11 el recorrido guiado empieza por los datos (Carga de datos), luego Real, Meta, Plan… y conserva todos los pasos anteriores en el mismo orden', tour[0][:2] == ['datos', 'carga'] and [t[0] for t in tour[1:6]] == ['real', 'meta', 'plan', 'pacing', 'forecast'] and len(tour) == 16 and all(t[2] for t in tour), tour[:4])
         await q.goto(u + '#inicio'); await q.wait_for_timeout(300)
         await q.evaluate("FP.app.actions['tour-restart']()"); await q.wait_for_timeout(700)
         tb = await q.evaluate("[location.hash, document.getElementById('tour-bar').innerText.replace(/\\s+/g,' ').slice(0,420)]")

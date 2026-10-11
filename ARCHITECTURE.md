@@ -2691,3 +2691,11 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ## Recorrido guiado interactivo (Fase 10)
 `FP.guidanceConfig.TOUR` (15 pasos; los 3 primeros con `kind:'action'`, `detect`, `cta`, `skipLabel`, `done`, `waiting`). `tour.js`: `syncTarget` (avance automático), `nextIdx` (salto sin venta real), `noteFor` (textos condicionales), `summaryRows`, `render` (tarjeta, resumen, botón colapsado). Estado en `state.ux.tour` = `{active, step, collapsed, went, flash, skipped:{id:true}, ended:null|'nometa'|'fin'}` y `state.ux.tourOffered`. Acciones en `app.js`: `tour-cta`, `tour-skip`, `tour-pause`, `tour-expand`, `tour-close`, `tour-resume`, además de `tour-next/prev/exit/start/restart`. `render()` llama a `syncTarget` antes de dibujar (con tope de recursión).
+
+
+## Fase 12 · Rutas del recorrido
+
+- `ux.tour.path` (`'A'|'B'|'C'|null`), `ux.tour.compact` (tarjeta compacta, no persiste tras recargar) y `ux.tour.upDismissed` (propuesta de ruta ya descartada, p. ej. `'C>B'`).
+- `FP.guidanceConfig.TOUR` es el catálogo completo (16); cada paso tiene `paths` (string con las rutas donde aparece; por defecto `'A'`). `FP.tour.steps()` devuelve solo los de la ruta activa (`FP.tour.setPath(p)`, que llaman `loadUx`, las acciones de ruta y `syncTarget/render`). Todo índice de paso (`tour.step`) es relativo a esa lista filtrada.
+- `FP.tour.upgradeFor(state, status)` calcula la ruta más completa sugerida; `FP.tour.currentMicro(state)` devuelve el micro-paso actual (lo usan `tour-cta` y `tour-micro-done` para decidir entre ocultar o dejar la tarjeta compacta).
+- Acciones nuevas: `tour-path`, `tour-change-path`, `tour-path-up`, `tour-up-dismiss`, `tour-compact-off`. Se retiró `tour-offer-go`.

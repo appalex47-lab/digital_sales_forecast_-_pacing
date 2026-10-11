@@ -12,7 +12,11 @@
   const H = () => FP.ui.helpers;
   const $ = (id) => document.getElementById(id);
 
-  const steps = () => G().TOUR;
+  // Ruta elegida en la pregunta inicial (Fase 12): A completa · B solo histórico · C empresa nueva. Sin ruta (usuarios previos) = A.
+  const PATHS = { A: 'Completa', B: 'Solo histórico', C: 'Empresa nueva' };
+  let pathNow = 'A';
+  const setPath = (p) => { pathNow = PATHS[p] ? p : 'A'; };
+  const steps = () => G().TOUR.filter((s) => (s.paths || 'A').includes(pathNow));
   const current = (state) => steps()[Math.min(Math.max(state.ux.tour.step, 0), steps().length - 1)];
   const idxOf = (id) => steps().findIndex((s) => s.id === id);
 
@@ -28,7 +32,7 @@
     if (n >= steps().length) return -1;
     const t = state.ux.tour;
     const noReal = (t.skipped && t.skipped.real) && !has(status).actual;
-    if (noReal && steps()[n].id === 'pacing') return idxOf('recovery');
+    if (noReal && steps()[n].id === 'pacing' && idxOf('recovery') >= 0) return idxOf('recovery');
     return n;
   }
 
@@ -42,6 +46,8 @@
       if (h.historical && noR) return 'Tienes histórico pero no venta real: puedes planear, pero Pacing y Forecast aparecerán vacíos hasta que la cargues.';
       if (noH && h.actual) return 'Sin histórico, el plan no proyecta volumen, AOV ni CR del año anterior.';
     }
+    if (s.id === 'plan' && !h.historical) return 'Ojo: sin histórico el plan original se congela sin volumen, AOV ni CR y ya no se puede rehacer. Si puedes, carga histórico antes de guardar.';
+    if (s.id === 'pacing' && !h.actual) return 'Aún no hay venta real: cuando la cargues, esta vista se activa. Mientras tanto el avance aparece vacío.';
     if (s.id === 'drivers' && noH) return 'Sin histórico no se puede comparar contra el año anterior; el diagnóstico usará solo el plan.';
     if (s.id === 'recovery' && noR) return 'Como no cargaste venta real, saltamos Pacing, Forecast y el diagnóstico: aparecerán vacíos hasta que la cargues.';
     return '';
@@ -80,6 +86,15 @@
     return list.map((m, i) => ({ ...m, done: dn[i], cur: i === curI }));
   }
   const curMicro = (list) => list.find((m) => m.cur) || null;
+  const currentMicro = (state) => curMicro(microList(state, FP.contextEngine.collectStatus(state), current(state)));
+  /** Ruta a la que conviene pasar cuando ya hay datos (B/C → más completa). Respeta «No por ahora». */
+  function upgradeFor(state, status) {
+    const t = state.ux.tour; const h = has(status);
+    let to = null;
+    if (pathNow === 'B' && h.actual) to = 'A';
+    else if (pathNow === 'C') to = h.actual ? 'A' : h.historical ? 'B' : null;
+    return to && t.upDismissed !== `${pathNow}>${to}` ? to : null;
+  }
   /** Marca un micro-paso manual («Ya revisé…», o hecho en pantalla sin estado: calcular/escribir meta). */
   function mark(state, fullKey, soft) {
     const t = state.ux.tour; t.micro = { ...(t.micro || {}), [fullKey]: true };
@@ -88,7 +103,7 @@
 
   /** Dónde avanzar (lo llama render()): paso de acción con su dato listo, paso de micro-pasos terminado, o cambio de micro-paso dentro del mismo paso. */
   function syncTarget(state, status) {
-    const t = state.ux.tour;
+    const t = state.ux.tour; setPath(t.path);
     if (!t.active || t.ended) return null;
     const s = current(state);
     if (!s) return null;
@@ -113,8 +128,8 @@
       const ok = h[s.detect];
       return { id, name: s.title, status: ok ? 'Hecho' : sk[id] ? 'Omitido' : 'Pendiente', tone: ok ? 'ok' : sk[id] ? 'skip' : 'pend', resume: !ok };
     };
-    const rows = [row('datos'), row('real'), row('meta')];
-    rows.push({ id: 'meta', name: 'Plan, pacing, forecast, diagnóstico, recuperación y medición', status: t.ended === 'fin' ? 'Revisado' : 'Pendiente', tone: t.ended === 'fin' ? 'ok' : 'pend', resume: t.ended !== 'fin' });
+    const rows = ['datos', 'real', 'meta'].filter((id) => idxOf(id) >= 0).map(row);
+    rows.push({ id: 'meta', name: pathNow === 'A' ? 'Plan, pacing, forecast, diagnóstico, recuperación y medición' : 'Plan y siguientes pasos', status: t.ended === 'fin' ? 'Revisado' : 'Pendiente', tone: t.ended === 'fin' ? 'ok' : 'pend', resume: t.ended !== 'fin' });
     return rows;
   }
 
@@ -136,6 +151,7 @@
   }
 
   function render(state) {
+    setPath(state.ux.tour.path);
     const bar = $('tour-bar');
     document.querySelectorAll('.tour-target').forEach((el) => el.classList.remove('tour-target', 'tour-target--here'));
     const t = state.ux.tour;
@@ -163,7 +179,9 @@
       const label = `${x.title}${ok ? ' · hecho' : skipped ? ' · omitido' : cur ? ' · paso actual' : ''}`;
       return `<span class="tour-dot${ok ? ' tour-dot--ok' : ''}${skipped ? ' tour-dot--skip' : ''}${cur ? ' tour-dot--cur' : ''}" title="${esc(label)}" aria-label="${esc(label)}">${ok ? '<svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.5"/></svg>' : ''}</span>`;
     }).join('');
-    const head = `<div class="tour-bar__dots" role="img" aria-label="Progreso del recorrido">${dots}</div>`;
+    const upTo = upgradeFor(state, status);
+    const head = `<div class="tour-bar__dots" role="img" aria-label="Progreso del recorrido">${dots}</div><button type="button" class="tour-link" data-action="tour-change-path">Ruta: ${esc(PATHS[pathNow])} · Cambiar</button>`;
+    const upBox = upTo ? `<div class="tour-up" role="status"><p>${upTo === 'B' ? 'Ya cargaste histórico.' : 'Ya cargaste venta real.'} ¿Pasamos al recorrido ${upTo === 'A' ? 'completo' : 'de «Solo histórico»'}?</p><div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="tour-path-up" data-path="${upTo}">Sí, pasar</button><button type="button" class="btn btn--small" data-action="tour-up-dismiss" data-key="${pathNow}>${upTo}">No por ahora</button></div></div>` : '';
     const ctl = `<span class="tour-bar__ctl"><button type="button" class="tour-link" data-action="tour-pause">Pausar</button><button type="button" class="tour-link" data-action="tour-exit">Salir (se guarda el paso)</button></span>`;
 
     if (t.ended) {
@@ -171,7 +189,8 @@
       bar.innerHTML = `<div class="tour-bar__inner" role="region" aria-label="Recorrido guiado">
         <div class="tour-bar__row">${head}</div>
         <h3 class="tour-bar__title">${t.ended === 'nometa' ? 'Recorrido en pausa: falta tu meta' : 'Recorrido terminado'}</h3>
-        <p class="tour-bar__txt">${t.ended === 'nometa' ? 'Sin meta no hay plan, pacing ni forecast. Cuando la tengas, retoma desde aquí; lo ya hecho se conserva.' : 'Esto quedó hecho y esto quedó pendiente. Puedes retomar cualquier punto cuando quieras.'}</p>
+        <p class="tour-bar__txt">${t.ended === 'nometa' ? 'Sin meta no hay plan, pacing ni forecast. Cuando la tengas, retoma desde aquí; lo ya hecho se conserva.' : pathNow === 'A' ? 'Esto quedó hecho y esto quedó pendiente. Puedes retomar cualquier punto cuando quieras.' : pathNow === 'B' ? 'Siguiente: carga tu venta real. Al detectarla te propongo pasar al recorrido completo.' : 'Pacing, forecast y diagnóstico se activan al cargar venta real. Cuando detecte datos te propongo pasar al recorrido completo.'}</p>
+        ${upBox}
         <ul class="tour-sum">${rows}</ul>
         <div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="tour-close">Cerrar recorrido</button>${ctl}</div>
       </div>`;
@@ -185,6 +204,24 @@
     const ml = microList(state, status, s); const cm = curMicro(ml);
     const away = state.view !== s.view;
     const guided = action || s.kind === 'micro';
+    // Tarjeta compacta (Fase 12): en micro-pasos de lectura/revisión, «Mostrarme dónde» NO cierra la tarjeta; se queda hasta «Ya lo vi» o «Siguiente».
+    if (t.compact && t.went && cm && cm.manual && !away) {
+      bar.innerHTML = `
+      <div class="tour-bar__inner tour-bar__inner--compact" role="region" aria-label="Recorrido guiado">
+        <span class="tour-bar__step">Paso ${i + 1} de ${n} · ${esc(s.title)}</span>
+        ${t.flash ? `<p class="tour-flash" role="status">${esc(t.flash)}</p>` : ''}
+        <p class="tour-compact__txt"><b>${esc(cm.title)}.</b> ${esc(cm.desc)}</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn--small btn--primary" data-action="tour-micro-done" data-key="${esc(s.id + '.' + cm.key)}">Ya lo vi</button>
+          <button type="button" class="btn btn--small" data-action="tour-micro-done" data-key="${esc(s.id + '.' + cm.key)}">Siguiente</button>
+          <button type="button" class="tour-link" data-action="tour-compact-off">Ver paso completo</button>
+        </div>
+        <p class="tour-compact__hint">Esta tarjeta no se cierra sola: se queda hasta que pulses una de las dos.</p>
+        ${ctl}
+      </div>`;
+      highlight(state, s, true, false);
+      return;
+    }
     bar.innerHTML = `
       <div class="tour-bar__inner" role="region" aria-label="Recorrido guiado">
         <div class="tour-bar__row">${head}</div>
@@ -198,6 +235,7 @@
           </span>
         </div>
         <h3 class="tour-bar__title">${s.chapter ? `${esc(s.chapter)} · ` : ''}${esc(s.title)}</h3>
+        ${upBox}
         ${t.flash ? `<p class="tour-flash" role="status">${esc(t.flash)}</p>` : ''}
         ${i === 0 ? '<p class="tour-bar__note">Este recorrido enseña el orden completo de la metodología, siempre empezando por los datos. Tu avance real con tus propios datos viaja arriba a la derecha, y el detalle completo está en Inicio.</p>' : ''}
         <dl class="tour-bar__body">
@@ -216,7 +254,7 @@
         <div class="btn-row">
           ${guided ? `<button type="button" class="btn btn--small btn--primary" data-action="tour-cta">${esc(away ? (s.cta || 'Ir a la pantalla') : 'Mostrarme dónde')}</button>
             ${cm && cm.manual && !away ? `<button type="button" class="btn btn--small" data-action="tour-micro-done" data-key="${esc(s.id + '.' + cm.key)}">${esc(cm.manual)}</button>` : ''}
-            ${action ? `<button type="button" class="btn btn--small" data-action="tour-skip">${esc(s.skipLabel)}</button>` : `<button type="button" class="btn btn--small btn--ghost" data-action="tour-next">Siguiente</button>`}`
+            ${action ? `<button type="button" class="btn btn--small" data-action="tour-skip">${esc(pathNow === 'B' && s.skipLabelB ? s.skipLabelB : s.skipLabel)}</button>` : `<button type="button" class="btn btn--small btn--ghost" data-action="tour-next">Siguiente</button>`}`
         : `<button type="button" class="btn btn--small btn--primary" data-action="tour-next">${i === n - 1 ? 'Terminar' : 'Siguiente'}</button>`}
           <button type="button" class="btn btn--small btn--ghost" data-action="tour-prev" ${i === 0 ? 'disabled' : ''}>Atrás</button>
           ${ctl}
@@ -225,5 +263,5 @@
     highlight(state, s, guided && t.went, guided && !t.went);
   }
 
-  FP.tour = { steps, current, render, syncTarget, nextIdx, noteFor, has, idxOf, summaryRows, microList, mark };
+  FP.tour = { steps, current, render, syncTarget, nextIdx, noteFor, has, idxOf, summaryRows, microList, mark, setPath, currentMicro, upgradeFor, PATHS };
 })(typeof window !== 'undefined' ? window : globalThis);
