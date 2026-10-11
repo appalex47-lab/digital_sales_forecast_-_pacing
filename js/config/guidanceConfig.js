@@ -480,11 +480,11 @@
   /* ---------- Recorrido guiado ---------- */
 
   const TOUR = [
-    { id: 'datos', view: 'carga', target: '#view-carga', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical',
+    { id: 'datos', view: 'carga', target: '#up-historical', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical',
       cta: 'Ir a cargar histórico', skipLabel: 'No tengo histórico', done: 'Histórico cargado.', waiting: 'Esperando tu archivo de histórico. Cuando se importe sin errores, paso solo al siguiente.',
       what: 'Los archivos con tu histórico: la venta de años anteriores, por día y canal.', why: 'Con el histórico, al capturar la meta el plan proyecta volumen, AOV y CR. Si capturas la meta antes, el plan original queda sin esos indicadores y no se puede rehacer.',
       lookFor: 'Que el histórico cargue sin errores. Si tu empresa no tiene histórico, usa «No tengo histórico» y sigue con la venta real. Si ya tienes datos, revisa que estén completos y sigue.', next: 'Cargar la venta real.' },
-    { id: 'real', view: 'carga', target: '#view-carga', title: 'Real', kind: 'action', detect: 'actual',
+    { id: 'real', view: 'carga', target: '#up-actual', title: 'Real', kind: 'action', detect: 'actual',
       cta: 'Ir a cargar venta real', skipLabel: 'No tengo venta real', done: 'Venta real cargada.', waiting: 'Esperando tu archivo de venta real. Cuando se importe sin errores, paso solo al siguiente.',
       what: 'La venta que realmente ocurrió este año, cargada desde archivos.', why: 'Sin real no hay pacing ni forecast.',
       lookFor: 'Que la calidad de datos no tenga errores y la fecha de corte sea la esperada.', next: 'Capturar la meta.' },
