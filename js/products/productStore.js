@@ -765,7 +765,7 @@
   }
 
   async function init(r) {
-    repo = r;
+    repo = r; clearBlockCache();
     catalog.list = []; catalog.bySku = new Map();
     meta = emptyMeta();
     resetDims();
@@ -804,6 +804,21 @@
   }
 
   const available = () => Boolean(repo && repo.ready);
+
+  /* Caché de bloques día × canal (solo lectura): Análisis lee los mismos bloques decenas de veces por consulta (un agregado por periodo, por comparación, por año previo…).
+     Se vacía al cargar, quitar un archivo o reiniciar el almacén, y está acotada por filas para no crecer sin límite. */
+  const blockCache = new Map(); let blockCacheRows = 0; const BLOCK_CACHE_ROWS = 3000000;
+  function clearBlockCache() { blockCache.clear(); blockCacheRows = 0; if (typeof aggCache !== 'undefined') aggCache.clear(); }
+  async function readBlock(store, date, channel) {
+    const k = `${store}|${date}|${channel}`, hit = blockCache.get(k);
+    if (hit) { blockCache.delete(k); blockCache.set(k, hit); return hit; }
+    const v = await IDB().get(repo.db, store, [date, channel]);
+    if (v) {
+      blockCache.set(k, v); blockCacheRows += v.n || 0;
+      for (const [ok, ov] of blockCache) { if (blockCacheRows <= BLOCK_CACHE_ROWS || blockCache.size <= 1) break; blockCache.delete(ok); blockCacheRows -= ov.n || 0; }
+    }
+    return v;
+  }
 
   async function rebuildRollups(date, channel) {
     const s = await IDB().get(repo.db, 'productDays', [date, channel]);
@@ -851,6 +866,7 @@
     const kind = draft.kind || 'sales';
     const id = `pbat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const report = { identical: 0, conflicts: 0, replaced: 0, added: 0, multiplicity: 0, details: [] };
+    clearBlockCache();
     draft.catalog.forEach((entry) => catalogIdx(entry));
     if (kind === 'sales' && draft.geoObs) absorbGeo(draft.geoObs);
     const dirty = catalog.list.filter((c) => c._dirty);
@@ -878,6 +894,7 @@
       if (onProgress && done % 20 === 0) onProgress(done, total);
       if (done % 20 === 0) await IDB().yieldToUI();
     }
+    clearBlockCache();
     await saveDims();
     const dates = [...draft.dates].sort();
     const batch = {
@@ -925,7 +942,7 @@
    * Agregado por grupo en un rango. Usa productRollups cuando no hay filtros y el grupo es un nivel resumido;
    * si no, cruza día por día los bloques de venta y funnel.
    */
-  async function aggregate({ from, to, channel = null, groupBy = 'total', filter = null }) {
+  async function aggregateRaw({ from, to, channel = null, groupBy = 'total', filter = null }) {
     const map = new Map();
     if (!available()) return map;
     const f = filter || {};
@@ -944,12 +961,24 @@
     let k = 0;
     for (const key of keys) {
       const [d, ch] = key.split('|');
-      const s = await IDB().get(repo.db, 'productDays', [d, ch]);
-      const fb = join ? await IDB().get(repo.db, 'productFunnel', [d, ch]) : null;
+      const s = await readBlock('productDays', d, ch);
+      const fb = join ? await readBlock('productFunnel', d, ch) : null;
       accumulateJoint(map, s, fb, { groupBy, filter: f });
       if (++k % 40 === 0) await IDB().yieldToUI();
     }
     return map;
+  }
+
+  /* Resultados de agregado ya calculados (mismos parámetros → misma respuesta hasta que cambien los datos). Se entrega una copia superficial del Map;
+     los acumuladores no se modifican fuera de este módulo (mergeAcc solo escribe en acumuladores nuevos). */
+  const aggCache = new Map(); const AGG_CACHE_MAX = 120;
+  async function aggregate(opts) {
+    const o = opts || {}; let k = null;
+    try { k = JSON.stringify([o.from, o.to, o.channel || null, o.groupBy || 'total', o.filter || null]); } catch (e) { k = null; }
+    if (k && aggCache.has(k)) { const hit = aggCache.get(k); aggCache.delete(k); aggCache.set(k, hit); return new Map(hit); }
+    const res = await aggregateRaw(o);
+    if (k) { aggCache.set(k, res); if (aggCache.size > AGG_CACHE_MAX) aggCache.delete(aggCache.keys().next().value); return new Map(res); }
+    return res;
   }
 
   /**
@@ -978,7 +1007,7 @@
       let k = 0;
       for (const key of keys) {
         const [d, ch] = key.split('|');
-        const s = await IDB().get(repo.db, 'productDays', [d, ch]);
+        const s = await readBlock('productDays', d, ch);
         for (const g of viaScan) accumulateJoint(slot(ch, g), s, null, { groupBy: g, filter: f });
         if (++k % 20 === 0) { if (onProgress) onProgress(k, keys.length); await IDB().yieldToUI(); }
       }
@@ -1041,6 +1070,7 @@
    */
   async function removeBatch(id, { onProgress = null } = {}) {
     if (!available()) throw new Error('IndexedDB no está disponible.');
+    clearBlockCache();
     const batch = await IDB().get(repo.db, 'productBatches', id);
     if (!batch) return { removedRows: 0, partitions: 0, fileName: null };
     const kind = batch.kind || 'sales', store = storeOf(kind), ms = metricsOf(kind), w = ms.length;
@@ -1071,6 +1101,7 @@
       if (onProgress && done % 20 === 0) onProgress(done, keys.length);
       if (done % 20 === 0) await IDB().yieldToUI();
     }
+    clearBlockCache();
     await IDB().del(repo.db, 'productBatches', id);
     // Resumen: se recalcula con los archivos que quedan
     const rest = await IDB().getAll(repo.db, 'productBatches');
