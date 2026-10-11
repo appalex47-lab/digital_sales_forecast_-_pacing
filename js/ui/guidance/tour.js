@@ -84,7 +84,7 @@
 
     if (t.collapsed) {
       bar.classList.add('tour-bar--pill');
-      bar.innerHTML = `<button type="button" class="btn btn--primary tour-pill" data-action="tour-expand">${t.ended ? 'Ver resumen del recorrido' : `Retomar recorrido · paso ${i + 1} de ${n}`}</button>`;
+      bar.innerHTML = `<button type="button" class="btn btn--primary tour-pill" data-action="tour-expand">${t.ended ? 'Ver resumen del recorrido' : t.went && s.kind === 'action' ? `Recorrido en espera · paso ${i + 1} de ${n} · Abrir` : `Retomar recorrido · paso ${i + 1} de ${n}`}</button>`;
       return;
     }
     bar.classList.remove('tour-bar--pill');

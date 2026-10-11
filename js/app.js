@@ -2294,7 +2294,7 @@
     /** Paso de acción: lleva a la pantalla y deja el recorrido esperando el dato (se detecta solo). */
     'tour-cta'() {
       const t = state.ux.tour; const v = FP.tour.steps()[t.step].view;
-      t.went = true; t.flash = '';
+      t.went = true; t.flash = ''; t.collapsed = true;   // la tarjeta se oculta mientras el usuario actúa; reaparece sola al detectar el dato
       if (root.location.hash === `#${v}`) render(); else root.location.hash = v;
     },
     /** «No tengo X»: se marca omitido y se sigue; sin meta el recorrido queda en pausa con su resumen. */

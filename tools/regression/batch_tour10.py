@@ -31,7 +31,10 @@ async def main():
         chk('T2 el recorrido abre en el paso 1 «Histórico» con «No tengo histórico»', 'Paso 1 de 15' in t and 'histórico primero' in t.lower() and 'No tengo histórico' in t and 'Ir a cargar histórico' in t, t[:300])
         await click(q, 'tour-cta')
         t = await q.evaluate(TXT)
-        chk('T2 al pulsar «Ir a cargar histórico» queda esperando el archivo', 'Esperando tu archivo de histórico' in t and await q.evaluate("location.hash")=='#carga', t[:300])
+        chk('T2 al pulsar «Ir a cargar histórico» la tarjeta se oculta (queda un botón) y estás en Carga de datos', 'Recorrido en espera · paso 1 de 15' in t and not await q.evaluate("!!document.querySelector('#tour-bar .tour-bar__inner')") and await q.evaluate("location.hash")=='#carga', t[:300])
+        await click(q, 'tour-expand')
+        t = await q.evaluate(TXT)
+        chk('T2 al abrirla muestra «Esperando tu archivo de histórico»', 'Esperando tu archivo de histórico' in t, t[:300])
         await click(q, 'tour-skip')
         t = await q.evaluate(TXT)
         chk('T3 «No tengo histórico» pasa a Venta real con su aviso condicional', 'Paso 2 de 15' in t and 'Sin histórico no habrá comparación' in t and 'No tengo venta real' in t, t[:400])
@@ -53,10 +56,10 @@ async def main():
         # detección automática: se carga la venta real mientras el recorrido espera
         await q.evaluate("FP.app.actions['tour-restart']()"); await q.wait_for_timeout(500)
         await click(q, 'tour-skip')   # sin histórico → paso Venta real
-        await click(q, 'tour-cta')
+        await click(q, 'tour-cta')   # la tarjeta se oculta
         await q.evaluate("FP.app.actions['generate-mock']()"); await q.wait_for_timeout(2500)
         t = await q.evaluate(TXT)
-        chk('T6 al cargarse la venta real el recorrido avanza solo a Meta y lo avisa', 'Venta real cargada.' in t and 'Paso 3 de 15' in t, t[:350])
+        chk('T6 al cargarse la venta real la tarjeta reaparece sola, en Meta, y lo avisa', 'Venta real cargada.' in t and 'Paso 3 de 15' in t, t[:350])
         await q.evaluate("FP.app.actions['sample-targets']()"); await q.wait_for_timeout(1500)
         t = await q.evaluate(TXT)
         chk('T6 al guardarse la meta avanza solo a Plan', 'Meta guardada.' in t and 'Paso 4 de 15' in t, t[:350])
