@@ -89,7 +89,7 @@ async def main():
             chk('H-reforecast encabezados por estado en «Por canal» (plan, actual, forecast, reforecast)', set(th) >= {'plan', 'actual', 'forecast', 'reforecast'}, th)
             band = await q.evaluate("""()=>{const o={};document.querySelectorAll('#rf-channels th[data-state]').forEach(e=>{const c=getComputedStyle(e);o[e.dataset.state]=[c.borderTopStyle,c.borderTopColor]});return o}""")
             chk('H-reforecast bandas con patrón distinto: Forecast punteada, Reforecast doble, Plan/Actual continuas', band.get('forecast', ['',''])[0] == 'dashed' and band.get('reforecast', ['',''])[0] == 'double' and band.get('plan', ['',''])[0] == 'solid', band)
-            txt = await q.evaluate("document.getElementById('view-reforecast').innerText.toLowerCase()")
+            txt = await q.evaluate("(document.getElementById('view-reforecast').textContent+' '+document.getElementById('ux-context').textContent).toLowerCase()")
             rt = await q.evaluate("""()=>{const v=document.getElementById('view-reforecast');const e=v.querySelector('.explainer summary');const t=v.querySelector('.state-tag--reforecast');const c=t?getComputedStyle(t):null;
               const r=getComputedStyle(document.documentElement).getPropertyValue('--ds-reforecast').trim();const i=document.createElement('i');i.style.color=r;document.body.appendChild(i);
               return {title:e?e.innerText.trim():'',badge:t?t.innerText.trim():'',same:c?c.color===getComputedStyle(i).color:false}}""")

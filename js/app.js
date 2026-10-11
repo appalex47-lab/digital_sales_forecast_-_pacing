@@ -2225,6 +2225,7 @@
 
     /* ----- Fase 7: guía, ayuda y navegación ----- */
     help(el) { FP.help.open(el.dataset.id); },
+    'help-menu'() { FP.navigation.toggleHelpMenu(); },
     'help-section'() {
       const v = FP.guidanceConfig.VIEWS[state.view];
       if (v) FP.help.open(v.help, `Ayuda: ${v.title}`);

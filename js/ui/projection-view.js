@@ -28,7 +28,7 @@
   function render(state) {
     const esc = H().esc, el = $('projection-view'); if (!el) return;
     const p = state.proj, res = compute(state), by = res.baseYear, ty = res.targetYear;
-    const head = `<section class="panel" aria-labelledby="t-proj"><div class="panel__head"><div>
+    const head = `<section class="panel" aria-labelledby="t-proj"><div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-proj">Proyección de ${ty}</h2>
         <p class="panel__desc">Qué meta proponer para ${ty} y qué esperamos que pase, a partir del cierre estimado de ${by}. Dos números distintos: la meta es a dónde queremos llegar; la proyección es lo que esperamos si el ritmo reciente se mantiene.</p></div></div>`;
     if (!res.hasData) {

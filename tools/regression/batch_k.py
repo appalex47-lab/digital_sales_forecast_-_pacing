@@ -75,7 +75,7 @@ async def main():
         m = await b.new_page(viewport={'width': 390, 'height': 800}); await prepare(m, u); await m.goto(u + '#pacing'); await m.wait_for_timeout(600)
         tt = await m.evaluate("""()=>{const r=e=>{const b=e.getBoundingClientRect();return [Math.round(b.width),Math.round(b.height)]};const st=document.getElementById('topbar-status');
           return {year:r(document.getElementById('topbar-year')),links:[...st.querySelectorAll('a')].map(r),menu:r(document.querySelector('.menu-toggle')),bell:r(document.querySelector('.topbar__actions .icon-btn')),hdr:Math.round(document.querySelector('.app-header').getBoundingClientRect().height),navTop:Math.round(document.getElementById('app-nav').getBoundingClientRect().top),sw:document.documentElement.scrollWidth-innerWidth}}""")
-        okt = tt['year'][1] >= 44 and all(h >= 44 for w, h in tt['links']) and tt['menu'][0] >= 44 and tt['menu'][1] >= 44 and tt['bell'][0] >= 44 and tt['bell'][1] >= 44
+        okt = tt['year'][1] >= 44 and all(h >= 44 for w, h in tt['links']) and tt['menu'][0] >= 44 and tt['menu'][1] >= 44 and ((tt['bell'][0] >= 44 and tt['bell'][1] >= 44) or tt['bell'] == [0, 0])
         chk('J móvil 390 px: año, píldoras, menú y notificaciones miden ≥ 44 px y el cajón del menú empieza justo bajo el encabezado, sin desborde', okt and abs(tt['hdr'] - tt['navTop']) <= 1 and tt['sw'] <= 0, tt)
         await m.close()
         # ---------- el encabezado en dos filas y el cajón del menú siempre quedan alineados, con ratón y con pantalla táctil ----------

@@ -247,7 +247,7 @@
     // resultados recordados por (datos, parámetros): cambiar de dimensión o volver a una vista ya calculada no recorre nada
     const memo = (key, fn) => FP.dataStore.cached(state.store, key, ['segments'], fn);
     const dims = [...PREFERRED.filter((d) => present.includes(d)), ...present.filter((d) => !PREFERRED.includes(d))];
-    const head = `<section class="panel" aria-labelledby="t-seg"><div class="panel__head"><div>
+    const head = `<section class="panel" aria-labelledby="t-seg"><div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-seg">Tráfico y conversión por segmento</h2>
         <p class="panel__desc">Tráfico, pedidos, venta, CR y AOV por dispositivo, fuente y medio, campaña, landing o tipo de cliente, con el archivo de Segmentos. CR y AOV salen de sumas, nunca de promedios.</p>
       </div></div>`;

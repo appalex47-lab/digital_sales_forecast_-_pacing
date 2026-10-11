@@ -163,7 +163,7 @@ ${cards}
       : `${setupBlock(nextCard + '\n' + readyCard)}\n\n${flowBlock}\n\n${nowBlock}`;
     $('home').innerHTML = `<div class="home">
       <header class="home__head">
-        <div><h2 class="ds-page-title">Inicio</h2>
+        <div data-own-head><h2 class="ds-page-title">Inicio</h2>
           <p class="ds-lede">Centro de control: qué está pasando, contra qué se compara y qué sigue.</p></div>
         ${controls}
       </header>

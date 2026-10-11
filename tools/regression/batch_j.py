@@ -35,7 +35,7 @@ async def main():
         chk('R-10 desaparecen los tres botones de modo (Aprendiz / Analista / Ejecutivo) del encabezado de cada vista (18 vistas)', not top, top)
         keep = await q.evaluate("""()=>{const v=document.querySelector('.ux-context');return [...v.querySelectorAll('[data-action]')].map(b=>b.dataset.action)}""")
         await q.goto(u + '#pacing'); await q.wait_for_timeout(300)
-        keep = await q.evaluate("[...document.querySelectorAll('.ux-context [data-action]')].map(b=>b.dataset.action)")
+        keep = await q.evaluate("[...document.querySelectorAll('#help-menu [data-action]')].map(b=>b.dataset.action)")
         chk('R-10 se conservan los botones «Ayuda de esta sección», «Glosario» y «Recorrido guiado»', {'help-section', 'glossary', 'tour-start'} <= set(keep), keep)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(300)
         tg = await q.evaluate("(()=>{const t=document.querySelector('.app-nav [data-action=\"ux-mode\"]');return t?[t.dataset.value,t.getAttribute('aria-pressed')||t.getAttribute('role')||'',(t.getAttribute('aria-label')||t.closest('label')?.innerText||t.parentElement.innerText||'').trim().slice(0,40)]:null})()")
