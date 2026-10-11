@@ -70,9 +70,22 @@
     return rows;
   }
 
+  let lastScrollKey = '';
+  /** Resalta la zona del paso. Con la acción ya pulsada se marca «Es aquí» y se desplaza a ella. */
+  function highlight(state, s, here, quiet) {
+    const target = s.target ? document.querySelector(s.target) : null;
+    if (!target || state.view !== s.view) return;
+    const box = target.closest('section.panel') || target;
+    box.classList.add('tour-target');
+    if (here) box.classList.add('tour-target--here');
+    const key = `${s.id}:${here}`;   // se desplaza solo al activar el paso o al pulsar la acción, no en cada re-dibujo (escribir en un campo)
+    if (box.scrollIntoView && !quiet && key !== lastScrollKey) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    lastScrollKey = key;
+  }
+
   function render(state) {
     const bar = $('tour-bar');
-    document.querySelectorAll('.tour-target').forEach((el) => el.classList.remove('tour-target'));
+    document.querySelectorAll('.tour-target').forEach((el) => el.classList.remove('tour-target', 'tour-target--here'));
     const t = state.ux.tour;
     if (!t.active) { bar.hidden = true; bar.innerHTML = ''; bar.classList.remove('tour-bar--pill'); return; }
     const esc = H().esc;
@@ -84,6 +97,7 @@
 
     if (t.collapsed) {
       bar.classList.add('tour-bar--pill');
+      if (s.kind === 'action' && t.went && !t.ended) highlight(state, s, true, false);
       bar.innerHTML = `<button type="button" class="btn btn--primary tour-pill" data-action="tour-expand">${t.ended ? 'Ver resumen del recorrido' : t.went && s.kind === 'action' ? `Recorrido en espera · paso ${i + 1} de ${n} · Abrir` : `Retomar recorrido · paso ${i + 1} de ${n}`}</button>`;
       return;
     }
@@ -148,12 +162,7 @@
           ${ctl}
         </div>
       </div>`;
-    const target = s.target ? document.querySelector(s.target) : null;
-    if (target && state.view === s.view) {
-      const box = target.closest('section.panel') || target;
-      box.classList.add('tour-target');
-      if (box.scrollIntoView && !(action && !t.went)) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+    highlight(state, s, action && t.went, action && !t.went);
   }
 
   FP.tour = { steps, current, render, syncTarget, nextIdx, noteFor, has, idxOf, summaryRows };

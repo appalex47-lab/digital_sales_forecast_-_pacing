@@ -32,6 +32,7 @@ async def main():
         await click(q, 'tour-cta')
         t = await q.evaluate(TXT)
         chk('T2 al pulsar «Ir a cargar histórico» la tarjeta se oculta (queda un botón) y estás en Carga de datos', 'Recorrido en espera · paso 1 de 15' in t and not await q.evaluate("!!document.querySelector('#tour-bar .tour-bar__inner')") and await q.evaluate("location.hash")=='#carga', t[:300])
+        chk('T2 la zona a llenar (tarjeta «Histórico») queda marcada con el rectángulo «Es aquí»', await q.evaluate("(()=>{const e=document.querySelector('.tour-target--here');return !!e&&!!e.querySelector('#up-historical')&&getComputedStyle(e,'::after').content.includes('Es aquí')})()"))
         await click(q, 'tour-expand')
         t = await q.evaluate(TXT)
         chk('T2 al abrirla muestra «Esperando tu archivo de histórico»', 'Esperando tu archivo de histórico' in t, t[:300])
@@ -48,6 +49,7 @@ async def main():
         await q.click('#tour-bar [data-action="tour-resume"][data-step="datos"]'); await q.wait_for_timeout(500)
         t = await q.evaluate(TXT)
         chk('T4 «Retomar» regresa al paso del dato pendiente (Histórico)', 'Paso 1 de 15' in t and 'No tengo histórico' in t, t[:200])
+        chk('T2b los archivos llevan número de versión para que el navegador no use una copia vieja', await q.evaluate("[...document.querySelectorAll('script[src^=\"js/\"]')].every(e=>/\\?v=/.test(e.getAttribute('src')))"))
         # pausar / retomar / atrás / salir
         await click(q, 'tour-pause')
         chk('T5 «Pausar» deja solo el botón «Retomar recorrido · paso 1 de 15»', 'Retomar recorrido · paso 1 de 15' in await q.evaluate(TXT) and not await q.evaluate("!!document.querySelector('#tour-bar .tour-bar__inner')"))
