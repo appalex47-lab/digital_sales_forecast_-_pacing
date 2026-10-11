@@ -22,6 +22,7 @@
 | 7 | **Ajustes**: «Básico» y «Avanzado» (hoy 104 controles) | Hecha en esta rama |
 | 8 | **Menú por pregunta (versión acordada)**: se conservan los nombres de grupo y las pantallas; cada grupo muestra su pregunta (Planear ¿Qué quiero alcanzar?, Monitorear ¿Cómo voy?, Diagnosticar ¿Por qué?, Análisis ¿Qué patrones hay?, Recuperar ¿Qué hago?, Medir y aprender ¿Funcionó?) en el menú y en la ruta | Hecha en esta rama |
 | 9 | **Encabezado homologado en las 21 vistas**: migas → título + estado → «Qué hay aquí» → «Qué hago aquí» → «Detalle» (título y descripción propios de la vista, sin perder texto) → contexto → aviso de calidad (solo donde aplica); ayudas en un menú «Ayuda ▾»; «Siguiente paso» al final de la página; Modo Aprendiz con un panel «Aprender en esta vista» siempre cerrado al entrar | Hecha en esta rama |
+| 10 | **Recorrido guiado interactivo**: tarjeta flotante que no bloquea la pantalla; los 3 primeros pasos (histórico, venta real, meta) son de acción y avanzan solo al detectar el dato; «No tengo histórico / venta real / meta» con textos condicionales; sin meta el recorrido queda en pausa con resumen y «Retomar»; Pausar/Retomar; se ofrece una vez en la primera visita sin datos y al activar el Modo Aprendiz. Conserva los 15 pasos y sus textos | Hecha en esta rama |
 | P | **Prueba de usuario** (`PRUEBA_DE_USUARIO_inicio.md`) | Después de las fases 1 y 5, y al final |
 
 ## Cómo se ejecuta cada fase

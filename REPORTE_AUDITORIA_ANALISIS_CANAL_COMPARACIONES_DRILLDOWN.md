@@ -425,3 +425,12 @@ Modo Aprendiz: «Aprender en esta vista» siempre inicia cerrado (se reinicia al
 2. «Análisis» (Evolución y patrones) deja de ser un grupo del menú y pasa a **Diagnosticar** (ahora: Diagnóstico, Categoría → Producto, Tráfico y conversión, Evolución y patrones). La vista conserva su id (`analisis`) y su enlace `#analisis`.
 3. Al activar el Modo Aprendiz aparece una ventana que ofrece el recorrido guiado («Usar recorrido guiado» / «Ahora no»).
 Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
+
+
+## Adenda 22 · Fase 10: recorrido guiado interactivo (2026-10-11)
+- Orden de los pasos: histórico (`datos`), venta real (`real`, antes estaba después de Plan), meta, plan, pacing… medición. Siguen siendo 15 pasos con sus textos «Qué estamos viendo / Por qué importa / Qué buscar / Qué sigue» (los dos últimos, dentro de «Qué buscar y qué sigue»).
+- Los 3 primeros son de acción (`kind:'action'`, `detect`: histórico, real o meta según `FP.contextEngine.collectStatus`). `FP.tour.syncTarget` (lo llama `render()`) avanza solo cuando el dato existe, con aviso «✔ … Siguiente: …». Si el dato ya existía, el paso se salta.
+- «No tengo X» marca el paso como omitido (`ux.tour.skipped`) y muestra textos condicionales (sin histórico; sin histórico ni real; con histórico y sin real). Sin venta real omitida se saltan Pacing → Hipótesis y se sigue en Recuperar. «Aún no tengo meta» termina en un resumen «Recorrido en pausa» con «Retomar».
+- Tarjeta flotante (hoja inferior en celular). Pausar colapsa a un botón «Retomar recorrido · paso N de 15»; Salir guarda el paso.
+- Se ofrece una sola vez en la primera visita sin datos (ventana no modal, `ux.tourOffered`) y al activar el Modo Aprendiz. Cobertura: `batch_tour10.py`.
+- Decisiones del plan que se tomaron por defecto: tarjeta no bloqueante; resumen en pausa sin meta; el recorrido llega hasta Medición con todos los pasos existentes (no se recortó a 8).

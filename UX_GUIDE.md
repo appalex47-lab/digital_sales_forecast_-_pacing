@@ -638,3 +638,7 @@ Borrar siempre pide confirmación y dice qué más se va (mediciones, vínculos)
 
 ## Añadido 2026-10-11 · Encabezado homologado (Fase 9)
 Toda pantalla abre igual: ruta, título con estado, «Qué hay aquí», «Qué hago aquí», «Detalle». Ayuda (sección, glosario, recorrido) está en el menú «Ayuda ▾» de la barra superior. «Siguiente paso» está al final de la página. En Modo Aprendiz, «Aprender en esta vista» es un panel plegable que siempre empieza cerrado.
+
+
+## Añadido 2026-10-11 · Recorrido guiado interactivo (Fase 10)
+El recorrido pregunta por tus datos: «Cargar histórico» / «No tengo histórico», luego venta real y meta. Cuando el dato se carga, el recorrido avanza solo. Si falta algo, el paso lo explica y sigue. Sin meta queda en pausa con un resumen para retomar. Se puede pausar (queda un botón «Retomar recorrido») y salir sin perder el paso.
