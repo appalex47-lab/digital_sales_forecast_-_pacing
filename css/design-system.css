@@ -1475,3 +1475,39 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 .tour-offer h2 { margin: 0 0 8px; font-size: 20px; }
 .tour-offer p { margin: 0 0 16px; font-size: 15px; line-height: 1.45; }
 .tour-offer__btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* ===== Recorrido guiado interactivo (Fase 10): tarjeta flotante que no bloquea la pantalla ===== */
+.tour-bar { position: fixed; right: 24px; bottom: 24px; left: auto; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 96px); overflow: auto; z-index: 60; background: var(--ds-surface, #fff); border: 1px solid var(--ds-border, #cbd5e1); border-top: 1px solid var(--ds-border, #cbd5e1); border-radius: 14px; box-shadow: 0 14px 40px rgba(15, 23, 42, .28); }
+.tour-bar--pill { width: auto; max-height: none; overflow: visible; background: transparent; border: 0; box-shadow: none; }
+.tour-bar .tour-bar__inner { max-width: none; padding: 16px 18px; gap: 10px; }
+.tour-bar__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tour-bar__dots { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.tour-dot { width: 14px; height: 14px; border-radius: 50%; background: #e2e8f0; display: inline-flex; align-items: center; justify-content: center; color: #fff; box-sizing: border-box; }
+.tour-dot--ok { background: #15803d; }
+.tour-dot--skip { background: #b45309; }
+.tour-dot--cur { background: #1d4ed8; box-shadow: 0 0 0 3px #bfd0fb; }
+.tour-bar__ctl { display: inline-flex; gap: 12px; margin-left: auto; flex-wrap: wrap; }
+.tour-link { background: none; border: 0; padding: 4px 0; color: var(--ds-text-2, #475569); font-size: 13px; text-decoration: underline; cursor: pointer; min-height: 32px; }
+.tour-bar__title { margin: 0; font-size: 20px; line-height: 1.25; }
+.tour-bar__txt { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ds-text-2, #475569); }
+.tour-bar .tour-bar__body { grid-template-columns: 1fr; gap: 8px; }
+.tour-flash { margin: 0; padding: 8px 10px; border-radius: 8px; background: #e6f6ec; border: 1px solid #9bd4ae; color: #14532d; font-size: 14px; }
+.tour-cond { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff7e6; border: 1px solid #f2c879; color: #5b3a00; font-size: 14px; line-height: 1.45; }
+.tour-wait { margin: 0; display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; background: #e8f6f4; color: #0f5f58; font-size: 14px; }
+.tour-wait span { width: 8px; height: 8px; border-radius: 50%; background: #0f766e; flex: none; }
+.tour-more summary { cursor: pointer; font-size: 13px; color: var(--ds-accent, #1d4ed8); font-weight: 600; }
+.tour-sum { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tour-sum__row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.tour-sum__row > span:nth-child(2) { flex: 1; min-width: 0; }
+.tour-chip { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; min-width: 74px; text-align: center; }
+.tour-chip--ok { background: #dcfce7; color: #14532d; }
+.tour-chip--skip { background: #fef3c7; color: #78350f; }
+.tour-chip--pend { background: #e0e7ff; color: #1e3a8a; }
+.tour-pill { border-radius: 999px; min-height: 44px; padding: 10px 20px; box-shadow: 0 8px 24px rgba(15, 23, 42, .3); }
+.tour-offer--soft { position: fixed; right: 24px; bottom: 24px; left: auto; top: auto; margin: 0; z-index: 70; }
+@media (max-width: 640px) {
+  .tour-bar { left: 0; right: 0; bottom: 0; width: auto; max-height: 70vh; border-radius: 18px 18px 0 0; }
+  .tour-bar--pill { left: auto; right: 16px; bottom: 16px; border-radius: 0; }
+  .tour-bar .btn { min-height: 44px; }
+  .tour-offer--soft { left: 16px; right: 16px; bottom: 16px; width: auto; max-width: none; }
+}

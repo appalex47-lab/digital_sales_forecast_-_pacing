@@ -480,18 +480,21 @@
   /* ---------- Recorrido guiado ---------- */
 
   const TOUR = [
-    { id: 'datos', view: 'carga', target: '#view-carga', title: 'Datos (histórico primero)',
-      what: 'Los archivos con tu histórico y, después, tu venta real del año.', why: 'Con el histórico, al capturar la meta el plan proyecta volumen, AOV y CR. Si capturas la meta antes, el plan original queda sin esos indicadores y no se puede rehacer.',
-      lookFor: 'Que el histórico cargue sin errores; luego carga la venta real. Si tu empresa no tiene histórico, omítelo y empieza por la venta real. Si ya tienes datos, revisa que estén completos y sigue.', next: 'Capturar la meta.' },
-    { id: 'meta', view: 'resumen', target: '#targets-form', title: 'Meta',
+    { id: 'datos', view: 'carga', target: '#view-carga', title: 'Datos (histórico primero)', kind: 'action', detect: 'historical',
+      cta: 'Ir a cargar histórico', skipLabel: 'No tengo histórico', done: 'Histórico cargado.', waiting: 'Esperando tu archivo de histórico. Cuando se importe sin errores, paso solo al siguiente.',
+      what: 'Los archivos con tu histórico: la venta de años anteriores, por día y canal.', why: 'Con el histórico, al capturar la meta el plan proyecta volumen, AOV y CR. Si capturas la meta antes, el plan original queda sin esos indicadores y no se puede rehacer.',
+      lookFor: 'Que el histórico cargue sin errores. Si tu empresa no tiene histórico, usa «No tengo histórico» y sigue con la venta real. Si ya tienes datos, revisa que estén completos y sigue.', next: 'Cargar la venta real.' },
+    { id: 'real', view: 'carga', target: '#view-carga', title: 'Real', kind: 'action', detect: 'actual',
+      cta: 'Ir a cargar venta real', skipLabel: 'No tengo venta real', done: 'Venta real cargada.', waiting: 'Esperando tu archivo de venta real. Cuando se importe sin errores, paso solo al siguiente.',
+      what: 'La venta que realmente ocurrió este año, cargada desde archivos.', why: 'Sin real no hay pacing ni forecast.',
+      lookFor: 'Que la calidad de datos no tenga errores y la fecha de corte sea la esperada.', next: 'Capturar la meta.' },
+    { id: 'meta', view: 'resumen', target: '#targets-form', title: 'Meta', kind: 'action', detect: 'target',
+      cta: 'Ir a capturar la meta', skipLabel: 'Aún no tengo meta', done: 'Meta guardada.', waiting: 'Esperando que guardes la meta. Cuando se guarde, paso solo al siguiente.',
       what: 'La meta anual por canal: el Original Target.', why: 'Todo se mide contra ella y nunca se modifica.',
-      lookFor: 'Que el total y los canales estén capturados y cuadren.', next: 'Revisar cómo vamos contra el plan.' },
+      lookFor: 'Que el total y los canales estén capturados y cuadren.', next: 'Revisar el plan.' },
     { id: 'plan', view: 'plan', target: '#view-plan', title: 'Plan', chapter: 'Planear',
       what: 'La meta repartida en meses, semanas y días con la estacionalidad.', why: 'Dice cuánto debería llevarse en cada fecha, no solo al cierre.',
-      lookFor: 'Que los días fuertes y débiles tengan sentido para el negocio.', next: 'Cargar la venta real.' },
-    { id: 'real', view: 'carga', target: '#view-carga', title: 'Real', chapter: 'Monitorear',
-      what: 'La venta que realmente ocurrió, cargada desde archivos.', why: 'Sin real no hay pacing ni forecast.',
-      lookFor: 'Que la calidad de datos no tenga errores y la fecha de corte sea la esperada.', next: 'Ver cómo vamos contra el plan.' },
+      lookFor: 'Que los días fuertes y débiles tengan sentido para el negocio.', next: 'Ver cómo vamos contra el plan.' },
     { id: 'pacing', view: 'pacing', target: '#fc-channels', title: 'Pacing',
       what: 'Plan acumulado vs actual acumulado por canal.', why: 'Dice si vamos arriba o debajo del plan de los días transcurridos.',
       lookFor: 'Canales con cumplimiento menor a 100 % y su gap.', next: 'Ver el forecast de cierre.' },
@@ -554,7 +557,7 @@
   ];
 
   // Capítulos del recorrido (para retomarlo por partes, no todo en una sesión)
-  const CH = { datos: 'Planear', meta: 'Planear', plan: 'Planear', real: 'Monitorear', pacing: 'Monitorear', forecast: 'Monitorear', gap: 'Monitorear',
+  const CH = { datos: 'Planear', meta: 'Planear', plan: 'Planear', real: 'Planear', pacing: 'Monitorear', forecast: 'Monitorear', gap: 'Monitorear',
     drivers: 'Diagnosticar', senales: 'Diagnosticar', hipotesis: 'Diagnosticar', recovery: 'Recuperar', escenario: 'Recuperar', accion: 'Recuperar', medicion: 'Medir', narrativa: 'Medir' };
   TOUR.forEach((t) => { t.chapter = t.chapter || CH[t.id] || null; });
 

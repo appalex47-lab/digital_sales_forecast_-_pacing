@@ -70,7 +70,8 @@
       ctxNote: null,
       visited: {},
       lastByGroup: {},
-      tour: { active: false, step: 0 },
+      tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null },
+      tourOffered: false,
       home: { channel: 'total', periodType: 'year', periodKey: null },
       measureAction: null,
       crumbExtra: {}
@@ -797,14 +798,14 @@
     const env = storage.load(K.uxSettings);
     const d = env && env.data ? env.data : {};
     const u = state.ux;
-    ['mode', 'visited', 'lastByGroup', 'tour', 'home', 'ctx', 'learned'].forEach((k) => { if (d[k] !== undefined) u[k] = typeof d[k] === 'object' && !Array.isArray(d[k]) ? { ...u[k], ...d[k] } : d[k]; });
+    ['mode', 'visited', 'lastByGroup', 'tour', 'home', 'ctx', 'learned', 'tourOffered'].forEach((k) => { if (d[k] !== undefined) u[k] = typeof d[k] === 'object' && !Array.isArray(d[k]) ? { ...u[k], ...d[k] } : d[k]; });
     u.tour.active = Boolean(d.tour && d.tour.active);
     // el modo Ejecutivo ya no existe: quien lo tenía guardado pasa a Analista
     if (!FP.guidanceConfig.MODES.some(([id]) => id === u.mode)) u.mode = 'analyst';
   }
   function saveUx() {
     const u = state.ux;
-    storage.save(K.uxSettings, { mode: u.mode, visited: u.visited, lastByGroup: u.lastByGroup, tour: u.tour, home: u.home, ctx: u.ctx, learned: u.learned });
+    storage.save(K.uxSettings, { mode: u.mode, visited: u.visited, lastByGroup: u.lastByGroup, tour: u.tour, home: u.home, ctx: u.ctx, learned: u.learned, tourOffered: u.tourOffered });
   }
 
   /** Render completo: navegación → vista existente → barra de contexto → ayuda, modo y recorrido. */
@@ -869,8 +870,13 @@
     FP.help.decorate(main);
     FP.help.enhanceEmpty(main, FP.contextEngine.requirements(state.view, status));
     FP.navigation.applyMode(state);
+    if (tourSyncDepth < 20) {
+      const adv = FP.tour.syncTarget(state, status);
+      if (adv) { tourSyncDepth++; try { tourGo(adv.idx, adv.flash); } finally { tourSyncDepth--; } return; }
+    }
     FP.tour.render(state);
     saveUx();
+    maybeOfferTourFirstTime(status);
   }
 
   function renderView() {
@@ -1873,7 +1879,7 @@
       state.dx.run = null;
       loadYearScoped(state.year);
       refresh();
-      state.ux.visited = {}; state.ux.tour = { active: false, step: 0 }; state.ux.lastByGroup = {};
+      state.ux.visited = {}; state.ux.tour = { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null }; state.ux.lastByGroup = {};
       render();
       FP.ui.toast('Datos borrados');
     },
@@ -2248,7 +2254,7 @@
       render();
       if (state.ux.mode === 'learner' && was !== 'learner' && !state.ux.tour.active) offerTour();
     },
-    'tour-offer-go'() { closeTourOffer(); tourGo(0); },
+    'tour-offer-go'() { closeTourOffer(); state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null }; tourGo(0); },
     'tour-offer-no'() { closeTourOffer(); },
     'nav-toggle'() { document.body.classList.toggle('nav-open'); },
     'lesson-dismiss'() { state.ux.lesson = null; render(); },
@@ -2275,15 +2281,40 @@
       render();
     },
     'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); },
-    'tour-start'() { tourGo(state.ux.tour.step || 0); },
-    'tour-restart'() { tourGo(0); },
+    'tour-start'() { tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
+    'tour-restart'() { state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null }; tourGo(0); },
     'tour-next'() {
-      const n = FP.tour.steps().length;
-      if (state.ux.tour.step >= n - 1) { state.ux.tour = { active: false, step: 0 }; render(); FP.ui.toast('Recorrido terminado. Puedes volver a iniciarlo desde "¿Cómo funciona?".'); return; }
-      tourGo(state.ux.tour.step + 1);
+      const t = state.ux.tour; const status = FP.contextEngine.collectStatus(state);
+      const n = FP.tour.nextIdx(state, status, t.step);
+      if (n < 0) { state.ux.tour = { ...t, ended: 'fin', collapsed: false, went: false, flash: '' }; render(); return; }
+      tourGo(n);
     },
     'tour-prev'() { tourGo(Math.max(0, state.ux.tour.step - 1)); },
     'tour-exit'() { state.ux.tour.active = false; render(); FP.ui.toast(`Recorrido pausado en el paso ${state.ux.tour.step + 1}. Puedes retomarlo cuando quieras.`); },
+    /** Paso de acción: lleva a la pantalla y deja el recorrido esperando el dato (se detecta solo). */
+    'tour-cta'() {
+      const t = state.ux.tour; const v = FP.tour.steps()[t.step].view;
+      t.went = true; t.flash = '';
+      if (root.location.hash === `#${v}`) render(); else root.location.hash = v;
+    },
+    /** «No tengo X»: se marca omitido y se sigue; sin meta el recorrido queda en pausa con su resumen. */
+    'tour-skip'() {
+      const t = state.ux.tour; const s = FP.tour.steps()[t.step];
+      t.skipped = { ...(t.skipped || {}), [s.id]: true };
+      if (s.id === 'meta') { state.ux.tour = { ...t, ended: 'nometa', went: false, flash: '', collapsed: false }; render(); return; }
+      const status = FP.contextEngine.collectStatus(state);
+      tourGo(FP.tour.nextIdx(state, status, t.step));
+    },
+    'tour-pause'() { state.ux.tour.collapsed = true; render(); },
+    'tour-expand'() { state.ux.tour.collapsed = false; render(); },
+    'tour-close'() { state.ux.tour = { ...state.ux.tour, active: false, collapsed: false, ended: null, step: 0 }; render(); },
+    /** Resumen: retomar un punto pendiente (la meta retoma el paso Meta, etc.). */
+    'tour-resume'(el) {
+      const i = FP.tour.idxOf(el.dataset.step);
+      const sk = { ...(state.ux.tour.skipped || {}) }; delete sk[el.dataset.step];
+      state.ux.tour = { ...state.ux.tour, skipped: sk, ended: null };
+      tourGo(i);
+    },
 
     /* ----- Fase 8.2: Business Setup ----- */
     'bc-field'(el) {
@@ -2984,20 +3015,29 @@
   /** Recorrido guiado: activa el paso y navega a su vista. */
   /** Al activar el Modo Aprendiz se ofrece el recorrido guiado (ventana con foco atrapado; Esc o «Ahora no» la cierran). */
   function closeTourOffer() { const d = document.getElementById('tour-offer'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
-  function offerTour() {
+  function offerTour(modal = true) {
     closeTourOffer();
     const d = document.createElement('dialog');
-    d.id = 'tour-offer'; d.className = 'tour-offer'; d.setAttribute('aria-labelledby', 'tour-offer-t');
-    d.innerHTML = '<h2 id="tour-offer-t">Modo Aprendiz activado</h2><p>Te recomendamos usar el recorrido guiado: te lleva paso a paso por las pantallas, en el orden en que se usan.</p><div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="tour-offer-go">Usar recorrido guiado</button><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
+    d.id = 'tour-offer'; d.className = modal ? 'tour-offer' : 'tour-offer tour-offer--soft'; d.setAttribute('aria-labelledby', 'tour-offer-t');
+    d.innerHTML = `<h2 id="tour-offer-t">${modal ? 'Modo Aprendiz activado' : 'Bienvenido a RevNavigator'}</h2>` + '<p>Te recomendamos usar el recorrido guiado: te lleva paso a paso por las pantallas, en el orden en que se usan.</p><div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="tour-offer-go">Usar recorrido guiado</button><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
     d.addEventListener('close', () => d.remove());
     document.body.appendChild(d);
-    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    if (modal && typeof d.showModal === 'function') d.showModal(); else if (typeof d.show === 'function') d.show(); else d.setAttribute('open', '');
   }
-  function tourGo(i) {
-    state.ux.tour = { active: true, step: i };
+  let tourSyncDepth = 0;
+  function tourGo(i, flash) {
+    state.ux.tour = { ...state.ux.tour, active: true, step: i, collapsed: false, went: false, flash: flash || '', ended: null };
     const v = FP.tour.steps()[i].view;
     if (root.location.hash === `#${v}` || state.view === v && !root.location.hash) render(); else root.location.hash = v;
   }
+  /** Primera visita sin datos: se ofrece el recorrido una sola vez (ventana que no bloquea la pantalla). */
+  function maybeOfferTourFirstTime(status) {
+    if (state.ux.tourOffered || state.ux.tour.active) return;
+    if (status.data.historical || status.data.actual || status.targets.defined) { state.ux.tourOffered = true; saveUx(); return; }
+    state.ux.tourOffered = true; saveUx();
+    offerTour(false);
+  }
+
 
   /** Crea una acción del plan ligada al escenario (y su hipótesis) seleccionado. */
   function addActionFrom(item, source) {

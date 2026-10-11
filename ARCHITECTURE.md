@@ -2687,3 +2687,7 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ## Encabezado homologado (Fase 9)
 `navigation.js` (`renderContextBar`) lee del DOM el título/descripción propios de la vista (marcados `data-own-head`, ocultos por CSS) y los muestra en «Detalle». Renderiza en `#ux-context` (cabecera), `#ux-next` (siguiente paso) y `#topbar-help` (menú Ayuda). `help.js` `learningBar` devuelve un `<details class="learn-panel">`; su estado abierto se guarda en `learnOpenView` y se reinicia al cambiar de vista.
+
+
+## Recorrido guiado interactivo (Fase 10)
+`FP.guidanceConfig.TOUR` (15 pasos; los 3 primeros con `kind:'action'`, `detect`, `cta`, `skipLabel`, `done`, `waiting`). `tour.js`: `syncTarget` (avance automático), `nextIdx` (salto sin venta real), `noteFor` (textos condicionales), `summaryRows`, `render` (tarjeta, resumen, botón colapsado). Estado en `state.ux.tour` = `{active, step, collapsed, went, flash, skipped:{id:true}, ended:null|'nometa'|'fin'}` y `state.ux.tourOffered`. Acciones en `app.js`: `tour-cta`, `tour-skip`, `tour-pause`, `tour-expand`, `tour-close`, `tour-resume`, además de `tour-next/prev/exit/start/restart`. `render()` llama a `syncTarget` antes de dibujar (con tope de recursión).
