@@ -116,16 +116,46 @@
         ${C().channels.map((c) => `
           <div class="field" style="--dot:${c.color}">
             <label for="t-${c.id}">${esc(c.label)}</label>
-            <input id="t-${c.id}" name="${c.id}" inputmode="decimal" autocomplete="off" value="${esc(val(t.byChannel[c.id].revenue))}" placeholder="Sin definir">
-            <span class="field__hint num">${t.byChannel[c.id].revenue ? esc(F().currencyCompact(t.byChannel[c.id].revenue)) + ', ' + esc(F().percent(FP.metrics.safeDivide(t.byChannel[c.id].revenue, t.annual.revenue), 1)) + ' del total' : ''}</span>
+            <input id="t-${c.id}" name="${c.id}" inputmode="decimal" autocomplete="off" value="${esc(val(t.byChannel[c.id].revenue))}" placeholder="Monto o %, ej. 151M o 58%">
+            <span class="field__hint num" data-share-hint="${c.id}"></span>
           </div>`).join('')}
       </div>
+      <p class="targets-form__split num" id="t-split" role="status" aria-live="polite"></p>
       ${note}
       <div class="btn-row">
         <button type="submit" class="btn btn--primary">Guardar metas</button>
         <button type="button" class="btn" data-action="sample-targets">Usar metas de ejemplo</button>
       </div>
       ${assistant(state)}`;
+    updateTargetHints();
+  }
+
+  /**
+   * Reparto por canal en vivo (Fase 13): al escribir la meta total y el monto (o el %) de cada canal, muestra el monto y el % de cada uno
+   * y cuánto falta o se excede. Solo lee y escribe textos de ayuda; no cambia lo que el usuario escribió ni guarda nada.
+   */
+  function updateTargetHints() {
+    const form = $('targets-form'); if (!form) return;
+    const total = FP.format.parseAmountInput(String((form.querySelector('[name="annual"]') || {}).value || ''));
+    let sum = 0, defined = 0; const pending = [];
+    C().channels.forEach((c) => {
+      const input = form.querySelector(`[name="${c.id}"]`); const hint = form.querySelector(`[data-share-hint="${c.id}"]`);
+      if (!input || !hint) return;
+      const r = FP.format.parseShareInput(input.value, total);
+      let txt = '';
+      if (r.error === 'no_total') txt = 'Para usar %, captura primero la meta anual total.';
+      else if (r.error) txt = r.kind === 'pct' ? 'El porcentaje debe estar entre 0 y 100.' : 'Monto no válido. Usa 151M, 151000000 o 58%.';
+      else if (r.value !== null) { sum += r.value; defined += 1; txt = total > 0 ? `${F().currencyCompact(r.value)}, ${F().percent(r.value / total, 1)} del total` : F().currencyCompact(r.value); }
+      if (r.value === null && !r.error) pending.push(c.label);
+      hint.textContent = txt;
+    });
+    const split = $('t-split'); if (!split) return;
+    if (!(total > 0)) { split.textContent = 'Captura la meta anual total y, en cada canal, su monto o su porcentaje (ej. 58%).'; return; }
+    if (!defined) { split.textContent = 'Indica cuánto le toca a cada canal: escribe el monto (151M) o su parte del total (58%).'; return; }
+    const diff = total - sum; const near = Math.abs(diff) <= Math.max(1, total * 0.0001);
+    if (near) split.textContent = `Asignado ${F().currencyCompact(sum)} (100 % de la meta): el reparto cuadra.`;
+    else if (diff > 0) split.textContent = `Asignado ${F().currencyCompact(sum)} (${F().percent(sum / total, 1)}). Falta ${F().currencyCompact(diff)} (${F().percent(diff / total, 1)})${pending.length === 1 ? ` para ${pending[0]}` : pending.length > 1 ? ` por repartir entre ${pending.join(', ')}` : ''}.`;
+    else split.textContent = `Asignado ${F().currencyCompact(sum)} (${F().percent(sum / total, 1)}). Se excede por ${F().currencyCompact(-diff)} (${F().percent(-diff / total, 1)}): ajusta algún canal.`;
   }
 
   /** Asistente: propone metas desde la venta real de un año base. Solo llena el formulario. */
@@ -356,6 +386,6 @@
   /** Utilidades compartidas con las vistas de Fase 1. */
   const helpers = { esc, pill, segmented };
 
-  FP.ui = { helpers, renderAppMeta, renderStatus, renderFacts, renderTargets, renderFilters, renderValidation,
+  FP.ui = { helpers, renderAppMeta, renderStatus, renderFacts, renderTargets, updateTargetHints, renderFilters, renderValidation,
     renderEdgeCases, renderEngine, renderExport, renderAll, toast };
 })(typeof window !== 'undefined' ? window : globalThis);

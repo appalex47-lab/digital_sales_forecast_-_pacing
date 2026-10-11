@@ -455,3 +455,13 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - En micro-pasos de revisión (con botón manual), «Mostrarme dónde» deja la tarjeta abierta y compacta hasta «Ya lo vi» o «Siguiente»; si el siguiente micro-paso también es de revisión, la marca «Es aquí» se mueve y la tarjeta se queda. Solo se oculta cuando hay que actuar en la pantalla (elegir archivo, llenar, guardar).
 
 **Pruebas.** `tools/regression/batch_route12.py` (R1–R12).
+
+## Adenda 25 · Fase 13: reparto por canal con monto o % (2026-10-11)
+
+**Qué cambia.** En «Metas y motor», tras la meta anual total, cada canal acepta monto (`151M`) o porcentaje (`58%`). El porcentaje se convierte a monto a centavos y se guarda siempre el monto; el modelo guardado no cambia. Muestra el equivalente junto a cada canal y un resumen en vivo (asignado, falta/exceso).
+
+**Qué no hace.** No autocompleta el último canal ni reparte el resto. Sin meta anual, el % se rechaza con aviso.
+
+**Archivos.** `js/ui/format.js` (`parseShareInput`), `js/ui/ui.js` (`updateTargetHints`), `js/app.js` (`saveTargetsFromForm`, listener `input`, `ta-fill`), `index.html`, `js/config/guidanceConfig.js`.
+
+**Pruebas.** `tools/regression/batch_share13.py` (S1–S11).

@@ -1904,6 +1904,7 @@
       const set = (name, v) => { const el = document.querySelector(`#targets-form [name="${name}"]`); if (el) el.value = String(v); };
       set('annual', s.total);
       C.channelIds.forEach((ch) => set(ch, s.byChannel[ch]));
+      FP.ui.updateTargetHints();
       document.getElementById('targets-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
       { const t = state.ux.tour; FP.tour.mark(state, 'meta.calc', false);   // sin render() completo: borraría lo que acaba de llenarse en el formulario
         if (t.active && t.step === FP.tour.idxOf('meta')) { t.went = false; t.collapsed = false; t.flash = 'Hecho: Calcula tu meta desde el histórico.'; t.lastMicro = 'meta.channels'; t.lastMicroTitle = 'Revisa el reparto por canal'; FP.tour.render(state); } }
@@ -3036,7 +3037,14 @@
     };
     const next = DM.createTargets(state.year);
     next.annual.revenue = read('annual', 'Meta anual');
-    C.channels.forEach((c) => { next.byChannel[c.id].revenue = read(c.id, c.label); });
+    // por canal: monto («151M») o parte del total («58%»); lo que se guarda siempre es el monto
+    C.channels.forEach((c) => {
+      const raw = String(fd.get(c.id) || '').trim();
+      const r = FP.format.parseShareInput(raw, next.annual.revenue);
+      if (r.error === 'no_total') bad.push(`${c.label} (para usar % captura primero la meta anual)`);
+      else if (r.error) bad.push(c.label);
+      next.byChannel[c.id].revenue = r.error ? null : r.value;
+    });
     if (bad.length) { FP.ui.toast(`Revisa estos montos: ${bad.join(', ')}. Usa números como 261000000 o 261M.`); return; }
     ['byMonth', 'byWeek', 'byDay'].forEach((k) => { next[k] = state.targets[k] || {}; });
     next.updatedAt = new Date().toISOString();
@@ -3167,6 +3175,9 @@
       const el = e.target.closest('select[data-action], input[data-action], textarea[data-action]');
       if (el && el.type === 'checkbox' && el.dataset.action === 'rc-select') { actions['rc-select'](el); return; }
       if (el && actions[el.dataset.action]) actions[el.dataset.action](el);
+    });
+    document.addEventListener('input', (e) => {   // reparto por canal en vivo (monto o %)
+      if (e.target && e.target.closest && e.target.closest('#targets-form') && FP.ui.updateTargetHints) FP.ui.updateTargetHints();
     });
     document.addEventListener('input', (e) => {   // meta escrita a mano (sin histórico): avanza el micro-paso sin volver a dibujar el formulario
       if (e.target && e.target.id === 't-annual' && String(e.target.value).trim() !== '' && state.ux.tour.active && !(state.ux.tour.micro || {})['meta.total']) {

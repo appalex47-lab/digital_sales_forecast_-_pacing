@@ -502,7 +502,7 @@
       micro: [
         { key: 'calc', when: 'data', title: 'Calcula tu meta desde el histórico', desc: 'Si no tienes una meta definida, abre «Calcular metas desde el histórico» y pulsa «Usar propuesta».', target: '.targets-assist', box: 'self' },
         { key: 'total', when: 'nodata', title: 'Escribe tu meta anual total', desc: 'Sin histórico ni venta real no se puede calcular; escríbela directamente (ej. 261M).', target: '.targets-form__total', box: 'self' },
-        { key: 'channels', title: 'Revisa el reparto por canal', desc: 'Mira cuánto le toca a cada canal y ajusta lo que necesites.', target: '.targets-form__channels', box: 'self', manual: 'Ya revisé los canales' },
+        { key: 'channels', title: 'Revisa el reparto por canal', desc: 'Escribe cuánto le toca a cada canal: el monto (151M) o su parte del total (58%). Abajo ves el % de cada uno y cuánto falta.', target: '.targets-form__channels', box: 'self', manual: 'Ya revisé los canales' },
         { key: 'save', title: 'Guarda las metas', desc: 'Pulsa «Guardar metas»: quedan como tu Original Target.', target: '#targets-form > .btn-row', box: 'self' }
       ],
       cta: 'Ir a capturar la meta', skipLabel: 'Aún no tengo meta', done: 'Meta guardada.', waiting: 'Esperando que guardes la meta. Cuando se guarde, paso solo al siguiente.',
