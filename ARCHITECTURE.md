@@ -2705,3 +2705,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - `FP.format.parseShareInput(raw, total)` → `{value, kind:'amount'|'pct', error?}`; con `%` usa `Math.round(total*n)/100`; errores `invalid` y `no_total`.
 - `FP.ui.updateTargetHints()` pinta `[data-share-hint]` por canal y el resumen `#t-split` (`role=status`); se llama al renderizar, en cada `input` de `#targets-form` y tras `ta-fill`.
 - `saveTargetsFromForm` (app.js) parsea los canales con `parseShareInput` contra la meta anual; no cambia el modelo guardado (siempre montos). Prueba: `tools/regression/batch_share13.py`.
+
+## Fase 14 · Supuestos de arranque
+
+- **Config** (`config.planning`): `standardShape {enabled, dayOfWeek[7 lun→dom], events[{name,from:'MM-DD',to,factor}]}`, `generalAov {mode:'manual'|'lines', value, lines[{name,aov,share}], source, ref}`, `crSource[canal] {type, ref}`. `FP.seasonality.effectiveConfig` los fusiona.
+- **Motor** (`planningEngine.js`): `dayWeight` aplica la forma estándar solo al componente del método sin histórico (nunca sustituye al histórico) y marca `assumed`; `monthWeights` deriva el peso del mes de la suma de sus días cuando la forma estándar actúa (`source: 'user_assumption'`). `resolveGeneralAov` reparte el AOV general: canales fijos (AOV propio `assumptions[canal].aov` o histórico) y libres; `AOV libre = meta libre ÷ (meta total ÷ AOV general − pedidos de los fijos)`; sin fijos, todos heredan. `metricAssumption` lo usa como último recurso antes de «Sin histórico ni supuesto». `plan.assumptions` y `audit.settings.{standardShape, generalAov}` dejan rastro.
+- **UI:** `js/ui/startup-assumptions-view.js` (se pinta dentro de `planning-config-view`); acciones `ss-*`, `gaov-*`, `cr-pct`, `cr-source`, `cr-ref` en `app.js` (cada una guarda ajustes e invalida el plan). Pruebas: `tools/regression/batch_ss14.py`.

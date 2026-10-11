@@ -1,0 +1,46 @@
+// Pruebas del motor de planeación con supuestos de arranque (Fase 14).  node tools/test-startup-assumptions.js  (desde la raíz del repo)
+const fs = require('fs'), vm = require('vm');
+const html = fs.readFileSync('index.html', 'utf8');
+const srcs = [...html.matchAll(/<script src="(js\/[^"?]+)/g)].map((m) => m[1]).filter((f) => !/js\/(ui|app|export|worker)/.test(f));
+const ctx = { console, Math, Date, JSON, Map, Set, Intl, Number, String, Array, Object, RegExp, Error, Promise, setTimeout, clearTimeout, parseFloat, isNaN, Symbol, Uint8Array, TextEncoder };
+ctx.globalThis = ctx; ctx.window = undefined; vm.createContext(ctx);
+srcs.forEach((f) => vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f }));
+const FP = ctx.FP;
+let bad = 0;
+const t = (n, c, d) => { console.log((c ? '✔ ' : '✘ ') + n + (!c && d !== undefined ? ' — ' + JSON.stringify(d) : '')); if (!c) bad++; };
+const year = 2027, rev = { ecommerce: 151400000, app: 62000000, whatsapp: 31900000, llamadas: 15700000 };
+const targets = FP.dataModel.createTargets(year);
+targets.annual = { revenue: 261000000 }; targets.byChannel = {};
+Object.entries(rev).forEach(([k, v]) => { targets.byChannel[k] = { revenue: v }; });
+const run = (settings) => FP.planning.generatePlan({ year, targets, store: null, events: [], settings });
+const sumDays = (p, ch) => Math.round(p.channels[ch].days.reduce((a, d) => a + d.values.revenue, 0) * 100) / 100;
+
+const flat = run({});
+t('sin configurar nada: reparto parejo por días (idéntico al anterior)', flat.channels.ecommerce.months[1].source === 'fallback' && !flat.assumptions.generalAov);
+const std = run({ standardShape: { enabled: true, dayOfWeek: [1, 1, 1, 1, 1.2, 1.3, 0.8], events: [{ name: 'Buen Fin', from: '11-13', to: '11-16', factor: 1.4 }] } });
+const e = std.channels.ecommerce;
+t('la forma estándar sube noviembre y marca el mes como supuesto', e.months[10].target > flat.channels.ecommerce.months[10].target && e.months[10].source === 'user_assumption', [e.months[10].target, e.months[10].source]);
+t('los días del evento pesan más y se marcan «Supuesto del usuario»', e.days.find((d) => d.date === `${year}-11-13`).values.revenue > e.days.find((d) => d.date === `${year}-11-01`).values.revenue && e.days.find((d) => d.date === `${year}-11-13`).cells.revenue.source === 'user_assumption');
+Object.keys(rev).forEach((ch) => t(`Σ días = meta anual (${ch})`, sumDays(std, ch) === rev[ch], sumDays(std, ch)));
+t('el plan cierra (validación)', std.validation && std.validation.checks.every((c) => c.ok !== false && c.status !== 'fail'), std.validation && std.validation.checks.filter((c) => c.ok === false));
+const off = run({ standardShape: { enabled: false, dayOfWeek: [1, 1, 1, 1, 3, 3, 1], events: [] } });
+t('forma estándar apagada = sin efecto', off.channels.ecommerce.months[10].target === flat.channels.ecommerce.months[10].target);
+const methodA = run({ method: 'A', standardShape: { enabled: true, dayOfWeek: [1, 1, 1, 1, 3, 3, 1], events: [] } });
+t('método A (uniforme) ignora la forma estándar', methodA.channels.ecommerce.months[10].target === flat.channels.ecommerce.months[10].target);
+
+const inh = run({ generalAov: { mode: 'manual', value: 1100 } });
+t('todos los canales heredan el AOV general', Object.values(inh.assumptions.byChannel).every((x) => x.kind === 'inherited' && x.value === 1100));
+t('pedidos = venta ÷ AOV (±12 por redondeo mensual)', Math.abs(inh.channels.ecommerce.annual.orders - rev.ecommerce / 1100) <= 12, [inh.channels.ecommerce.annual.orders, rev.ecommerce / 1100]);
+const own = run({ generalAov: { mode: 'manual', value: 1100 }, assumptions: { ecommerce: { aov: 1150 } } });
+const ords = Object.keys(rev).reduce((a, ch) => a + own.channels[ch].annual.orders, 0);
+t('con un canal propio, los demás se ajustan y el total digital sigue en el AOV general', Math.abs(261000000 / ords - 1100) < 0.5 && ['app', 'whatsapp', 'llamadas'].every((c) => own.assumptions.byChannel[c].kind === 'adjusted'), [261000000 / ords, own.assumptions.byChannel]);
+t('el canal propio conserva su AOV', Math.abs(own.channels.ecommerce.annual.aov - 1150) < 0.5, own.channels.ecommerce.annual.aov);
+const imposible = run({ generalAov: { mode: 'manual', value: 5000 }, assumptions: { ecommerce: { aov: 100 } } });
+t('AOV propios que agotan los pedidos del general: avisa y no inventa', !!imposible.assumptions.issue && Object.keys(imposible.assumptions.byChannel).length === 0);
+const lines = run({ generalAov: { mode: 'lines', lines: [{ name: 'a', aov: 900, share: 50 }, { name: 'b', aov: 3100, share: 50 }] } });
+t('AOV general por líneas = Σ(% pedidos × AOV)', lines.assumptions.generalAov === 2000);
+const norm = FP.planning.generalAovValue({ mode: 'lines', lines: [{ aov: 100, share: 1 }, { aov: 400, share: 3 }] });
+t('los % que no suman 100 se normalizan', norm === 325, norm);
+t('sin AOV general ni propio: celdas «Sin histórico ni supuesto» (nunca 0)', flat.channels.ecommerce.annual.orders === null);
+console.log(bad ? `\n${bad} falla(s)` : '\nOK');
+process.exit(bad ? 1 : 0);

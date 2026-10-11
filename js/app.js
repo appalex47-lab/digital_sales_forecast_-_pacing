@@ -555,6 +555,14 @@
   }
 
   /** Datos, ajustes, eventos o año cambiaron: recalcular perfiles y comparación cuando se necesiten. */
+  /** Supuestos de arranque: copia editable de standardShape / generalAov / crSource dentro de los ajustes guardados. */
+  function ssGet(key) {
+    const st = state.planning.settings;
+    if (!st[key] || key === 'crSource') st[key] = FP.seasonality.effectiveConfig(st)[key];
+    return st[key];
+  }
+  function ssSave() { savePlanningSettings(); invalidatePlanning(); render(); }
+
   function invalidatePlanning() {
     state.planning.profiles = null;
     state.planning.comparison = null;
@@ -2986,8 +2994,68 @@
       s.assumptions = s.assumptions || {};
       s.assumptions[el.dataset.channel] = { ...(s.assumptions[el.dataset.channel] || {}), [el.dataset.key]: v };
       savePlanningSettings();
+      invalidatePlanning();
       render();
     },
+
+    /* ---- Supuestos de arranque (Fase 14): forma estándar, AOV general, CR con fuente ---- */
+    'ss-toggle'(el) { const ss = ssGet('standardShape'); ss.enabled = el.checked; ssSave(); },
+    'ss-dow'(el) {
+      const v = FP.normalize.normalizeNumber(el.value).value;
+      if (v === null || v <= 0) { FP.ui.toast('El factor debe ser mayor a 0 (1 = día normal).'); render(); return; }
+      const ss = ssGet('standardShape'); ss.dayOfWeek[+el.dataset.i] = v; ssSave();
+    },
+    'ss-event-add'() { const ss = ssGet('standardShape'); ss.events.push({ name: '', from: '', to: '', factor: 1 }); ssSave(); },
+    'ss-event-del'(el) { const ss = ssGet('standardShape'); ss.events.splice(+el.dataset.i, 1); ssSave(); },
+    'ss-event-set'(el) {
+      const ss = ssGet('standardShape'), e = ss.events[+el.dataset.i], f = el.dataset.f;
+      if (!e) return;
+      if (f === 'name') e.name = el.value.trim();
+      else if (f === 'factor') {
+        const v = FP.normalize.normalizeNumber(el.value).value;
+        if (v === null || v <= 0) { FP.ui.toast('El factor debe ser mayor a 0 (1 = día normal).'); render(); return; }
+        e.factor = v;
+      } else {
+        const t = el.value.trim();
+        if (t !== '' && !/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(t)) { FP.ui.toast('Escribe la fecha como MM-DD, por ejemplo 11-13.'); render(); return; }
+        e[f] = t;
+      }
+      ssSave();
+    },
+    'gaov-mode'(el) { ssGet('generalAov').mode = el.value === 'lines' ? 'lines' : 'manual'; ssSave(); },
+    'gaov-value'(el) {
+      const raw = el.value.trim();
+      const v = raw === '' ? null : FP.normalize.normalizeNumber(raw).value;
+      if (raw !== '' && (v === null || v <= 0)) { FP.ui.toast('El AOV debe ser mayor a 0.'); render(); return; }
+      ssGet('generalAov').value = v; ssSave();
+    },
+    'gaov-source'(el) { ssGet('generalAov').source = el.value; ssSave(); },
+    'gaov-ref'(el) { ssGet('generalAov').ref = el.value.trim(); ssSave(); },
+    'gaov-line-add'() { ssGet('generalAov').lines.push({ name: '', aov: null, share: null }); ssSave(); },
+    'gaov-line-del'(el) { ssGet('generalAov').lines.splice(+el.dataset.i, 1); ssSave(); },
+    'gaov-line-set'(el) {
+      const g = ssGet('generalAov'), l = g.lines[+el.dataset.i], f = el.dataset.f;
+      if (!l) return;
+      if (f === 'name') l.name = el.value.trim();
+      else {
+        const raw = el.value.trim();
+        const v = raw === '' ? null : FP.normalize.normalizeNumber(raw).value;
+        if (raw !== '' && (v === null || v < 0 || (f === 'share' && v > 100))) { FP.ui.toast(f === 'share' ? 'El % de pedidos va de 0 a 100.' : 'El AOV debe ser mayor a 0.'); render(); return; }
+        l[f] = v;
+      }
+      ssSave();
+    },
+    'cr-pct'(el) {
+      const raw = el.value.trim();
+      const v = raw === '' ? null : FP.normalize.normalizeNumber(raw).value;
+      if (raw !== '' && (v === null || v <= 0 || v > 100)) { FP.ui.toast('El CR va de 0 a 100 %. Ejemplo: 1.5'); render(); return; }
+      const s = state.planning.settings;
+      s.assumptions = s.assumptions || {};
+      s.assumptions[el.dataset.channel] = { ...(s.assumptions[el.dataset.channel] || {}), conversionRate: v === null ? null : Math.round(v * 1e4) / 1e6 };
+      ssSave();
+    },
+    'cr-source'(el) { const cs = ssGet('crSource'); cs[el.dataset.channel] = { ...cs[el.dataset.channel], type: el.value }; ssSave(); },
+    'cr-ref'(el) { const cs = ssGet('crSource'); cs[el.dataset.channel] = { ...cs[el.dataset.channel], ref: el.value.trim() }; ssSave(); },
 
     'plan-settings-reset'() {
       state.planning.settings = {};

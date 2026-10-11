@@ -661,3 +661,11 @@ Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por e
 - En «Metas y motor», después de la **meta anual total**, cada canal acepta su **monto** (`151M`, `151,400,000`) o su **porcentaje** del total (`58%`). El % exige haber capturado antes la meta anual; si no, se avisa.
 - Junto a cada canal aparece su equivalente (`$151.4 M, 58.0% del total`) y debajo un resumen en vivo: `Asignado $245.3 M (94.0%). Falta $15.7 M (6.0%) para Llamadas.` / «el reparto cuadra» / «Se excede por …».
 - Lo que se guarda siempre es el **monto** (el % se redondea a centavos). No se completa solo el último canal ni se reparte el resto.
+
+## Añadido 2026-10-11 · Supuestos de arranque (Fase 14)
+
+- **Dónde:** «Configuración de planeación», primera sección. Sale **abierta** mientras no haya histórico ni venta real (es la guía de qué llenar) y **plegada** cuando ya hay datos («el histórico siempre manda»). La persona puede abrirla o cerrarla; el sistema recuerda su elección mientras la sesión siga abierta.
+- **Forma del año:** casilla «Usar mi forma estándar donde falte histórico»; factores L–D (1 = día normal) y eventos con nombre, desde/hasta (MM-DD) y factor. Las fechas se repiten cada año. Muestra cuánto pesaría cada mes. Sin eventos ni factores, el reparto sigue siendo parejo por días.
+- **AOV y CR:** un **AOV general** (número, o generado de tus líneas con su AOV y % de **pedidos**). Cada canal lo hereda. Si un canal tiene AOV propio, los demás quedan «Ajustados» para que el total digital siga en el AOV general. El CR se captura por canal en %.
+- **Fuente:** cada AOV general y CR declara su origen (Mi dato / Benchmark / Estimación); con «Benchmark» la fuente y el año son obligatorios (aviso, no bloqueo). La app **no trae benchmarks**.
+- **Plan:** si el plan se apoya en estos supuestos, muestra el aviso «Supuesto» con enlace a la sección.

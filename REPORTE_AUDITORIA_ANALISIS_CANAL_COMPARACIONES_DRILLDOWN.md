@@ -465,3 +465,15 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 **Archivos.** `js/ui/format.js` (`parseShareInput`), `js/ui/ui.js` (`updateTargetHints`), `js/app.js` (`saveTargetsFromForm`, listener `input`, `ta-fill`), `index.html`, `js/config/guidanceConfig.js`.
 
 **Pruebas.** `tools/regression/batch_share13.py` (S1–S11).
+
+## Adenda 26 · Fase 14: supuestos de arranque (2026-10-11)
+
+**Qué cambia.** Planear sin histórico ni venta real deja de ser solo «parejo por días». La persona puede declarar una forma estándar (día de la semana y eventos), un AOV general que se reparte a los canales según su meta, y el CR por canal con su origen. Todo es supuesto del usuario y se marca así en el plan.
+
+**Reglas.** El histórico siempre manda; la forma estándar solo actúa en el componente del método que no tenga histórico. Los planes ya guardados no cambian (el plan original sigue congelado). Sin configurar nada, el resultado es idéntico al anterior.
+
+**Límites conocidos.** Con un canal que tenga AOV histórico, ese canal se trata como fijo (su AOV histórico) y el ajuste solo reparte entre los demás. No hay benchmarks incluidos. No se aplican factores de día del mes ni de temporada (las temporadas se capturan como eventos con rango).
+
+**Archivos.** `config.js`, `seasonality.js`, `planningEngine.js`, `planning-config-view.js`, `startup-assumptions-view.js`, `planning-view.js`, `app.js`, `styles.css`, `index.html`.
+
+**Pruebas.** `tools/regression/batch_ss14.py` (T1–T10).

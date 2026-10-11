@@ -31,6 +31,18 @@
       <td class="num">${F().metric('conversionRate', v.conversionRate)}</td><td class="num">${F().metric('aov', v.aov)}</td>`;
   }
 
+  /** ¿El plan se apoya en supuestos de arranque del usuario (forma estándar o AOV general)? */
+  function assumptionParts(plan) {
+    const parts = [];
+    const st = (plan.audit && plan.audit.settings) || {};
+    if (st.standardShape && st.standardShape.enabled && C().channelIds.some((ch) => plan.channels[ch].months.some((m) => m.source === 'user_assumption')
+      || plan.channels[ch].days.some((d) => d.cells.revenue && d.cells.revenue.source === 'user_assumption'))) parts.push('forma estándar del año');
+    if (C().channelIds.some((ch) => plan.channels[ch].months.some((m) => m.assumptions && m.assumptions.aov.source === 'user_assumption'))) parts.push('AOV supuesto');
+    if (C().channelIds.some((ch) => plan.channels[ch].months.some((m) => m.assumptions && m.assumptions.conversionRate.source === 'user_assumption'))) parts.push('CR supuesto');
+    return parts;
+  }
+  const usesAssumptions = (plan) => assumptionParts(plan).length > 0;
+
   function targetsPanel(state) {
     const esc = H().esc;
     const t = state.targets;
@@ -77,9 +89,11 @@
         <div><dt>Confianza</dt><dd>${conf(a.confidence)}</dd></div>
         <div><dt>Generado</dt><dd class="num">${esc(a.generatedAt.slice(0, 16).replace('T', ' '))} · ${esc(a.algorithmVersion)}</dd></div>
       </dl>
+      ${usesAssumptions(plan) ? `<div class="ds-alert ds-alert--info" role="note"><span class="chip">Supuesto</span> <strong>Este plan usa supuestos de arranque</strong> (${assumptionParts(plan).join(' y ')}). Se afinarán con tu venta real: la app te propondrá reemplazarlos, nunca lo hace sola.
+        <a href="#configuracion" data-nav="configuracion">Revisar supuestos de arranque</a></div>` : ''}
       ${isPreview && !hasOriginal && !hp.firstDate ? `<div class="ds-alert ds-alert--warning" role="note"><strong>Todavía no hay histórico.</strong>
         Si guardas ahora el plan original, se congela sin volumen, AOV ni CR proyectados y ya no se puede rehacer (después solo se guardan revisiones).
-        Carga el histórico primero si quieres esos indicadores. <a href="#carga" data-nav="carga">Ir a Carga de datos</a></div>` : ''}
+        Carga el histórico primero si quieres esos indicadores, o captura tus supuestos de AOV y CR en <a href="#configuracion" data-nav="configuracion">Configuración de planeación</a>. <a href="#carga" data-nav="carga">Ir a Carga de datos</a></div>` : ''}
       ${isPreview ? `<div class="btn-row">
         <button type="button" class="btn btn--primary" data-action="plan-save">${hasOriginal ? 'Guardar como revisión' : 'Guardar como plan distribuido original'}</button>
         <button type="button" class="btn" data-action="plan-discard">Descartar vista previa</button></div>
