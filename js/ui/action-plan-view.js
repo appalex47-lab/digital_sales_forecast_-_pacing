@@ -53,12 +53,12 @@
           <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : 'disabled'}>Agregar al plan</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
       <details class="disclosure"><summary>Agregar una acción propia al catálogo</summary><div class="panel__body">
         <div class="settings-grid">
-          <div class="field"><label for="rc-cu-name" class="field__hint">Nombre</label><input id="rc-cu-name" type="text"></div>
+          <div class="field"><label for="rc-cu-name" class="field__hint">Nombre</label><input id="rc-cu-name" data-draft type="text"></div>
           <div class="field"><label for="rc-cu-driver" class="field__hint">Driver que intenta modificar</label>
-            <select id="rc-cu-driver">${Object.entries(DRIVER).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
-          <div class="field"><label for="rc-cu-owner" class="field__hint">Área responsable</label><input id="rc-cu-owner" type="text"></div>
-          <div class="field"><label for="rc-cu-days" class="field__hint">Ventana de medición (días)</label><input id="rc-cu-days" type="number" min="1" step="1"></div>
-          <div class="field field--full"><label for="rc-cu-desc" class="field__hint">Descripción</label><input id="rc-cu-desc" type="text"></div>
+            <select id="rc-cu-driver" data-draft>${Object.entries(DRIVER).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
+          <div class="field"><label for="rc-cu-owner" class="field__hint">Área responsable</label><input id="rc-cu-owner" data-draft type="text"></div>
+          <div class="field"><label for="rc-cu-days" class="field__hint">Ventana de medición (días)</label><input id="rc-cu-days" data-draft type="number" min="1" step="1"></div>
+          <div class="field field--full"><label for="rc-cu-desc" class="field__hint">Descripción</label><input id="rc-cu-desc" data-draft type="text"></div>
         </div>
         <button type="button" class="btn" data-action="rc-add-custom">Agregar al catálogo</button></div></details>
       <div class="ai-box">

@@ -106,7 +106,20 @@
     return amt === null || amt === undefined ? '' : String(amt);
   }
 
+  /**
+   * Borrador del formulario de metas: lo escrito y aún no guardado sobrevive a cualquier re-dibujo (p. ej. «Mostrarme dónde» del recorrido).
+   * Vale solo mientras las metas guardadas no cambien (guardar, limpiar, importar o cambiar de año lo descartan).
+   */
+  let targetsDraft = null;
+  const targetsSig = (state) => JSON.stringify([state.year, state.targets && state.targets.annual, state.targets && state.targets.byChannel, state.targets && state.targets.channelShare]);
+  function markTargetsDraft(state) { targetsDraft = { sig: targetsSig(state) }; }
+
   function renderTargets(state) {
+    const formEl = $('targets-form');
+    let keep = null;
+    if (targetsDraft && formEl && targetsDraft.sig === targetsSig(state)) {
+      keep = {}; formEl.querySelectorAll('input[name]').forEach((i) => { keep[i.name] = i.value; });
+    } else targetsDraft = null;
     const t = state.targets;
     const val = (v) => (v === null || v === undefined ? '' : String(v));
     const h = DM().validateTargets(t);
@@ -137,6 +150,7 @@
         <button type="button" class="btn" data-action="sample-targets">Usar metas de ejemplo</button>
       </div>
       ${assistant(state)}`;
+    if (keep) Object.keys(keep).forEach((n) => { const i = $('targets-form').querySelector(`[name="${n}"]`); if (i) i.value = keep[n]; });
     updateTargetHints();
   }
 
@@ -396,6 +410,6 @@
   /** Utilidades compartidas con las vistas de Fase 1. */
   const helpers = { esc, pill, segmented };
 
-  FP.ui = { helpers, renderAppMeta, renderStatus, renderFacts, renderTargets, updateTargetHints, renderFilters, renderValidation,
+  FP.ui = { helpers, renderAppMeta, renderStatus, renderFacts, renderTargets, markTargetsDraft, updateTargetHints, renderFilters, renderValidation,
     renderEdgeCases, renderEngine, renderExport, renderAll, toast };
 })(typeof window !== 'undefined' ? window : globalThis);

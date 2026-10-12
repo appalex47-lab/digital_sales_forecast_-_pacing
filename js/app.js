@@ -857,6 +857,16 @@
   }
 
   /** No dibuja dos veces a la vez: al quitar del DOM un campo con cambios sin confirmar, el navegador dispara un «change» en pleno dibujo; ese dibujo se pospone hasta que termine el actual. */
+  // Borradores: lo escrito en campos marcados con data-draft (formularios sin estado propio) sobrevive a cualquier re-dibujo.
+  const drafts = {};
+  function restoreDrafts() {
+    document.querySelectorAll('[data-draft]').forEach((el) => {
+      if (!el.id || !(el.id in drafts)) return;
+      if (el.value !== drafts[el.id]) el.value = drafts[el.id];
+      const d = el.closest('details'); if (d && drafts[el.id] !== '') d.open = true;
+    });
+  }
+  function clearDrafts(prefix) { Object.keys(drafts).forEach((k) => { if (k.startsWith(prefix)) delete drafts[k]; }); }
   let rendering = false, renderAgain = false;
   function render() {
     if (rendering) { renderAgain = true; return; }   // se vuelve a dibujar al terminar, no en medio del dibujo
@@ -872,6 +882,7 @@
     if (g) u.lastByGroup[g] = state.view;
     FP.navigation.renderNav(state);
     renderView();
+    restoreDrafts();
     announceView();
     learnFromView();
     // El contexto persistente (canal/periodo) se sincroniza con lo que la vista tiene elegido en este momento,
@@ -1923,7 +1934,7 @@
       const set = (name, v) => { const el = document.querySelector(`#targets-form [name="${name}"]`); if (el) el.value = String(v); };
       set('annual', s.total);
       C.channelIds.forEach((ch) => set(ch, s.byChannel[ch]));
-      FP.ui.updateTargetHints();
+      FP.ui.markTargetsDraft(state); FP.ui.updateTargetHints();
       document.getElementById('targets-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
       { const t = state.ux.tour; FP.tour.mark(state, 'meta.calc', false);   // sin render() completo: borraría lo que acaba de llenarse en el formulario
         if (t.active && t.step === FP.tour.idxOf('meta')) { t.went = false; t.collapsed = false; t.flash = 'Hecho: Calcula tu meta desde el histórico.'; t.lastMicro = 'meta.channels'; t.lastMicroTitle = 'Revisa el reparto por canal'; FP.tour.render(state); } }
@@ -2620,6 +2631,7 @@
       if (!r.ok) { FP.ui.toast(r.errors.join(' ')); return; }
       state.rc.custom.push(r.action);
       storage.save(K.actionLibraryCustom, state.rc.custom);
+      clearDrafts('rc-cu-');
       render(); FP.ui.toast('Acción agregada al catálogo.');
     },
     async 'rc-ai'() {
@@ -3261,8 +3273,11 @@
       if (el && el.type === 'checkbox' && el.dataset.action === 'rc-select') { actions['rc-select'](el); return; }
       if (el && actions[el.dataset.action]) actions[el.dataset.action](el);
     });
+    ['input', 'change'].forEach((ev) => document.addEventListener(ev, (e) => {   // borradores de formularios sin estado propio
+      const t = e.target; if (t && t.dataset && t.dataset.draft !== undefined && t.id) drafts[t.id] = t.value;
+    }));
     document.addEventListener('input', (e) => {   // reparto por canal en vivo (monto o %)
-      if (e.target && e.target.closest && e.target.closest('#targets-form') && FP.ui.updateTargetHints) FP.ui.updateTargetHints();
+      if (e.target && e.target.closest && e.target.closest('#targets-form') && FP.ui.updateTargetHints) { FP.ui.markTargetsDraft(state); FP.ui.updateTargetHints(); }
     });
     document.addEventListener('input', (e) => {   // meta escrita a mano (sin histórico): avanza el micro-paso sin volver a dibujar el formulario
       if (e.target && e.target.id === 't-annual' && String(e.target.value).trim() !== '' && state.ux.tour.active && !(state.ux.tour.micro || {})['meta.total']) {
@@ -3330,7 +3345,7 @@
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
-  FP.app = { state, actions, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

@@ -495,3 +495,11 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - **Guía en la misma pantalla.** Sin histórico ni venta real, «Supuestos de arranque» abre con «Cómo llenarlo si no tienes datos» (4 pasos). Subtítulo de «Meta anual» reducido a una línea; el resto está en el desplegable «Cómo se usa esta captura».
 - **Ayuda.** Nueva entrada `supuestosArranque` (glosario y botón «?»).
 - **Pruebas.** `batch_ss14c.py` (V1–V11).
+
+## Adenda 29 · Borradores: lo escrito no se pierde al avanzar el recorrido (2026-10-11)
+
+- **Problema.** Al escribir la Meta anual (sin guardar) y pulsar «Mostrarme dónde» del siguiente micro-paso, `render()` volvía a dibujar el formulario desde el estado guardado y la meta se borraba.
+- **Corrección 1: formulario de metas.** `FP.ui.markTargetsDraft` guarda un borrador con la firma de las metas guardadas; `renderTargets` restaura lo escrito mientras esa firma no cambie (guardar, limpiar, importar o cambiar de año lo descartan).
+- **Corrección 2: mecanismo genérico.** Los campos marcados con `data-draft` (formularios sin estado propio) se recuerdan en `drafts` y se restauran tras cada render (`restoreDrafts`); aplicado a «Agregar una acción propia» (Recovery). Se limpian al agregar la acción.
+- **Revisión.** Se recorrieron todos los pasos de las rutas A y C llenando cada campo visible y re-dibujando con los botones del recorrido: sin otros campos que pierdan datos (los que se guardan con `change` ya persisten).
+- **Pruebas.** `batch_draft.py` (D1–D8). `FP.app.render` queda expuesto.
