@@ -96,9 +96,21 @@
   function renderAlerts(state) {
     const esc = H().esc;
     const run = state.fc.run;
+    // Etiquetas por tipo de alerta (no todas son riesgo): riesgo, datos faltantes, por encima del plan, mejora y tendencia
+    const TAGS = {
+      risk: { label: 'Riesgo', pill: 'error', order: 0, hint: 'el real o el forecast quedan por debajo del plan' },
+      data: { label: 'Faltan datos', pill: 'warning', order: 1, hint: 'días pasados sin venta real; el pacing no los cuenta' },
+      above: { label: 'Por encima del plan', pill: 'ok', order: 2, hint: 'el forecast de cierre supera el plan anual (revisa si el plan es conservador o si faltan días de venta real)' },
+      improving: { label: 'Mejora', pill: 'ok', order: 3, hint: 'el real supera el plan varios días seguidos' },
+      trend: { label: 'Tendencia', pill: 'na', order: 4, hint: 'el ritmo reciente difiere del acumulado' }
+    };
     const SEV = { info: 'na', attention: 'warning', warning: 'warning' };
+    const tagOf = (a) => TAGS[a.category] || { label: a.severity === 'info' ? 'Informativa' : 'Atención', pill: SEV[a.severity] || 'na', order: 9, hint: '' };
+    const sorted = run.alerts.map((a, i) => ({ a, i })).sort((x, y) => (tagOf(x.a).order - tagOf(y.a).order) || (x.i - y.i)).map((x) => x.a);
+    const used = [...new Set(sorted.map((a) => a.category).filter((c) => TAGS[c]))];
     $('fc-alerts').innerHTML = run.alerts.length
-      ? `<ul class="alert-list">${run.alerts.map((a) => `<li>${H().pill(SEV[a.severity] || 'na', a.severity === 'info' ? 'Informativa' : 'Atención')} <span>${esc(a.message)}</span></li>`).join('')}</ul>
+      ? `<ul class="alert-list">${sorted.map((a) => { const t = tagOf(a); return `<li>${H().pill(t.pill, t.label)} <span>${esc(a.message)}</span></li>`; }).join('')}</ul>
+        ${used.length ? `<p class="field__hint"><strong>Etiquetas:</strong> ${used.map((c) => `<strong>${esc(TAGS[c].label)}</strong> = ${esc(TAGS[c].hint)}`).join('; ')}.</p>` : ''}
         <p class="field__hint">Reglas matemáticas (umbrales en Parámetros): racha de ${run.settings.alerts.streakDays} días empeorando o mejorando el gap, performance de 28 días distinta a la acumulada por más de ${F().percent(run.settings.alerts.recentVsCumulative, 0)}, y forecast de cierre a más de ${F().percent(run.settings.alerts.forecastGapPct, 0)} del plan. Describen, no explican ni recomiendan.</p>`
       : '<p class="note note--ok">Sin alertas de pacing con los umbrales actuales.</p>';
   }

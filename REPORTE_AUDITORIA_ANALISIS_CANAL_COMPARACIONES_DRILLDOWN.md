@@ -514,3 +514,10 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - **Límites.** Cualquiera con el enlace lee la pestaña; Google tarda minutos en reflejar cambios; no es automático; CSV exportado depende del idioma de la hoja (fechas/números); no apto para volúmenes muy grandes.
 - **Sin verificar contra Google real.** Las pruebas usan un Google simulado (interceptan docs.google.com). El comportamiento real (CORS del enlace publicado, redirecciones, bloqueos de Workspace) debe confirmarse con una hoja real.
 - **Pruebas.** `tools/test-sheets-link.js` (Node) y `tools/regression/batch_sheets15.py` (S1–S20).
+
+## Adenda 31 · Alertas de pacing con etiquetas por tipo (2026-10-12)
+
+- **Problema.** Todas las alertas salían con «Atención» en naranja, aunque unas eran riesgo, otras buenas noticias y otras avisos de datos faltantes; además el texto decía «-24.4 % debajo del plan» (doble negativo).
+- **Cambio.** `buildAlerts` asigna `category` (conserva `severity` por compatibilidad): `risk` (forecast bajo el plan o racha bajo el plan), `data` (días pasados sin venta real), `above` (forecast sobre el plan), `improving` y `trend`. La vista muestra Riesgo (rojo), Faltan datos (naranja), Por encima del plan (verde), Mejora (verde) y Tendencia (neutra), ordenadas por esa prioridad, con una leyenda que explica solo las etiquetas presentes. El texto usa el valor absoluto del gap.
+- **Nota.** «Por encima del plan» no es una garantía: la leyenda sugiere revisar si el plan es conservador o si faltan días de venta real. Las alertas sin categoría (antiguas) conservan «Atención»/«Informativa».
+- **Pruebas.** `batch_alertas.py` (A1–A8). `buildAlerts` queda exportado.
