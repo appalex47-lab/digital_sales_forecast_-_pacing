@@ -684,3 +684,6 @@ Etiquetas: Riesgo (rojo), Faltan datos (naranja), Por encima del plan y Mejora (
 
 ## Nube (prueba S1)
 Configuración → Avanzado → «Nube (Supabase) · prueba»: «Subir copia a la nube» (sube y verifica), «Restaurar desde la nube» (reemplaza los bloques que existan en la copia y pide recargar), «Borrar copia de la nube». Entra sin login (sesión anónima). Solo datos de ejemplo hasta aprobar políticas.
+
+## Nube: cuenta y sincronización automática
+En «Nube (Supabase)»: **Vincular mi correo** (te llega un código de 6 dígitos; la copia queda ligada a tu correo) y **Entrar con mi correo** (otro equipo o tras borrar el navegador, luego «Restaurar»). La casilla **Sincronizar automáticamente metas, supuestos y ajustes** sube sola lo liviano y al abrir trae lo más nuevo; apagada por defecto.

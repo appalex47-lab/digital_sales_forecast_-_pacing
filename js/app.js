@@ -45,7 +45,7 @@
     settings: null,
     staging: { items: [], activeId: null, issueFilter: 'all' },
     sheets: { links: [], busy: false },
-    cloud: { busy: false, msg: null, tone: null, last: null, session: null },   // Fase S1: copia en la nube (Supabase)   // Fase 15: enlaces de Google Sheets publicados (solo URL)
+    cloud: { busy: false, msg: null, tone: null, last: null, session: null, auth: { step: null, email: '' }, auto: { on: false, last: null, error: null, pulled: [] } },   // Fase S1: copia en la nube (Supabase)   // Fase 15: enlaces de Google Sheets publicados (solo URL)
     quality: null,
     availableYears: [],
     qualityType: 'historical',
@@ -2594,7 +2594,52 @@
       if (!window.confirm('Se borrará la copia de la nube de esta sesión. Tus datos locales no se tocan. ¿Continuar?')) return;
       return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; });
     },
-    'cloud-signout'() { FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión de nube cerrada en este navegador. La copia sigue en Supabase, pero esta sesión anónima ya no podrá abrirla.', 'warn'); render(); },
+
+    /* ----- Fase S3: cuenta con correo (código de 6 dígitos) ----- */
+    'cloud-link-send'() {
+      const email = ((document.getElementById('cloud-email') || {}).value || '').trim();
+      return cloudRun(async () => {
+        const r = await FP.cloud.linkEmailStart(email, {});
+        if (!r.ok) return cloudNote(r.error, 'bad');
+        state.cloud.auth = { step: 'link', email: r.email }; clearDrafts('cloud-');
+        cloudNote(`Te mandé un código de 6 dígitos a ${r.email}. Escríbelo abajo. Si no llega en un minuto, revisa spam.`, 'ok');
+      });
+    },
+    'cloud-login-send'() {
+      const email = ((document.getElementById('cloud-email') || {}).value || '').trim();
+      return cloudRun(async () => {
+        const r = await FP.cloud.loginStart(email, {});
+        if (!r.ok) return cloudNote(r.error, 'bad');
+        state.cloud.auth = { step: 'login', email: r.email }; clearDrafts('cloud-');
+        cloudNote(`Te mandé un código de 6 dígitos a ${r.email}. Escríbelo abajo.`, 'ok');
+      });
+    },
+    'cloud-code-confirm'() {
+      const code = ((document.getElementById('cloud-code') || {}).value || '').trim();
+      const { step, email } = state.cloud.auth || {};
+      return cloudRun(async () => {
+        const r = step === 'login' ? await FP.cloud.loginConfirm(email, code, {}) : await FP.cloud.linkEmailConfirm(email, code, {});
+        if (!r.ok) return cloudNote(r.error, 'bad');
+        state.cloud.auth = { step: null, email: '' }; clearDrafts('cloud-');
+        cloudNote(step === 'login' ? `Entraste como ${email}. Ahora puedes usar «Restaurar desde la nube».` : `Listo: ${email} quedó vinculado a tu copia. Ya puedes entrar desde otro equipo con tu correo.`, 'ok');
+      });
+    },
+    'cloud-auth-cancel'() { state.cloud.auth = { step: null, email: '' }; clearDrafts('cloud-'); cloudNote(null); render(); },
+
+    'cloud-auto-toggle'(el) {
+      const on = !!el.checked; FP.cloud.setAuto(on); state.cloud.auto.on = on; state.cloud.auto.error = null;
+      if (!on) { cloudNote('Sincronización automática apagada. Lo ya subido sigue en la nube.', 'ok'); render(); return; }
+      return cloudRun(async () => {
+        const pull = await FP.cloud.pullNewer(cloudWriter, FP.repository.isDataKey, {});
+        if (pull.ok && pull.applied.length) { state.cloud.restored = true; state.cloud.auto.pulled = pull.applied; }
+        const keys = (await cloudProvider.keys()).filter((k) => FP.cloud.isAutoKey(k, FP.repository.isDataKey) && !(pull.applied || []).includes(k));
+        const r = await FP.cloud.pushKeys(cloudProvider, keys, {});
+        if (!r.ok) { state.cloud.auto.error = r.error; return cloudNote(r.error, 'bad'); }
+        state.cloud.auto.last = r.at;
+        cloudNote(`Sincronización automática encendida. Subí ${r.pushed} ajuste(s)${pull.applied && pull.applied.length ? ` y traje ${pull.applied.length} más nuevos de la nube (recarga para aplicarlos)` : ''}.`, 'ok');
+      });
+    },
+    'cloud-signout'() { FP.cloud.setAuto(false); state.cloud.auto.on = false; FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión de nube cerrada en este navegador. La copia sigue en Supabase, pero esta sesión anónima ya no podrá abrirla.', 'warn'); render(); },
     async 'storage-retry'() {
       const st = await FP.app.retryMigration();
       render();
@@ -3404,11 +3449,14 @@
 
   async function init() {
     try { await initStorage(); } catch (e) { state.storage = { mode: 'unavailable', migration: migrationState, error: String(e && e.message || e) }; }
+    // S2: antes de cargar nada, trae lo liviano que en la nube sea más nuevo (si no, la app podría volver a guardar su copia vieja y pisarlo)
+    cloudRefreshSession();
+    state.cloud.auto.on = FP.cloud.autoOn() && !!state.cloud.session;
+    if (state.cloud.auto.on) { try { await Promise.race([autoPull(false), new Promise((res) => setTimeout(res, 3000))]); } catch (e) { state.cloud.auto.error = String(e && e.message || e); } }
     FP.ui.renderAppMeta();
     loadSettings();
     loadAliases();
     loadSheetLinks();
-    cloudRefreshSession();
     loadPlanningSettings();
     loadForecastSettings();
     loadReforecastSettings();
@@ -3447,8 +3495,55 @@
       return lsStorage.load(key);
     }
   };
+
+  /* ----- Fase S2: sincronización automática de lo liviano (opt-in) ----- */
+  const cloudWriter = {
+    keys: cloudProvider.keys, read: cloudProvider.read,
+    /** Escribe conservando la fecha de guardado original (para no provocar un rebote de subida). Solo claves chicas (localStorage). */
+    async write(key, env) { lsAdapter.set(`${C.storage.namespace}:${key}`, JSON.stringify(env)); }
+  };
+  const autoPending = new Set(); let autoTimer = null, autoBusy = false;
+  function autoStatusEl() { return document.getElementById('cloud-auto-status'); }
+  function autoStatusText() {
+    const a = state.cloud.auto;
+    if (!a.on) return 'Apagada: tus metas y ajustes solo se guardan en este navegador.';
+    if (a.error) return `No se pudo sincronizar: ${a.error}`;
+    return a.last ? `Última sincronización: ${new Date(a.last).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : 'Encendida: se sincroniza cuando cambies algo.';
+  }
+  function autoPaint() { const el = autoStatusEl(); if (el) el.textContent = autoStatusText(); }
+  async function autoFlush() {
+    if (autoBusy || !autoPending.size) return;
+    autoBusy = true; const keys = [...autoPending]; autoPending.clear();
+    const r = await FP.cloud.pushKeys(cloudProvider, keys, {});
+    autoBusy = false;
+    if (r.ok) { state.cloud.auto.last = r.at; state.cloud.auto.error = null; } else { state.cloud.auto.error = r.error; keys.forEach((k) => autoPending.add(k)); }
+    autoPaint(); cloudRefreshSession();
+    if (autoPending.size && r.ok) autoSchedule();
+  }
+  function autoSchedule() { clearTimeout(autoTimer); autoTimer = setTimeout(autoFlush, C.cloud.autoDebounceMs); }
+  function autoMark(key) {
+    if (!state.cloud.auto.on || !FP.cloud.isAutoKey(key, FP.repository.isDataKey)) return;
+    autoPending.add(key); autoSchedule();
+  }
+  const _save = storage.save.bind(storage);
+  storage.save = (key, data) => { const ok = _save(key, data); if (ok) autoMark(key); return ok; };
+  async function autoPull(announce) {
+    const r = await FP.cloud.pullNewer(cloudWriter, FP.repository.isDataKey, {});
+    if (!r.ok) { state.cloud.auto.error = r.error; autoPaint(); return r; }
+    state.cloud.auto.error = null;
+    if (r.applied.length) {
+      state.cloud.auto.pulled = r.applied;
+      const needReload = r.applied.includes('businessContext');   // config.js lo lee antes de arrancar
+      if (needReload) state.cloud.restored = true;
+      FP.ui.toast(`Se trajeron ${r.applied.length} ajuste(s) más nuevos de la nube${needReload ? '. Recarga la página para aplicar los del negocio.' : '.'}`);
+      cloudNote(`Se trajeron de la nube ${r.applied.length} ajuste(s) más nuevos (${r.applied.slice(0, 4).join(', ')}${r.applied.length > 4 ? '…' : ''})${needReload ? '. Recarga para aplicar los del negocio.' : '.'}`, 'ok');
+    }
+    if (announce) render();
+    return r;
+  }
+
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
-  function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s ? { userId: s.user_id, anonymous: s.anonymous } : null; }
+  function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s ? { userId: s.user_id, anonymous: s.anonymous, email: s.email || null } : null; }
   const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   async function cloudRun(fn) {
     if (state.cloud.busy) return;

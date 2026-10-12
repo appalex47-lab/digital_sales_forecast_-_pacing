@@ -28,7 +28,7 @@
     switch (id) {
       case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${st && st.passed === st.total ? 'operativo' : 'con fallas'}`; }
       case 'st-modo': { const m = (FP.guidanceConfig.MODES || []).find((x) => x[0] === state.ux.mode); return m ? esc(m[1]) : ''; }
-      case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? 'Sesión activa · sin copia subida en esta sesión' : 'Sin conectar · solo datos de ejemplo'); }
+      case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? (c.session.email ? `Cuenta ${esc(c.session.email)}` : 'Sesión anónima · sin correo vinculado') : 'Sin conectar'); }
       case 'st-adv': return 'Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA';
       case 'st-otras': return plural(ELSEWHERE.length, 'preferencia', 'preferencias');
       case 'st-fuentes': { const b = FP.dataSources.build(state); return `${b.summary.activeSources} de ${b.summary.liveSources} fuentes con datos`; }
@@ -161,17 +161,31 @@
   }
 
 
-  /** Fase S1: copia en la nube (Supabase). Sesión anónima, sin login. Solo datos de ejemplo hasta aprobar políticas. */
+  /** Fase S1/S3: copia en la nube (Supabase). Entra sin login (sesión anónima) y, opcionalmente, vincula un correo con código. */
   function cloudPanel(state) {
-    const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session;
+    const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session, au = c.auth || {};
     const dis = c.busy ? 'disabled' : '';
-    return `${accStart(state, 'st-nube', 'Nube (Supabase) · prueba', 'Guarda una copia de tus datos en tu proyecto de Supabase y la restaura. Entras sin login: la app abre una sesión anónima y cada sesión solo puede ver sus propios datos.')}
+    const who = s ? (s.email ? `cuenta de <strong>${esc(s.email)}</strong> (correo verificado)` : `anónima activa (${esc(String(s.userId || '').slice(0, 8))}…) · <strong>sin correo vinculado</strong>`) : 'aún no hay sesión; se crea sola al subir';
+    let account = '';
+    if (au.step) {
+      account = `<div class="field"><label class="field__hint" for="cloud-code">Código de 6 dígitos enviado a ${esc(au.email)}</label>
+          <input id="cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" data-draft placeholder="123456"></div>
+        <div class="btn-row"><button type="button" class="btn btn--primary" data-action="cloud-code-confirm" ${dis}>Confirmar código</button>
+          <button type="button" class="btn btn--small" data-action="cloud-auth-cancel" ${dis}>Cancelar</button></div>`;
+    } else if (!(s && s.email)) {
+      account = `<div class="field"><label class="field__hint" for="cloud-email">Tu correo (para no perder la copia al borrar el navegador o cambiar de equipo)</label>
+          <input id="cloud-email" type="email" autocomplete="email" data-draft placeholder="tu@correo.com"></div>
+        <div class="btn-row"><button type="button" class="btn" data-action="cloud-link-send" ${dis} ${s && s.anonymous ? '' : 'disabled'}>Vincular mi correo</button>
+          <button type="button" class="btn" data-action="cloud-login-send" ${dis}>Entrar con mi correo</button></div>
+        <p class="field__hint">«Vincular» une tu correo a la copia que ya subiste (primero sube una). «Entrar» sirve en otro equipo o tras borrar el navegador, con un correo ya vinculado. Si entras con una cuenta distinta a la actual, verás la copia de esa cuenta.</p>`;
+    }
+    return `${accStart(state, 'st-nube', 'Nube (Supabase)', 'Guarda una copia de tus datos en tu proyecto de Supabase y la restaura. Entras sin login: la app abre una sesión anónima y cada cuenta solo puede ver sus propios datos.')}
         <div class="panel__body stack">
-          <p class="note note--warning"><strong>Fase de prueba:</strong> usa solo datos de ejemplo. No subas ventas reales hasta confirmar que la empresa permite guardar datos fuera del navegador.</p>
           <ul class="plain-list">
-            <li>Sesión: <strong>${s ? `anónima activa (${esc(String(s.userId || '').slice(0, 8))}…)` : 'aún no hay sesión; se crea sola al subir'}</strong></li>
-            <li>Qué viaja: tus datos y configuración guardados en este navegador. <strong>No viaja</strong> la API key de Cohere ni los datos de Productos (IndexedDB de productos).</li>
-            <li>Si borras los datos del navegador o entras desde otro equipo, esta sesión anónima se pierde y no podrás abrir la copia (se resolverá vinculando un correo en la siguiente fase).</li>
+            <li>Sesión: ${who}</li>
+            <li>Qué viaja: tus datos y configuración guardados en este navegador. <strong>No viaja</strong> la API key de Cohere ni los datos de Productos.</li>
+            <li>Dónde: tu proyecto de Supabase, protegido por reglas de acceso por cuenta. Confirma con tu empresa que es un destino permitido antes de subir información real.</li>
+            ${s && s.anonymous ? '<li>Sin correo vinculado, si borras los datos del navegador o entras desde otro equipo, la copia queda inaccesible. Vincula tu correo abajo.</li>' : ''}
           </ul>
           <div class="btn-row">
             <button type="button" class="btn btn--primary" data-action="cloud-upload" ${dis}>${c.busy ? 'Trabajando…' : 'Subir copia a la nube'}</button>
@@ -180,6 +194,10 @@
             ${s ? `<button type="button" class="btn btn--small" data-action="cloud-signout" ${dis}>Cerrar sesión de nube</button>` : ''}
             ${c.restored ? '<button type="button" class="btn btn--small btn--primary" data-action="bc-reload">Recargar y aplicar</button>' : ''}
           </div>
+          <div class="field field--check"><label><input type="checkbox" data-action="cloud-auto-toggle" ${c.auto && c.auto.on ? 'checked' : ''} ${s ? '' : 'disabled'} ${dis}> Sincronizar automáticamente metas, supuestos y ajustes</label>
+            <span class="field__hint">Solo lo liviano (metas, supuestos, versiones, equivalencias, enlaces de Sheets, negocio). Los datos pesados siguen subiéndose a mano. Si dos equipos cambian lo mismo, gana el cambio más reciente. No incluye preferencias por dispositivo ni la API key de Cohere.${s ? '' : ' Requiere una sesión: sube una copia primero.'}</span>
+            <span class="field__hint" id="cloud-auto-status">${esc(c.auto && c.auto.on ? (c.auto.error ? `No se pudo sincronizar: ${c.auto.error}` : c.auto.last ? `Última sincronización: ${new Date(c.auto.last).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : 'Encendida: se sincroniza cuando cambies algo.') : 'Apagada: tus metas y ajustes solo se guardan en este navegador.')}</span></div>
+          ${account}
           ${c.msg ? `<p class="note ${c.tone === 'bad' ? 'note--warning' : c.tone === 'ok' ? 'note--ok' : ''}" id="cloud-msg" role="status">${esc(c.msg)}</p>` : '<p class="note" id="cloud-msg" role="status" hidden></p>'}
         </div>
       ${accEnd()}`;
@@ -199,7 +217,7 @@
           <div class="btn-row"><button type="button" class="btn" data-action="st-expand-all">Expandir todo</button><button type="button" class="btn" data-action="st-collapse-all">Contraer todo</button></div>
           <nav aria-label="Secciones de esta pantalla"><div class="stindex">
             <div><p class="stgroup">Herramienta</p><ul class="plain-list">${link('st-estado', 'Estado de la herramienta')}${link('st-modo', 'Modo de uso')}${link('st-otras', 'Otras preferencias')}${link('st-negocio', 'Negocio (Business Setup)')}</ul></div>
-            <div><p class="stgroup">Datos</p><ul class="plain-list">${link('st-fuentes', 'Fuentes de datos')}${link('st-equivalencias', 'Equivalencias de nombres')}${link('st-almacenamiento', 'Almacenamiento')}${link('st-nube', 'Nube (prueba)')}</ul></div>
+            <div><p class="stgroup">Datos</p><ul class="plain-list">${link('st-fuentes', 'Fuentes de datos')}${link('st-equivalencias', 'Equivalencias de nombres')}${link('st-almacenamiento', 'Almacenamiento')}${link('st-nube', 'Nube')}</ul></div>
             <div><p class="stgroup">Inteligencia artificial</p><ul class="plain-list">${link('st-ia', 'Conexión con Cohere')}${link('st-ia-log', 'Qué se envió a Cohere')}${link('st-ia-aprendido', 'Lo que la IA aprendió')}${link('st-ia-privacidad', 'Datos personales protegidos')}</ul></div>
           </div></nav>
         </div>

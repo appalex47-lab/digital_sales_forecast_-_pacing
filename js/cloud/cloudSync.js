@@ -28,7 +28,10 @@
     if (code === 'signup_disabled' || /signups? not allowed/i.test(msg)) return 'Supabase tiene apagado el registro de usuarios (Authentication → Sign In / Providers → User Signups → «Allow new users to sign up»). Los inicios anónimos también lo necesitan. Actívalo y guarda.';
     if (code === 'anonymous_provider_disabled' || /anonymous sign-ins are disabled/i.test(msg)) return 'Los inicios anónimos están desactivados en Supabase (Authentication → Sign In / Providers → Allow anonymous sign-ins). Actívalos y guarda con «Save changes».';
     if (code === 'captcha_failed' || /captcha/i.test(msg)) return 'Supabase pide CAPTCHA y esta versión de la app todavía no lo envía. Desactiva CAPTCHA en Supabase hasta que lo publiquemos.';
-    if (status === 429) return 'Supabase limitó los intentos por ahora. Espera unos minutos.';
+    if (code === 'email_exists' || code === 'identity_already_exists') return 'Ese correo ya tiene una cuenta. Usa «Entrar con mi correo» para abrirla.';
+    if (code === 'email_address_invalid' || code === 'validation_failed') return 'Ese correo no es válido.';
+    if (code === 'otp_expired' || /expired|invalid/i.test(msg) && code.startsWith('otp')) return 'El código es incorrecto o ya venció. Pide uno nuevo.';
+    if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit' || status === 429) return 'Supabase limitó los envíos por ahora (el servicio de correo gratuito permite pocos por hora). Espera unos minutos e inténtalo de nuevo.';
     return `Supabase respondió ${status}${code ? ` (${code})` : ''}${msg ? ': ' + msg : ''}.`;
   }
 
@@ -94,6 +97,57 @@
   }
   function signOut() { saveSession(null); }
 
+
+  /* ---------- Cuenta con correo (código de 6 dígitos) ---------- */
+  async function authCall(path, { method = 'POST', body, session, fetchImpl, loginCtx } = {}) {
+    const f = fetchImpl || root.fetch.bind(root);
+    const headers = authHeaders(session ? { Authorization: `Bearer ${session.access_token}` } : {});
+    let res; try { res = await f(`${cfg().url}/auth/v1/${path}`, { method, headers, body: JSON.stringify(body || {}) }); }
+    catch (e) { return { ok: false, error: 'No se pudo conectar con Supabase (sin conexión o bloqueado).' }; }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (loginCtx && (j.error_code === 'signup_disabled' || j.error_code === 'otp_disabled' || /signups not allowed/i.test(j.msg || ''))) return { ok: false, error: 'Ese correo todavía no tiene cuenta. Primero vincúlalo con «Vincular mi correo» desde el navegador donde tienes tu copia.' };
+      return { ok: false, error: explain(res.status, j) };
+    }
+    return { ok: true, json: j };
+  }
+  const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
+
+  /** Paso 1 de vincular: pide a Supabase asociar el correo a la sesión anónima y mandar un código. */
+  async function linkEmailStart(email, opts) {
+    email = String(email || '').trim().toLowerCase();
+    if (!validEmail(email)) return { ok: false, error: 'Escribe un correo válido.' };
+    const se = await ensureSession(Object.assign({}, opts, { noCreate: true }));
+    if (!se.ok) return { ok: false, error: 'Primero sube una copia (se crea la sesión) y luego vincula tu correo.' };
+    if (!se.session.anonymous) return { ok: false, error: 'Esta sesión ya tiene un correo vinculado.' };
+    const r = await authCall('user', { method: 'PUT', body: { email }, session: se.session, fetchImpl: opts && opts.fetchImpl });
+    if (!r.ok) return r;
+    if (!r.json.new_email) return { ok: false, error: 'Supabase no pidió confirmar el correo (la opción «Confirm email» está apagada), así que no se enviará código. Actívala en Authentication → Sign In / Providers → Email y vuelve a intentar.' };
+    return { ok: true, email };
+  }
+  /** Paso 2 de vincular: confirma el código. La sesión anónima pasa a ser de ese correo, con los mismos datos. */
+  async function linkEmailConfirm(email, code, opts) {
+    const r = await authCall('verify', { body: { type: 'email_change', email: String(email).trim().toLowerCase(), token: String(code || '').trim() }, fetchImpl: opts && opts.fetchImpl });
+    if (!r.ok) return r;
+    if (!r.json.access_token) return { ok: false, error: 'Supabase no devolvió una sesión. Pide un código nuevo.' };
+    const sess = toSession(r.json); sess.anonymous = false; saveSession(sess); return { ok: true, session: sess };
+  }
+  /** Entrar con un correo que ya tiene cuenta (otro equipo, o tras borrar el navegador). */
+  async function loginStart(email, opts) {
+    email = String(email || '').trim().toLowerCase();
+    if (!validEmail(email)) return { ok: false, error: 'Escribe un correo válido.' };
+    const cp = await getCaptchaToken(opts); if (!cp.ok) return { ok: false, error: cp.error };
+    const body = { email, create_user: false }; if (cp.token) body.gotrue_meta_security = { captcha_token: cp.token };
+    const r = await authCall('otp', { body, fetchImpl: opts && opts.fetchImpl, loginCtx: true });
+    return r.ok ? { ok: true, email } : r;
+  }
+  async function loginConfirm(email, code, opts) {
+    const r = await authCall('verify', { body: { type: 'email', email: String(email).trim().toLowerCase(), token: String(code || '').trim() }, fetchImpl: opts && opts.fetchImpl });
+    if (!r.ok) return r;
+    if (!r.json.access_token) return { ok: false, error: 'Supabase no devolvió una sesión. Pide un código nuevo.' };
+    const sess = toSession(r.json); sess.anonymous = false; saveSession(sess); return { ok: true, session: sess };
+  }
+
   /* ---------- REST ---------- */
   async function rest(path, { method = 'GET', body, prefer, fetchImpl, session } = {}) {
     const f = fetchImpl || root.fetch.bind(root);
@@ -110,6 +164,18 @@
     let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16);
   }
 
+
+  /** Sube un sobre (partido en trozos) y borra trozos sobrantes de una subida anterior más larga. */
+  async function putKey(session, key, env, fetchImpl) {
+    const table = cfg().table, text = JSON.stringify(env), parts = split(text, cfg().chunkChars), at = (env && env.savedAt && !isNaN(Date.parse(env.savedAt))) ? new Date(env.savedAt).toISOString() : new Date().toISOString();   // updated_at = fecha de guardado del dato: base de «gana el más nuevo»
+    const rows = parts.map((p, n) => ({ user_id: session.user_id, key, part: n, total: parts.length, payload: p, bytes: p.length, updated_at: at }));
+    for (let b = 0; b < rows.length; b += 4) {
+      await rest(`${table}?on_conflict=user_id,key,part`, { method: 'POST', body: rows.slice(b, b + 4), prefer: 'resolution=merge-duplicates,return=minimal', fetchImpl, session });
+    }
+    await rest(`${table}?key=eq.${encodeURIComponent(key)}&part=gte.${parts.length}`, { method: 'DELETE', fetchImpl, session });
+    return { text, parts: parts.length, at };
+  }
+
   /**
    * Sube todas las claves. `provider`: { keys():Promise<string[]>, read(key):Promise<envelope|null> }.
    * Devuelve { ok, keys:[{key,bytes,parts,digest}], bytes } o { ok:false, error }.
@@ -122,14 +188,9 @@
     try {
       for (let i = 0; i < keys.length; i++) {
         const key = keys[i], env = await provider.read(key); if (!env) continue;
-        const text = JSON.stringify(env), parts = split(text, size);
         if (onProgress) onProgress({ key, index: i + 1, of: keys.length });
-        const rows = parts.map((p, n) => ({ user_id: session.user_id, key, part: n, total: parts.length, payload: p, bytes: p.length, updated_at: new Date().toISOString() }));
-        for (let b = 0; b < rows.length; b += 4) {
-          await rest(`${table}?on_conflict=user_id,key,part`, { method: 'POST', body: rows.slice(b, b + 4), prefer: 'resolution=merge-duplicates,return=minimal', fetchImpl, session });
-        }
-        await rest(`${table}?key=eq.${encodeURIComponent(key)}&part=gte.${parts.length}`, { method: 'DELETE', fetchImpl, session });   // sobrantes de una subida anterior más larga
-        report.push({ key, bytes: text.length, parts: parts.length, digest: digest(text) }); total += text.length;
+        const { text, parts } = await putKey(session, key, env, fetchImpl);
+        report.push({ key, bytes: text.length, parts, digest: digest(text) }); total += text.length;
       }
       // claves que ya no existen localmente se quitan de la nube (la copia refleja lo local)
       const names = new Set(report.map((r) => r.key));
@@ -157,6 +218,51 @@
     return { ok: true, items, userId: session.user_id };
   }
 
+
+  /* ---------- S2: sincronización automática de lo liviano ---------- */
+  const AUTO_FLAG = 'fp.cloudAuto';   // fuera del namespace de datos: es una preferencia de este navegador
+  const autoOn = () => { try { return root.localStorage.getItem(AUTO_FLAG) === '1'; } catch (e) { return false; } };
+  const setAuto = (v) => { try { if (v) root.localStorage.setItem(AUTO_FLAG, '1'); else root.localStorage.removeItem(AUTO_FLAG); } catch (e) { /* sin storage */ } };
+  const baseKey = (k) => String(k).split(':')[0];
+  /** ¿Esta clave viaja sola? Solo claves chicas, sin secretos y sin preferencias por dispositivo. */
+  function isAutoKey(key, isDataKey) {
+    const b = baseKey(key);
+    return !(isDataKey && isDataKey(key)) && !cfg().skipKeys.includes(b) && !cfg().autoSkipKeys.includes(b);
+  }
+
+  /** Sube solo estas claves (sin tocar ni borrar las demás de la nube). */
+  async function pushKeys(provider, keys, { fetchImpl, captchaImpl } = {}) {
+    const se = await ensureSession({ fetchImpl, captchaImpl }); if (!se.ok) return se;
+    let n = 0;
+    try { for (const key of keys) { const env = await provider.read(key); if (!env) continue; await putKey(se.session, key, env, fetchImpl); n++; } }
+    catch (e) { return { ok: false, error: e.message }; }
+    return { ok: true, pushed: n, at: new Date().toISOString() };
+  }
+
+  /**
+   * Trae las claves chicas que en la nube son MÁS NUEVAS que las locales (gana la última escritura; gracias a updated_at
+   * del primer trozo). `provider`: { keys, read, write(key, envelope) }. Devuelve { ok, applied:[keys], pushedNewer:[keys] }.
+   */
+  async function pullNewer(provider, isDataKey, { fetchImpl } = {}) {
+    const se = await ensureSession({ fetchImpl, noCreate: true }); if (!se.ok) return { ok: true, applied: [], none: true };
+    const session = se.session, applied = [];
+    try {
+      const metas = await rest(`${cfg().table}?select=key,total,updated_at&part=eq.0`, { fetchImpl, session });
+      for (const m of metas || []) {
+        if (!isAutoKey(m.key, isDataKey)) continue;
+        const local = await provider.read(m.key);
+        const localAt = local && local.savedAt ? Date.parse(local.savedAt) : 0, cloudAt = Date.parse(m.updated_at);
+        if (!(cloudAt > localAt + 2000)) continue;
+        const parts = await rest(`${cfg().table}?select=part,payload&key=eq.${encodeURIComponent(m.key)}&order=part.asc`, { fetchImpl, session });
+        if (!parts || parts.length < m.total || Array.from({ length: m.total }, (_, i) => parts.find((x) => x.part === i)).some((x) => !x)) continue;   // incompleta: no se toca lo local
+        let env; try { env = JSON.parse(parts.slice().sort((a, b) => a.part - b.part).map((x) => x.payload).join('')); } catch (e) { continue; }
+        if (local && JSON.stringify(local) === JSON.stringify(env)) continue;   // mismo contenido: nada que aplicar
+        await provider.write(m.key, env); applied.push(m.key);
+      }
+    } catch (e) { return { ok: false, error: e.message, applied }; }
+    return { ok: true, applied };
+  }
+
   /** Compara lo subido con lo que hay en la nube (claves, tamaño y suma de verificación). */
   async function verify(uploadReport, opts) {
     const d = await download(opts); if (!d.ok) return d;
@@ -172,5 +278,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
+  FP.cloud = { autoOn, setAuto, isAutoKey, pushKeys, pullNewer, linkEmailStart, linkEmailConfirm, loginStart, loginConfirm, validEmail, getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
