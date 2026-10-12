@@ -1285,3 +1285,5 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
   .ss-recon .chip { white-space: nowrap; overflow-wrap: normal; }
   .ss-recon td.num, .ss-recon th.num { white-space: nowrap; }
 }
+
+.ss-steps { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; }

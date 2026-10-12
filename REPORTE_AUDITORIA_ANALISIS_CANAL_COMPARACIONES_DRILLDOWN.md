@@ -487,3 +487,11 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - **Modo guiado.** Nuevo paso `supuestos` (ruta C, empresa nueva) con 4 micro-pasos: forma del año, AOV, CR, cuadre. TOUR = 17 pasos; ruta C = Meta → Supuestos → Plan → primeras ventas.
 - **Límite.** Guardar metas no regenera una vista previa de plan ya creada (falta aviso de «plan desactualizado»).
 - **Pruebas.** `batch_ss14.py` (U1–U5), `batch_route12.py`, `batch_j.py`, `batch_tour10.py`.
+
+## Adenda 28 · Fase 14d: plan desactualizado, guía en pantalla y Ayuda (2026-10-11)
+
+- **Aviso de «plan desactualizado».** Al generar la vista previa se guarda la firma de metas + ajustes (`ps.previewSig`, `FP.planningView.inputSig`). Si cambian después, `FP.planningView.isStale` es verdadero: Plan muestra el aviso con «Regenerar vista previa» y Metas y motor muestra el aviso con enlace a Plan. Solo aplica a la vista previa; un plan guardado es una versión congelada y no se marca.
+- **Tráfico por canal definido.** `trafficDefinition` en `config.js`: sesiones (Ecommerce, App), mensajes recibidos (WhatsApp), llamadas contestadas (Llamadas). Se muestra bajo cada canal en la tabla de CR.
+- **Guía en la misma pantalla.** Sin histórico ni venta real, «Supuestos de arranque» abre con «Cómo llenarlo si no tienes datos» (4 pasos). Subtítulo de «Meta anual» reducido a una línea; el resto está en el desplegable «Cómo se usa esta captura».
+- **Ayuda.** Nueva entrada `supuestosArranque` (glosario y botón «?»).
+- **Pruebas.** `batch_ss14c.py` (V1–V11).

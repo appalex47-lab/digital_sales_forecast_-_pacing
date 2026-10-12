@@ -131,6 +131,7 @@
       </div>
       <p class="targets-form__split num" id="t-split" role="status" aria-live="polite"></p>
       ${note}
+      ${FP.planningView && FP.planningView.isStale(state) ? `<div class="ds-alert ds-alert--warning" role="alert"><div><strong>Tu vista previa del plan quedó desactualizada.</strong> Cambiaste metas o supuestos después de generarla. <a href="#plan" data-nav="plan">Ir a Plan y regenerarla</a></div></div>` : ''}
       <div class="btn-row">
         <button type="submit" class="btn btn--primary">Guardar metas</button>
         <button type="button" class="btn" data-action="sample-targets">Usar metas de ejemplo</button>

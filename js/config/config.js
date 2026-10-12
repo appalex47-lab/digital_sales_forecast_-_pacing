@@ -26,13 +26,13 @@
    * (minúsculas, sin acentos, espacios simples). Todo lo demás es canal no reconocido.
    */
   const CHANNELS = [
-    { id: 'ecommerce', label: 'Ecommerce', trafficLabel: 'Sesiones', color: '#0E5E6F', order: 1,
+    { id: 'ecommerce', label: 'Ecommerce', trafficLabel: 'Sesiones', trafficDefinition: 'sesiones del sitio', color: '#0E5E6F', order: 1,
       aliases: ['ecommerce', 'e-commerce', 'e commerce', 'e_commerce', 'ecom', 'web', 'sitio web', 'sitio'] },
-    { id: 'app',       label: 'App',       trafficLabel: 'Sesiones', color: '#5B4FC7', order: 2,
+    { id: 'app',       label: 'App',       trafficLabel: 'Sesiones', trafficDefinition: 'sesiones de la app', color: '#5B4FC7', order: 2,
       aliases: ['app', 'aplicacion', 'app movil', 'mobile app', 'mobile'] },
-    { id: 'whatsapp',  label: 'WhatsApp',  trafficLabel: 'Mensajes / contactos', color: '#2E7D4F', order: 3,
+    { id: 'whatsapp',  label: 'WhatsApp',  trafficLabel: 'Mensajes / contactos', trafficDefinition: 'mensajes recibidos', color: '#2E7D4F', order: 3,
       aliases: ['whatsapp', 'whats app', 'whats', 'wa', 'wsp'] },
-    { id: 'llamadas',  label: 'Llamadas',  trafficLabel: 'Llamadas', color: '#A8661B', order: 4,
+    { id: 'llamadas',  label: 'Llamadas',  trafficLabel: 'Llamadas', trafficDefinition: 'llamadas contestadas', color: '#A8661B', order: 4,
       aliases: ['llamadas', 'llamada', 'calls', 'call', 'call center', 'callcenter', 'telefono'] }
   ];
 
