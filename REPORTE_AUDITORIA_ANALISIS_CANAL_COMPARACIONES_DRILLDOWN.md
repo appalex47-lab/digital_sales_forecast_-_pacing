@@ -479,3 +479,11 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 **Archivos.** `config.js`, `seasonality.js`, `planningEngine.js`, `planning-config-view.js`, `startup-assumptions-view.js`, `planning-view.js`, `app.js`, `styles.css`, `index.html`.
 
 **Pruebas.** `tools/regression/batch_ss14.py` (T1–T10).
+
+## Adenda 27 · Fase 14c: todo cuadra a la Meta anual total + modo guiado (2026-10-11)
+
+- **Cuadre visible.** El bloque 3 de «Supuestos de arranque» genera el plan con la configuración actual y compara contra la **Meta anual total**: Σ metas de canal, Σ meses, Σ días, pedidos, AOV total vs AOV general, tráfico y CR total. Chips «Cuadra» / diferencia. Si los canales no suman la meta total se avisa; nunca se ajusta ni se completa solo.
+- **% recordado.** `targets.channelShare[ch]` guarda el % tecleado; al cambiar la Meta anual total y guardar, esos canales se reescalan y la meta total manda.
+- **Modo guiado.** Nuevo paso `supuestos` (ruta C, empresa nueva) con 4 micro-pasos: forma del año, AOV, CR, cuadre. TOUR = 17 pasos; ruta C = Meta → Supuestos → Plan → primeras ventas.
+- **Límite.** Guardar metas no regenera una vista previa de plan ya creada (falta aviso de «plan desactualizado»).
+- **Pruebas.** `batch_ss14.py` (U1–U5), `batch_route12.py`, `batch_j.py`, `batch_tour10.py`.

@@ -17,6 +17,7 @@
   let userOpen = null;   // null = automático (abierto si no hay histórico ni venta real)
   let autoOpen = true;
 
+  const chip = (ok, yes, no) => `<span class="chip${ok ? ' chip--ok' : ''}">${ok ? yes : no}</span>`;
   const num = (v) => (v === null || v === undefined || v === '' ? '' : String(v));
   const fmtMoney = (v) => (v === null || v === undefined ? '—' : FP.format.currency(v, 0));
 
@@ -46,6 +47,58 @@
     return `<select aria-label="${H().esc(label)}" data-action="${action}" ${attrs}>${SRC.map(([k, l]) => `<option value="${k}" ${k === value ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   }
 
+  /** Bloque 3: todo debe cuadrar con la Meta anual total. Genera el plan con los supuestos actuales y compara. */
+  function reconcile(state, cfg, genValue) {
+    const esc = H().esc, F = FP.format;
+    const T = state.targets.annual.revenue;
+    const chans = C().channelIds.filter((ch) => state.targets.byChannel[ch] && state.targets.byChannel[ch].revenue > 0);
+    if (!(T > 0)) return `<div id="ss-check"><h4 class="h4">3 · ¿Todo cuadra con tu Meta anual total?</h4><p class="field__hint">Captura arriba la <strong>Meta anual total</strong> y el reparto por canal: aquí verás que meses, días, pedidos y tráfico suman a esa meta.</p></div>`;
+    let plan;
+    try {
+      const profiles = state.planning.profiles || FP.seasonality.buildProfiles(FP.dataStore.records(state.store, 'historical'), cfg, state.year);
+      plan = FP.planning.generatePlan({ year: state.year, targets: state.targets, store: state.store, events: state.events, settings: state.planning.settings, profiles });
+    } catch (e) { return ''; }
+    const sumCh = chans.reduce((a, ch) => a + state.targets.byChannel[ch].revenue, 0);
+    const sumMonths = chans.reduce((a, ch) => a + plan.channels[ch].months.reduce((x, m) => x + (m.target || 0), 0), 0);
+    const sumDays = plan.total.revenue;
+    const tol = Math.max(1, T * 0.00001);
+    const row = (label, val, ok, diffTxt) => `<tr><td>${esc(label)}</td><td class="num">${val}</td><td>${ok === null ? '' : ok ? '<span class="chip chip--ok">Cuadra</span>' : `<span class="chip">${esc(diffTxt)}</span>`}</td></tr>`;
+    const money = (v) => (v === null || v === undefined ? F.DASH : F.currency(v, 0));
+    const near = (v) => v !== null && v !== undefined && Math.abs(v - T) <= tol;
+    const gap = T - sumCh;
+    // pedidos, tráfico y sus cocientes solo se muestran si TODOS los canales con meta los tienen (una suma parcial engañaría)
+    const allOrd = chans.length > 0 && chans.every((ch) => plan.channels[ch].annual.orders !== null && plan.channels[ch].annual.orders !== undefined);
+    const allTr = allOrd && chans.every((ch) => plan.channels[ch].annual.trafficVolume !== null && plan.channels[ch].annual.trafficVolume !== undefined);
+    const orders = allOrd ? plan.total.orders : null, traffic = allTr ? plan.total.trafficVolume : null;
+    const aovTot = allOrd ? plan.total.aov : null;
+    const rows = [
+      row('Meta anual total (la que capturas)', money(T), null),
+      row('Σ metas de canal', money(sumCh), near(sumCh), gap > 0 ? `Faltan ${money(gap)} por asignar` : `Se exceden por ${money(-gap)}`),
+      row('Σ meses del plan', money(sumMonths), near(sumMonths), `Difiere ${money(sumMonths - T)}`),
+      row('Σ días del plan', money(sumDays), near(sumDays), `Difiere ${money(sumDays - T)}`),
+      row('Pedidos del plan', orders === null || orders === undefined ? F.DASH : F.integer(orders), null),
+      row('AOV total (venta ÷ pedidos)' + (genValue > 0 ? ` · tu AOV general es ${money(genValue)}` : ''), aovTot ? F.currency(aovTot, 2) : F.DASH,
+        genValue > 0 && aovTot ? Math.abs(aovTot - genValue) / genValue < 0.005 : null, 'Difiere de tu AOV general (hay AOV propio o histórico en algún canal)'),
+      row('Tráfico del plan', traffic === null || traffic === undefined ? F.DASH : F.integer(traffic), null),
+      row('CR total (pedidos ÷ tráfico)', allTr && plan.total.conversionRate ? F.percent(plan.total.conversionRate, 2) : F.DASH, null)
+    ].join('');
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const sum = (k) => { const v = chans.map((ch) => plan.channels[ch].months[i].plan[k]); return v.some((x) => x === null || x === undefined) ? null : v.reduce((a, b) => a + b, 0); };
+      return { name: MONTHS[i], rev: chans.reduce((a, ch) => a + (plan.channels[ch].months[i].target || 0), 0), ord: sum('orders'), tr: sum('trafficVolume') };
+    });
+    const monthRows = months.map((m) => `<tr><td>${m.name}</td><td class="num">${money(m.rev)}</td><td class="num">${F.percent(m.rev / T, 1)}</td><td class="num">${m.ord === null ? F.DASH : F.integer(m.ord)}</td><td class="num">${m.tr === null ? F.DASH : F.integer(m.tr)}</td></tr>`).join('');
+    const warn = Math.abs(gap) > tol ? `<div class="ds-alert ds-alert--warning" role="alert"><strong>Los canales no suman tu Meta anual total.</strong> ${gap > 0 ? `Faltan ${esc(money(gap))} (${esc(F.percent(gap / T, 1))}) por asignar` : `Se exceden por ${esc(money(-gap))}`}. El plan reparte lo que asignas a cada canal; no completa ni recorta solo. Ajusta los canales en «Meta anual», arriba.</div>` : '';
+    return `<div id="ss-check">
+      <h4 class="h4">3 · ¿Todo cuadra con tu Meta anual total? ${chip(!warn && near(sumDays), 'Cuadra', 'Revisar')}</h4>
+      <p class="field__hint">Cambies lo que cambies arriba (días fuertes, eventos, AOV, CR), la venta del plan siempre debe sumar tu <strong>Meta anual total</strong>. Esta tabla lo comprueba en vivo con el plan que se generaría hoy.</p>
+      ${warn}
+      <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Concepto</th><th class="num">Valor</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <details class="disclosure"><summary>Ver cómo queda mes a mes (la venta suma ${esc(money(T))})</summary>
+        <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Mes</th><th class="num">Venta</th><th class="num">% del año</th><th class="num">Pedidos</th><th class="num">Tráfico</th></tr></thead><tbody>${monthRows}
+          <tr><td><strong>Total</strong></td><td class="num"><strong>${money(months.reduce((a, m) => a + m.rev, 0))}</strong></td><td class="num"><strong>${F.percent(months.reduce((a, m) => a + m.rev, 0) / T, 1)}</strong></td><td></td><td></td></tr></tbody></table></div></details>
+    </div>`;
+  }
+
   function render(state) {
     const esc = H().esc;
     const cfg = FP.seasonality.effectiveConfig(state.planning.settings);
@@ -64,9 +117,10 @@
       ? '<p class="field__hint">Ya tienes datos: estos supuestos se usan solo donde falte histórico (el histórico siempre manda).</p>'
       : '<div class="ds-alert ds-alert--warning" role="note"><strong>Aún no hay histórico ni venta real.</strong> El plan se calculará con lo que captures aquí; cada cifra queda marcada como <em>Supuesto</em> y se afinará con tu venta real (la app te lo propondrá, nunca lo cambia sola).</div>';
 
-    const shape = `
-      <h4 class="h4">1 · Forma del año: ¿cómo se reparte la meta?</h4>
-      <p class="field__hint">Sin histórico la app reparte parejo por días del calendario. Aquí puedes indicar tus días fuertes y tus eventos. El peso de cada mes sale de la suma de sus días.</p>
+    const shapeOn = ss.enabled && (ss.dayOfWeek.some((x) => x !== 1) || (ss.events || []).some((e) => Number(e.factor) > 0 && Number(e.factor) !== 1));
+    const shape = `<div id="ss-shape">
+      <h4 class="h4">1 · Forma del año: ¿cómo se reparte la meta? ${chip(shapeOn, 'Forma propia', 'Parejo por días')}</h4>
+      <p class="field__hint">La <strong>Meta anual total</strong> no cambia: esto solo decide qué meses, semanas y días reciben más o menos de ella. Sin histórico el reparto es parejo; aquí indicas tus días fuertes y tus eventos. El peso de cada mes sale de la suma de sus días.</p>
       <div class="field"><label><input type="checkbox" data-action="ss-toggle" ${ss.enabled ? 'checked' : ''}> Usar mi forma estándar donde falte histórico</label></div>
       ${ss.enabled ? `
         <div class="field"><span class="field__label">Día de la semana (1 = día normal)</span>
@@ -83,7 +137,7 @@
           </tbody></table></div>` : '<p class="field__hint">Aún no hay eventos.</p>'}
           <div class="btn-row"><button type="button" class="btn" data-action="ss-event-add">Agregar evento</button></div>
           <p class="field__hint">Los factores son tuyos: la app no sugiere cifras. Si un evento cambia de fecha cada año (Buen Fin, Hot Sale), edítalo antes de generar el plan.</p></div>
-        <p class="field__hint num"><strong>Cómo pesaría cada mes del año con esta forma:</strong> ${shares.map((x, i) => `${MONTHS[i]} ${FP.format.percent(x, 1)}`).join(' · ')}</p>` : ''}`;
+        <p class="field__hint num"><strong>Cómo pesaría cada mes del año con esta forma:</strong> ${shares.map((x, i) => `${MONTHS[i]} ${FP.format.percent(x, 1)}`).join(' · ')}</p>` : ''}</div>`;
 
     const linesBlock = ga.mode === 'lines' ? `
       <div class="field"><span class="field__label">Mis líneas de producto o servicio</span>
@@ -97,9 +151,10 @@
         <div class="btn-row"><button type="button" class="btn" data-action="gaov-line-add">Agregar línea</button></div>
         ${(() => { const s = (ga.lines || []).reduce((a, l) => a + (Number(l.share) || 0), 0); return `<p class="field__hint">Suma de % de pedidos: <strong>${FP.format.decimal(s, 1)}%</strong>${Math.abs(s - 100) < 0.05 ? ' ✓' : s > 0 ? ' (no suma 100: se normaliza)' : ''}. AOV general = Σ (% de pedidos × AOV de la línea). Usa % de <em>pedidos</em>, no de venta.</p>`; })()}</div>` : '';
 
-    const gaov = `
-      <h4 class="h4">2 · Ticket promedio (AOV) y conversión (CR)</h4>
-      <p class="field__hint">Pedidos = venta ÷ AOV; tráfico = pedidos ÷ CR. Captura un <strong>AOV general</strong>: cada canal lo hereda y la meta de cada canal pesa en el resultado. Si un canal tiene un ticket distinto, ponle su AOV propio y los demás se ajustan para que el total digital siga en el AOV general.</p>
+    const crCount = C().channelIds.filter((ch) => cfg.assumptions[ch] && cfg.assumptions[ch].conversionRate > 0).length;
+    const gaov = `<div id="ss-aov">
+      <h4 class="h4">2 · Ticket promedio (AOV) y conversión (CR) ${chip(genValue > 0, 'AOV ' + fmtMoney(genValue), 'AOV pendiente')} ${chip(crCount === C().channelIds.length, 'CR de los 4 canales', crCount ? `CR de ${crCount} de ${C().channelIds.length} canales` : 'CR pendiente')}</h4>
+      <p class="field__hint">La venta de cada canal ya está fijada por su meta; el AOV y el CR solo la convierten en <strong>pedidos y tráfico</strong>. Pedidos = venta ÷ AOV; tráfico = pedidos ÷ CR. Captura un <strong>AOV general</strong>: cada canal lo hereda y la meta de cada canal pesa en el resultado. Si un canal tiene un ticket distinto, ponle su AOV propio y los demás se ajustan para que el total digital siga en el AOV general.</p>
       <div class="settings-grid">
         <div class="field"><label for="gaov-mode">AOV general viene de</label>
           <select id="gaov-mode" data-action="gaov-mode"><option value="manual" ${ga.mode !== 'lines' ? 'selected' : ''}>Un número que capturo</option><option value="lines" ${ga.mode === 'lines' ? 'selected' : ''}>Mis líneas de producto o servicio</option></select></div>
@@ -113,7 +168,7 @@
       </div>
       ${linesBlock}
       ${res.issue ? `<div class="ds-alert ds-alert--warning" role="alert">${esc(res.issue)}</div>` : ''}
-      <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Canal</th><th class="num">% de la meta</th><th class="num">AOV del canal</th><th>AOV propio (${C().currency})</th><th>CR (%)</th><th>Origen del CR</th><th>Fuente y año</th></tr></thead><tbody>
+      <div class="table-wrap" id="ss-cr"><table class="table ds-table"><thead><tr><th>Canal</th><th class="num">% de la meta</th><th class="num">AOV del canal</th><th>AOV propio (${C().currency})</th><th>CR (%)</th><th>Origen del CR</th><th>Fuente y año</th></tr></thead><tbody>
         ${C().channels.map((c) => {
           const a = cfg.assumptions[c.id] || {}, r = res.byChannel[c.id], rev = revs[c.id];
           const own = a.aov > 0;
@@ -130,11 +185,11 @@
               ${cs.type === 'benchmark' && !String(cs.ref || '').trim() && a.conversionRate ? '<span class="field__hint neg">Falta fuente y año.</span>' : ''}</td></tr>`;
         }).join('')}
       </tbody></table></div>
-      <p class="field__hint">WhatsApp y Llamadas no tienen «sesiones» como la web: su CR es contactos que se vuelven pedido; define qué cuenta como tráfico en esos canales. La CR se captura por canal porque cambia mucho entre ellos. La app no trae benchmarks: si usas uno, captura su fuente y año.</p>`;
+      <p class="field__hint">WhatsApp y Llamadas no tienen «sesiones» como la web: su CR es contactos que se vuelven pedido; define qué cuenta como tráfico en esos canales. La CR se captura por canal porque cambia mucho entre ellos. La app no trae benchmarks: si usas uno, captura su fuente y año.</p></div>`;
 
     return `<details class="ds-accordion ds-accordion--plain" id="startup-assumptions" ${open ? 'open' : ''}>
       <summary><span>Supuestos de arranque${data ? '' : ' · guía para llenar lo que aún no tienes'}</span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
-      <div class="ds-accordion__body stack">${intro}${shape}${gaov}</div></details>`;
+      <div class="ds-accordion__body stack">${intro}${shape}${gaov}${reconcile(state, cfg, genValue)}</div></details>`;
   }
 
   /** Recuerda si la persona abrió o cerró la guía (el render la vuelve a dibujar). */

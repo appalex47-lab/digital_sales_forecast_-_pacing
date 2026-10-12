@@ -3123,6 +3123,11 @@
       if (r.error === 'no_total') bad.push(`${c.label} (para usar % captura primero la meta anual)`);
       else if (r.error) bad.push(c.label);
       next.byChannel[c.id].revenue = r.error ? null : r.value;
+      // si lo escribió como %, se recuerda: al cambiar la meta anual total, ese canal sigue siendo el mismo % del nuevo total
+      if (!r.error && r.kind === 'pct' && r.value !== null) {
+        next.channelShare = next.channelShare || {};
+        next.channelShare[c.id] = Number(raw.replace('%', '').replace(/\s+/g, '').replace(/,/g, ''));
+      }
     });
     if (bad.length) { FP.ui.toast(`Revisa estos montos: ${bad.join(', ')}. Usa números como 261000000 o 261M.`); return; }
     ['byMonth', 'byWeek', 'byDay'].forEach((k) => { next[k] = state.targets[k] || {}; });

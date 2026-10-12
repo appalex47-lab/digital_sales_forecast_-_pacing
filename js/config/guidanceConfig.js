@@ -508,6 +508,16 @@
       cta: 'Ir a capturar la meta', skipLabel: 'Aún no tengo meta', done: 'Meta guardada.', waiting: 'Esperando que guardes la meta. Cuando se guarde, paso solo al siguiente.',
       what: 'La meta anual por canal: el Original Target.', why: 'Todo se mide contra ella y nunca se modifica.',
       lookFor: 'Que el total y los canales estén capturados y cuadren.', next: 'Revisar el plan.' },
+    // Solo ruta C (empresa nueva): sin histórico ni venta, el plan se apoya en supuestos tuyos. La sección vive en «Metas y motor» mientras no haya datos.
+    { id: 'supuestos', view: 'resumen', target: '#startup-assumptions', paths: 'C', kind: 'micro', title: 'Supuestos de arranque', cta: 'Ir a Supuestos', done: 'Supuestos revisados.',
+      micro: [
+        { key: 'shape', when: 'nodata', title: 'Dile al plan cómo se mueve tu año', desc: 'Sin histórico el plan reparte tu meta parejo por días. En «1 · Forma del año» marca tus días fuertes y tus eventos si quieres; tu meta anual no cambia, solo qué días reciben más de ella.', target: '#ss-shape', box: 'self', manual: 'Listo, sigo' },
+        { key: 'aov', when: 'nodata', title: 'Captura tu ticket promedio (AOV)', desc: 'En «2 · Ticket promedio» escribe un AOV general (o genéralo con tus líneas de producto). Con él la app convierte la venta de cada canal en pedidos.', target: '#ss-aov', box: 'self', manual: 'Lo dejo para después' },
+        { key: 'cr', when: 'nodata', title: 'Captura la conversión (CR) de cada canal', desc: 'En la tabla de canales escribe el CR en %. Con él la app calcula el tráfico. Si usas un benchmark, anota su fuente y año; son supuestos y se afinarán con tu venta real.', target: '#ss-cr', box: 'self', manual: 'Lo dejo para después' },
+        { key: 'check', when: 'nodata', title: 'Comprueba que todo cuadre con tu meta', desc: 'En «3 · ¿Todo cuadra?» la venta de meses y días debe sumar tu Meta anual total, cambies lo que cambies arriba. Si faltan o sobran montos en los canales, te lo dice.', target: '#ss-check', box: 'self', manual: 'Ya lo revisé' }
+      ],
+      what: 'Los supuestos con los que se calcula tu plan cuando aún no hay histórico ni venta real: forma del año, AOV y CR.', why: 'Sin datos el plan necesita tus supuestos para estimar pedidos y tráfico. Todos quedan marcados «Supuesto» y se afinarán con tu venta real.',
+      lookFor: 'Que la venta de meses y días sume tu Meta anual total y que cada supuesto sea razonable para tu negocio.', next: 'Revisar y guardar el plan.' },
     { id: 'plan', view: 'plan', target: '#view-plan', paths: 'ABC', kind: 'micro', done: 'Plan guardado y revisado.', cta: 'Ir a Plan', title: 'Plan', chapter: 'Planear',
       micro: [
         { key: 'gen', title: 'Genera la vista previa', desc: 'Pulsa «Generar vista previa»: calcula cómo se reparte la meta en meses, semanas y días.', target: '#plan-targets .btn-row', box: 'self' },
@@ -595,7 +605,7 @@
   ];
 
   // Capítulos del recorrido (para retomarlo por partes, no todo en una sesión)
-  const CH = { datos: 'Planear', meta: 'Planear', plan: 'Planear', real: 'Planear', pacing: 'Monitorear', forecast: 'Monitorear', gap: 'Monitorear',
+  const CH = { datos: 'Planear', meta: 'Planear', supuestos: 'Planear', plan: 'Planear', real: 'Planear', pacing: 'Monitorear', forecast: 'Monitorear', gap: 'Monitorear',
     drivers: 'Diagnosticar', senales: 'Diagnosticar', hipotesis: 'Diagnosticar', recovery: 'Recuperar', escenario: 'Recuperar', accion: 'Recuperar', medicion: 'Medir', narrativa: 'Medir', empezar: 'Planear' };
   TOUR.forEach((t) => { t.chapter = t.chapter || CH[t.id] || null; });
 

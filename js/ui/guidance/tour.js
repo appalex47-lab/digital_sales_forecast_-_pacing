@@ -76,6 +76,11 @@
       if (m.key === 'file') return staged || manual;
       if (m.key === 'commit') return Boolean(h[s.detect]);
       if (s.id === 'meta' && m.key === 'save') return h.target;
+      if (s.id === 'supuestos' && (m.key === 'aov' || m.key === 'cr')) {
+        const cfg = FP.seasonality.effectiveConfig(ps.settings);
+        if (m.key === 'aov') return manual || FP.planning.generalAovValue(cfg.generalAov) > 0;
+        return manual || FP.config.channelIds.some((ch) => cfg.assumptions[ch] && cfg.assumptions[ch].conversionRate > 0);
+      }
       if (s.id === 'plan' && m.key === 'gen') return Boolean(ps.preview) || hasOriginal;
       if (s.id === 'plan' && m.key === 'save') return hasOriginal;
       return manual;
@@ -112,6 +117,7 @@
     const ml = microList(state, status, s);
     if (s.kind === 'action' && done(state, status, s)) return adv();
     if (s.kind === 'micro' && ml.length && ml.every((m) => m.done)) return adv();
+    if (s.kind === 'micro' && s.micro && !ml.length) return adv();   // todos sus micro-pasos dependen de un estado que ya cambió (p. ej. ya hay datos)
     const cm = curMicro(ml);
     const k = cm ? `${s.id}.${cm.key}` : '';
     if (cm && t.lastMicro !== k) {

@@ -97,6 +97,15 @@
 
   /* ---------- Metas ---------- */
 
+  /** Lo que se muestra en el campo del canal: el % que la persona escribió (si el monto guardado aún corresponde a ese % de la meta) o el monto. */
+  function channelValue(t, id) {
+    const amt = t.byChannel[id].revenue;
+    const pct = t.channelShare && t.channelShare[id];
+    const total = t.annual.revenue;
+    if (pct > 0 && total > 0 && amt !== null && amt !== undefined && Math.abs(Math.round(total * pct) / 100 - amt) <= 0.01) return `${pct}%`;
+    return amt === null || amt === undefined ? '' : String(amt);
+  }
+
   function renderTargets(state) {
     const t = state.targets;
     const val = (v) => (v === null || v === undefined ? '' : String(v));
@@ -116,7 +125,7 @@
         ${C().channels.map((c) => `
           <div class="field" style="--dot:${c.color}">
             <label for="t-${c.id}">${esc(c.label)}</label>
-            <input id="t-${c.id}" name="${c.id}" inputmode="decimal" autocomplete="off" value="${esc(val(t.byChannel[c.id].revenue))}" placeholder="Monto o %, ej. 151M o 58%">
+            <input id="t-${c.id}" name="${c.id}" inputmode="decimal" autocomplete="off" value="${esc(channelValue(t, c.id))}" placeholder="Monto o %, ej. 151M o 58%">
             <span class="field__hint num" data-share-hint="${c.id}"></span>
           </div>`).join('')}
       </div>
