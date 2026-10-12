@@ -669,3 +669,6 @@ Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por e
 - **AOV y CR:** un **AOV general** (número, o generado de tus líneas con su AOV y % de **pedidos**). Cada canal lo hereda. Si un canal tiene AOV propio, los demás quedan «Ajustados» para que el total digital siga en el AOV general. El CR se captura por canal en %.
 - **Fuente:** cada AOV general y CR declara su origen (Mi dato / Benchmark / Estimación); con «Benchmark» la fuente y el año son obligatorios (aviso, no bloqueo). La app **no trae benchmarks**.
 - **Plan:** si el plan se apoya en estos supuestos, muestra el aviso «Supuesto» con enlace a la sección.
+
+## Añadido 2026-10-11 · Cuadre con la Meta anual total y paso guiado (Fase 14c)
+Bloque 3 de Supuestos: tabla de cuadre contra la Meta anual total. En modo guiado (empresa nueva) hay un paso «Supuestos de arranque» con 4 micro-pasos (forma, AOV, CR, cuadre).

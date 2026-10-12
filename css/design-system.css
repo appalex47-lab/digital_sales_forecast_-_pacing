@@ -1553,3 +1553,5 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 .tour-offer--soft h2 { font-size: 18px; margin-bottom: 4px; }
 .tour-offer--soft > p:not(.tour-offer__eyebrow) { margin-bottom: 8px; font-size: 14px; }
 .tour-offer--soft .tour-offer__opts { margin-bottom: 8px; }
+
+.chip--ok { background: var(--ds-success-soft, #dcfce7); color: #14532d; border-color: transparent; }
