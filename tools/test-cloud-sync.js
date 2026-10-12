@@ -121,5 +121,19 @@ const provider = { keys: async () => Object.keys(envs), read: async (k) => envs[
   pl = await Cl.pullNewer(writer, isData, {}); ok('lo local más nuevo NO se pisa con lo viejo de la nube', pl.applied.length === 0 && lsData.settings.data.v === 3, pl);
   rows.push({ user_id: Cl.loadSession().user_id, key: 'cohereApiKey', part: 0, total: 1, payload: JSON.stringify({ savedAt: '2099-01-01T00:00:00Z', data: 'X' }), updated_at: '2099-01-01T00:00:00.000Z' });
   pl = await Cl.pullNewer(writer, isData, {}); ok('claves secretas nunca se traen aunque estén en la nube', !pl.applied.includes('cohereApiKey') && !lsData.cohereApiKey, pl);
+  // ---- retorno desde el enlace del correo (hash) ----
+  const mkLoc = (hash) => { global.location = { hash, pathname: '/app/', search: '', protocol: 'https:', origin: 'https://x.github.io' }; global.history = { replaceState: (a, b, url) => { global.__url = url; global.location.hash = '#' + String(url).split('#')[1]; } }; };
+  const mkFetch = (user) => async (u0, o) => ({ ok: !!user, status: user ? 200 : 401, json: async () => user || {} });
+  mkLoc('#/'); ok('sin tokens en el hash: no hace nada', (await Cl.consumeAuthHash({})) === null);
+  mkLoc('#ajustes'); ok('hash normal de la app: no hace nada', (await Cl.consumeAuthHash({})) === null);
+  Cl.signOut(); mkLoc('#access_token=AT1&refresh_token=RT1&expires_in=3600&token_type=bearer&type=email_change');
+  let h = await Cl.consumeAuthHash({ fetchImpl: mkFetch({ id: 'user-9', email: 'a@x.com', is_anonymous: false }) });
+  ok('enlace de correo: guarda la sesión con su correo y limpia el hash', h.ok && h.type === 'email_change' && Cl.loadSession().email === 'a@x.com' && !Cl.loadSession().anonymous && global.__url === '/app/#ajustes', { h, url: global.__url });
+  Cl.signOut(); mkLoc('#access_token=AT1&refresh_token=RT1&expires_in=3600&type=magiclink');
+  h = await Cl.consumeAuthHash({ fetchImpl: mkFetch(null) });
+  ok('si Supabase no confirma la cuenta: error claro y no guarda sesión', !h.ok && /no pude confirmar/.test(h.error) && Cl.loadSession() === null, h);
+  mkLoc('#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  h = await Cl.consumeAuthHash({}); ok('enlace vencido: mensaje claro', !h.ok && /venció|ya se usó/.test(h.error), h);
+  ok('redirectUrl apunta a la app sin hash', Cl.redirectUrl() === 'https://x.github.io/app/', Cl.redirectUrl());
   console.log(fails ? `\n${fails} fallas` : '\nTodo OK'); process.exit(fails ? 1 : 0);
 })();

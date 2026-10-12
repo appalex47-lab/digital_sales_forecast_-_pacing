@@ -2602,7 +2602,7 @@
         const r = await FP.cloud.linkEmailStart(email, {});
         if (!r.ok) return cloudNote(r.error, 'bad');
         state.cloud.auth = { step: 'link', email: r.email }; clearDrafts('cloud-');
-        cloudNote(`Te mandé un código de 6 dígitos a ${r.email}. Escríbelo abajo. Si no llega en un minuto, revisa spam.`, 'ok');
+        cloudNote(`Te mandé un correo a ${r.email}. Ábrelo y toca el enlace de confirmación (o, si trae un código, escríbelo abajo). Si no llega en un minuto, revisa spam.`, 'ok');
       });
     },
     'cloud-login-send'() {
@@ -2611,7 +2611,7 @@
         const r = await FP.cloud.loginStart(email, {});
         if (!r.ok) return cloudNote(r.error, 'bad');
         state.cloud.auth = { step: 'login', email: r.email }; clearDrafts('cloud-');
-        cloudNote(`Te mandé un código de 6 dígitos a ${r.email}. Escríbelo abajo.`, 'ok');
+        cloudNote(`Te mandé un correo a ${r.email}. Ábrelo y toca el enlace para entrar (o, si trae un código, escríbelo abajo).`, 'ok');
       });
     },
     'cloud-code-confirm'() {
@@ -3449,6 +3449,14 @@
 
   async function init() {
     try { await initStorage(); } catch (e) { state.storage = { mode: 'unavailable', migration: migrationState, error: String(e && e.message || e) }; }
+    // S3: ¿volvemos del enlace de un correo de Supabase? (antes de que el router lea el hash)
+    try {
+      const ah = await FP.cloud.consumeAuthHash({});
+      if (ah) {
+        state.stOpen['st-adv'] = true; state.stOpen['st-nube'] = true; state.view = 'ajustes';
+        cloudNote(ah.ok ? (ah.session.email ? `Listo: ${ah.session.email} quedó confirmado. ${ah.type === 'magiclink' ? 'Ya entraste: usa «Restaurar desde la nube».' : 'Tu copia quedó ligada a ese correo.'}` : 'Sesión abierta.') : ah.error, ah.ok ? 'ok' : 'bad');
+      }
+    } catch (e) { /* sin enlace de correo */ }
     // S2: antes de cargar nada, trae lo liviano que en la nube sea más nuevo (si no, la app podría volver a guardar su copia vieja y pisarlo)
     cloudRefreshSession();
     state.cloud.auto.on = FP.cloud.autoOn() && !!state.cloud.session;
