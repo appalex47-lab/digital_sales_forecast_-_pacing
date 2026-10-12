@@ -32,9 +32,45 @@
     return `Supabase respondió ${status}${code ? ` (${code})` : ''}${msg ? ': ' + msg : ''}.`;
   }
 
-  async function signInAnonymously(fetchImpl) {
+
+  /* ---------- CAPTCHA (Cloudflare Turnstile) ---------- */
+  let turnstileLoading = null;
+  function loadTurnstile() {
+    if (root.turnstile) return Promise.resolve(root.turnstile);
+    if (turnstileLoading) return turnstileLoading;
+    turnstileLoading = new Promise((resolve, reject) => {
+      const sc = root.document.createElement('script');
+      sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; sc.async = true;
+      sc.onload = () => (root.turnstile ? resolve(root.turnstile) : reject(new Error('Turnstile no se inicializó.')));
+      sc.onerror = () => { turnstileLoading = null; reject(new Error('No se pudo cargar la verificación de Cloudflare (¿bloqueador de anuncios o sin conexión?).')); };
+      root.document.head.appendChild(sc);
+    });
+    return turnstileLoading;
+  }
+  /** Devuelve { ok:true, token|null } (null = sin CAPTCHA configurado) o { ok:false, error }. */
+  async function getCaptchaToken(opts) {
+    if (opts && opts.captchaImpl) return opts.captchaImpl();
+    const key = cfg().turnstileSiteKey;
+    if (!key || !root.document) return { ok: true, token: null };
+    let box = null, id = null;
+    try {
+      const ts = await loadTurnstile();
+      box = root.document.createElement('div'); box.id = 'cloud-captcha';
+      box.setAttribute('style', 'position:fixed;right:12px;bottom:12px;z-index:9999;background:#fff;padding:6px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.3)');
+      root.document.body.appendChild(box);
+      const token = await new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('La verificación de Cloudflare tardó demasiado. Intenta de nuevo.')), 60000);
+        id = ts.render(box, { sitekey: key, callback: (tk) => { clearTimeout(t); resolve(tk); }, 'error-callback': () => { clearTimeout(t); reject(new Error('Cloudflare rechazó la verificación. Revisa que el dominio esté en la lista del widget de Turnstile.')); } });
+      });
+      return { ok: true, token };
+    } catch (e) { return { ok: false, error: e.message }; }
+    finally { try { if (id !== null && root.turnstile) root.turnstile.remove(id); } catch (e) { /* ya no existe */ } if (box && box.parentNode) box.parentNode.removeChild(box); }
+  }
+
+  async function signInAnonymously(fetchImpl, opts) {
+    const cp = await getCaptchaToken(opts); if (!cp.ok) return { ok: false, error: cp.error };
     const f = fetchImpl || root.fetch.bind(root);
-    let res; try { res = await f(`${cfg().url}/auth/v1/signup`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ data: {} }) }); }
+    let res; try { res = await f(`${cfg().url}/auth/v1/signup`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(cp.token ? { data: {}, gotrue_meta_security: { captcha_token: cp.token } } : { data: {} }) }); }
     catch (e) { return { ok: false, error: 'No se pudo conectar con Supabase (sin conexión o bloqueado).' }; }
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) return { ok: false, error: explain(res.status, j) };
@@ -54,7 +90,7 @@
     if (s && s.expires_at - 60 > Math.floor(Date.now() / 1000)) return { ok: true, session: s, created: false };
     if (s) { const r = await refresh(s, opts && opts.fetchImpl); if (r.ok) return { ok: true, session: r.session, created: false }; if (!r.invalid) return r; }
     if (opts && opts.noCreate) return { ok: false, error: 'Sin sesión.' };
-    const r = await signInAnonymously(opts && opts.fetchImpl); return r.ok ? { ok: true, session: r.session, created: true } : r;
+    const r = await signInAnonymously(opts && opts.fetchImpl, opts); return r.ok ? { ok: true, session: r.session, created: true } : r;
   }
   function signOut() { saveSession(null); }
 
@@ -78,8 +114,8 @@
    * Sube todas las claves. `provider`: { keys():Promise<string[]>, read(key):Promise<envelope|null> }.
    * Devuelve { ok, keys:[{key,bytes,parts,digest}], bytes } o { ok:false, error }.
    */
-  async function upload(provider, { onProgress, fetchImpl } = {}) {
-    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+  async function upload(provider, { onProgress, fetchImpl, captchaImpl } = {}) {
+    const se = await ensureSession({ fetchImpl, captchaImpl }); if (!se.ok) return se;
     const session = se.session, table = cfg().table, size = cfg().chunkChars;
     const skip = new Set(cfg().skipKeys), keys = (await provider.keys()).filter((k) => !skip.has(String(k).split(':')[0]));
     const report = []; let total = 0;
@@ -136,5 +172,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
+  FP.cloud = { getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
