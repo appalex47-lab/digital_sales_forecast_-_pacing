@@ -141,6 +141,10 @@
     formula: '', interpretation: '', caveats: '', nextStep: '', purpose: '', whenToUse: '', decision: '', related: [], ...o });
 
   const HELP = [
+    e('supuestosArranque', 'Supuestos de arranque', 'Cifras que capturas tú (forma del año, AOV general y CR por canal) para planear cuando todavía no hay histórico ni venta real.',
+      { detailedDescription: 'Viven en «Metas y motor», debajo de la Meta anual. La Meta anual total manda siempre: los supuestos solo cambian cómo se reparte en meses y días y cuántos pedidos y tráfico implica. Forma del año: peso por día de la semana y eventos (1 = día normal). AOV general: se reparte a los canales según su % de la meta; un canal con AOV propio hace que los demás se ajusten para que el total siga en el general. CR por canal: tráfico = sesiones en Ecommerce y App, mensajes recibidos en WhatsApp y llamadas contestadas en Llamadas.',
+        howToRead: 'El bloque «¿Todo cuadra?» compara la Meta anual total con Σ canales, Σ meses y Σ días. Cada cifra del plan que viene de un supuesto se marca como «Supuesto».',
+        caveats: 'La app no trae benchmarks ni sugiere factores: son tuyos. Cuando hay histórico o venta real, esos datos ganan y los supuestos solo llenan los huecos. Si cambias metas o supuestos, regenera la vista previa del plan.', glossary: true }),
     e('businessContext', 'Contexto del negocio', 'Descripción estructurada del negocio: qué vende, cómo vende, cómo compra su cliente, cómo se organiza y qué términos usa.',
       { howToRead: 'Alimenta la configuración al arrancar la app (moneda, nombre, terminología). Es la única fuente de esos datos.',
         caveats: 'No cambia canales, métricas, fórmulas, forecast, diagnóstico ni datos cargados.', glossary: true }),

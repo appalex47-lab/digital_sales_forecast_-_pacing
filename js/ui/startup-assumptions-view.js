@@ -87,7 +87,7 @@
       return { name: MONTHS[i], rev: chans.reduce((a, ch) => a + (plan.channels[ch].months[i].target || 0), 0), ord: sum('orders'), tr: sum('trafficVolume') };
     });
     const monthRows = months.map((m) => `<tr><td>${m.name}</td><td class="num">${money(m.rev)}</td><td class="num">${F.percent(m.rev / T, 1)}</td><td class="num">${m.ord === null ? F.DASH : F.integer(m.ord)}</td><td class="num">${m.tr === null ? F.DASH : F.integer(m.tr)}</td></tr>`).join('');
-    const warn = Math.abs(gap) > tol ? `<div class="ds-alert ds-alert--warning" role="alert"><strong>Los canales no suman tu Meta anual total.</strong> ${gap > 0 ? `Faltan ${esc(money(gap))} (${esc(F.percent(gap / T, 1))}) por asignar` : `Se exceden por ${esc(money(-gap))}`}. El plan reparte lo que asignas a cada canal; no completa ni recorta solo. Ajusta los canales en «Meta anual», arriba.</div>` : '';
+    const warn = Math.abs(gap) > tol ? `<div class="ds-alert ds-alert--warning" role="alert"><div><strong>Los canales no suman tu Meta anual total.</strong> ${gap > 0 ? `Faltan ${esc(money(gap))} (${esc(F.percent(gap / T, 1))}) por asignar` : `Se exceden por ${esc(money(-gap))}`}. El plan reparte lo que asignas a cada canal; no completa ni recorta solo. Ajusta los canales en «Meta anual», arriba.</div></div>` : '';
     return `<div id="ss-check">
       <h4 class="h4">3 · ¿Todo cuadra con tu Meta anual total? ${chip(!warn && near(sumDays), 'Cuadra', 'Revisar')}</h4>
       <p class="field__hint">Cambies lo que cambies arriba (días fuertes, eventos, AOV, CR), la venta del plan siempre debe sumar tu <strong>Meta anual total</strong>. Esta tabla lo comprueba en vivo con el plan que se generaría hoy.</p>
@@ -115,7 +115,12 @@
 
     const intro = data
       ? '<p class="field__hint">Ya tienes datos: estos supuestos se usan solo donde falte histórico (el histórico siempre manda).</p>'
-      : '<div class="ds-alert ds-alert--warning" role="note"><strong>Aún no hay histórico ni venta real.</strong> El plan se calculará con lo que captures aquí; cada cifra queda marcada como <em>Supuesto</em> y se afinará con tu venta real (la app te lo propondrá, nunca lo cambia sola).</div>';
+      : `<div class="ds-alert ds-alert--warning" role="note"><div><strong>Aún no hay histórico ni venta real.</strong> El plan se calculará con lo que captures aquí; cada cifra queda marcada como <em>Supuesto</em> y se afinará con tu venta real (la app te lo propondrá, nunca lo cambia sola).</div></div>
+        <div class="note" id="ss-howto"><strong>Cómo llenarlo si no tienes datos</strong> ${FP.help && FP.help.helpButton ? FP.help.helpButton('supuestosArranque') : ''}
+          <ol class="ss-steps"><li><strong>Meta:</strong> captura arriba la Meta anual total y su reparto por canal.</li>
+            <li><strong>Forma del año (opcional):</strong> si no sabes, déjala pareja; si conoces tus días fuertes o eventos, anótalos.</li>
+            <li><strong>AOV y CR:</strong> pon un AOV aproximado y un CR estimado por canal, y marca el origen «Estimación».</li>
+            <li><strong>Revisa el cuadre</strong> (bloque 3) y genera el plan en «Plan». Cuando llegue tu venta real, los datos reemplazan estos supuestos.</li></ol></div>`;
 
     const shapeOn = ss.enabled && (ss.dayOfWeek.some((x) => x !== 1) || (ss.events || []).some((e) => Number(e.factor) > 0 && Number(e.factor) !== 1));
     const shape = `<div id="ss-shape">
@@ -175,7 +180,7 @@
           const eff = own ? a.aov : r ? r.value : null;
           const tag = own ? 'Propio' : r ? (r.kind === 'adjusted' ? 'Ajustado' : 'Hereda') : (genValue ? '' : '');
           const cs = cfg.crSource[c.id];
-          return `<tr><td><span class="channel-cell" style="--dot:${c.color}">${esc(c.label)}</span></td>
+          return `<tr><td><span class="channel-cell" style="--dot:${c.color}">${esc(c.label)}</span>${c.trafficDefinition ? `<span class="cell-sub">Tráfico = ${esc(c.trafficDefinition)}</span>` : ''}</td>
             <td class="num">${rev > 0 && totalRev > 0 ? FP.format.percent(rev / totalRev, 1) : '—'}<span class="cell-sub">${rev > 0 ? fmtMoney(rev) : 'Sin meta'}</span></td>
             <td class="num">${eff ? fmtMoney(eff) : '—'}${tag ? `<span class="cell-sub">${tag}</span>` : ''}</td>
             <td><input type="number" min="0" step="0.01" aria-label="AOV propio ${esc(c.label)}" value="${esc(num(a.aov))}" placeholder="Hereda" data-action="plan-assumption" data-channel="${c.id}" data-key="aov"></td>
@@ -185,7 +190,7 @@
               ${cs.type === 'benchmark' && !String(cs.ref || '').trim() && a.conversionRate ? '<span class="field__hint neg">Falta fuente y año.</span>' : ''}</td></tr>`;
         }).join('')}
       </tbody></table></div>
-      <p class="field__hint">WhatsApp y Llamadas no tienen «sesiones» como la web: su CR es contactos que se vuelven pedido; define qué cuenta como tráfico en esos canales. La CR se captura por canal porque cambia mucho entre ellos. La app no trae benchmarks: si usas uno, captura su fuente y año.</p></div>`;
+      <p class="field__hint">El CR es pedidos ÷ tráfico, y el tráfico se cuenta distinto en cada canal: <strong>Ecommerce y App = sesiones, WhatsApp = mensajes recibidos, Llamadas = llamadas contestadas</strong>. Por eso el CR se captura por canal. La app no trae benchmarks: si usas uno, captura su fuente y año.</p></div>`;
 
     return `<details class="ds-accordion ds-accordion--plain" id="startup-assumptions" ${open ? 'open' : ''}>
       <summary><span>Supuestos de arranque${data ? '' : ' · guía para llenar lo que aún no tienes'}</span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>

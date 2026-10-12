@@ -2837,6 +2837,7 @@
       ps.preview = FP.planning.generatePlan({ year: state.year, targets: state.targets, store: state.store,
         events: state.events, settings: ps.settings, profiles: ensureProfiles() });
       ps.selected = 'preview';
+      ps.previewSig = FP.planningView.inputSig(state);
       render();
       const v = ps.preview.validation;
       FP.ui.toast(`Vista previa generada en ${Date.now() - t0} ms: ${v.closed ? 'plan cerrado' : 'plan no cerrado, revisa las validaciones'}. Aún no se guarda.`);

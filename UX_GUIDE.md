@@ -672,3 +672,6 @@ Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por e
 
 ## Añadido 2026-10-11 · Cuadre con la Meta anual total y paso guiado (Fase 14c)
 Bloque 3 de Supuestos: tabla de cuadre contra la Meta anual total. En modo guiado (empresa nueva) hay un paso «Supuestos de arranque» con 4 micro-pasos (forma, AOV, CR, cuadre).
+
+## Añadido 2026-10-11 · Plan desactualizado, guía de 4 pasos y Ayuda (Fase 14d)
+Aviso cuando cambias metas o supuestos con una vista previa ya generada; guía «Cómo llenarlo si no tienes datos» dentro de Supuestos; tráfico definido por canal; entrada de Ayuda «Supuestos de arranque».

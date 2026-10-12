@@ -89,6 +89,8 @@
         <div><dt>Confianza</dt><dd>${conf(a.confidence)}</dd></div>
         <div><dt>Generado</dt><dd class="num">${esc(a.generatedAt.slice(0, 16).replace('T', ' '))} · ${esc(a.algorithmVersion)}</dd></div>
       </dl>
+      ${isPreview && isStale(state) ? `<div class="ds-alert ds-alert--warning" id="plan-stale" role="alert"><div><strong>Esta vista previa quedó desactualizada.</strong> Cambiaste metas o supuestos después de generarla, así que no refleja lo que tienes capturado.</div>
+        <button type="button" class="btn btn--primary" data-action="plan-preview">Regenerar vista previa</button></div>` : ''}
       ${usesAssumptions(plan) ? `<div class="ds-alert ds-alert--info" role="note"><span class="chip">Supuesto</span> <strong>Este plan usa supuestos de arranque</strong> (${assumptionParts(plan).join(' y ')}). Se afinarán con tu venta real: la app te propondrá reemplazarlos, nunca lo hace sola.
         <a href="${FP.startupAssumptionsView.hasData(state) ? '#configuracion' : '#resumen'}" data-nav="${FP.startupAssumptionsView.hasData(state) ? 'configuracion' : 'resumen'}">Revisar supuestos de arranque</a></div>` : ''}
       ${isPreview && !hasOriginal && !hp.firstDate ? `<div class="ds-alert ds-alert--warning" role="note"><strong>Todavía no hay histórico.</strong>
@@ -269,5 +271,14 @@
       <details class="disclosure"><summary>Supuestos de CR y AOV</summary>${assumptionsPanel(state, plan)}</details>`;
   }
 
-  FP.planningView = { render, SOURCE_LABEL };
+  /** Firma de lo que alimenta al plan (metas y supuestos): si cambia después de generar la vista previa, el plan quedó desactualizado. */
+  function inputSig(state) {
+    try { return JSON.stringify([state.year, state.targets, state.planning.settings]); } catch (e) { return ''; }
+  }
+  function isStale(state) {
+    const ps = state.planning;
+    return !!(ps && ps.preview && ps.previewSig && ps.previewSig !== inputSig(state));
+  }
+
+  FP.planningView = { render, SOURCE_LABEL, inputSig, isStale };
 })(typeof window !== 'undefined' ? window : globalThis);
