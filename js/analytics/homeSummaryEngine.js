@@ -38,6 +38,24 @@
     return out;
   }
 
+
+  /**
+   * 1b · Por qué va así contra el PLAN (la misma pregunta que «¿Cómo voy?»): Nivel 1 del Diagnóstico (Plan vs Actual, mismo método),
+   * así que las cifras son idénticas a las de Diagnóstico → Nivel 1. Solo LEE el motor de drivers.
+   */
+  function whyPlan(state, ch, period) {
+    const run = state.fc && state.fc.run;
+    if (!run || run.plan.source === 'none') return { status: 'no_run' };
+    const DE = FP.driverEngine;
+    const built = DE.buildPairs({ comparison: 'actual_vs_plan', period, channel: ch, run, rf: null, store: state.store });
+    const coverage = { expected: built.expected, paired: built.pairs.length, currentRange: built.currentRange, baselineRange: built.baselineRange };
+    if (!built.pairs.length) return { status: 'no_base', coverage, note: built.notes[0] || null };
+    const l1 = DE.level1(built.pairs, {});
+    const drivers = (l1.drivers || []).filter((d) => fin(d.contribution));
+    return { status: 'ok', gap: l1.gap.abs, gapPct: l1.gap.pct, current: l1.gap.current, baseline: l1.gap.baseline, coverage,
+      drivers: drivers.map((d) => ({ id: d.driver, label: d.label, contribution: d.contribution })), method: l1.attribution && l1.attribution.method };
+  }
+
   /** 3 · Cómo va cada canal: las mismas cifras de Pacing/Forecast que las tarjetas de Inicio, canal por canal. */
   function channels(state, period) {
     const run = state.fc && state.fc.run;
@@ -117,7 +135,7 @@
   function compute(state, h) {
     const period = periodOf(state, h), ch = h.channel || 'total';
     const w = why(state, ch, period);
-    return { channel: ch, period, why: w, where: where(state, ch, period), channels: channels(state, period), trust: trust(state, w) };
+    return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), trust: trust(state, w) };
   }
 
   FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf };
