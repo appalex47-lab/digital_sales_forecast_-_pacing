@@ -44,6 +44,7 @@
     store: ST.createStore(),
     settings: null,
     staging: { items: [], activeId: null, issueFilter: 'all' },
+    sheets: { links: [], busy: false },   // Fase 15: enlaces de Google Sheets publicados (solo URL)
     quality: null,
     availableYears: [],
     qualityType: 'historical',
@@ -264,6 +265,43 @@
   function saveSettings() { storage.save(K.settings, state.settings); }
 
   /** Equivalencias de nombres (homologación): se guardan aparte y las consultan los normalizadores al importar. */
+  /** Google Sheets por enlace publicado (Fase 15): se recuerda solo la URL, la etiqueta y cuándo se trajo; nunca claves ni datos. */
+  function loadSheetLinks() {
+    const s = storage.load(K.sheetsLinks);
+    const ok = (l) => l && typeof l.id === 'string' && typeof l.url === 'string' && (l.type === 'products' || C.dataTypeIds.includes(l.type));
+    state.sheets.links = s && s.data && Array.isArray(s.data.links) ? s.data.links.filter(ok).slice(0, 30) : [];
+  }
+  function saveSheetLinks() { storage.save(K.sheetsLinks, { links: state.sheets.links }); }
+  async function fetchSheet(type, link) {
+    const SL = FP.sheetsLink;
+    const n = SL.normalize(link.url);
+    if (!n.ok) { FP.ui.toast(n.error); return; }
+    if (state.sheets.busy) return;
+    state.sheets.busy = true;
+    const btns = [...document.querySelectorAll(`[data-action="sheets-fetch"][data-type="${type}"], [data-action="sheets-refresh"]`)];
+    btns.forEach((b) => { b.disabled = true; });
+    try {
+      FP.ui.toast('Trayendo la pestaña de Google Sheets…');
+      const r = await SL.fetchCsv(n.csvUrl);
+      if (!r.ok) { FP.ui.toast(r.error); return; }
+      const file = new File([r.text], SL.fileName(link.label, type), { type: 'text/csv' });
+      const card = document.getElementById(`up-${type}`);
+      await stageFiles([file], type, card ? card.closest('.upload-card').querySelector('.upload-card__state') : null);
+      const rows = Math.max(0, r.rows - 1);
+      const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind };
+      const i = state.sheets.links.findIndex((l) => l.id === id || (l.type === type && l.url === rec.url));
+      if (i >= 0) state.sheets.links[i] = rec; else state.sheets.links.push(rec);
+      saveSheetLinks(); clearDrafts('sheets-');
+      render();
+      FP.ui.toast(`Traje ${rows.toLocaleString('es-MX')} filas de Google Sheets. Revísalas abajo antes de importar.${n.kind === 'shared' ? ' Ojo: ese enlace comparte todo el libro; es más seguro publicar solo la pestaña.' : ''}`);
+      scrollToStaging();
+    } finally {
+      state.sheets.busy = false;
+      document.querySelectorAll('[data-action="sheets-fetch"], [data-action="sheets-refresh"]').forEach((b) => { b.disabled = false; });
+    }
+  }
+
   function loadAliases() { const s = storage.load(K.aliases); FP.aliases.set(s && s.data && Array.isArray(s.data.rules) ? s.data.rules : []); }
   function saveAliases() { storage.save(K.aliases, { rules: FP.aliases.rules() }); }
 
@@ -1908,6 +1946,7 @@
       state.staging = { items: [], activeId: null, issueFilter: 'all' };
       loadSettings();
       loadAliases();
+    loadSheetLinks();
       loadPlanningSettings();
       loadForecastSettings();
       loadReforecastSettings();
@@ -2094,6 +2133,23 @@
 
     /* ----- Fase 1: carga ----- */
     'pick-files'(el) { pickFiles(el); },
+
+    /* ----- Fase 15: Google Sheets por enlace publicado ----- */
+    'sheets-fetch'(el) {
+      const t = el.dataset.type;
+      const url = (document.getElementById(`sheets-url-${t}`) || {}).value;
+      const label = (document.getElementById(`sheets-label-${t}`) || {}).value;
+      return fetchSheet(t, { url, label });
+    },
+    'sheets-refresh'(el) {
+      const l = state.sheets.links.find((x) => x.id === el.dataset.id);
+      if (l) return fetchSheet(l.type, l);
+    },
+    'sheets-remove'(el) {
+      state.sheets.links = state.sheets.links.filter((x) => x.id !== el.dataset.id);
+      saveSheetLinks(); render();
+      FP.ui.toast('Enlace quitado de la app. Recuerda dejar de publicar la pestaña en Google Sheets si ya no la usas.');
+    },
 
     'download-template'(el) {
       const t = el.dataset.type;
@@ -3321,6 +3377,7 @@
     FP.ui.renderAppMeta();
     loadSettings();
     loadAliases();
+    loadSheetLinks();
     loadPlanningSettings();
     loadForecastSettings();
     loadReforecastSettings();

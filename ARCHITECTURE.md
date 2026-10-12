@@ -2714,3 +2714,6 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Fase 14c · Cuadre y recorrido
 `startup-assumptions-view.js#reconcile` genera el plan con `FP.planning.generatePlan` y compara con `targets.annual.revenue`. `targets.channelShare` (app.js `saveTargetsFromForm`, ui.js `channelValue`) recuerda % por canal. `guidanceConfig.js` paso `supuestos` (ruta C); `tour.js` `microList` detecta AOV/CR desde `FP.seasonality.effectiveConfig`.
+
+### Fase 15 · Google Sheets por enlace publicado
+`js/import/sheetsLink.js` normaliza y lee el enlace; `app.js` (`fetchSheet`, acciones `sheets-fetch/refresh/remove`, `state.sheets.links`, clave `sheetsLinks`) arma un `File` CSV y llama a `stageFiles`, es decir, la misma ruta que un archivo. UI en `import-view.js#sheetsBlock`.

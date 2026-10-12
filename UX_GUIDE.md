@@ -675,3 +675,6 @@ Bloque 3 de Supuestos: tabla de cuadre contra la Meta anual total. En modo guiad
 
 ## Añadido 2026-10-11 · Plan desactualizado, guía de 4 pasos y Ayuda (Fase 14d)
 Aviso cuando cambias metas o supuestos con una vista previa ya generada; guía «Cómo llenarlo si no tienes datos» dentro de Supuestos; tráfico definido por canal; entrada de Ayuda «Supuestos de arranque».
+
+## Añadido 2026-10-11 · Google Sheets por enlace publicado (Fase 15)
+En Carga de datos, cada tarjeta trae «Traer desde Google Sheets (enlace publicado)»: 3 pasos, advertencia de enlace público y tip de fechas. Los enlaces guardados se ven siempre con «Actualizar» y «Quitar». Todo pasa por revisión antes de importar.

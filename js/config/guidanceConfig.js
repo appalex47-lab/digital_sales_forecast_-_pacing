@@ -141,6 +141,10 @@
     formula: '', interpretation: '', caveats: '', nextStep: '', purpose: '', whenToUse: '', decision: '', related: [], ...o });
 
   const HELP = [
+    e('googleSheetsEnlace', 'Google Sheets por enlace publicado', 'Trae una pestaña de Google Sheets publicada como CSV y la manda a revisión, igual que un archivo.',
+      { detailedDescription: 'En Carga de datos, cada tarjeta (Histórico, Plan / Meta, Venta real, Segmentos y Productos) tiene «Traer desde Google Sheets». Publica solo la pestaña de datos (Archivo → Compartir → Publicar en la web → CSV), pega el enlace y pulsa «Traer y revisar». Pasa por el mismo mapeo y validación que un archivo y no se importa hasta que lo confirmes. «Actualizar» vuelve a leer la pestaña.',
+        howToRead: 'La app recuerda solo el enlace, no los datos ni claves. Cada tipo de dato usa su propia pestaña.',
+        caveats: 'Cualquiera con el enlace puede leer esa pestaña: publica solo la de datos y deja de publicar cuando no la uses. Google tarda unos minutos en reflejar cambios. Usa fechas AAAA-MM-DD. Para volúmenes muy grandes (productos por SKU y sucursal) conviene seguir con CSV.', glossary: true }),
     e('supuestosArranque', 'Supuestos de arranque', 'Cifras que capturas tú (forma del año, AOV general y CR por canal) para planear cuando todavía no hay histórico ni venta real.',
       { detailedDescription: 'Viven en «Metas y motor», debajo de la Meta anual. La Meta anual total manda siempre: los supuestos solo cambian cómo se reparte en meses y días y cuántos pedidos y tráfico implica. Forma del año: peso por día de la semana y eventos (1 = día normal). AOV general: se reparte a los canales según su % de la meta; un canal con AOV propio hace que los demás se ajusten para que el total siga en el general. CR por canal: tráfico = sesiones en Ecommerce y App, mensajes recibidos en WhatsApp y llamadas contestadas en Llamadas.',
         howToRead: 'El bloque «¿Todo cuadra?» compara la Meta anual total con Σ canales, Σ meses y Σ días. Cada cifra del plan que viene de un supuesto se marca como «Supuesto».',
