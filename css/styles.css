@@ -1294,3 +1294,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .sheets-link { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid var(--ds-border, #e2e8f0); border-radius: 8px; }
 .sheets-link .cell-sub { display: block; }
 .sheets-box .ss-steps { font-size: 13px; color: var(--ds-text-muted, #475569); }
+
+/* Alertas de pacing: etiquetas del mismo ancho para que el texto quede alineado */
+#fc-alerts .alert-list .pill { min-width: 9.5rem; justify-content: flex-start; }
+@media (max-width: 600px) { #fc-alerts .alert-list .pill { min-width: 0; } #fc-alerts .alert-list li { flex-wrap: wrap; } }

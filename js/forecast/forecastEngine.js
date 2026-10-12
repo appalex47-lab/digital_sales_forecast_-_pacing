@@ -220,27 +220,27 @@
     if (neg >= a.streakDays) {
       const from = counted[counted.length - 1 - neg];
       const last = counted[counted.length - 1];
-      out.push({ type: 'gap_growing', severity: 'attention', channel, metric: 'revenue', days: neg,
+      out.push({ type: 'gap_growing', severity: 'attention', category: 'risk', channel, metric: 'revenue', days: neg,
         from: from ? from.cumulative.revenue.gap : 0, to: last.cumulative.revenue.gap,
         message: `${label}: el real quedó debajo del plan diario ${neg} días seguidos; el gap acumulado empeoró.` });
     }
     if (pos >= a.streakDays) {
-      out.push({ type: 'gap_improving', severity: 'info', channel, metric: 'revenue', days: pos,
+      out.push({ type: 'gap_improving', severity: 'info', category: 'improving', channel, metric: 'revenue', days: pos,
         to: counted[counted.length - 1].cumulative.revenue.gap,
         message: `${label}: el real superó el plan diario ${pos} días seguidos; el gap acumulado mejoró.` });
     }
     const ytd = series.indices.ytd.revenue, rec = series.indices[cfg.recentWindow].revenue;
     if (M().isFiniteNumber(ytd.value) && M().isFiniteNumber(rec.value) && Math.abs(rec.value - ytd.value) >= a.recentVsCumulative) {
-      out.push({ type: 'recent_vs_cumulative', severity: 'info', channel, metric: 'revenue', recent: rec.value, cumulative: ytd.value,
+      out.push({ type: 'recent_vs_cumulative', severity: 'info', category: 'trend', channel, metric: 'revenue', recent: rec.value, cumulative: ytd.value,
         message: `${label}: performance ${cfg.windows[cfg.recentWindow].label.toLowerCase()} ${fmtPct(rec.value)} vs acumulado ${fmtPct(ytd.value)}.` });
     }
     const fg = series.annual && series.annual.forecastGap.revenue;
     if (fg && M().isFiniteNumber(fg.gapPct) && Math.abs(fg.gapPct) >= a.forecastGapPct) {
-      out.push({ type: 'forecast_gap', severity: 'attention', channel, metric: 'revenue', gapPct: fg.gapPct, gap: fg.gap,
-        message: `${label}: el forecast de cierre está ${fmtPct(fg.gapPct)} ${fg.gapPct < 0 ? 'debajo' : 'arriba'} del plan anual.` });
+      out.push({ type: 'forecast_gap', severity: 'attention', category: fg.gapPct < 0 ? 'risk' : 'above', channel, metric: 'revenue', gapPct: fg.gapPct, gap: fg.gap,
+        message: `${label}: el forecast de cierre está ${fmtPct(Math.abs(fg.gapPct))} ${fg.gapPct < 0 ? 'debajo' : 'arriba'} del plan anual.` });
     }
     if (series.missingActualDays > 0) {
-      out.push({ type: 'missing_actual', severity: 'attention', channel, metric: 'revenue', days: series.missingActualDays,
+      out.push({ type: 'missing_actual', severity: 'attention', category: 'data', channel, metric: 'revenue', days: series.missingActualDays,
         message: `${label}: ${series.missingActualDays} días pasados sin venta real; no cuentan en el pacing y se proyectan con el método.` });
     }
     return out;
@@ -409,5 +409,5 @@
   }
 
   FP.forecastEngine = { effectiveConfig, planInputs, actualInputs, buildChannelRows, buildTotalRows, projectRows,
-    runForecast, generateForecast, worstConfidence };
+    runForecast, generateForecast, worstConfidence, buildAlerts };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -678,3 +678,6 @@ Aviso cuando cambias metas o supuestos con una vista previa ya generada; guía �
 
 ## Añadido 2026-10-11 · Google Sheets por enlace publicado (Fase 15)
 En Carga de datos, cada tarjeta trae «Traer desde Google Sheets (enlace publicado)»: 3 pasos, advertencia de enlace público y tip de fechas. Los enlaces guardados se ven siempre con «Actualizar» y «Quitar». Todo pasa por revisión antes de importar.
+
+## Añadido 2026-10-12 · Alertas de pacing por tipo
+Etiquetas: Riesgo (rojo), Faltan datos (naranja), Por encima del plan y Mejora (verde), Tendencia (neutra). Ordenadas por prioridad y con leyenda.
