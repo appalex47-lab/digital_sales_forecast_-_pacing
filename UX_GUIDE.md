@@ -664,7 +664,7 @@ Dentro de cada paso importante, el recorrido muestra de 2 a 4 micro-pasos (por e
 
 ## Añadido 2026-10-11 · Supuestos de arranque (Fase 14)
 
-- **Dónde:** «Configuración de planeación», primera sección. Sale **abierta** mientras no haya histórico ni venta real (es la guía de qué llenar) y **plegada** cuando ya hay datos («el histórico siempre manda»). La persona puede abrirla o cerrarla; el sistema recuerda su elección mientras la sesión siga abierta.
+- **Dónde:** en «Metas y motor», justo debajo de las metas (de ellas toma el % de cada canal), y **solo mientras no haya histórico ni venta real**: es la guía de qué llenar. En cuanto hay datos desaparece de ahí y pasa, plegada, a «Configuración de planeación» («el histórico siempre manda»); nunca está en los dos sitios a la vez. La persona puede abrirla o cerrarla; el sistema recuerda su elección mientras la sesión siga abierta. Lee las metas **guardadas**, no las que aún se están escribiendo.
 - **Forma del año:** casilla «Usar mi forma estándar donde falte histórico»; factores L–D (1 = día normal) y eventos con nombre, desde/hasta (MM-DD) y factor. Las fechas se repiten cada año. Muestra cuánto pesaría cada mes. Sin eventos ni factores, el reparto sigue siendo parejo por días.
 - **AOV y CR:** un **AOV general** (número, o generado de tus líneas con su AOV y % de **pedidos**). Cada canal lo hereda. Si un canal tiene AOV propio, los demás quedan «Ajustados» para que el total digital siga en el AOV general. El CR se captura por canal en %.
 - **Fuente:** cada AOV general y CR declara su origen (Mi dato / Benchmark / Estimación); con «Benchmark» la fuente y el año son obligatorios (aviso, no bloqueo). La app **no trae benchmarks**.

@@ -856,7 +856,16 @@
     if (a) { a.textContent = ''; setTimeout(() => { a.textContent = `Vista: ${t}`; }, 50); }   // el vaciado previo asegura que se anuncie aunque el texto se repita
   }
 
+  /** No dibuja dos veces a la vez: al quitar del DOM un campo con cambios sin confirmar, el navegador dispara un «change» en pleno dibujo; ese dibujo se pospone hasta que termine el actual. */
+  let rendering = false, renderAgain = false;
   function render() {
+    if (rendering) { renderAgain = true; return; }   // se vuelve a dibujar al terminar, no en medio del dibujo
+    rendering = true;
+    try { renderNow(); } finally { rendering = false; }
+    if (renderAgain) { renderAgain = false; render(); }
+  }
+
+  function renderNow() {
     const u = state.ux;
     u.visited[state.view] = true;
     const g = FP.navigation.groupOf(state.view);
@@ -900,9 +909,11 @@
   function renderView() {
     FP.ui.renderStatus(state);
     VIEWS.forEach((v) => { document.getElementById(`view-${v}`).hidden = v !== state.view; });
+    FP.startupAssumptionsView.sync(state);
     if (state.view === 'resumen') {
       FP.ui.renderFacts(state);
       FP.ui.renderTargets(state);
+      FP.startupAssumptionsView.mountInGoals(state);
       FP.ui.renderFilters(state);
       FP.ui.renderValidation(state);
       FP.ui.renderEngine(state);

@@ -143,5 +143,22 @@
     if (d) d.addEventListener('toggle', () => { userOpen = d.open === autoOpen ? null : d.open; });
   }
 
-  FP.startupAssumptionsView = { render, bind, hasData };
+  /**
+   * Dónde vive la guía: en «Metas y motor» (junto a las metas que alimentan el plan) mientras NO haya histórico ni venta real;
+   * en cuanto hay datos, se mueve a «Configuración de planeación» (plegada). Nunca está en los dos sitios a la vez.
+   */
+  function sync(state) {
+    const data = hasData(state);
+    const host = document.getElementById('startup-assumptions-host');
+    if (host && data) host.innerHTML = '';
+    if (!data) { const old = document.querySelector('#plan-config #startup-assumptions'); if (old) old.remove(); }
+  }
+  function mountInGoals(state) {
+    const host = document.getElementById('startup-assumptions-host');
+    if (!host) return;
+    host.innerHTML = hasData(state) ? '' : render(state);
+    bind();
+  }
+
+  FP.startupAssumptionsView = { render, bind, hasData, sync, mountInGoals };
 })(typeof window !== 'undefined' ? window : globalThis);

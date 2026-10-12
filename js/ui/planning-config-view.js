@@ -29,7 +29,7 @@
     const hp = cfg.historicalPeriod;
 
     $('plan-config').innerHTML = `
-      ${FP.startupAssumptionsView.render(state)}
+      ${FP.startupAssumptionsView.hasData(state) ? FP.startupAssumptionsView.render(state) : '<p class="field__hint" id="startup-assumptions-pointer">Los <strong>supuestos de arranque</strong> (forma del año, AOV y CR) están en <a href="#resumen" data-nav="resumen">Metas y motor</a> mientras no haya histórico ni venta real.</p>'}
       <div class="settings-grid">
         <div class="field"><label for="pc-method">Método de distribución aplicado</label>
           <select id="pc-method" data-action="plan-setting" data-key="method">
