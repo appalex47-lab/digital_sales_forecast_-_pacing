@@ -513,6 +513,17 @@
     },
 
     /* ----- Fase 8.1: almacenamiento IndexedDB y capa Categoría → Producto ----- */
+    /**
+     * Fase S1: nube (Supabase). URL del proyecto y llave PÚBLICA (publishable); nunca service_role.
+     * La seguridad real son las políticas RLS de la base (cada sesión solo ve sus filas).
+     */
+    cloud: {
+      url: 'https://odsaouldxxjurniizefc.supabase.co',
+      publishableKey: 'sb_publishable_CGIWMEMCuMmo22T6MtmOgg_7vKGa-V4',
+      table: 'cloud_blobs',
+      chunkChars: 400000,       // tamaño máximo de texto por fila
+      skipKeys: ['cohereApiKey', 'storageMigration', 'cloudSession']   // secretos y banderas locales: nunca viajan a la nube
+    },
     storageDb: {
       name: 'fp-data', version: 2,
       /** Claves de datos (prefijo antes de ':') que viven en IndexedDB; el resto se queda en localStorage. */

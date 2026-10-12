@@ -681,3 +681,6 @@ En Carga de datos, cada tarjeta trae «Traer desde Google Sheets (enlace publica
 
 ## Añadido 2026-10-12 · Alertas de pacing por tipo
 Etiquetas: Riesgo (rojo), Faltan datos (naranja), Por encima del plan y Mejora (verde), Tendencia (neutra). Ordenadas por prioridad y con leyenda.
+
+## Nube (prueba S1)
+Configuración → Avanzado → «Nube (Supabase) · prueba»: «Subir copia a la nube» (sube y verifica), «Restaurar desde la nube» (reemplaza los bloques que existan en la copia y pide recargar), «Borrar copia de la nube». Entra sin login (sesión anónima). Solo datos de ejemplo hasta aprobar políticas.

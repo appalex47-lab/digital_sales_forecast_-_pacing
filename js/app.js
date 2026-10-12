@@ -44,7 +44,8 @@
     store: ST.createStore(),
     settings: null,
     staging: { items: [], activeId: null, issueFilter: 'all' },
-    sheets: { links: [], busy: false },   // Fase 15: enlaces de Google Sheets publicados (solo URL)
+    sheets: { links: [], busy: false },
+    cloud: { busy: false, msg: null, tone: null, last: null, session: null },   // Fase S1: copia en la nube (Supabase)   // Fase 15: enlaces de Google Sheets publicados (solo URL)
     quality: null,
     availableYears: [],
     qualityType: 'historical',
@@ -2565,6 +2566,35 @@
       state.pa.testing = false; render();
       FP.ui.toast(`Pruebas de almacenamiento: ${state.pa.tests.passed} de ${state.pa.tests.total} correctas.`);
     },
+
+    /* ----- Fase S1: nube ----- */
+    'cloud-upload'() {
+      return cloudRun(async () => {
+        await repo.flush();
+        const up = await FP.cloud.upload(cloudProvider, {});
+        if (!up.ok) return cloudNote(up.error, 'bad');
+        const v = await FP.cloud.verify(up, {});
+        state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
+        cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
+      });
+    },
+    'cloud-download'() {
+      if (!window.confirm('Esto reemplaza en este navegador los bloques de datos que existan en la nube por la copia guardada. ¿Continuar?')) return;
+      return cloudRun(async () => {
+        const d = await FP.cloud.download({});
+        if (!d.ok) return cloudNote(d.error, 'bad');
+        if (!d.items.length) return cloudNote('No hay copia en la nube todavía. Primero usa «Subir copia a la nube».', 'warn');
+        for (const it of d.items) { const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+        await repo.flush();
+        cloudNote(`Copia restaurada: ${d.items.length} bloques de datos. Recarga para verlos aplicados.`, 'ok');
+        state.cloud.restored = true;
+      });
+    },
+    'cloud-delete'() {
+      if (!window.confirm('Se borrará la copia de la nube de esta sesión. Tus datos locales no se tocan. ¿Continuar?')) return;
+      return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; });
+    },
+    'cloud-signout'() { FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión de nube cerrada en este navegador. La copia sigue en Supabase, pero esta sesión anónima ya no podrá abrirla.', 'warn'); render(); },
     async 'storage-retry'() {
       const st = await FP.app.retryMigration();
       render();
@@ -3378,6 +3408,7 @@
     loadSettings();
     loadAliases();
     loadSheetLinks();
+    cloudRefreshSession();
     loadPlanningSettings();
     loadForecastSettings();
     loadReforecastSettings();
@@ -3402,7 +3433,31 @@
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
-  FP.app = { state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+
+  /* ----- Fase S1: nube (Supabase). Proveedor de claves: lo que hay guardado localmente, sin secretos ----- */
+  const cloudProvider = {
+    async keys() {
+      const pre = `${C.storage.namespace}:`, set = new Set();
+      lsAdapter.keys().filter((k) => k.startsWith(pre)).forEach((k) => set.add(k.slice(pre.length)));
+      (await repo.kvAllKeys()).forEach((k) => set.add(k));
+      return [...set].sort();
+    },
+    async read(key) {
+      if (FP.repository.isDataKey(key) && repo.ready) { const e = await repo.kvRead(key).catch(() => null); if (e) return e; }
+      return lsStorage.load(key);
+    }
+  };
+  function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
+  function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s ? { userId: s.user_id, anonymous: s.anonymous } : null; }
+  const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  async function cloudRun(fn) {
+    if (state.cloud.busy) return;
+    state.cloud.busy = true; cloudNote('Trabajando…'); render();
+    try { await fn(); } catch (e) { cloudNote(`Falló: ${e && e.message || e}`, 'bad'); }
+    state.cloud.busy = false; cloudRefreshSession(); render();
+  }
+
+  FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
