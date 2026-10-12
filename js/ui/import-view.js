@@ -67,6 +67,36 @@
       </div>`;
   }
 
+  /**
+   * Fase 15 · Google Sheets por enlace publicado. Entra por la misma ruta que un archivo: «en revisión» → mapeo → validación → confirmar.
+   * Solo se recuerda el enlace (nunca claves ni datos).
+   */
+  function sheetsBlock(state, t) {
+    const esc = H().esc;
+    const links = (state.sheets && state.sheets.links ? state.sheets.links : []).filter((l) => l.type === t);
+    const when = (iso) => { try { return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
+    const rows = links.map((l) => `<li class="sheets-link"><span><strong>${esc(l.label || 'Pestaña de Google Sheets')}</strong>
+        <span class="cell-sub">${l.rows !== undefined ? `${esc(F().integer(l.rows))} filas · ` : ''}traída ${esc(when(l.lastAt))}${l.kind === 'shared' ? ' · enlace compartido (todo el libro)' : ''}</span></span>
+        <span class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="sheets-refresh" data-id="${esc(l.id)}">Actualizar</button>
+        <button type="button" class="btn btn--small" data-action="sheets-remove" data-id="${esc(l.id)}">Quitar</button></span></li>`).join('');
+    return `${rows ? `<div class="sheets-saved" id="sheets-saved-${t}"><p class="field__hint"><strong>Google Sheets guardadas</strong> (actualizar vuelve a leer la pestaña; nada se importa sin confirmar)</p><ul class="sheets-links">${rows}</ul></div>` : ''}
+      <details class="disclosure sheets-box" id="sheets-${t}"><summary>Traer desde Google Sheets (enlace publicado)</summary>
+      <div class="stack">
+        <ol class="ss-steps">
+          <li>En tu hoja: <strong>Archivo → Compartir → Publicar en la web</strong>.</li>
+          <li>Elige <strong>solo la pestaña de datos</strong> (no «Todo el documento») y el formato <strong>Valores separados por comas (.csv)</strong>; pulsa Publicar.</li>
+          <li>Pega aquí el enlace y pulsa «Traer y revisar». Nada se importa hasta que lo confirmes abajo.</li>
+        </ol>
+        <div class="field"><label for="sheets-url-${t}">Enlace de la pestaña publicada</label>
+          <input id="sheets-url-${t}" type="url" data-draft autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=…&single=true&output=csv"></div>
+        <div class="field"><label for="sheets-label-${t}">Nombre para reconocerla (opcional)</label>
+          <input id="sheets-label-${t}" type="text" data-draft autocomplete="off" placeholder="Ej.: Venta real 2026"></div>
+        <div class="btn-row"><button type="button" class="btn btn--primary" data-action="sheets-fetch" data-type="${t}">Traer y revisar</button></div>
+        <p class="field__hint"><strong>Cuidado:</strong> cualquiera que tenga el enlace puede leer esa pestaña. Publica solo la pestaña de datos y, cuando ya no la uses, ve a Archivo → Compartir → Publicar en la web → «Dejar de publicar». Google tarda unos minutos en reflejar cambios.</p>
+        <p class="field__hint">Tip de fechas: usa el formato <strong>AAAA-MM-DD</strong> (Formato → Número → Más formatos → Fecha y hora personalizada) para que no se confunda día con mes.</p>
+      </div></details>`;
+  }
+
   function renderCards(state) {
     const esc = H().esc;
     $('import-cards').innerHTML = C().dataTypeIds.map((t) => {
@@ -89,6 +119,7 @@
             </label>
             <button type="button" class="btn" data-action="download-template" data-type="${t}">Descargar plantilla</button>
           </div>
+          ${sheetsBlock(state, t)}
           <p class="upload-card__state" data-state="${col.batches.length ? 'ready' : 'empty'}" role="status">${col.batches.length
             ? `${col.batches.length} archivo${col.batches.length === 1 ? '' : 's'}, ${F().integer(col.records.length)} registros guardados`
             : 'Sin archivos cargados'}</p>
@@ -124,6 +155,7 @@
           <button type="button" class="btn" data-action="download-template" data-type="products">Plantilla venta</button>
           <button type="button" class="btn" data-action="download-template" data-type="productFunnel">Plantilla funnel</button>
         </div>
+        ${ok ? sheetsBlock(state, 'products') : ''}
         <p class="upload-card__state" data-state="${!ok ? 'error' : (m && (m.batches || m.funnelBatches) ? 'ready' : 'empty')}" role="status">${!ok ? 'Requiere IndexedDB (no disponible en este navegador).' : m && (m.batches || m.funnelBatches) ? `${m.batches || 0} archivo(s) de venta, ${m.funnelBatches || 0} de funnel · ${F().integer(m.skus)} SKU · ${esc(m.dateMin)} a ${esc(m.dateMax)}` : 'Sin archivos cargados'}</p>
       </div></section>`;
   }

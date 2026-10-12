@@ -249,6 +249,8 @@
         uxSettings: 'uxSettings',
         // Fase 8.1 (solo banderas y preferencias; los datos grandes viven en IndexedDB)
         storageMigration: 'storageMigration', productSettings: 'productSettings',
+        // Fase 15 (enlaces de Google Sheets publicados; solo la URL, nunca claves)
+        sheetsLinks: 'sheetsLinks',
         // Fase 8.2 (configuración pequeña; config.js la lee de forma síncrona al arrancar)
         businessContext: 'businessContext'
       }

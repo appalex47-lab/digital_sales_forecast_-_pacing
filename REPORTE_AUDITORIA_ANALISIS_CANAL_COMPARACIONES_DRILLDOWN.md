@@ -503,3 +503,14 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - **Corrección 2: mecanismo genérico.** Los campos marcados con `data-draft` (formularios sin estado propio) se recuerdan en `drafts` y se restauran tras cada render (`restoreDrafts`); aplicado a «Agregar una acción propia» (Recovery). Se limpian al agregar la acción.
 - **Revisión.** Se recorrieron todos los pasos de las rutas A y C llenando cada campo visible y re-dibujando con los botones del recorrido: sin otros campos que pierdan datos (los que se guardan con `change` ya persisten).
 - **Pruebas.** `batch_draft.py` (D1–D8). `FP.app.render` queda expuesto.
+
+## Adenda 30 · Fase 15: Google Sheets por enlace publicado (2026-10-11)
+
+- **Qué es.** Opción A: una pestaña publicada en la web como CSV se trae con `fetch` (sin credenciales) y entra por la misma ruta de importación que un archivo (revisión → mapeo → validación → confirmar). Sirve para todos los tipos (Histórico, Plan/Meta, Venta real, Segmentos, Productos y los CSV de GA4 que ya traducen sus módulos).
+- **Módulo.** `js/import/sheetsLink.js`: `normalize` (solo `https://docs.google.com/spreadsheets/…`; convierte `pubhtml` a `pub?output=csv` y los enlaces de edición a `export?format=csv`, marcados «shared»), `fetchCsv` (distingue 404/403, HTML en vez de CSV, red/CORS, pestaña vacía) y `fileName`.
+- **Persistencia.** `sheetsLinks` guarda solo URL, etiqueta, filas, fecha y tipo. Nunca claves ni datos. «Actualizar» vuelve a leer; «Quitar» lo borra de la app.
+- **UI.** Cada tarjeta de Carga: desplegable «Traer desde Google Sheets» (3 pasos, advertencia de enlace público, tip de fechas AAAA-MM-DD) y lista «Google Sheets guardadas» siempre visible. Campos con `data-draft`.
+- **Seguridad.** Al abrir la app no se hace ninguna petición a Google; solo al pulsar. Dominio y protocolo validados estrictamente.
+- **Límites.** Cualquiera con el enlace lee la pestaña; Google tarda minutos en reflejar cambios; no es automático; CSV exportado depende del idioma de la hoja (fechas/números); no apto para volúmenes muy grandes.
+- **Sin verificar contra Google real.** Las pruebas usan un Google simulado (interceptan docs.google.com). El comportamiento real (CORS del enlace publicado, redirecciones, bloqueos de Workspace) debe confirmarse con una hoja real.
+- **Pruebas.** `tools/test-sheets-link.js` (Node) y `tools/regression/batch_sheets15.py` (S1–S20).
