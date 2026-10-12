@@ -2717,3 +2717,13 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Fase 15 · Google Sheets por enlace publicado
 `js/import/sheetsLink.js` normaliza y lee el enlace; `app.js` (`fetchSheet`, acciones `sheets-fetch/refresh/remove`, `state.sheets.links`, clave `sheetsLinks`) arma un `File` CSV y llama a `stageFiles`, es decir, la misma ruta que un archivo. UI en `import-view.js#sheetsBlock`.
+
+## Fase S1 — Nube (Supabase), prueba de subir y restaurar
+
+- `js/cloud/cloudSync.js` (`FP.cloud`): cliente sin dependencias (fetch) para Auth y REST de Supabase. Sesión **anónima** (`POST /auth/v1/signup`), renovada con refresh token; se guarda en `localStorage['fp.cloudSession']` (fuera del namespace de datos: nunca se sube ni se exporta).
+- Tabla `public.cloud_blobs(user_id, key, part, total, payload, bytes, updated_at)`, PK `(user_id,key,part)`, RLS: solo el dueño (`auth.uid() = user_id`) lee/escribe; `anon` sin permisos. Cada clave de la app (sobre `{schemaVersion,savedAt,data}`) se serializa y se parte en trozos de texto (`config.cloud.chunkChars`).
+- Proveedor de claves en `app.js` (`cloudProvider`): localStorage + IndexedDB `kv` (`repo.kvAllKeys`). No viajan `cohereApiKey`, `storageMigration` ni la sesión; los datos de Productos (otros almacenes de IndexedDB) quedan fuera de S1.
+- Subir = upsert por trozos + borrado de trozos sobrantes y de claves ya inexistentes + verificación (relee y compara tamaño y suma FNV-1a). Restaurar rechaza copias incompletas o dañadas completas (todo o nada) y pide recargar.
+- UI: Configuración → Avanzado → «Nube (Supabase) · prueba». Nada se pide a Supabase al abrir la app.
+- Tests: `tools/test-cloud-sync.js` (Supabase simulado con RLS), `tools/regression/batch_cloud_s1.py`.
+- Limitación conocida: una sesión anónima se pierde al borrar datos del navegador o cambiar de equipo (S3: vincular correo/Google).

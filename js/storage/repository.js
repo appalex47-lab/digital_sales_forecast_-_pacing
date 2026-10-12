@@ -102,6 +102,8 @@
       kvGet(key) { return cache.has(key) ? cache.get(key) : null; },
       kvHas(key) { return cache.has(key); },
       kvKeys() { return [...cache.keys()]; },
+      /** Todas las claves kv guardadas en IndexedDB (sin cargar valores), incluidas las sacadas de la caché. */
+      async kvAllKeys() { return mode === 'indexeddb' ? (await IDB().keys(db, 'kv')).map(String) : []; },
       /** Escribe en caché de inmediato y en IndexedDB en cola (orden garantizado). */
       kvSet(key, envelope) {
         cache.set(key, envelope);

@@ -15,7 +15,7 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
-IDS = ['st-adv', 'st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio']
+IDS = ['st-adv', 'st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-nube', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio']
 SEC = "(()=>[...document.querySelectorAll('#view-ajustes details.stacc')].map(d=>({id:d.id,open:d.open,title:((d.querySelector('summary h3')||{}).textContent||'').trim(),meta:((d.querySelector('.stacc__meta')||{}).textContent||'').trim()})))()"
 async def main():
     async with async_playwright() as p:
@@ -24,10 +24,10 @@ async def main():
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); u = f'http://127.0.0.1:{port}/index.html'; await prepare(q, u)
         await q.goto(u + '#ajustes'); await q.wait_for_selector('#st-fuentes', state='attached', timeout=20000); await q.wait_for_timeout(300)
         sec = await q.evaluate(SEC)
-        chk('AL-1 Configuración tiene 12 desplegables (Opciones avanzadas que agrupa a las demás, Estado, Modo, Otras preferencias, Fuentes, Equivalencias, Almacenamiento, Conexión con Cohere, Qué se envió, Lo aprendido, Datos personales y Negocio)', sorted(x['id'] for x in sec) == sorted(IDS), [x['id'] for x in sec])
+        chk('AL-1 Configuración tiene 13 desplegables (Opciones avanzadas que agrupa a las demás, Estado, Modo, Otras preferencias, Fuentes, Equivalencias, Almacenamiento, Nube, Conexión con Cohere, Qué se envió, Lo aprendido, Datos personales y Negocio)', sorted(x['id'] for x in sec) == sorted(IDS), [x['id'] for x in sec])
         chk('AL-1 todos entran cerrados y cada uno trae su título y un resumen visible aunque esté cerrado', all(not x['open'] and x['title'] and x['meta'] for x in sec), [(x['id'], x['open'], bool(x['meta'])) for x in sec])
         order = [x['id'] for x in sec]
-        chk('AL-1 el orden es Básico (Estado, Modo, Negocio, Conexión con Cohere) y luego Avanzado (Otras preferencias, Datos, IA)', order == ['st-estado', 'st-modo', 'st-negocio', 'st-ia', 'st-adv', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad'], order)
+        chk('AL-1 el orden es Básico (Estado, Modo, Negocio, Conexión con Cohere) y luego Avanzado (Otras preferencias, Datos, IA)', order == ['st-estado', 'st-modo', 'st-negocio', 'st-ia', 'st-adv', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-nube', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad'], order)
         groups = await q.evaluate("[...document.querySelectorAll('#view-ajustes .stgroup--page')].map(x=>x.textContent.trim())")
         chk('AL-1 los grupos se anuncian con su rótulo: Básico, Negocio, Avanzado, Datos e IA', groups == ['Básico · Herramienta', 'Negocio', 'Avanzado', 'Datos', 'Inteligencia artificial'], groups)
         h = await q.evaluate("(()=>{const v=document.getElementById('view-ajustes');const hs=[...v.querySelectorAll('h1,h2,h3,h4,h5')];let prev=0,jump=0;hs.forEach(x=>{const n=+x.tagName[1];if(prev&&n>prev+1)jump++;prev=n});return {jump,h2:v.querySelectorAll('h2').length}})()")
