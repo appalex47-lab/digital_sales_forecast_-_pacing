@@ -520,6 +520,8 @@
     cloud: {
       url: 'https://odsaouldxxjurniizefc.supabase.co',
       publishableKey: 'sb_publishable_CGIWMEMCuMmo22T6MtmOgg_7vKGa-V4',
+      // Site Key PÚBLICA de Cloudflare Turnstile (la Secret Key vive solo en Supabase). Vacía = sin CAPTCHA.
+      turnstileSiteKey: '0x4AAAAAAFUpjBAaF6uT9DhY',
       table: 'cloud_blobs',
       chunkChars: 400000,       // tamaño máximo de texto por fila
       skipKeys: ['cohereApiKey', 'storageMigration', 'cloudSession']   // secretos y banderas locales: nunca viajan a la nube

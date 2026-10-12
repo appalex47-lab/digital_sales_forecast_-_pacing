@@ -22,7 +22,7 @@ async def main():
             if r.method == 'OPTIONS': return await route.fulfill(status=204, headers=CORS)
             if u.path == '/auth/v1/signup':
                 if not state['anon']: return await route.fulfill(status=422, content_type='application/json', body='{"msg":"Anonymous sign-ins are disabled"}', headers=CORS)
-                state['users'] += 1
+                state['users'] += 1; state['body'] = r.post_data
                 return await route.fulfill(status=200, content_type='application/json', headers=CORS, body=json.dumps({'access_token': 't1', 'refresh_token': 'r-1', 'expires_in': 3600, 'user': {'id': 'u1', 'is_anonymous': True}}))
             qs = parse_qs(u.query)
             if r.method == 'POST':
@@ -40,6 +40,9 @@ async def main():
                 return await route.fulfill(status=204, body='', headers=CORS)
             return await route.fulfill(status=200, content_type='application/json', headers=CORS, body=json.dumps(sorted([{'key': y['key'], 'part': y['part'], 'total': y['total'], 'payload': y['payload']} for y in sel], key=lambda y: (y['key'], y['part']))))
         await q.route('https://odsaouldxxjurniizefc.supabase.co/**', handler)
+        async def ts(route):
+            await route.fulfill(status=200, content_type='application/javascript', body="window.turnstile={render:function(el,o){setTimeout(function(){o.callback('TOK-PW')},50);return 'w1'},remove:function(){}};")
+        await q.route('https://challenges.cloudflare.com/**', ts)
         q.on('dialog', lambda d: asyncio.ensure_future(d.accept()))
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); u = f'http://127.0.0.1:{port}/index.html'
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(1200)
@@ -60,6 +63,8 @@ async def main():
         await q.click('[data-action="cloud-upload"]'); await q.wait_for_timeout(3500)
         msg = await q.inner_text('#cloud-msg')
         chk('N5 sube y verifica', 'verificada' in msg and len(rows) > 0, msg)
+        chk('N5b el registro anónimo envió el token de Turnstile', 'TOK-PW' in (state.get('body') or '') and 'captcha_token' in state.get('body', ''), state.get('body'))
+        chk('N5c el contenedor del CAPTCHA se retira al terminar', await q.evaluate("!document.getElementById('cloud-captcha')"))
         chk('N6 la API key de Cohere no viajó', not any('SECRETO-COHERE' in y['payload'] or y['key'] == 'cohereApiKey' for y in rows))
         chk('N7 la sesión anónima no viajó ni quedó dentro de los datos', not any('refresh_token' in y['payload'] for y in rows))
         keys = sorted({y['key'] for y in rows}); chk('N8 viajan los datos de la app (dataset/targets/settings…)', any(k.startswith('dataset') or k.startswith('actualData') or k.startswith('planData') for k in keys), keys)

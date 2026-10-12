@@ -6,13 +6,13 @@ const Cl = FP.cloud; let fails = 0;
 const ok = (n, c, d) => { if (!c) { fails++; console.log('✘ ' + n + (d ? ' — ' + JSON.stringify(d) : '')); } else console.log('✔ ' + n); };
 
 // --- Supabase simulado ---
-let anonEnabled = true, users = 0; const rows = []; const tokens = new Map(); let calls = [];
+let lastSignupBody = null, needCaptcha = false, mode = '', anonEnabled = true, users = 0; const rows = []; const tokens = new Map(); let calls = [];
 const resp = (status, obj) => ({ ok: status < 300, status, json: async () => obj, text: async () => (obj === null ? '' : JSON.stringify(obj)) });
 async function fake(url, o) {
   calls.push(`${o.method} ${url.replace('https://x.supabase.co', '')}`);
   const u = new URL(url), h = o.headers || {};
   if (h.apikey !== 'sb_publishable_test') return resp(401, { message: 'no apikey' });
-  if (u.pathname === '/auth/v1/signup') { if (!anonEnabled) return resp(422, { msg: 'Anonymous sign-ins are disabled' }); const id = 'user-' + (++users); const t = 'tok-' + id; tokens.set(t, id); return resp(200, { access_token: t, refresh_token: 'r-' + id, expires_in: 3600, user: { id, is_anonymous: true } }); }
+  if (u.pathname === '/auth/v1/signup') { lastSignupBody = JSON.parse(o.body || '{}'); if (needCaptcha && !(lastSignupBody.gotrue_meta_security && lastSignupBody.gotrue_meta_security.captcha_token)) return resp(400, { error_code: 'captcha_failed', msg: 'captcha verification process failed' }); if (mode === 'nosignup') return resp(422, { error_code: 'signup_disabled', msg: 'Signups not allowed for this instance' }); if (!anonEnabled) return resp(422, { error_code: 'anonymous_provider_disabled', msg: 'Anonymous sign-ins are disabled' }); const id = 'user-' + (++users); const t = 'tok-' + id; tokens.set(t, id); return resp(200, { access_token: t, refresh_token: 'r-' + id, expires_in: 3600, user: { id, is_anonymous: true } }); }
   if (u.pathname === '/auth/v1/token') { const b = JSON.parse(o.body); const id = String(b.refresh_token).replace('r-', ''); if (!b.refresh_token.startsWith('r-')) return resp(400, { error: 'bad' }); const t = 'tok2-' + id; tokens.set(t, id); return resp(200, { access_token: t, refresh_token: b.refresh_token, expires_in: 3600, user: { id, is_anonymous: true } }); }
   const uid = tokens.get(String(h.Authorization || '').replace('Bearer ', '')); if (!uid) return resp(401, { message: 'JWT' });
   const mine = rows.filter((r) => r.user_id === uid);
@@ -30,6 +30,16 @@ const envs = { settings: { schemaVersion: 1, data: { year: 2026, big: 'x'.repeat
 const provider = { keys: async () => Object.keys(envs), read: async (k) => envs[k] };
 
 (async () => {
+  mode = 'nosignup'; let r0 = await Cl.upload(provider, {});
+  ok('registro apagado: mensaje apunta a «Allow new users to sign up»', !r0.ok && /Allow new users to sign up/.test(r0.error), r0); mode = '';
+  needCaptcha = true; Cl.signOut();
+  let rc = await Cl.upload(provider, {});
+  ok('CAPTCHA exigido y sin token: mensaje claro, sin usuario', !rc.ok && /CAPTCHA/.test(rc.error) && users === 0, rc);
+  rc = await Cl.upload(provider, { captchaImpl: async () => ({ ok: true, token: 'TOK-123' }) });
+  ok('con token de Turnstile: el registro lo envía en gotrue_meta_security', rc.ok && lastSignupBody.gotrue_meta_security.captcha_token === 'TOK-123', lastSignupBody);
+  rc = await Cl.upload(provider, { captchaImpl: async () => ({ ok: false, error: 'Cloudflare rechazó la verificación.' }) }); // ya hay sesión: no pide otra
+  ok('con sesión vigente no se vuelve a pedir CAPTCHA', rc.ok);
+  needCaptcha = false; Cl.signOut(); users = 0; rows.length = 0; tokens.clear();
   anonEnabled = false;
   let r = await Cl.upload(provider, {});
   ok('anónimos desactivados: error claro y sin filas', !r.ok && /anónimos están desactivados/.test(r.error) && rows.length === 0, r);
