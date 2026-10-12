@@ -24,6 +24,8 @@ async def main():
                 if not state['anon']: return await route.fulfill(status=422, content_type='application/json', body='{"msg":"Anonymous sign-ins are disabled"}', headers=CORS)
                 state['users'] += 1; state['body'] = r.post_data
                 return await route.fulfill(status=200, content_type='application/json', headers=CORS, body=json.dumps({'access_token': 't1', 'refresh_token': 'r-1', 'expires_in': 3600, 'user': {'id': 'u1', 'is_anonymous': True}}))
+            if u.path == '/auth/v1/user' and r.method == 'GET':
+                return await route.fulfill(status=200, content_type='application/json', headers=CORS, body=json.dumps({'id': 'u7', 'email': 'enlace@empresa.com', 'is_anonymous': False}))
             if u.path == '/auth/v1/user' and r.method == 'PUT':
                 state['pending'] = json.loads(r.post_data)['email']
                 return await route.fulfill(status=200, content_type='application/json', headers=CORS, body=json.dumps({'id': 'u1', 'new_email': state['pending']}))
@@ -145,6 +147,14 @@ async def main():
         await q.uncheck('[data-action="cloud-auto-toggle"]'); await q.wait_for_timeout(600)
         n0 = len(rows); await q.evaluate("FP.app.storage.save('aliases',{rules:['z']})"); await q.wait_for_timeout(6000)
         chk('N30 apagada, ya no sube cambios', all('\"z\"' not in y['payload'] and '"z"' not in y['payload'] for y in rows if y['key'] == 'aliases'))
+        # ---- S3: retorno desde el enlace del correo ----
+        await q.goto(u + '#resumen'); await q.wait_for_timeout(500)
+        await q.goto(u + '#access_token=AT7&refresh_token=RT7&expires_in=3600&token_type=bearer&type=email_change'); await q.reload(); await q.wait_for_timeout(2500)
+        chk('N31 al volver del enlace abre Configuración con la Nube abierta y el hash limpio', 'access_token' not in (await q.evaluate('location.hash')) and await q.evaluate("document.getElementById('st-nube') && document.getElementById('st-nube').open"), await q.evaluate('location.hash'))
+        chk('N32 muestra la cuenta confirmada', 'enlace@empresa.com' in (await q.inner_text('#st-nube')), await q.inner_text('#cloud-msg'))
+        chk('N33 la sesión del enlace quedó guardada con su correo', await q.evaluate("JSON.parse(localStorage.getItem('fp.cloudSession')).email") == 'enlace@empresa.com')
+        await q.goto(u + '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid'); await q.reload(); await q.wait_for_timeout(2500)
+        chk('N34 enlace vencido: lo explica sin romper la app', 'venció' in (await q.inner_text('#st-nube')) or 'ya se usó' in (await q.inner_text('#st-nube')), (await q.inner_text('#st-nube'))[:300])
         await q.goto(u + '#resumen'); await q.wait_for_timeout(1800)
         chk('N12 tras recargar la app arranca con los datos restaurados', await q.evaluate("FP.dataStore.allBatches(FP.app.state.store).length > 0"))
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(1000)

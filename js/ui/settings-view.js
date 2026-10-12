@@ -168,12 +168,12 @@
     const who = s ? (s.email ? `cuenta de <strong>${esc(s.email)}</strong> (correo verificado)` : `anónima activa (${esc(String(s.userId || '').slice(0, 8))}…) · <strong>sin correo vinculado</strong>`) : 'aún no hay sesión; se crea sola al subir';
     let account = '';
     if (au.step) {
-      account = `<div class="field"><label class="field__hint" for="cloud-code">Código de 6 dígitos enviado a ${esc(au.email)}</label>
+      account = `<div class="field"><label class="field__hint" for="cloud-code">Si el correo a ${esc(au.email)} trae un código, escríbelo aquí (si trae un enlace, solo tócalo)</label>
           <input id="cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" data-draft placeholder="123456"></div>
         <div class="btn-row"><button type="button" class="btn btn--primary" data-action="cloud-code-confirm" ${dis}>Confirmar código</button>
           <button type="button" class="btn btn--small" data-action="cloud-auth-cancel" ${dis}>Cancelar</button></div>`;
     } else if (!(s && s.email)) {
-      account = `<div class="field"><label class="field__hint" for="cloud-email">Tu correo (para no perder la copia al borrar el navegador o cambiar de equipo)</label>
+      account = `<div class="field"><label class="field__hint" for="cloud-email">Tu correo (para no perder la copia al borrar el navegador o cambiar de equipo; te llegará un enlace de confirmación)</label>
           <input id="cloud-email" type="email" autocomplete="email" data-draft placeholder="tu@correo.com"></div>
         <div class="btn-row"><button type="button" class="btn" data-action="cloud-link-send" ${dis} ${s && s.anonymous ? '' : 'disabled'}>Vincular mi correo</button>
           <button type="button" class="btn" data-action="cloud-login-send" ${dis}>Entrar con mi correo</button></div>

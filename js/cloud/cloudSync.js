@@ -99,10 +99,10 @@
 
 
   /* ---------- Cuenta con correo (código de 6 dígitos) ---------- */
-  async function authCall(path, { method = 'POST', body, session, fetchImpl, loginCtx } = {}) {
+  async function authCall(path, { method = 'POST', body, session, fetchImpl, loginCtx, redirectTo } = {}) {
     const f = fetchImpl || root.fetch.bind(root);
     const headers = authHeaders(session ? { Authorization: `Bearer ${session.access_token}` } : {});
-    let res; try { res = await f(`${cfg().url}/auth/v1/${path}`, { method, headers, body: JSON.stringify(body || {}) }); }
+    let res; try { res = await f(`${cfg().url}/auth/v1/${path}${redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : ''}`, { method, headers, body: JSON.stringify(body || {}) }); }
     catch (e) { return { ok: false, error: 'No se pudo conectar con Supabase (sin conexión o bloqueado).' }; }
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -120,7 +120,7 @@
     const se = await ensureSession(Object.assign({}, opts, { noCreate: true }));
     if (!se.ok) return { ok: false, error: 'Primero sube una copia (se crea la sesión) y luego vincula tu correo.' };
     if (!se.session.anonymous) return { ok: false, error: 'Esta sesión ya tiene un correo vinculado.' };
-    const r = await authCall('user', { method: 'PUT', body: { email }, session: se.session, fetchImpl: opts && opts.fetchImpl });
+    const r = await authCall('user', { method: 'PUT', body: { email }, session: se.session, fetchImpl: opts && opts.fetchImpl, redirectTo: redirectUrl() });
     if (!r.ok) return r;
     if (!r.json.new_email) return { ok: false, error: 'Supabase no pidió confirmar el correo (la opción «Confirm email» está apagada), así que no se enviará código. Actívala en Authentication → Sign In / Providers → Email y vuelve a intentar.' };
     return { ok: true, email };
@@ -138,7 +138,7 @@
     if (!validEmail(email)) return { ok: false, error: 'Escribe un correo válido.' };
     const cp = await getCaptchaToken(opts); if (!cp.ok) return { ok: false, error: cp.error };
     const body = { email, create_user: false }; if (cp.token) body.gotrue_meta_security = { captcha_token: cp.token };
-    const r = await authCall('otp', { body, fetchImpl: opts && opts.fetchImpl, loginCtx: true });
+    const r = await authCall('otp', { body, fetchImpl: opts && opts.fetchImpl, loginCtx: true, redirectTo: redirectUrl() });
     return r.ok ? { ok: true, email } : r;
   }
   async function loginConfirm(email, code, opts) {
@@ -146,6 +146,34 @@
     if (!r.ok) return r;
     if (!r.json.access_token) return { ok: false, error: 'Supabase no devolvió una sesión. Pide un código nuevo.' };
     const sess = toSession(r.json); sess.anonymous = false; saveSession(sess); return { ok: true, session: sess };
+  }
+
+
+  /** A dónde vuelve Supabase tras tocar el enlace del correo (debe estar en «Redirect URLs» del proyecto). */
+  function redirectUrl() { try { return root.location && /^https?:/.test(root.location.protocol) ? root.location.origin + root.location.pathname : undefined; } catch (e) { return undefined; } }
+
+  /**
+   * Si la página se abrió desde el enlace de un correo de Supabase, la URL trae la sesión en el hash
+   * (#access_token=…&refresh_token=…&type=…) o un error (#error_description=…). Se consume, se guarda la sesión y se limpia el hash.
+   * Devuelve null (no es un retorno de correo), { ok:true, session, type } o { ok:false, error }.
+   */
+  async function consumeAuthHash(opts) {
+    const loc = root.location; if (!loc || !loc.hash || loc.hash.length < 10) return null;
+    const p = new URLSearchParams(loc.hash.replace(/^#/, ''));
+    const clean = () => { try { root.history.replaceState(null, '', loc.pathname + loc.search + '#ajustes'); } catch (e) { /* sin history */ } };
+    if (p.get('error') || p.get('error_code') || p.get('error_description')) {
+      clean(); const code = p.get('error_code') || '';
+      return { ok: false, error: code === 'otp_expired' ? 'El enlace del correo ya venció o ya se usó. Pide uno nuevo.' : `Supabase rechazó el enlace${p.get('error_description') ? ': ' + p.get('error_description').replace(/\+/g, ' ') : '.'}` };
+    }
+    if (!p.get('access_token') || !p.get('refresh_token')) return null;
+    const f = (opts && opts.fetchImpl) || root.fetch.bind(root), at = p.get('access_token');
+    let user = null;
+    try { const res = await f(`${cfg().url}/auth/v1/user`, { method: 'GET', headers: authHeaders({ Authorization: `Bearer ${at}` }) }); if (res.ok) user = await res.json(); } catch (e) { /* sin red */ }
+    clean();
+    if (!user || !user.id) return { ok: false, error: 'Abriste el enlace del correo, pero no pude confirmar la cuenta con Supabase. Intenta de nuevo.' };
+    const sess = toSession({ access_token: at, refresh_token: p.get('refresh_token'), expires_in: Number(p.get('expires_in')) || 3600, expires_at: Number(p.get('expires_at')) || undefined, user });
+    sess.anonymous = !!user.is_anonymous && !user.email; saveSession(sess);
+    return { ok: true, session: sess, type: p.get('type') || '' };
   }
 
   /* ---------- REST ---------- */
@@ -278,5 +306,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { autoOn, setAuto, isAutoKey, pushKeys, pullNewer, linkEmailStart, linkEmailConfirm, loginStart, loginConfirm, validEmail, getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
+  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, linkEmailStart, linkEmailConfirm, loginStart, loginConfirm, validEmail, getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
