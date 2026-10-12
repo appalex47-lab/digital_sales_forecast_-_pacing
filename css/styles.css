@@ -1275,3 +1275,13 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 /* Fase 32 — ejes explícitos de Lectura de Entidad */
 .trend-chart__axis-line{stroke:var(--border,#cbd5e1);stroke-width:1}
 .trend-chart__tick{stroke:var(--border,#cbd5e1);stroke-width:1}
+
+/* Supuestos de arranque: el cuerpo no debe ensancharse más que la pantalla (las tablas desplazan por dentro) */
+#startup-assumptions .ds-accordion__body { grid-template-columns: minmax(0, 1fr); }
+#startup-assumptions .ds-accordion__body > * { min-width: 0; }
+@media (max-width: 600px) {
+  .ss-recon table { min-width: 0; width: 100%; table-layout: auto; }
+  .ss-recon th, .ss-recon td { padding: 8px 6px; white-space: normal; overflow-wrap: break-word; font-size: 13px; }
+  .ss-recon .chip { white-space: nowrap; overflow-wrap: normal; }
+  .ss-recon td.num, .ss-recon th.num { white-space: nowrap; }
+}

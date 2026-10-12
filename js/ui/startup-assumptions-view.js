@@ -92,7 +92,7 @@
       <h4 class="h4">3 · ¿Todo cuadra con tu Meta anual total? ${chip(!warn && near(sumDays), 'Cuadra', 'Revisar')}</h4>
       <p class="field__hint">Cambies lo que cambies arriba (días fuertes, eventos, AOV, CR), la venta del plan siempre debe sumar tu <strong>Meta anual total</strong>. Esta tabla lo comprueba en vivo con el plan que se generaría hoy.</p>
       ${warn}
-      <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Concepto</th><th class="num">Valor</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="table-wrap ss-recon"><table class="table ds-table"><thead><tr><th>Concepto</th><th class="num">Valor</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table></div>
       <details class="disclosure"><summary>Ver cómo queda mes a mes (la venta suma ${esc(money(T))})</summary>
         <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Mes</th><th class="num">Venta</th><th class="num">% del año</th><th class="num">Pedidos</th><th class="num">Tráfico</th></tr></thead><tbody>${monthRows}
           <tr><td><strong>Total</strong></td><td class="num"><strong>${money(months.reduce((a, m) => a + m.rev, 0))}</strong></td><td class="num"><strong>${F.percent(months.reduce((a, m) => a + m.rev, 0) / T, 1)}</strong></td><td></td><td></td></tr></tbody></table></div></details>
