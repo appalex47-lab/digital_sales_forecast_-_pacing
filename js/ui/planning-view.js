@@ -90,10 +90,10 @@
         <div><dt>Generado</dt><dd class="num">${esc(a.generatedAt.slice(0, 16).replace('T', ' '))} · ${esc(a.algorithmVersion)}</dd></div>
       </dl>
       ${usesAssumptions(plan) ? `<div class="ds-alert ds-alert--info" role="note"><span class="chip">Supuesto</span> <strong>Este plan usa supuestos de arranque</strong> (${assumptionParts(plan).join(' y ')}). Se afinarán con tu venta real: la app te propondrá reemplazarlos, nunca lo hace sola.
-        <a href="#configuracion" data-nav="configuracion">Revisar supuestos de arranque</a></div>` : ''}
+        <a href="${FP.startupAssumptionsView.hasData(state) ? '#configuracion' : '#resumen'}" data-nav="${FP.startupAssumptionsView.hasData(state) ? 'configuracion' : 'resumen'}">Revisar supuestos de arranque</a></div>` : ''}
       ${isPreview && !hasOriginal && !hp.firstDate ? `<div class="ds-alert ds-alert--warning" role="note"><strong>Todavía no hay histórico.</strong>
         Si guardas ahora el plan original, se congela sin volumen, AOV ni CR proyectados y ya no se puede rehacer (después solo se guardan revisiones).
-        Carga el histórico primero si quieres esos indicadores, o captura tus supuestos de AOV y CR en <a href="#configuracion" data-nav="configuracion">Configuración de planeación</a>. <a href="#carga" data-nav="carga">Ir a Carga de datos</a></div>` : ''}
+        Carga el histórico primero si quieres esos indicadores, o captura tus supuestos de AOV y CR en <a href="#resumen" data-nav="resumen">Metas y motor</a>. <a href="#carga" data-nav="carga">Ir a Carga de datos</a></div>` : ''}
       ${isPreview ? `<div class="btn-row">
         <button type="button" class="btn btn--primary" data-action="plan-save">${hasOriginal ? 'Guardar como revisión' : 'Guardar como plan distribuido original'}</button>
         <button type="button" class="btn" data-action="plan-discard">Descartar vista previa</button></div>

@@ -470,6 +470,8 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 
 **Qué cambia.** Planear sin histórico ni venta real deja de ser solo «parejo por días». La persona puede declarar una forma estándar (día de la semana y eventos), un AOV general que se reparte a los canales según su meta, y el CR por canal con su origen. Todo es supuesto del usuario y se marca así en el plan.
 
+**Dónde.** En «Metas y motor», debajo de las metas, solo mientras no haya histórico ni venta real; con datos pasa plegada a «Configuración de planeación».
+
 **Reglas.** El histórico siempre manda; la forma estándar solo actúa en el componente del método que no tenga histórico. Los planes ya guardados no cambian (el plan original sigue congelado). Sin configurar nada, el resultado es idéntico al anterior.
 
 **Límites conocidos.** Con un canal que tenga AOV histórico, ese canal se trata como fijo (su AOV histórico) y el ajuste solo reparte entre los demás. No hay benchmarks incluidos. No se aplican factores de día del mes ni de temporada (las temporadas se capturan como eventos con rango).
