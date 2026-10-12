@@ -2727,3 +2727,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - UI: Configuración → Avanzado → «Nube (Supabase) · prueba». Nada se pide a Supabase al abrir la app.
 - Tests: `tools/test-cloud-sync.js` (Supabase simulado con RLS), `tools/regression/batch_cloud_s1.py`.
 - Limitación conocida: una sesión anónima se pierde al borrar datos del navegador o cambiar de equipo (S3: vincular correo/Google).
+
+## Fase S2/S3 — Cuenta con correo y sincronización automática de lo liviano
+
+- **S3 (cuenta):** `FP.cloud.linkEmailStart/Confirm` (PUT `/auth/v1/user` + verify `email_change`) convierte la sesión anónima en cuenta con correo conservando el mismo `user_id` (y por tanto su copia). `loginStart/Confirm` (`/otp` con `create_user:false` + verify `email`) entra desde otro equipo. Requiere en Supabase: «Confirm email» activo y `{{ .Token }}` en las plantillas «Change Email Address» y «Magic Link». Si «Confirm email» está apagado, la app lo detecta (la respuesta no trae `new_email`) y no promete código. `/otp` lleva token de Turnstile si hay Site Key.
+- **S2 (auto-sync, opt-in):** casilla en el panel Nube (`fp.cloudAuto` en localStorage, fuera del namespace). Solo claves chicas: no `dataKeys`, no `skipKeys` (Cohere, sesión, migración) ni `autoSkipKeys` (`uxSettings`, `productSettings`). Subida con debounce (`autoDebounceMs`) vía `storage.save` envuelto; `updated_at` de la nube = `savedAt` del dato. Al abrir la app, ANTES de cargar estado, `pullNewer` trae solo lo más nuevo (gana la última escritura; mismo contenido = nada) y lo escribe conservando su `savedAt` (sin rebote). `businessContext` pide recarga (config.js lo lee antes de arrancar). No resuelve conflictos simultáneos reales (S5).
+- Tests: `tools/test-cloud-sync.js`, `tools/regression/batch_cloud_s1.py` (N1–N30).
