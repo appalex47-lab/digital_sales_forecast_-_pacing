@@ -24,9 +24,12 @@
   function authHeaders(extra) { return Object.assign({ apikey: cfg().publishableKey, 'Content-Type': 'application/json' }, extra || {}); }
   function explain(status, body) {
     const msg = (body && (body.msg || body.message || body.error_description || body.error)) || '';
-    if (status === 422 || /anonymous/i.test(msg)) return 'Los inicios anónimos están desactivados en Supabase (Authentication → Sign In / Providers → Allow anonymous sign-ins).';
+    const code = (body && (body.error_code || body.code)) || '';
+    if (code === 'signup_disabled' || /signups? not allowed/i.test(msg)) return 'Supabase tiene apagado el registro de usuarios (Authentication → Sign In / Providers → User Signups → «Allow new users to sign up»). Los inicios anónimos también lo necesitan. Actívalo y guarda.';
+    if (code === 'anonymous_provider_disabled' || /anonymous sign-ins are disabled/i.test(msg)) return 'Los inicios anónimos están desactivados en Supabase (Authentication → Sign In / Providers → Allow anonymous sign-ins). Actívalos y guarda con «Save changes».';
+    if (code === 'captcha_failed' || /captcha/i.test(msg)) return 'Supabase pide CAPTCHA y esta versión de la app todavía no lo envía. Desactiva CAPTCHA en Supabase hasta que lo publiquemos.';
     if (status === 429) return 'Supabase limitó los intentos por ahora. Espera unos minutos.';
-    return `Supabase respondió ${status}${msg ? ': ' + msg : ''}.`;
+    return `Supabase respondió ${status}${code ? ` (${code})` : ''}${msg ? ': ' + msg : ''}.`;
   }
 
   async function signInAnonymously(fetchImpl) {
