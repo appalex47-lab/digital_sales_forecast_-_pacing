@@ -24,7 +24,7 @@ def truth(ch):
     a = [vals(ch, d) for d in DAYS if d.month == 8 and d.day <= 22]; b = [vals(ch, d) for d in DAYS if d.month == 9]
     T0, O0, R0 = (sum(x[i] for x in a) for i in range(3)); T1, O1, R1 = (sum(x[i] for x in b) for i in range(3))
     c0, c1, k0, k1 = O0 / T0, O1 / T1, R0 / O0, R1 / O1
-    return dict(traffic=(T1 - T0) * c0 * k0, cr=T1 * (c1 - c0) * k0, aov=T1 * c1 * (k1 - k0), delta=R1 - R0, R0=R0, R1=R1)
+    return dict(traffic=(T1 - T0) * c0 * k0, cr=T1 * (c1 - c0) * k0, aov=T1 * c1 * (k1 - k0), delta=R1 - R0, R0=R0, R1=R1, T0=T0, T1=T1, O0=O0, O1=O1, c0=c0, c1=c1, k0=k0, k1=k1)
 SEG = 'fecha,canal,dimension,segmento,venta,pedidos,traffic_volume\n' + '\n'.join(
     f'{d},ecommerce,landing,{s},{o * (400 if d.month == 8 else 340)},{o},{t}' for d in DAYS for s, t, o in
     [('/home', 900 if d.month == 8 else 700, 30), ('/ofertas', 500, 15), ('/raro', 100 if d.month == 8 else 600, 0)]) + '\n'
@@ -55,7 +55,7 @@ async def main():
         # 1 · Ecommerce: efectos = cálculo aparte
         await q.select_option('#home-ch', 'ecommerce'); await q.wait_for_timeout(900)
         T = truth('ecommerce')
-        vv = await ev("[...document.querySelectorAll('#hs-why .sgd-wf__val')].map(e=>e.innerText.trim())")
+        vv = await ev("[...document.querySelectorAll('#hs-why [data-basis=previous] .sgd-wf__val')].map(e=>e.innerText.trim())")
         chk('H1 cascada Ecommerce = tráfico, conversión, ticket y total del cálculo aparte', vv == [money(T['traffic']), money(T['cr']), money(T['aov']), money(T['delta'])], (vv, T))
         chk('H1b los tres efectos suman el cambio de venta (cálculo aparte)', abs(T['traffic'] + T['cr'] + T['aov'] - T['delta']) < 1e-6)
         t = await txt('#hs-why'); chk('H1c días: «Compara 22 de 22 días por canal»', 'Compara 22 de 22 días por canal' in t, t[-300:])
@@ -109,11 +109,23 @@ async def main():
         chk('H11 «Lo esencial» se ve y los 6 «Ver más» vienen cerrados (7 tarjetas, cascada, segmentos, canales, confianza, recorrido)', st['n'] == 6 and st['open'] == 0 and st['key'] and st['nowHidden'], st)
         kv = await ev("(()=>{const c=[...document.querySelectorAll('#h-now')][0].closest('section'); const card=l=>[...c.querySelectorAll('.metric-card')].find(x=>x.querySelector('.metric-card__label').textContent.trim()===l).querySelector('.metric-card__value').textContent.trim(); return {cum:card('Cumplimiento'), fc:card('Forecast'), big:document.querySelector('.home-key__big').textContent.trim(), keytxt:document.querySelector('[data-key=how]').innerText.replace(/\\s+/g,' ')}})()")
         chk('H12 «¿Cómo voy?» = tarjetas de «Todas las cifras» (cumplimiento y forecast)', kv['big'] == kv['cum'] and kv['fc'].replace(' ', '') in kv['keytxt'].replace(' ', ''), kv)
-        eff = await ev("(()=>({key:(document.querySelector('[data-key=why] [data-why-basis=previous]')||{textContent:''}).textContent.match(/[+−]\\$[\\d,]+/g)||[], wf:[...document.querySelectorAll('#hs-why .sgd-wf__val')].map(e=>e.textContent.trim()).slice(0,3)}))()")
+        eff = await ev("(()=>({key:(document.querySelector('[data-key=why] [data-why-basis=previous]')||{textContent:''}).textContent.match(/[+−]\\$[\\d,]+/g)||[], wf:[...document.querySelectorAll('#hs-why [data-basis=previous] .sgd-wf__val')].map(e=>e.textContent.trim()).slice(0,3)}))()")
         chk('H13 «¿Por qué?» de lo esencial: la línea contra el periodo anterior = cascada de «Por qué cambió la venta»', eff['key'][-3:] == eff['wf'] and len(eff['wf']) == 3, eff)
         pl = await ev("(()=>{const num=t=>{const m=String(t).match(/([+−-])?\\$([\\d,]+)/);return m?(m[1]&&m[1]!=='+'?-1:1)*+m[2].replace(/,/g,''):null}; const vals=[...document.querySelectorAll('[data-key=why] [data-why-basis=plan]')].length?[...document.querySelectorAll('[data-key=why] .home-key__list b')].map(b=>num(b.textContent)):[]; const gapLi=[...document.querySelectorAll('[data-key=how] .home-key__list li')].find(l=>l.textContent.trim().startsWith('Gap')); return {vals, gap: gapLi?num(gapLi.querySelector('b').textContent):null, head:(document.querySelector('[data-why-basis=plan]')||{textContent:''}).textContent}})()")
         chk('H13b «¿Por qué?» principal es contra el PLAN: tráfico + conversión + ticket = el Gap de «¿Cómo voy?»', len(pl['vals']) == 3 and pl['gap'] is not None and abs(sum(pl['vals']) - pl['gap']) <= 2, pl)
         chk('H13c el recuadro dice explícitamente contra qué compara (plan y periodo anterior)', 'Contra el plan' in pl['head'] and await ev("document.querySelector('[data-why-basis=previous]') ? document.querySelector('[data-why-basis=previous]').textContent : ''") != '', pl['head'])
+        T = truth('ecommerce')
+        tb = await ev("(()=>{const r={}; document.querySelectorAll('#hs-why [data-basis=previous] table.why-cmp tbody tr').forEach(tr=>{r[tr.dataset.met]=[...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\\s+/g,' ').trim())}); return r})()")
+        num = lambda t: float(t.replace('$', '').replace(',', '').replace('%', '').replace('+', '').replace('−', '-').split(' ')[0])
+        chk('H14 tabla de comparación: sesiones base y actual = cálculo aparte', tb.get('sessions') and abs(num(tb['sessions'][0]) - T['T0']) < 1 and abs(num(tb['sessions'][1]) - T['T1']) < 1, (tb.get('sessions'), T['T0'], T['T1']))
+        chk('H14b conversión base y actual (% con 2 decimales) = cálculo aparte', tb.get('cr') and abs(num(tb['cr'][0]) - T['c0'] * 100) < 0.006 and abs(num(tb['cr'][1]) - T['c1'] * 100) < 0.006, (tb.get('cr'), T['c0'] * 100, T['c1'] * 100))
+        chk('H14c ticket base y actual = cálculo aparte', tb.get('aov') and abs(num(tb['aov'][0]) - T['k0']) < 1 and abs(num(tb['aov'][1]) - T['k1']) < 1, (tb.get('aov'), T['k0'], T['k1']))
+        chk('H14d venta base y actual y los efectos de la tabla suman el cambio', tb.get('revenue') and abs(num(tb['revenue'][0]) - T['R0']) < 1 and abs(num(tb['revenue'][1]) - T['R1']) < 1 and abs(sum(num(tb[k][3]) for k in ('sessions', 'cr', 'aov')) - num(tb['revenue'][3])) <= 2, tb)
+        chk('H14e el cambio % de sesiones = cálculo aparte', tb.get('sessions') and abs(num(tb['sessions'][2]) - (T['T1'] / T['T0'] - 1) * 100) < 0.06, (tb.get('sessions'), (T['T1'] / T['T0'] - 1) * 100))
+        pt = await ev("(()=>{const r={}; document.querySelectorAll('#hs-why [data-basis=plan] table.why-cmp tbody tr').forEach(tr=>{r[tr.dataset.met]=[...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\\s+/g,' ').trim())}); return {rows:r, heads:[...document.querySelectorAll('#hs-why [data-basis=plan] table.why-cmp thead th')].map(t=>t.textContent.trim())}})()")
+        chk('H15 sección «Contra el plan» con tabla Plan/Real y sus efectos suman el cambio', pt['heads'][1].startswith('Plan') and pt['heads'][2] == 'Real' and abs(sum(num(pt['rows'][k][3]) for k in ('sessions', 'cr', 'aov')) - num(pt['rows']['revenue'][3])) <= 2, pt)
+        kc = await ev("(()=>({plan:[...document.querySelectorAll('[data-key=why] [data-cmp]')].map(e=>e.textContent.trim()), prev:(document.querySelector('[data-key=why] [data-why-prev-cmp]')||{textContent:''}).textContent.trim()}))()")
+        chk('H16 la tarjeta de Inicio muestra de dónde a dónde (Plan → Real y periodo anterior → actual)', len(kc['plan']) == 3 and all(x.startswith('Plan ') and ' → Real ' in x for x in kc['plan']) and kc['prev'].count('→') == 3, kc)
         await q.evaluate("document.querySelector('details[data-home-more=channels]').open=true"); await q.wait_for_timeout(200)
         await q.select_option('#home-ch', 'app'); await q.wait_for_timeout(900)
         op = await q.evaluate("document.querySelector('details[data-home-more=channels]').open"); chk('H14 al cambiar de canal, lo que la persona abrió sigue abierto', op is True, op)

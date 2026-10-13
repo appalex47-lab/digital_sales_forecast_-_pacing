@@ -31,7 +31,8 @@
       annual: s.annual ? { plan: pickBlock(s.annual.plan), actualToDate: pickBlock(s.annual.actualToDate), planToDate: pickBlock(s.annual.planToDate),
         forecast: pickBlock(s.annual.forecast), forecastGapRevenue: s.annual.forecastGap.revenue } : null,
       months: s.months.map((m) => ({ key: m.key, status: m.status, plan: pickBlock(m.plan), actualToDate: pickBlock(m.actualToDate), forecast: pickBlock(m.forecast) })),
-      confidence: s.confidence || null
+      confidence: s.confidence || null,                       // legado: mide suficiencia del histórico, NO precisión
+      historyAdequacy: s.historyAdequacy || null              // mismo dato con nombre honesto (aditivo, compatible)
     };
   }
 

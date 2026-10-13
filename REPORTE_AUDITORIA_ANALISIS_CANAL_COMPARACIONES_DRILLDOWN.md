@@ -526,3 +526,8 @@ Cobertura: `batch_head9.py` (H7, H8) y `batch_menuq8.py`.
 - **Hallazgo:** en Inicio, «¿Cómo voy?» (cumplimiento, Gap) compara contra el PLAN, pero «¿Por qué?» descomponía el cambio contra el PERIODO ANTERIOR (`actual_vs_previous`). Diagnóstico → Driver Nivel 1 usa Plan vs Actual. Resultado: signos opuestos legítimos (conversión +$373,729 vs plan y −$1,004,787 vs septiembre) sin que la tarjeta dijera la base.
 - **Corrección:** `homeSummaryEngine.whyPlan` (Nivel 1 de `driverEngine`, mismo método que Diagnóstico) alimenta el bloque principal de «¿Por qué?» contra el plan; la lectura contra el periodo anterior queda como línea rotulada y, si el signo de la conversión difiere, una nota lo explica. «Ver más → Por qué cambió la venta» no cambia (sigue contra el periodo anterior, rotulado).
 - **Pruebas:** `batch_home_summary.py` H13 (línea del periodo anterior = cascada), H13b (tráfico + conversión + ticket = Gap de «¿Cómo voy?»), H13c (el recuadro nombra su base).
+
+## Adenda 33 — Indicadores de comparación en «¿Por qué?» (2026-10-12)
+- **Pedido:** la tarjeta y las cascadas decían solo «cayó/subió» sin mostrar contra qué ni cuánto.
+- **Cambio:** cada driver (sesiones, conversión, ticket, venta) muestra valor base → valor actual y variación %. «Ver más» ahora tiene dos secciones rotuladas con su base: «Contra el plan» (Plan/Real, cascada de `whyPlan`) y «Contra <mes anterior> (mismos días)» (cascada de periodo anterior, con tabla Sesiones/CR/Ticket). La tarjeta de Inicio repite ambos con `data-cmp`. `whyPlan` y `why` exponen `metrics {base, cur}` y `drivers[].baseline/current/deltaPct`.
+- **Pruebas:** `batch_home_summary.py` H14–H16.

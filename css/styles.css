@@ -1298,3 +1298,10 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 /* Alertas de pacing: etiquetas del mismo ancho para que el texto quede alineado */
 #fc-alerts .alert-list .pill { min-width: 9.5rem; justify-content: flex-start; }
 @media (max-width: 600px) { #fc-alerts .alert-list .pill { min-width: 0; } #fc-alerts .alert-list li { flex-wrap: wrap; } }
+
+/* Inicio · «Por qué»: dos bases de comparación (plan y periodo anterior) con su tabla de métricas */
+.why-basis { margin: 0 0 var(--sp-5, 1.25rem); }
+.why-basis + .why-basis { padding-top: var(--sp-4, 1rem); border-top: 1px solid var(--c-border, #e2e8f0); }
+.why-basis .ds-h4 { margin: 0 0 var(--sp-2, .5rem); }
+.why-cmp td.is-neg, .why-cmp td.is-pos { font-weight: 600; }
+.home-key__sub[data-cmp] { display: block; }

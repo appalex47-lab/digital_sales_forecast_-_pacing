@@ -239,7 +239,9 @@
           <div class="field"><label for="dx-key-input" class="field__hint">API key de Cohere</label>
             <input id="dx-key-input" type="password" autocomplete="off" value="${esc(ai.apiKey || '')}" data-action="dx-key" placeholder="Pega tu API key"></div>
           <div class="field field--check"><label><input type="checkbox" data-action="dx-remember" ${ai.rememberKey ? 'checked' : ''}> Recordar la key en este navegador</label>
-            <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta. Cualquiera con acceso a este navegador podría verla.</span></div>
+            <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta ni se sube a la nube. Cualquiera con acceso a este navegador podría verla.</span></div>
+          <div class="note note--warning"><strong>Límite de seguridad.</strong> Esta app corre completa en tu navegador: una API key guardada aquí <em>no es un secreto seguro</em>. Cualquier extensión, script del mismo sitio o persona con acceso a este equipo puede leerla; ocultarla o codificarla no lo evita. Úsala solo en equipos personales, no la recuerdes en equipos compartidos y crea en Cohere una key propia con límite de gasto que puedas revocar. La protección completa requiere un servidor intermedio (proxy) que guarde la key; esta app no lo tiene.</div>
+          <div class="btn-row"><button type="button" class="btn btn--small" data-action="dx-key-clear" ${ai.apiKey ? '' : 'disabled'}>Quitar la key de este navegador</button></div>
           <div class="field"><label for="dx-model" class="field__hint">Modelo</label>
             <input id="dx-model" type="text" value="${esc(ai.model)}" data-action="dx-model"></div>
         </div>

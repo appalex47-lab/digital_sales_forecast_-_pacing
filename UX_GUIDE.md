@@ -687,3 +687,6 @@ Configuración → Avanzado → «Nube (Supabase) · prueba»: «Subir copia a l
 
 ## Nube: cuenta y sincronización automática
 En «Nube (Supabase)»: **Vincular mi correo** (te llega un código de 6 dígitos; la copia queda ligada a tu correo) y **Entrar con mi correo** (otro equipo o tras borrar el navegador, luego «Restaurar»). La casilla **Sincronizar automáticamente metas, supuestos y ajustes** sube sola lo liviano y al abrir trae lo más nuevo; apagada por defecto.
+
+## Inicio: «¿Por qué?» con indicadores
+Cada driver muestra «base → actual (Δ%)». Se leen dos bases por separado: contra el plan y contra el periodo anterior en los mismos días; los títulos de «Ver más» indican la base.

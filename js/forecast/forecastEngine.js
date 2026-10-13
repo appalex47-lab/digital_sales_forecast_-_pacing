@@ -149,6 +149,16 @@
     return 'limited';
   }
 
+  /**
+   * Suficiencia del histórico: lo que `forecastConfidence` mide realmente (días comparables), sin sugerir precisión.
+   * excellent/sufficient → 'sufficient'; limited → 'limited'; insufficient → 'insufficient'; método A (no usa índices) → null.
+   * `confidence` se conserva por compatibilidad (versiones guardadas y exports); la interfaz usa `historyAdequacy`.
+   */
+  function historyAdequacy(confidence) {
+    if (!confidence) return null;
+    return confidence === 'excellent' ? 'sufficient' : confidence;
+  }
+
   /** Resumen de un conjunto de filas agrupado por una llave (mes o semana). */
   function groupSummaries(rows, keyOf, cutoff) {
     const groups = new Map();
@@ -181,7 +191,7 @@
     });
     const confidence = forecastConfidence(methodId, mi, rows);
     return {
-      days, months, weeks, annual, indices, confidence,
+      days, months, weeks, annual, indices, confidence, historyAdequacy: historyAdequacy(confidence),
       assumptions: FM().describeAssumptions(methodId, mi, cfg),
       projectedDays: proj.filter((p) => p.source !== 'actual').length,
       fallbackDays: proj.filter((p) => p.fallback).length,
@@ -197,7 +207,7 @@
     const days = rows.map((r, i) => ({ ...r, forecast: proj[i].forecast }));
     const annual = P().summarizePeriod(days, cutoff);
     return { methodId, annual, forecastByDay: proj.map((p) => p.forecast), assumptions: FM().describeAssumptions(methodId, mi, cfg),
-      confidence: forecastConfidence(methodId, mi, rows), fallbackDays: proj.filter((p) => p.fallback).length };
+      confidence: forecastConfidence(methodId, mi, rows), historyAdequacy: historyAdequacy(forecastConfidence(methodId, mi, rows)), fallbackDays: proj.filter((p) => p.fallback).length };
   }
 
   /* ---------- Alertas descriptivas ---------- */
@@ -343,6 +353,7 @@
       }),
       indices: totalIndices,
       confidence: worstConfidence(C().channelIds.map((ch) => channels[ch].confidence)),
+      historyAdequacy: historyAdequacy(worstConfidence(C().channelIds.map((ch) => channels[ch].confidence))),
       projectedDays: totalDays.filter((d) => d.forecastSource !== 'actual').length,
       fallbackDays: totalDays.filter((d) => d.fallback).length,
       missingActualDays: totalDays.filter((d) => d.closed && !d.counted).length
@@ -352,7 +363,8 @@
       const annual = P().strictAggregate(C().channelIds.map((ch) => comparison.byChannel[ch][m].annual && comparison.byChannel[ch][m].annual.forecast));
       const plan = totalAnnual ? totalAnnual.plan : null;
       comparison.total[m] = { methodId: m, forecast: annual, forecastGap: P().blockForecastGap(plan, annual),
-        confidence: worstConfidence(C().channelIds.map((ch) => comparison.byChannel[ch][m].confidence)) };
+        confidence: worstConfidence(C().channelIds.map((ch) => comparison.byChannel[ch][m].confidence)),
+        historyAdequacy: historyAdequacy(worstConfidence(C().channelIds.map((ch) => comparison.byChannel[ch][m].confidence))) };
     });
 
     const alerts = [
@@ -373,6 +385,86 @@
       events: eventSummaries(channels, tags, cutoff),
       alerts
     };
+  }
+
+  /* ---------- Backtesting reproducible (precisión real, no suficiencia del histórico) ---------- */
+
+  /**
+   * Backtesting sobre filas diarias `{ date, counted, plan, actual }` de UNA serie.
+   * Para cada fecha ancla T (la última, y hacia atrás cada `stepDays`) recalcula los índices solo con datos ≤ T,
+   * proyecta los `horizon` días siguientes con el método y compara contra la venta real de esos días.
+   * Es determinista: mismos datos y parámetros → mismo resultado. No toca el forecast vigente.
+   * Métricas sobre `metric` (venta por omisión): MAE, WAPE = Σ|F−A| / ΣA, sesgo = Σ(F−A) / ΣA (+ sobreestima, − subestima)
+   * y el mismo WAPE del plan sin ajustar (referencia). Días con real = 0 cuentan en MAE/WAPE pero se reportan aparte.
+   * Devuelve `status: 'not_evaluated'` con motivo si hay menos de `minAnchors` anclas o `minDays` días evaluables.
+   */
+  function backtestRows(rows, { methodId, cfg, year, horizon = 7, metric = 'revenue', cache = null }) {
+    const b = cfg.backtest;
+    const empty = (reason) => ({ status: 'not_evaluated', reason, methodId, horizon, metric, anchors: 0, days: 0, mae: null, wape: null, biasPct: null, planWape: null, beatsPlan: null, zeroDays: 0 });
+    if (methodId === 'A') return empty('El método A usa el plan sin ajustar: su error es el del propio plan (ver «Plan sin ajustar»).');
+    const counted = rows.filter((r) => r.counted && r.actual && M().isFiniteNumber(r.actual[metric])).map((r) => r.date).sort();
+    if (!counted.length) return empty('No hay días con venta real.');
+    const addDays = (d, n) => Cal().toISODate(Cal().addDays(Cal().parseDate(d), n));
+    const last = counted[counted.length - 1];
+    const byDate = new Map(rows.map((r) => [r.date, r]));
+    const errs = []; let anchorsUsed = 0;
+    for (let k = 0; k < b.anchors; k++) {
+      const T = addDays(last, -(horizon + k * b.stepDays));
+      if (T < `${year}-01-01`) break;
+      let indices = cache ? cache.get(T) : null;
+      if (!indices) { indices = PI().calculateAllIndices(rows, { cutoff: T, year, settings: cfg }); if (cache) cache.set(T, indices); }
+      const mi = FM().methodIndices(methodId, indices, cfg);
+      let n = 0;
+      for (let i = 1; i <= horizon; i++) {
+        const r = byDate.get(addDays(T, i));
+        if (!r || !r.counted || !r.actual || !M().isFiniteNumber(r.actual[metric]) || !r.plan) continue;
+        const p = FM().projectDay(methodId, r.plan, mi);
+        if (!p.values || !M().isFiniteNumber(p.values[metric]) || !M().isFiniteNumber(r.plan[metric])) continue;
+        errs.push({ f: p.values[metric], a: r.actual[metric], plan: r.plan[metric] }); n++;
+      }
+      if (n) anchorsUsed++;
+    }
+    if (anchorsUsed < b.minAnchors) return empty(`Solo ${anchorsUsed} de ${b.minAnchors} cortes evaluables con horizonte de ${horizon} días: falta histórico con venta real.`);
+    if (errs.length < b.minDays) return empty(`Solo ${errs.length} días evaluables (mínimo ${b.minDays}).`);
+    const sumA = errs.reduce((s, e) => s + e.a, 0);
+    const abs = errs.reduce((s, e) => s + Math.abs(e.f - e.a), 0);
+    const signed = errs.reduce((s, e) => s + (e.f - e.a), 0);
+    const absPlan = errs.reduce((s, e) => s + Math.abs(e.plan - e.a), 0);
+    if (!(sumA > 0)) return empty('La venta real del periodo evaluado suma 0: el error relativo no es calculable.');
+    const wape = abs / sumA, planWape = absPlan / sumA;
+    return { status: 'evaluated', reason: null, methodId, horizon, metric, anchors: anchorsUsed, days: errs.length,
+      mae: abs / errs.length, wape, biasPct: signed / sumA, planWape, beatsPlan: wape < planWape,
+      zeroDays: errs.filter((e) => e.a === 0).length };
+  }
+
+  /**
+   * Backtesting por canal y horizonte con las mismas entradas que `runForecast`.
+   * Evalúa los métodos que ajustan por desempeño (B, C, D); el A es el plan sin ajustar y se usa como referencia (`planWape`).
+   * @returns { methodId (en uso), methods, byChannel: { [canal]: { [método]: { [horizonte]: resultado } } } }
+   */
+  function backtest(p) {
+    const cfg = effectiveConfig(p.settings || {});
+    const year = p.year;
+    const referenceDate = p.referenceDate || cfg.referenceDate || today();
+    const cutoff = P().cutoffDate(referenceDate, cfg.todayStatus);
+    const methodId = p.method || cfg.method;
+    const plans = planInputs({ year, planVersion: p.planVersion, dataset: p.dataset });
+    const actuals = actualInputs({ year, store: p.store, useHistoricalAsActual: cfg.useHistoricalAsActual });
+    const tagTypes = cfg.useHistoricalAsActual ? ['plan', 'actual', 'historical'] : ['plan', 'actual'];
+    const tagRecords = p.store ? tagTypes.flatMap((t) => FP.dataStore.records(p.store, t)) : [];
+    const tags = FP.planning.buildTags(year, { records: tagRecords, events: p.events || [] });
+    const methods = FM().METHOD_IDS.filter((m) => m !== 'A');
+    const out = { methodId, methods, referenceDate, cutoff, byChannel: {} };
+    C().channelIds.forEach((ch) => {
+      const rows = buildChannelRows({ year, ch, plans: plans.map, actuals, tags: tags[ch], referenceDate, cutoff });
+      const cache = new Map();
+      out.byChannel[ch] = {};
+      methods.forEach((m) => {
+        out.byChannel[ch][m] = {};
+        cfg.backtest.horizons.forEach((h) => { out.byChannel[ch][m][h] = backtestRows(rows, { methodId: m, cfg, year, horizon: h, metric: cfg.backtest.metric, cache }); });
+      });
+    });
+    return out;
   }
 
   function worstConfidence(list) {
@@ -409,5 +501,5 @@
   }
 
   FP.forecastEngine = { effectiveConfig, planInputs, actualInputs, buildChannelRows, buildTotalRows, projectRows,
-    runForecast, generateForecast, worstConfidence, buildAlerts };
+    runForecast, generateForecast, worstConfidence, buildAlerts, historyAdequacy, backtest, backtestRows };
 })(typeof window !== 'undefined' ? window : globalThis);

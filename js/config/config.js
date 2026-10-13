@@ -373,7 +373,9 @@
       /** Estado de pacing por cumplimiento: ≥ aboveFrom arriba; ≥ onPlanFrom en plan; menor, debajo. */
       pacingThresholds: { aboveFrom: 1.01, onPlanFrom: 0.99 },
       /** Alertas descriptivas. */
-      alerts: { streakDays: 5, recentVsCumulative: 0.05, forecastGapPct: 0.03 }
+      alerts: { streakDays: 5, recentVsCumulative: 0.05, forecastGapPct: 0.03 },
+      /** Backtesting reproducible del forecast (mide error real; la «suficiencia del histórico» NO es precisión). */
+      backtest: { horizons: [7, 14], anchors: 8, stepDays: 7, minAnchors: 3, minDays: 14, metric: 'revenue' }
     },
     /* ----- Fase 4: reforecast y recuperación ----- */
     reforecast: {
@@ -623,6 +625,8 @@
 
     confidenceLevels: ['excellent', 'sufficient', 'limited', 'insufficient'],
     confidenceLabels: { excellent: 'Excelente', sufficient: 'Suficiente', limited: 'Limitada', insufficient: 'Insuficiente' },
+    /** Forecast: lo que antes se llamaba «confianza» solo mide cuánto histórico comparable hay, no la precisión del pronóstico. */
+    historyAdequacyLabels: { sufficient: 'Histórico suficiente', limited: 'Histórico limitado', insufficient: 'Histórico insuficiente' },
     planValueSources: ['explicit_plan', 'user_target', 'historical_average', 'historical_seasonality', 'calculated', 'user_assumption', 'fallback', 'insufficient_data'],
 
     /* ----- Fase 1: carga, normalización y calidad ----- */

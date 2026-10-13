@@ -15,7 +15,7 @@
     fetchImpl = (typeof fetch !== 'undefined' ? fetch : null), timeoutMs = C().diagnostics.cohere.timeoutMs,
     temperature = C().diagnostics.cohere.temperature }) {
     // sent: false cuando NADA salió del navegador (sin key o sin red disponible): no se registra en el registro de transparencia
-    const fail = (status, msg, sent = true) => ({ ok: false, status, text: null, errors: [msg], sent, model });
+    const fail = (status, msg, sent = true, errorKind = null) => ({ ok: false, status, text: null, errors: [msg], sent, model, errorKind });
     // Si no se entrega explícitamente, reutiliza la conexión Cohere central de la app.
     // Así Diagnóstico, Narrativa, Recovery e Importación comparten exactamente la misma configuración.
     if (!apiKey && FP.cohereConnection && typeof FP.cohereConnection.get === 'function') {
@@ -40,11 +40,19 @@
       });
       if (timer) clearTimeout(timer);
     } catch (e) {
-      return fail('unavailable', `No se pudo conectar con Cohere (${e && e.name === 'AbortError' ? 'tiempo agotado' : 'red o permisos del navegador'}).`);
+      const timeout = e && e.name === 'AbortError';
+      return fail('unavailable', `No se pudo conectar con Cohere (${timeout ? 'tiempo agotado' : 'red o permisos del navegador'}).`, true, timeout ? 'timeout' : 'network');
     }
-    if (!res || !res.ok) return fail('unavailable', `Cohere respondió con error${res ? ` ${res.status}` : ''}.`);
+    if (!res || !res.ok) {
+      // Mensajes por tipo de error. Nunca se incluye la key ni el cuerpo de la respuesta (puede repetir datos enviados).
+      const code = res ? res.status : 0;
+      if (code === 401 || code === 403) return fail('unavailable', `Cohere rechazó la API key (${code}). Revísala o reemplázala en Configuración de RevNavigator.`, true, 'auth');
+      if (code === 429) return fail('unavailable', 'Se alcanzó el límite de uso de Cohere (429). Espera un momento o revisa la cuota de tu cuenta.', true, 'quota');
+      if (code >= 500) return fail('unavailable', `Cohere no está disponible en este momento (${code}). Intenta más tarde.`, true, 'server');
+      return fail('unavailable', `Cohere respondió con error${code ? ` ${code}` : ''}.`, true, 'http');
+    }
     let data;
-    try { data = await res.json(); } catch (e) { return fail('invalid', 'La respuesta de Cohere no es JSON.'); }
+    try { data = await res.json(); } catch (e) { return fail('invalid', 'La respuesta de Cohere no es JSON.', true, 'invalid'); }
     const text = data && data.message && Array.isArray(data.message.content) && data.message.content[0] ? data.message.content[0].text : null;
     return { ok: true, status: 'ok', text, errors: [], sent: true, model };
   }

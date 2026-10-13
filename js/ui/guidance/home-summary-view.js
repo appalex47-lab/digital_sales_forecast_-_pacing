@@ -25,32 +25,60 @@
     return { cur: `el año ${period.key}`, base: `el año ${+period.key - 1}` };
   };
 
+  const MET = [['revenue', 'Venta', null], ['sessions', 'Sesiones (tráfico)', 'traffic'], ['orders', 'Pedidos', null], ['cr', 'Conversión (CR)', 'cr'], ['aov', 'Ticket (AOV)', 'aov']];
+  const fmtMet = (k, v) => (!fin(v) ? '—' : k === 'sessions' || k === 'orders' ? F().integer(v) : k === 'cr' ? F().percent(v, 2) : F().currency(v, 0));
+  const relPct = (cur, base) => (fin(cur) && fin(base) && base !== 0 ? cur / base - 1 : null);
+  /** Tabla de comparación: cada métrica en las dos bases, su cambio y cuánto pesó en la venta (los efectos suman el cambio total). */
+  function cmpTable(m, eff, labels) {
+    const { esc } = H();
+    const rows = MET.map(([k, label, ek]) => {
+      const bv = m.base[k], cv = m.cur[k], rp = relPct(cv, bv);
+      const pp = k === 'cr' && fin(bv) && fin(cv) ? ` <span class="cell-sub">${(cv - bv) * 100 >= 0 ? '+' : '−'}${Math.abs((cv - bv) * 100).toFixed(2)} pp</span>` : '';
+      const ev = k === 'revenue' ? (eff ? eff.delta : cv - bv) : (ek && eff ? eff[ek] : null);
+      return `<tr data-met="${k}"><th scope="row">${esc(label)}</th><td class="num">${esc(fmtMet(k, bv))}</td><td class="num">${esc(fmtMet(k, cv))}</td>
+        <td class="num ${rp === null ? '' : rp < 0 ? 'is-neg' : rp > 0 ? 'is-pos' : ''}">${esc(fin(rp) ? F().signedPercent(rp, 1) : '—')}${pp}</td>
+        <td class="num ${fin(ev) ? (ev < -0.5 ? 'is-neg' : ev > 0.5 ? 'is-pos' : '') : ''}">${fin(ev) ? esc(sMoney(ev)) : '—'}</td></tr>`;
+    }).join('');
+    return `<div class="table-wrap"><table class="table ds-table why-cmp"><caption class="visually-hidden">Comparación de cada métrica entre ${esc(labels.base)} y ${esc(labels.cur)}</caption>
+      <thead><tr><th scope="col">Métrica</th><th scope="col" class="num">${esc(labels.base)}</th><th scope="col" class="num">${esc(labels.cur)}</th><th scope="col" class="num">Cambio</th><th scope="col" class="num">Efecto en la venta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
   function whyBlock(S, ctx) {
-    const { esc } = H(), w = S.why, pw = periodWord(S.period), chLbl = FP.navigation.contextLabel({ channel: S.channel });
-    const sub = `${esc(pw.cur.charAt(0).toUpperCase() + pw.cur.slice(1))} contra ${esc(pw.base)} · ${esc(chLbl)} · mismos días en ambos periodos`;
+    const { esc } = H(), w = S.why, wp = S.whyPlan, pw = periodWord(S.period), chLbl = FP.navigation.contextLabel({ channel: S.channel });
+    const hasPlan = wp && wp.status === 'ok';
+    const sub = `${esc(cap(pw.cur))} · ${esc(chLbl)} · ${hasPlan ? `contra el plan y contra ${esc(pw.base)}` : `contra ${esc(pw.base)}`}, mismos días`;
     const logic = ['Mismo motor de «Tráfico y conversión»: Venta = Sesiones × CR × Ticket; los tres efectos suman exactamente el cambio de venta.',
-      'Compara días exactos contra días exactos: solo cuentan los días (por canal) con venta en los dos periodos.',
+      'Contra el plan: usa el Nivel 1 de Diagnóstico (Plan vs Real en los días contados), así que las cifras son las mismas que en Diagnóstico.',
+      'Contra el periodo anterior: compara días exactos contra días exactos; solo cuentan los días (por canal) con venta en los dos periodos.',
       'Sin sesiones, o con un canal sin sesiones dentro de «Total digital», muestra solo el cambio de venta y dice qué falta.',
-      'Sin periodo anterior con venta real, no muestra nada que comparar. Sigue el Canal y el Periodo de arriba.'];
-    let body;
+      'Sigue el Canal y el Periodo de arriba.'];
+    const domTxt = (e) => { const r = Object.entries({ traffic: e.traffic, cr: e.cr, aov: e.aov }).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0]; return `Lo que más pesó: ${EFFECT[r[0]].toLowerCase()} (${sMoney(r[1])}).`; };
+    const wf = (e) => `<div class="sgd">${FP.segmentsDecompView.waterfall({ total: { traffic: e.traffic, cr: e.cr, aov: e.aov, delta: e.delta } }, { esc, money: (v) => F().currency(v, 0) })}</div>`;
+    let planSec = '';
+    if (hasPlan) {
+      const cov = wp.coverage, under = wp.gap < 0;
+      planSec = `<section class="why-basis" data-basis="plan"><h4 class="ds-h4">Contra el plan</h4>
+        <ul class="headline"><li>La venta real va ${esc(F().currency(Math.abs(wp.gap), 0))} ${under ? 'por debajo' : 'por encima'} del plan${fin(wp.gapPct) ? ` (${esc(F().signedPercent(wp.gapPct, 1))})` : ''}: ${esc(F().currency(wp.current, 0))} contra ${esc(F().currency(wp.baseline, 0))}.</li></ul>
+        ${wp.effects ? wf(wp.effects) + `<ul class="headline"><li>${esc(domTxt(wp.effects))}</li></ul>` : '<p class="field__hint">No se puede separar tráfico, conversión y ticket: falta alguno de los tres en el plan o en el real.</p>'}
+        ${cmpTable(wp.metrics, wp.effects, { base: 'Plan', cur: 'Real' })}
+        <p class="field__hint">Compara ${cov.paired} de ${cov.expected} días por canal con venta real (${esc(rangeTxt(cov.currentRange))}), contra el plan de esos mismos días.</p></section>`;
+    }
+    let prev;
     if (w.status !== 'ok') {
-      body = `<div class="ds-empty" data-why="no_base"><strong class="ds-empty__t">No hay con qué comparar todavía</strong><p class="ds-empty__d">${esc(w.note || `No hay venta real de ${pw.base} en los mismos días.`)}${S.period.type === 'year' ? ' Elige un mes en «Periodo» para ver el cambio contra el mes anterior.' : ''}</p></div>`;
+      prev = `<div class="ds-empty" data-why="no_base"><strong class="ds-empty__t">No hay con qué comparar todavía</strong><p class="ds-empty__d">${esc(w.note || `No hay venta real de ${pw.base} en los mismos días.`)}${S.period.type === 'year' ? ' Elige un mes en «Periodo» para ver el cambio contra el mes anterior.' : ''}</p></div>`;
     } else {
       const cov = w.coverage, up = w.delta >= 0;
       const head = `La venta ${up ? 'subió' : 'bajó'} ${esc(sMoney(Math.abs(w.delta)).replace(/^[+−]/, ''))} (${esc(F().signedPercent(w.baseline ? w.delta / w.baseline : null, 1))}): ${esc(F().currency(w.current, 0))} contra ${esc(F().currency(w.baseline, 0))}.`;
       let eff = '';
-      if (w.effects) {
-        const e = w.effects;
-        eff = `<div class="sgd">${FP.segmentsDecompView.waterfall({ total: { traffic: e.traffic, cr: e.cr, aov: e.aov, delta: e.delta } }, { esc, money: (v) => F().currency(v, 0) })}</div>
-          <ul class="headline"><li>Lo que más pesó: ${esc(EFFECT[w.dominant].toLowerCase())} (${esc(sMoney(e[w.dominant]))}).${w.kind === 'noBaseOrders' ? ' Sin pedidos en el periodo anterior, el cambio se atribuye a conversión.' : ''}</li></ul>`;
-      } else {
-        eff = `<p class="field__hint" data-why="no_traffic">No se puede separar tráfico, conversión y ticket: ${S.channel === 'total' ? 'alguno de los canales no trae sesiones, y sumar canales con y sin sesiones mezclaría cosas distintas. Elige un canal con sesiones (Ecommerce o App).' : 'este canal no trae sesiones en el periodo.'}</p>`;
-      }
+      if (w.effects) eff = wf(w.effects) + `<ul class="headline"><li>${esc(domTxt(w.effects))}${w.kind === 'noBaseOrders' ? ' Sin pedidos en el periodo anterior, el cambio se atribuye a conversión.' : ''}</li></ul>` + cmpTable(w.metrics, w.effects, { base: cap(pw.base), cur: cap(pw.cur) });
+      else eff = `<p class="field__hint" data-why="no_traffic">No se puede separar tráfico, conversión y ticket: ${S.channel === 'total' ? 'alguno de los canales no trae sesiones, y sumar canales con y sin sesiones mezclaría cosas distintas. Elige un canal con sesiones (Ecommerce o App).' : 'este canal no trae sesiones en el periodo.'}</p>`;
       const cuadre = cov.paired < cov.expected ? ` Faltan ${cov.expected - cov.paired} de ${cov.expected} días por canal con dato en ambos periodos; esos no cuentan.` : '';
-      body = `<ul class="headline"><li>${head}</li></ul>${eff}<p class="field__hint" data-why-cov>Compara ${cov.paired} de ${cov.expected} días por canal (${esc(rangeTxt(cov.currentRange))} contra ${esc(rangeTxt(cov.baselineRange))}).${esc(cuadre)}</p>
-        <p><a class="btn btn--ghost" href="#analisis" data-nav="analisis">Ver el análisis completo</a></p>`;
+      prev = `<ul class="headline"><li>${head}</li></ul>${eff}<p class="field__hint" data-why-cov>Compara ${cov.paired} de ${cov.expected} días por canal (${esc(rangeTxt(cov.currentRange))} contra ${esc(rangeTxt(cov.baselineRange))}).${esc(cuadre)}</p>`;
     }
-    return block('why', 'Por qué cambió la venta', 'Análisis', sub, body, logic);
+    const body = `${planSec}<section class="why-basis" data-basis="previous"><h4 class="ds-h4">Contra ${esc(pw.base)} (mismos días)</h4>${prev}</section>
+      <p><a class="btn btn--ghost" href="#analisis" data-nav="analisis">Ver el análisis completo</a></p>`;
+    return block('why', 'Por qué: contra el plan y contra el periodo anterior', 'Análisis', sub, body, logic);
   }
 
   function whereBlock(S, ctx) {
@@ -132,14 +160,16 @@
     let planHtml = '';
     if (wp && wp.status === 'ok') {
       const under = wp.gap < 0;
+      const metK = { trafficVolume: 'sessions', conversionRate: 'cr', aov: 'aov' };
       planHtml = `<p data-why-basis="plan"><strong>Contra el plan, la venta va ${esc(F().currency(Math.abs(wp.gap), 0))} ${under ? 'por debajo' : 'por encima'}</strong>${fin(wp.gapPct) ? ` (${esc(F().signedPercent(wp.gapPct, 1))})` : ''}.</p>
-        ${wp.drivers.length ? `<ul class="home-key__list">${wp.drivers.map((d) => `<li>${esc(DNAME[d.id] || d.label)} <b class="${cls(d.contribution)}">${esc(sMoney(d.contribution))}</b></li>`).join('')}</ul>` : ''}`;
+        ${wp.drivers.length ? `<ul class="home-key__list">${wp.drivers.map((d) => `<li>${esc(DNAME[d.id] || d.label)} <b class="${cls(d.contribution)}">${esc(sMoney(d.contribution))}</b><span class="field__hint home-key__sub" data-cmp="${esc(d.id)}">Plan ${esc(fmtMet(metK[d.id], d.baseline))} → Real ${esc(fmtMet(metK[d.id], d.current))}${fin(d.deltaPct) ? ` (${esc(F().signedPercent(d.deltaPct, 1))})` : ''}</span></li>`).join('')}</ul>` : ''}`;
     }
     // Lectura secundaria: contra el periodo anterior (otra base; puede dar otro signo)
     let prevHtml = '';
     if (w.status === 'ok') {
       const e = w.effects;
-      prevHtml = `<p class="field__hint home-key__sub" data-why-basis="previous">Contra ${esc(pw.base)} (mismos días) la venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))}${e ? `: tráfico ${esc(sMoney(e.traffic))} · conversión ${esc(sMoney(e.cr))} · ticket ${esc(sMoney(e.aov))}` : ''}.</p>`;
+      const mb = w.metrics && w.metrics.base, mc = w.metrics && w.metrics.cur;
+      prevHtml = `<p class="field__hint home-key__sub" data-why-basis="previous">Contra ${esc(pw.base)} (mismos días): la venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))} (${esc(F().currency(w.baseline, 0))} → ${esc(F().currency(w.current, 0))}, ${esc(F().signedPercent(w.baseline ? w.delta / w.baseline : null, 1))})${e ? `: tráfico ${esc(sMoney(e.traffic))} · conversión ${esc(sMoney(e.cr))} · ticket ${esc(sMoney(e.aov))}` : ''}.</p>${e && mb && mc ? `<p class="field__hint home-key__sub" data-why-prev-cmp>Sesiones ${esc(fmtMet('sessions', mb.sessions))} → ${esc(fmtMet('sessions', mc.sessions))} · CR ${esc(fmtMet('cr', mb.cr))} → ${esc(fmtMet('cr', mc.cr))} · Ticket ${esc(fmtMet('aov', mb.aov))} → ${esc(fmtMet('aov', mc.aov))}</p>` : ''}`;
       if (wp && wp.status === 'ok' && e) {
         const planCr = (wp.drivers.find((d) => d.id === 'conversionRate') || {}).contribution;
         if (fin(planCr) && Math.sign(planCr) !== 0 && Math.sign(e.cr) !== 0 && Math.sign(planCr) !== Math.sign(e.cr)) {
@@ -171,7 +201,7 @@
   }
 
   const BLOCKS = [
-    ['why', whyBlock, 'Por qué cambió la venta, con cascada', 'Tráfico → conversión → ticket, días comparados y cuadre'],
+    ['why', whyBlock, 'Por qué va así y por qué cambió la venta, con cascada', 'Contra el plan y contra el periodo anterior: tráfico → conversión → ticket, comparación y cuadre'],
     ['where', whereBlock, 'Dónde mirar: segmentos y avisos de calidad', 'Un segmento por dimensión de GA4, con «Diagnosticar»'],
     ['channels', channelsBlock, 'Cómo va cada canal', 'Venta acumulada, cumplimiento, forecast vs meta y estado de pacing'],
     ['trust', trustBlock, 'Confianza de los datos', 'Hasta dónde llega la venta real, días comparados, calidad y archivos cargados']

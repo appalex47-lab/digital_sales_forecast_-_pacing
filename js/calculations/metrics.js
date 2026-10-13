@@ -221,15 +221,40 @@
   }
 
   /**
-   * Valida que la suma de hijos cuadre con el padre
-   * (días → mes, meses → año, canales → total).
+   * Valida que la suma de hijos cuadre con el padre (días → mes, meses → año, canales → total).
+   *
+   * Semántica de valores (documentada en ARCHITECTURE.md):
+   *   - `0` es un cero REAL (cuenta como hijo presente).
+   *   - `null` / `undefined` / '' / no numérico = dato DESCONOCIDO o no cargado (hijo ausente; NO es cero).
+   * Una suma parcial nunca se presenta como conciliación completa:
+   *   state 'reconciled'          → todos los hijos presentes y la suma cuadra.
+   *   state 'discrepancy'         → todos presentes y la suma NO cuadra (o hay llaves duplicadas).
+   *   state 'incomplete_coverage' → faltan hijos: no se puede afirmar ni negar la conciliación.
+   *   state 'not_evaluable'       → falta el padre o ningún hijo trae valor.
+   * `status` conserva el contrato histórico ('pass' | 'warning' | 'na') y añade 'incomplete'.
+   * `opts.keys` (opcional) detecta hijos duplicados; `opts.expected` fija cuántos hijos se esperan
+   * (por omisión, el largo del arreglo recibido).
    */
-  function validateHierarchy(parentValue, childValues, tolerance = C().tolerances.hierarchy) {
+  function validateHierarchy(parentValue, childValues, tolerance = C().tolerances.hierarchy, opts = {}) {
     const parent = toNumberOrNull(parentValue);
-    const sum = sumNullable(childValues);
-    if (parent === null || sum === null) return { status: 'na', parent, sum, diff: null, diffPct: null };
+    const list = Array.isArray(childValues) ? childValues : [];
+    const sum = sumNullable(list);
+    const expected = Number.isFinite(opts.expected) ? opts.expected : list.length;
+    const present = list.filter((v) => toNumberOrNull(v) !== null).length;
+    const coverage = { expected, present, missing: Math.max(0, expected - present) };
+    let duplicateKeys = [];
+    if (Array.isArray(opts.keys)) {
+      const seen = new Set();
+      opts.keys.forEach((k) => { if (seen.has(k)) duplicateKeys.push(k); seen.add(k); });
+    }
+    const base = { parent, sum, coverage, duplicateKeys };
+    if (parent === null || sum === null) return { ...base, status: 'na', state: 'not_evaluable', diff: null, diffPct: null };
     const diff = sum - parent;
-    return { status: isClose(sum, parent, tolerance) ? 'pass' : 'warning', parent, sum, diff, diffPct: safeDivide(diff, parent) };
+    const diffPct = safeDivide(diff, parent);
+    if (coverage.missing > 0) return { ...base, status: 'incomplete', state: 'incomplete_coverage', diff, diffPct };
+    if (duplicateKeys.length) return { ...base, status: 'warning', state: 'discrepancy', diff, diffPct };
+    const ok = isClose(sum, parent, tolerance) === true;
+    return { ...base, status: ok ? 'pass' : 'warning', state: ok ? 'reconciled' : 'discrepancy', diff, diffPct };
   }
 
   /* ---------- Fase 2: nombres canónicos del motor de planeación ----------
