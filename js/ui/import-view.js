@@ -210,6 +210,19 @@
     // Resultado del Worker: solo trae una vista previa; la cuenta de filas que entrarán la calculó él para cada opción
     const willImport = result.remote ? (state.settings.includeErrorRows ? result.willImport.withErrors : result.willImport.strict) : FP.importer.selectRows(result, { includeErrorRows: state.settings.includeErrorRows }).length;
     const issuesTotal = result.remote ? result.issuesTotal : result.issues.length;
+    // «Solo filas nuevas o cambiadas»: cuenta exacta cuando el archivo se revisó en la página (en archivos muy grandes se informa al importar)
+    const DS = FP.dataStore;
+    const canSkip = DS.canSkipUnchanged(staged.dataType);
+    let counts = null;
+    if (canSkip && !result.remote && sum.rows <= 20000) {
+      const same = DS.unchangedPredicate(state.store, staged.dataType);
+      const sel = FP.importer.selectRows(result, { includeErrorRows: state.settings.includeErrorRows });
+      const unchanged = sel.filter((r) => same(r.record)).length;
+      counts = { unchanged, fresh: sel.length - unchanged };
+    }
+    const willImportNow = active.skipUnchanged && counts ? counts.fresh : willImport;
+    const skipBlock = canSkip ? `<div class="field field--check"><label><input type="checkbox" data-action="staging-skip-unchanged" ${active.skipUnchanged ? 'checked' : ''}> Importar solo filas nuevas o cambiadas (omitir las que ya están cargadas con los mismos valores)</label>
+        <span class="field__hint">${counts ? (counts.unchanged ? `Ya están cargadas sin cambios: ${F().integer(counts.unchanged)}. Nuevas o con cambios: ${F().integer(counts.fresh)}.${counts.fresh === 0 && active.skipUnchanged ? ' No hay nada nuevo que importar: puedes descartar el archivo.' : ''}` : 'Ninguna de estas filas está cargada todavía.') : 'Con archivos grandes, el conteo se informa al importar.'}</span></div>` : '';
 
     const tabs = items.length > 1 ? `<div class="file-tabs" role="tablist">${items.map((i) => {
       const isP = i.staged.dataType === 'products';
@@ -343,13 +356,14 @@
         </ol>
 
         <div class="staging__foot">
+          ${skipBlock}
           <p>${result.canImport
-            ? `Se importarán <strong>${F().integer(willImport)}</strong> de ${F().integer(sum.rows)} filas como ${esc(C().dataTypes[staged.dataType].label)}.${sum.rows - willImport ? ` ${F().integer(sum.rows - willImport)} quedan fuera y sus errores se guardan en el registro del archivo.` : ''}`
+            ? `Se importarán <strong>${F().integer(willImportNow)}</strong> de ${F().integer(sum.rows)} filas como ${esc(C().dataTypes[staged.dataType].label)}.${sum.rows - willImport ? ` ${F().integer(sum.rows - willImport)} quedan fuera y sus errores se guardan en el registro del archivo.` : ''}`
             : 'Corrige el mapeo para poder importar.'}</p>
           ${result.canImport && sum.rows - willImport > 0 ? rejectionNote(result, sum.rows - willImport, willImport, esc, F()) : ''}
           <div class="btn-row">
             <button type="button" class="btn" data-action="discard-staged">Descartar archivo</button>
-            <button type="button" class="btn btn--primary" data-action="commit-staged" ${result.canImport && willImport && !active.busy ? '' : 'disabled'}>${active.busy ? 'Procesando… ' : ''}Importar ${F().integer(willImport)} filas</button>
+            <button type="button" class="btn btn--primary" data-action="commit-staged" ${result.canImport && willImportNow && !active.busy ? '' : 'disabled'}>${active.busy ? 'Procesando… ' : ''}Importar ${F().integer(willImportNow)} filas${active.skipUnchanged && counts ? ' nuevas o cambiadas' : ''}</button>
           </div>
         </div>
       </div>`;

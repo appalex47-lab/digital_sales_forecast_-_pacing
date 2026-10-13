@@ -690,3 +690,8 @@ En «Nube (Supabase)»: **Vincular mi correo** (te llega un código de 6 dígito
 
 ## Inicio: «¿Por qué?» con indicadores
 Cada driver muestra «base → actual (Δ%)». Se leen dos bases por separado: contra el plan y contra el periodo anterior en los mismos días; los títulos de «Ver más» indican la base.
+
+## Inicio: «¿Por qué?» más limpio
+La tarjeta de Inicio muestra solo la lectura contra el plan (con «Plan → Real» por driver). La lectura contra el periodo anterior y su nota de «comparaciones distintas» viven en «Ver más → Por qué».
+## Carga: actualizar desde Google Sheets
+«Actualizar» trae la hoja completa pero, por omisión, solo importa las filas nuevas o con valores distintos (casilla en la revisión). Se puede desmarcar para importar todo.
