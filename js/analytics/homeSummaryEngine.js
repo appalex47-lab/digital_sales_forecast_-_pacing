@@ -81,6 +81,16 @@
     return { status: 'ok', rows };
   }
 
+  /** 4 · ¿Cuándo llego a la meta?: día en que el forecast acumulado alcanza el plan total del periodo (mes o año) del canal elegido. */
+  function goal(state, ch, period) {
+    const run = state.fc && state.fc.run;
+    if (!run || run.plan.source === 'none') return null;
+    const series = ch === 'total' ? run.total : run.channels[ch];
+    if (!series) return null;
+    const g = FP.forecastEngine.periodGoal(series, period, { cutoff: run.cutoff });
+    return { ...g, scope: period.type === 'month' ? 'mes' : 'año', label: FP.forecastEngine.goalLabel(g, period.type === 'month' ? 'mes' : 'año') };
+  }
+
   /** 2 · Dónde mirar hoy: por dimensión de GA4, el segmento con mayor |Δ venta| fuera de «Otros»; y los avisos de calidad del tráfico. */
   function where(state, ch, period) {
     if (!state.store || !state.store.segments || !(state.store.segments.records || []).length) return { status: 'no_segments' };
@@ -140,8 +150,8 @@
   function compute(state, h) {
     const period = periodOf(state, h), ch = h.channel || 'total';
     const w = why(state, ch, period);
-    return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), trust: trust(state, w) };
+    return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), goal: goal(state, ch, period), trust: trust(state, w) };
   }
 
-  FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf };
+  FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf, goal };
 })(typeof window !== 'undefined' ? window : globalThis);
