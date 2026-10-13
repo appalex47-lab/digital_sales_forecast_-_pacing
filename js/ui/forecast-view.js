@@ -14,6 +14,27 @@
 
   const CONF_PILL = { excellent: 'ok', sufficient: 'ok', limited: 'warning', insufficient: 'error' };
   const confPill = (c) => (c ? H().pill(CONF_PILL[c], C().confidenceLabels[c]) : H().pill('na', 'No aplica'));
+  /** Suficiencia del histórico comparable (NO precisión del pronóstico). */
+  const HIST_PILL = { sufficient: 'ok', limited: 'warning', insufficient: 'error' };
+  const histPill = (c) => (c ? H().pill(HIST_PILL[c], C().historyAdequacyLabels[c]) : H().pill('na', 'No aplica'));
+  const pctTxt = (v, d = 1) => (Number.isFinite(v) ? `${(v * 100).toFixed(d)} %` : '—');
+  /** Calidad medida del pronóstico (backtesting); «no evaluada» mientras no haya evidencia. */
+  function backtestBlock(state, run, ch) {
+    const esc = H().esc;
+    const bt = state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null;
+    const head = '<div class="subhead"><h3 class="panel__title">Calidad del pronóstico (backtesting)</h3></div>';
+    const intro = '<p class="field__hint">Suficiente histórico no significa pronóstico preciso. Aquí se mide el error real: se recalcula el forecast con los datos disponibles en fechas pasadas y se compara con la venta que realmente ocurrió.</p>';
+    if (!bt) return `${head}${intro}<div class="btn-row"><button type="button" class="btn btn--small" data-action="fc-backtest">Calcular error histórico</button></div><p class="cell-sub">Calidad medida: <strong>no evaluada</strong> todavía.</p>`;
+    const chs = ch === 'total' ? Object.keys(bt.byChannel) : [ch];
+    const hs = ch === 'total' ? ['7'] : Object.keys(bt.byChannel[chs[0]][bt.methods[0]] || {});
+    const rows = chs.flatMap((c) => bt.methods.flatMap((m) => hs.map((h) => { const r = bt.byChannel[c][m][h]; if (!r) return '';
+      return `<tr${m === bt.methodId ? ' class="row-current"' : ''}><td>${esc(PV().chLabel(c))}</td><td>${esc(m)}${m === bt.methodId ? ' <span class="chip">en uso</span>' : ''}</td><td class="num">${esc(h)} días</td>
+      ${r.status === 'evaluated' ? `<td class="num">${esc(pctTxt(r.wape))}</td><td class="num">${esc(pctTxt(r.biasPct))} <span class="cell-sub">${r.biasPct > 0 ? 'sobrestima' : r.biasPct < 0 ? 'subestima' : ''}</span></td><td class="num">${esc(pctTxt(r.planWape))}</td><td>${r.beatsPlan ? 'Mejora al plan' : 'No mejora al plan'}</td><td class="num">${r.anchors} cortes · ${r.days} días${r.zeroDays ? ` · ${r.zeroDays} con venta 0` : ''}</td>`
+        : `<td colspan="5"><strong>No evaluada.</strong> <span class="cell-sub">${esc(r.reason || '')}</span></td>`}</tr>`; }))).join('');
+    return `${head}${intro}<div class="table-wrap"><table class="table ds-table"><thead><tr><th>Canal</th><th>Método</th><th class="num">Horizonte</th><th class="num">Error (WAPE)</th><th class="num">Sesgo</th><th class="num">Error del plan sin ajustar</th><th>Contra el plan</th><th class="num">Evidencia</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="field__hint">Se evalúan los métodos B, C y D contra el plan sin ajustar (método A). Métrica: venta. WAPE = Σ|pronóstico − real| ÷ Σ real. Sesgo positivo = el pronóstico queda por encima de lo real. Es una medición histórica: no garantiza el error futuro. El total digital no se evalúa por separado (es la suma de canales); con «Total» se muestra el horizonte de 7 días de cada canal.</p>
+      <div class="btn-row"><button type="button" class="btn btn--small" data-action="fc-backtest">Recalcular</button></div>`;
+  }
 
   function idxCell(ix) {
     if (!ix) return `<td class="num">${F().DASH}</td>`;
@@ -67,18 +88,20 @@
         <td class="wrap"><span class="cell-sub">${esc(assumptions)}</span>${m.fallbackDays ? `<span class="cell-sub">${m.fallbackDays} días con índice sin datos (usan plan)</span>` : ''}</td>
         <td class="num">${esc(F().metric(k, fc && fc[k]))}</td>
         <td class="num">${esc(PV().signed(k, g && g.gap))}<span class="cell-sub">${esc(F().signedPercent(g && g.gapPct, 1))}</span></td>
-        <td>${confPill(m.confidence)}</td></tr>`;
+        <td>${histPill(m.historyAdequacy)}</td></tr>`;
     }).join('');
     $('fc-methods').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Comparación de métodos · ${esc(PV().chLabel(ch))}</h3></div>
       <div class="table-wrap"><table class="table ds-table">
-        <thead><tr><th>Método</th><th>Supuestos</th><th class="num" data-state="forecast">Forecast anual</th><th class="num">Diferencia vs plan (${esc(F().metric(k, plan[k]))})</th><th>Confianza</th></tr></thead>
+        <thead><tr><th>Método</th><th>Supuestos</th><th class="num" data-state="forecast">Forecast anual</th><th class="num">Diferencia vs plan (${esc(F().metric(k, plan[k]))})</th><th>Histórico comparable</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
+      <p class="field__hint">«Histórico comparable» indica si hay días suficientes para calcular los índices; no mide qué tan preciso es el pronóstico (ver «Calidad del pronóstico»).</p>
       <p class="field__hint">Todos conservan el patrón diario del plan (nunca "restante ÷ días restantes"). En D los índices se aplican solo a volumen, CR y AOV; pedidos y venta se derivan, sin doble conteo.
         Ningún método se declara mejor: el método en uso se elige arriba.</p>
       <details class="disclosure"><summary>¿Por qué los cuatro métodos pueden dar cierres distintos?</summary><div class="panel__body">
         <p>Con los mismos datos, cada método supone algo distinto sobre los días que faltan: A supone que serán como el plan; B, que seguirán el desempeño de todo el año; C, que seguirán el de la ventana reciente; D, que cada palanca (volumen, CR, AOV) seguirá su propio desempeño.
-        Si el año, lo reciente y las palancas se comportan parecido, los cierres coinciden; si no, se separan. Esa diferencia es información, no un error.</p></div></details>`;
+        Si el año, lo reciente y las palancas se comportan parecido, los cierres coinciden; si no, se separan. Esa diferencia es información, no un error.</p></div></details>
+      ${backtestBlock(state, run, ch)}`;
   }
 
   /** Fase 9.1: guía pedagógica del método (qué usa, qué supone, cuándo diverge, límite). Nombre y descripción vienen del config. */

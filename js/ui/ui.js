@@ -127,6 +127,8 @@
     if (h.status === 'pass') note = `<p class="note note--ok" role="status">La suma de canales cuadra con la meta anual.</p>`;
     else if (h.status === 'warning') {
       note = `<p class="note note--warning" role="alert">La suma de canales (${esc(F().currency(h.sum))}) difiere de la meta anual por ${esc(F().currency(h.diff))} (${esc(F().signedPercent(h.diffPct, 2))}).</p>`;
+    } else if (h.status === 'incomplete') {
+      note = `<p class="note" role="status">Cobertura incompleta: ${esc(String(h.coverage.present))} de ${esc(String(h.coverage.expected))} canales con meta. Con lo capturado la suma es ${esc(F().currency(h.sum))}; no se puede confirmar ni descartar la conciliación con la meta anual hasta capturar los ${esc(String(h.coverage.missing))} faltantes.</p>`;
     } else note = `<p class="note">Captura la meta total y la de cada canal para validar la jerarquía.</p>`;
 
     $('targets-form').innerHTML = `
@@ -410,6 +412,6 @@
   /** Utilidades compartidas con las vistas de Fase 1. */
   const helpers = { esc, pill, segmented };
 
-  FP.ui = { helpers, renderAppMeta, renderStatus, renderFacts, renderTargets, markTargetsDraft, updateTargetHints, renderFilters, renderValidation,
+  FP.ui = { helpers, renderAppMeta, renderStatus, renderSaveFailure, renderFacts, renderTargets, markTargetsDraft, updateTargetHints, renderFilters, renderValidation,
     renderEdgeCases, renderEngine, renderExport, renderAll, toast };
 })(typeof window !== 'undefined' ? window : globalThis);

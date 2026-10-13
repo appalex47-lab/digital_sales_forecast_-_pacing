@@ -137,6 +137,8 @@
         <section>${heading ? '<h4>Almacenamiento</h4>' : ''}
           <ul class="plain-list">
             <li>Modo: <strong>${esc(st.mode === 'indexeddb' ? 'IndexedDB (datos) + localStorage (preferencias)' : 'solo localStorage (IndexedDB no disponible)')}</strong></li>
+            ${(() => { const ps = state.persist || null; if (!ps) return ''; const t = { saved: 'confirmado en IndexedDB', pending: `guardando (${ps.pending} pendiente${ps.pending === 1 ? '' : 's'})…`, failed: `ERROR: ${ps.failed} escritura(s) solo en memoria`, memory: 'solo en memoria / localStorage' }[ps.state] || ps.state;
+              return `<li${ps.state === 'failed' ? ' class="val--invalid"' : ''}>Guardado: <strong>${esc(t)}</strong>${ps.lastConfirmedAt ? ` · última confirmación ${esc(new Date(ps.lastConfirmedAt).toLocaleTimeString('es-MX'))}` : ''}${ps.state === 'failed' ? ' <button type="button" class="btn btn--small" data-action="storage-retry-writes">Reintentar guardado</button>' : ''}</li>`; })()}
             <li>Migración: <strong>${esc(migText)}</strong>${mig.keys ? (mig.keys.filter((k) => k.action === 'copied').length ? ` · ${mig.keys.filter((k) => k.action === 'copied').length} claves copiadas y verificadas` : ' · no había datos anteriores que copiar') : ''}${mig.status === 'verified' ? ' · localStorage se conserva como respaldo' : ''}</li>
             ${mig.error ? `<li class="val--invalid">${esc(mig.error)}</li>` : ''}
             <li>Espacio usado: ${pa.estimate ? `${esc(F().decimal(pa.estimate.usage / 1048576, 1))} MB de ${esc(F().decimal(pa.estimate.quota / 1073741824, 1))} GB disponibles` : '—'}</li>

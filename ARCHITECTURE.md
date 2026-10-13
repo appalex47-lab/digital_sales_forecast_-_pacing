@@ -2734,3 +2734,39 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - **S2 (auto-sync, opt-in):** casilla en el panel Nube (`fp.cloudAuto` en localStorage, fuera del namespace). Solo claves chicas: no `dataKeys`, no `skipKeys` (Cohere, sesión, migración) ni `autoSkipKeys` (`uxSettings`, `productSettings`). Subida con debounce (`autoDebounceMs`) vía `storage.save` envuelto; `updated_at` de la nube = `savedAt` del dato. Al abrir la app, ANTES de cargar estado, `pullNewer` trae solo lo más nuevo (gana la última escritura; mismo contenido = nada) y lo escribe conservando su `savedAt` (sin rebote). `businessContext` pide recarga (config.js lo lee antes de arrancar). No resuelve conflictos simultáneos reales (S5).
 - Tests: `tools/test-cloud-sync.js`, `tools/regression/batch_cloud_s1.py` (N1–N30).
 - **S3 con enlace (plan Free, sin plantillas):** el correo por defecto de Supabase trae un enlace; `redirect_to` = URL de la app (`FP.cloud.redirectUrl`, debe estar en «Redirect URLs»). Al volver, `consumeAuthHash` lee `#access_token=…` (o `#error…`), confirma la cuenta con `GET /auth/v1/user`, guarda la sesión y limpia el hash a `#ajustes`; se ejecuta en `init` antes del router. El código de 6 dígitos sigue funcionando si algún día se personalizan las plantillas (SMTP propio).
+
+
+## Cierre de auditoría integral (2026-10-13)
+
+### Semántica de valores nulos y conciliación de jerarquías (`metrics.validateHierarchy`)
+- `0` es un cero real. `null`/`undefined`/vacío/no numérico es dato **desconocido o no cargado** y nunca se trata como cero.
+- `sumNullable` conserva su contrato (ignora desconocidos; `null` si no hay ninguno). La conciliación ya no se decide con esa suma parcial:
+  `validateHierarchy(padre, hijos, tolerancia, {expected, keys})` devuelve `state`: `reconciled`, `discrepancy`, `incomplete_coverage` (faltan hijos) o `not_evaluable`,
+  más `coverage {expected, present, missing}` y `duplicateKeys`. `status` conserva `pass`/`warning`/`na` y añade `incomplete`.
+- Consumidor actual: `dataModel.validateTargets` → panel de metas. Otras validaciones (plan, calidad de importación) tienen sus propias reglas y no usan esta función.
+- Un padre con diferencia legítima (categoría residual, canal no clasificado) se sigue mostrando como `discrepancy`: la app no fuerza que la suma de hijos iguale al padre.
+
+### Persistencia: guardado aceptado ≠ guardado confirmado
+- `repo.kvSet()` conserva su firma síncrona (acepta en caché y devuelve `true`). La confirmación real se expone con `repo.status()`: `saved` | `pending` | `failed` | `memory`,
+  `pending`, `failed`, `failedKeys`, `lastConfirmedAt`, `lastError`; `repo.onSettled` notifica cada cambio y `repo.retryFailed()` reintenta.
+- Un fallo deja el banner persistente `#save-failure` («solo en memoria») hasta que el reintento o una escritura posterior se confirme; Configuración → Almacenamiento muestra el estado y el botón «Reintentar guardado».
+- `beforeunload` pide confirmación mientras haya escrituras pendientes o fallidas. Sin IndexedDB, el enrutador usa localStorage (que ya devolvía `false` al fallar) y, como último recurso, memoria.
+- No cubierto: edición simultánea desde dos pestañas (gana la última escritura).
+
+### Forecast: suficiencia del histórico ≠ precisión
+- `forecastConfidence` mide días comparables. Se conserva por compatibilidad (`confidence`, también en versiones guardadas) y se añade `historyAdequacy` (`sufficient`/`limited`/`insufficient`) con etiquetas «Histórico suficiente/limitado/insuficiente» (`config.historyAdequacyLabels`). La interfaz usa solo estas.
+- `forecastEngine.backtest()` / `backtestRows()`: backtesting reproducible por canal, método (B, C, D) y horizonte (7 y 14 días, `config.forecast.backtest`): recalcula índices con datos ≤ fecha de corte, proyecta, compara con la venta real y reporta WAPE, MAE, sesgo y el WAPE del plan sin ajustar. Sin evidencia suficiente (menos de 3 cortes o 14 días) responde «no evaluada» con motivo. Solo mide venta; el total digital no se evalúa por separado.
+
+### Cohere
+- La key vive solo en memoria salvo que el usuario marque «Recordar» (localStorage `fp.v1:cohereApiKey`); está en `cloud.skipKeys`, ningún exportador la referencia y los errores nunca la incluyen. Configuración advierte que una key en el navegador **no es un secreto seguro** y permite quitarla. Los errores se clasifican (`errorKind`: auth, quota, server, network, timeout, invalid, http).
+- Riesgo residual: sin proxy no hay forma de proteger la key frente a extensiones, scripts del mismo origen o acceso al equipo. Requiere un backend que la custodie (no autorizado ni existente).
+
+### Canales y métricas fijos (brecha documentada, sin cambio)
+- Fijos: `config.channels` (Ecommerce, App, WhatsApp, Llamadas), `metricKeys` (5) y `additiveMetricKeys` (3). Literales fuera de config: `model/availability.js` (`NON_GA4`), `import/ga4Funnel.js` y `ga4Segments.js` (`PLATFORM` web/android/ios → canal), `ui/planning-view.js:248` y `ui/reforecast-view.js:325` (canal por defecto), `app.js:62-63` (filtros iniciales) y `analytics/analysisContext.js:20` (respaldo).
+- Puntos de extensión: `config.channels`, `businessContext` (solo describe el negocio), `FP.dataModel.getChannel`. Hacerlos configurables exigiría migrar `dataset`, `plans`, `forecasts`, `reforecasts`, `scenarios` y `actionPlan` (todas indexadas por id de canal) con un `schemaVersion` nuevo.
+
+### Instrumentación
+- No hay GA4/GTM/dataLayer ni llamadas de telemetría: las únicas salidas de red son Cohere, Google Sheets publicado, y (si se activa) Supabase/Turnstile. No se añadió medición porque no hay identificador autorizado. Propuesta de eventos mínimos sin datos comerciales: `view_open{view}`, `import_done{type,rows_bucket}`, `export_done{kind}`, `forecast_run{method}`, `backtest_run`, `error_shown{kind}`, con consentimiento previo.
+
+### Errores globales
+- `app.js` registra `error` y `unhandledrejection`: avisa al usuario (máximo 5, una cada 5 s), registra en consola y oculta la API key si apareciera en el mensaje.

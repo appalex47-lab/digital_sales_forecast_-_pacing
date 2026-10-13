@@ -77,6 +77,29 @@
     let queue = Promise.resolve();
     let lastError = null;
     let onError = null;
+    let onSettled = null;
+    // Estado de confirmación: kvSet() devuelve true al aceptar el valor en la caché; la escritura real a IndexedDB se confirma después.
+    let pending = 0;                  // escrituras encoladas y aún no confirmadas
+    let lastConfirmedAt = null;       // ISO de la última escritura confirmada por IndexedDB
+    const failed = new Map();         // key → envelope que IndexedDB NO aceptó (siguen solo en memoria)
+    const settle = () => { if (onSettled) { try { onSettled(repo.status()); } catch (e) { /* la UI no debe romper la cola */ } } };
+    /** Encola una operación de IndexedDB manteniendo el orden y contando pendiente / confirmada / fallida. */
+    const enqueue = (key, envelope, op) => {
+      pending++;
+      queue = queue.then(op).then(() => {
+        pending--; lastConfirmedAt = new Date().toISOString();
+        failed.delete(key);   // la cola es ordenada: una escritura confirmada reemplaza cualquier fallo anterior de esa clave
+        settle();
+      }, (e) => {
+        pending--; lastError = String(e && e.message || e);
+        if (envelope !== undefined) failed.set(key, envelope);
+        if (onError) onError(lastError);
+        settle();
+        throw e;
+      });
+      const p = queue; queue = queue.catch(() => {});   // un error no rompe la cola de las demás escrituras
+      return p;
+    };
 
     const repo = {
       get ready() { return mode === 'indexeddb'; },
@@ -84,6 +107,26 @@
       get db() { return db; },
       get lastError() { return lastError; },
       set onError(fn) { onError = fn; },
+      /** Callback con el estado de guardado cada vez que una escritura se confirma o falla. */
+      set onSettled(fn) { onSettled = fn; },
+      /**
+       * Estado de persistencia (no cambia la firma de kvSet):
+       *   saved   → nada pendiente ni fallido: todo lo aceptado está confirmado en IndexedDB.
+       *   pending → hay escrituras en cola sin confirmar.
+       *   failed  → IndexedDB rechazó alguna escritura: esos datos están SOLO en memoria (se pierden al cerrar).
+       *   memory  → IndexedDB no está disponible (la ruta enrutada no usa este repositorio).
+       */
+      status() {
+        const state = mode !== 'indexeddb' ? 'memory' : failed.size ? 'failed' : pending > 0 ? 'pending' : 'saved';
+        return { state, pending, failed: failed.size, failedKeys: [...failed.keys()], lastConfirmedAt, lastError };
+      },
+      /** Reintenta las escrituras fallidas (en orden). Devuelve el estado resultante. */
+      async retryFailed() {
+        for (const [k, env] of [...failed.entries()]) {
+          try { await enqueue(k, env, () => IDB().put(db, 'kv', { key: k, envelope: env })); } catch (e) { /* queda en failed */ }
+        }
+        return repo.status();
+      },
       STORES,
 
       /** Abre la base y carga la caché kv. Nunca lanza: si falla, mode = 'unavailable'. */
@@ -107,21 +150,19 @@
       /** Escribe en caché de inmediato y en IndexedDB en cola (orden garantizado). */
       kvSet(key, envelope) {
         cache.set(key, envelope);
-        const clone = envelope;
-        queue = queue.then(() => IDB().put(db, 'kv', { key, envelope: clone })).catch((e) => { lastError = String(e && e.message || e); if (onError) onError(lastError); });
-        return true;
+        enqueue(key, envelope, () => IDB().put(db, 'kv', { key, envelope })).catch(() => {});
+        return true;   // aceptado en caché; la confirmación real llega por status() / flush() / onSettled
       },
       /** Escribe en IndexedDB SIN dejar copia en la caché y espera a que termine (guardado por bloques de colecciones grandes). */
       kvSetAsync(key, envelope) {
-        queue = queue.then(() => IDB().put(db, 'kv', { key, envelope })).catch((e) => { lastError = String(e && e.message || e); if (onError) onError(lastError); throw e; });
-        const p = queue; queue = queue.catch(() => {});   // un error no rompe la cola de las demás escrituras
-        return p.then(() => true, () => false);
+        return enqueue(key, undefined, () => IDB().put(db, 'kv', { key, envelope })).then(() => true, () => false);
       },
       /** Quita una clave de la caché en memoria SIN borrarla de IndexedDB (ya está guardada). */
       kvEvict(key) { cache.delete(key); },
       kvDelete(key) {
         cache.delete(key);
-        queue = queue.then(() => IDB().del(db, 'kv', key)).catch((e) => { lastError = String(e && e.message || e); if (onError) onError(lastError); });
+        failed.delete(key);
+        enqueue(key, undefined, () => IDB().del(db, 'kv', key)).catch(() => {});
       },
       /** Lee directo de IndexedDB (sin caché): la usa la verificación de migración. */
       async kvRead(key) { const r = await IDB().get(db, 'kv', key); return r ? r.envelope : null; },

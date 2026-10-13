@@ -2640,6 +2640,11 @@
       });
     },
     'cloud-signout'() { FP.cloud.setAuto(false); state.cloud.auto.on = false; FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión de nube cerrada en este navegador. La copia sigue en Supabase, pero esta sesión anónima ya no podrá abrirla.', 'warn'); render(); },
+    async 'storage-retry-writes'() {
+      const st = await repo.retryFailed();
+      state.persist = st; render();
+      FP.ui.toast(st.state === 'failed' ? `Siguen ${st.failed} escritura(s) sin guardar: ${st.lastError || 'sin detalle'}. Exporta tus datos como respaldo.` : 'Guardado confirmado en IndexedDB.');
+    },
     async 'storage-retry'() {
       const st = await FP.app.retryMigration();
       render();
@@ -2828,6 +2833,10 @@
       render();
     },
     'dx-toggle-signals'() { state.dx.showAllSignals = !state.dx.showAllSignals; render(); },
+    'dx-key-clear'() {
+      state.dx.apiKey = ''; state.dx.rememberKey = false; saveDiagnosticSettings();
+      FP.ui.toast('La API key se quitó de este navegador. Para volver a usar Cohere, pega una nueva.'); render();
+    },
     'dx-key'(el) { state.dx.apiKey = el.value.trim(); saveDiagnosticSettings(); },
     'dx-remember'(el) { state.dx.rememberKey = el.checked; saveDiagnosticSettings(); render(); },
     'dx-model'(el) { state.dx.model = el.value.trim() || C.diagnostics.cohere.model; saveDiagnosticSettings(); },
@@ -2951,6 +2960,13 @@
       FP.ui.toast(`Fecha de referencia fijada en ${state.fc.lastActualDate}, último día con real.`);
     },
     'fc-ref-today'() { delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); },
+    'fc-backtest'() {
+      const run = ensureForecast();
+      const planVersion = FP.planning.getOriginalPlan(state.planning.registry);
+      state.fc.backtest = { stamp: run.generatedAt, data: FP.forecastEngine.backtest({ year: state.year, store: state.store, planVersion,
+        dataset: planVersion ? null : state.dataset, events: state.events, settings: state.fc.settings }) };
+      render();
+    },
     'fc-metric'(el) { state.fc.metric = el.dataset.value; render(); },
     'fc-channel'(el) { state.fc.channel = el.value; render(); },
     'fc-period'(el) { state.fc.period = el.dataset.value; render(); },
@@ -3438,9 +3454,44 @@
   }
 
   /** Arranque del almacenamiento: abre IndexedDB y migra (sin borrar localStorage) antes de leer datos. */
+  /** Red de seguridad: errores no capturados se avisan (una vez cada 5 s, máximo 5) en vez de fallar en silencio. Nunca muestra la API key. */
+  function installGlobalErrorHandlers() {
+    let shown = 0, lastAt = 0;
+    const report = (kind, err) => {
+      let msg = String(err && err.message || err || 'error desconocido');
+      const key = state.dx && state.dx.apiKey;
+      if (key) msg = msg.split(key).join('[key]');
+      try { console.error(`[RevNavigator] ${kind}:`, msg); } catch (e) { /* sin consola */ }
+      const now = Date.now();
+      if (shown >= 5 || now - lastAt < 5000) return;
+      shown++; lastAt = now;
+      if (FP.ui && FP.ui.toast) FP.ui.toast(`Ocurrió un error inesperado (${msg.slice(0, 120)}). Tus datos guardados no se modificaron; si algo no responde, recarga la página.`);
+    };
+    root.addEventListener('error', (ev) => report('error', ev && (ev.error || ev.message)));
+    root.addEventListener('unhandledrejection', (ev) => report('promesa rechazada', ev && ev.reason));
+  }
+
   async function initStorage() {
+    installGlobalErrorHandlers();
     await repo.init();
     repo.onError = (msg) => FP.ui.toast(`No se pudo guardar en IndexedDB (${msg}). Exporta los datos como respaldo.`);
+    // Estado real de persistencia: un fallo de escritura deja un aviso que NO desaparece (los datos solo están en memoria)
+    // hasta que un reintento o una escritura posterior se confirme.
+    repo.onSettled = (st) => {
+      state.persist = st;
+      const had = state.saveFailure && state.saveFailure.dataType === 'kv';
+      if (st.state === 'failed') {
+        state.saveFailure = { dataType: 'kv', message: `IndexedDB rechazó ${st.failed} escritura(s) (${st.lastError || 'sin detalle'}): esos datos están solo en memoria y se perderán al cerrar o recargar la página.` };
+        if (FP.ui && FP.ui.renderSaveFailure) FP.ui.renderSaveFailure(state);
+      } else if (had) {
+        state.saveFailure = null;
+        if (FP.ui && FP.ui.renderSaveFailure) FP.ui.renderSaveFailure(state);
+      }
+    };
+    root.addEventListener('beforeunload', (ev) => {
+      const st = repo.status();
+      if (st.state === 'pending' || st.state === 'failed') { ev.preventDefault(); ev.returnValue = ''; }
+    });
     migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo });
     state.storageKind = storage.kind;
     state.storage = { mode: repo.mode, migration: migrationState, error: repo.lastError };
