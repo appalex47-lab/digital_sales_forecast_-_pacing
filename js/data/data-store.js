@@ -70,15 +70,38 @@
     return o;
   }
 
-  function commitBatch(store, staged, result, { includeErrorRows = false, settings = {}, source = null, durationMs = null } = {}) {
+  /* ---------- «Solo filas nuevas o cambiadas» (actualizar desde Google Sheets / re-importar) ----------
+   * El almacén agrega lotes y el último gana por llave; re-importar la hoja completa duplicaba todas las filas. Con esta opción se omiten
+   * las filas cuya llave (fecha|canal|tipo) ya existe con EXACTAMENTE los mismos valores; las nuevas y las que cambiaron sí entran.
+   * No aplica a Segmentos (su llave no incluye dimensión/segmento) ni a Productos (almacén propio). */
+  const SKIPPABLE = ['historical', 'plan', 'actual'];
+  const canSkipUnchanged = (dataType) => SKIPPABLE.includes(dataType);
+  function valuesSig(r) {
+    const m = (r && r.metrics) || {};
+    return Object.keys(m).sort().map((k) => `${k}:${m[k] && m[k].value !== undefined && m[k].value !== null ? m[k].value : ''}`).join('|');
+  }
+  /** (registro) → true si ya hay un registro vigente con esa llave y los mismos valores. Se arma antes de agregar nada. */
+  function unchangedPredicate(store, dataType) {
+    const latest = resolveLatest(store, dataType);
+    return (rec) => { const cur = latest.get(rec.key); return Boolean(cur) && valuesSig(cur) === valuesSig(rec); };
+  }
+
+  function commitBatch(store, staged, result, { includeErrorRows = false, settings = {}, source = null, durationMs = null, skipUnchanged = false } = {}) {
     if (!result.canImport) throw new Error('El archivo tiene problemas de mapeo; corrígelos antes de importar.');
     const id = batchId();
     const selected = FP.importer.selectRows(result, { includeErrorRows });
     const acceptedLines = new Set(selected.map((r) => r.line));
+    let toWrite = selected, skipped = 0;
+    if (skipUnchanged && canSkipUnchanged(staged.dataType)) {
+      const same = unchangedPredicate(store, staged.dataType);
+      toWrite = selected.filter((r) => !same(r.record));
+      skipped = selected.length - toWrite.length;
+      if (!toWrite.length) return { empty: true, skippedUnchanged: skipped, dataType: staged.dataType, fileName: staged.fileName };
+    }
 
-    const newRecords = new Array(selected.length);
-    for (let i = 0; i < selected.length; i++) {
-      const rec = cloneRecord(selected[i].record);
+    const newRecords = new Array(toWrite.length);
+    for (let i = 0; i < toWrite.length; i++) {
+      const rec = cloneRecord(toWrite[i].record);
       rec.provenance.batchId = id;
       rec.provenance.fileName = staged.fileName;
       delete rec.provenance.columns; // el mapeo vive una sola vez en el batch
@@ -92,7 +115,8 @@
       importedAt: new Date().toISOString(),
       rowCount: result.rows.length,
       accepted: newRecords.length,
-      rejected: result.rows.length - newRecords.length,
+      skippedUnchanged: skipped,   // filas válidas que ya estaban cargadas sin cambios (no se vuelven a guardar)
+      rejected: result.rows.length - selected.length,
       quarantined: newRecords.filter((r) => r.status === 'quarantined').length,
       source: source || staged.sourceType || 'csv', durationMs,
       detection: staged.detection || null,   // Fase B · tipo de dataset detectado y método   // Fase A · auditoría: tipo de fuente y duración de la carga
@@ -117,10 +141,18 @@
    * identificador del lote ya puesto). `done` trae lo que calculó el Worker: filas leídas, aceptadas, rechazadas, en cuarentena, resumen,
    * problemas (con rowImported) y mapeo. El lote queda con los mismos campos que el de commitBatch.
    */
-  function commitRemote(store, staged, done, records, { id, includeErrorRows = false, settings = {}, source = null, durationMs = null } = {}) {
+  function commitRemote(store, staged, done, records, { id, includeErrorRows = false, settings = {}, source = null, durationMs = null, skipUnchanged = false } = {}) {
+    let skipped = 0;
+    if (skipUnchanged && canSkipUnchanged(staged.dataType)) {
+      const same = unchangedPredicate(store, staged.dataType);
+      const keep = records.filter((r) => !same(r));
+      skipped = records.length - keep.length; records = keep;
+      if (!records.length) return { empty: true, skippedUnchanged: skipped, dataType: staged.dataType, fileName: staged.fileName };
+      done = { ...done, accepted: done.accepted - skipped, quarantined: records.filter((r) => r.status === 'quarantined').length };
+    }
     const batch = {
       id, dataType: staged.dataType, fileName: staged.fileName, importedAt: new Date().toISOString(),
-      rowCount: done.rowCount, accepted: done.accepted, rejected: done.rejected, quarantined: done.quarantined,
+      rowCount: done.rowCount, accepted: done.accepted, skippedUnchanged: skipped, rejected: done.rejected, quarantined: done.quarantined,
       source: source || staged.sourceType || 'csv', durationMs,
       detection: staged.detection || null,
       includeErrorRows, settings: { ...settings }, mapping: { ...done.mapping }, delimiter: done.delimiter,
@@ -418,7 +450,7 @@
     return { headers: ['fecha', 'canal', ...C().metricKeys.map((k) => C().metrics[k].csv), 'evento', 'festivo', 'temporada'], rows };
   }
 
-  FP.dataStore = { signature, cached, latestList, segmentIndex, cloneRecord, commitRemote, newBatchId: () => batchId(),
+  FP.dataStore = { canSkipUnchanged, unchangedPredicate, signature, cached, latestList, segmentIndex, cloneRecord, commitRemote, newBatchId: () => batchId(),
     createStore, emptyCollection, records, batches, allBatches,
     commitBatch, removeBatch, clearCollection,
     findDuplicates, resolveLatest, observedValues, consolidate, years, isEmpty,

@@ -288,6 +288,9 @@
       const file = new File([r.text], SL.fileName(link.label, type), { type: 'text/csv' });
       const card = document.getElementById(`up-${type}`);
       await stageFiles([file], type, card ? card.closest('.upload-card').querySelector('.upload-card__state') : null);
+      // Actualizar desde Sheets: por omisión solo entran las filas nuevas o cambiadas (la hoja publicada siempre baja completa)
+      const stagedItem = state.staging.items.find((i) => i.staged.fileName === file.name);
+      if (stagedItem && ST.canSkipUnchanged(type)) stagedItem.skipUnchanged = true;
       const rows = Math.max(0, r.rows - 1);
       const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind };
@@ -1794,6 +1797,13 @@
 
   /** Lo que sigue a confirmar un archivo (de la página o del Worker): quitarlo de la revisión, guardar, recalcular y avisar. */
   function finishCommit(item, batch) {
+    if (batch && batch.empty) {   // todo lo del archivo ya estaba cargado sin cambios: no se guarda un lote vacío
+      state.staging.items = state.staging.items.filter((i) => i !== item);
+      state.staging.activeId = state.staging.items[0] ? state.staging.items[0].staged.id : null;
+      render();
+      FP.ui.toast(`Sin filas nuevas ni cambios: las ${batch.skippedUnchanged.toLocaleString('es-MX')} filas de ${batch.fileName} ya estaban cargadas con los mismos valores. No se guardó nada.`);
+      return;
+    }
     learn('data-committed');
       state.staging.items = state.staging.items.filter((i) => i !== item);
       state.staging.activeId = state.staging.items[0] ? state.staging.items[0].staged.id : null;
@@ -1804,7 +1814,7 @@
       if ((batch.dataType === 'plan' || batch.dataType === 'actual') && years.length && !years.includes(state.year)) loadYearScoped(years[years.length - 1]);
       refresh();
       render();
-      FP.ui.toast(`Importadas ${batch.accepted} filas de ${batch.fileName}${batch.quarantined ? ` (${batch.quarantined} con un valor en cuarentena: se conserva el original y no suma)` : ''}${batch.rejected ? `; ${batch.rejected} quedaron fuera` : ''}.`);
+      FP.ui.toast(`Importadas ${batch.accepted} filas de ${batch.fileName}${batch.skippedUnchanged ? ` (omití ${batch.skippedUnchanged.toLocaleString('es-MX')} que ya estaban iguales)` : ''}${batch.quarantined ? ` (${batch.quarantined} con un valor en cuarentena: se conserva el original y no suma)` : ''}${batch.rejected ? `; ${batch.rejected} quedaron fuera` : ''}.`);
   }
 
   /** Confirma un archivo del Worker: los registros llegan por bloques (la página nunca tuvo todas las filas) y se agregan al almacén de una vez. */
@@ -1820,7 +1830,7 @@
       try { done = await FP.importWorker.commit({ jobId: item.remote.jobId, batchId: id, includeErrorRows: Boolean(state.settings.includeErrorRows) }, { onProgress: onWorkProgress(item.staged.fileName) }); }
       catch (e) { item.busy = false; state.staging.working = null; render(); FP.ui.toast(`No se pudo importar ${item.staged.fileName}: ${e.message}`); return; }
       state.staging.working = null;
-      const batch = ST.commitRemote(state.store, item.staged, done, done.records, { id, includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+      const batch = ST.commitRemote(state.store, item.staged, done, done.records, { id, skipUnchanged: Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
       finishCommit(item, batch);
     } finally { item.committing = false; }
   }
@@ -2269,6 +2279,11 @@
 
     'issue-filter'(el) { state.staging.issueFilter = el.dataset.value; render(); },
 
+    'staging-skip-unchanged'(el) {
+      const item = activeItem(); if (!item) return;
+      item.skipUnchanged = el.checked; render();
+    },
+
     'discard-staged'() {
       const item = activeItem();
       if (item && item.remote) FP.importWorker.drop(item.remote.jobId);   // el Worker libera las filas de ese archivo
@@ -2286,7 +2301,7 @@
       if (!item.result || item.result.sig !== stagedSig(item.staged)) item.result = processStaged(item.staged);
       if (!item.result.canImport) { render(); FP.ui.toast('Corrige el mapeo antes de importar.'); return; }
       const batch = ST.commitBatch(state.store, item.staged, item.result,
-        { includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+        { skipUnchanged: Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
       finishCommit(item, batch);
     },
 

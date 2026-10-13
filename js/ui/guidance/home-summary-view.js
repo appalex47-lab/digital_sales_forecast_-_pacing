@@ -164,21 +164,8 @@
       planHtml = `<p data-why-basis="plan"><strong>Contra el plan, la venta va ${esc(F().currency(Math.abs(wp.gap), 0))} ${under ? 'por debajo' : 'por encima'}</strong>${fin(wp.gapPct) ? ` (${esc(F().signedPercent(wp.gapPct, 1))})` : ''}.</p>
         ${wp.drivers.length ? `<ul class="home-key__list">${wp.drivers.map((d) => `<li>${esc(DNAME[d.id] || d.label)} <b class="${cls(d.contribution)}">${esc(sMoney(d.contribution))}</b><span class="field__hint home-key__sub" data-cmp="${esc(d.id)}">Plan ${esc(fmtMet(metK[d.id], d.baseline))} → Real ${esc(fmtMet(metK[d.id], d.current))}${fin(d.deltaPct) ? ` (${esc(F().signedPercent(d.deltaPct, 1))})` : ''}</span></li>`).join('')}</ul>` : ''}`;
     }
-    // Lectura secundaria: contra el periodo anterior (otra base; puede dar otro signo)
-    let prevHtml = '';
-    if (w.status === 'ok') {
-      const e = w.effects;
-      const mb = w.metrics && w.metrics.base, mc = w.metrics && w.metrics.cur;
-      prevHtml = `<p class="field__hint home-key__sub" data-why-basis="previous">Contra ${esc(pw.base)} (mismos días): la venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))} (${esc(F().currency(w.baseline, 0))} → ${esc(F().currency(w.current, 0))}, ${esc(F().signedPercent(w.baseline ? w.delta / w.baseline : null, 1))})${e ? `: tráfico ${esc(sMoney(e.traffic))} · conversión ${esc(sMoney(e.cr))} · ticket ${esc(sMoney(e.aov))}` : ''}.</p>${e && mb && mc ? `<p class="field__hint home-key__sub" data-why-prev-cmp>Sesiones ${esc(fmtMet('sessions', mb.sessions))} → ${esc(fmtMet('sessions', mc.sessions))} · CR ${esc(fmtMet('cr', mb.cr))} → ${esc(fmtMet('cr', mc.cr))} · Ticket ${esc(fmtMet('aov', mb.aov))} → ${esc(fmtMet('aov', mc.aov))}</p>` : ''}`;
-      if (wp && wp.status === 'ok' && e) {
-        const planCr = (wp.drivers.find((d) => d.id === 'conversionRate') || {}).contribution;
-        if (fin(planCr) && Math.sign(planCr) !== 0 && Math.sign(e.cr) !== 0 && Math.sign(planCr) !== Math.sign(e.cr)) {
-          prevHtml += `<p class="field__hint home-key__sub" data-why-differ>Son comparaciones distintas: la conversión va ${planCr > 0 ? 'por encima del plan' : 'por debajo del plan'} pero ${e.cr > 0 ? 'sube' : 'baja'} contra ${esc(pw.base)}.</p>`;
-        }
-      }
-    }
     let whyHtml;
-    if (planHtml) whyHtml = planHtml + prevHtml;
+    if (planHtml) whyHtml = planHtml;   // la lectura contra el periodo anterior vive en «Ver más» (aquí saturaba la tarjeta)
     else if (w.status === 'ok' && w.effects) {
       const e = w.effects;
       whyHtml = `<p><strong>La venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))}</strong> contra ${esc(pw.base)} (sin plan para comparar).</p>

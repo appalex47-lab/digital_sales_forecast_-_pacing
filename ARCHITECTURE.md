@@ -2770,3 +2770,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ### Errores globales
 - `app.js` registra `error` y `unhandledrejection`: avisa al usuario (máximo 5, una cada 5 s), registra en consola y oculta la API key si apareciera en el mensaje.
+
+### Importar solo filas nuevas o cambiadas (2026-10-13)
+- Google publica la pestaña completa: la descarga siempre es total. Lo que cambia es lo que se guarda: `dataStore.commitBatch/commitRemote` aceptan `skipUnchanged` y omiten las filas cuya llave (`fecha|canal|tipo`) ya existe vigente con los mismos valores de métricas; las nuevas y las cambiadas entran (el último lote gana, como siempre).
+- Solo para Histórico, Plan y Venta real. Segmentos (su llave no incluye dimensión/segmento) y Productos (almacén propio) siguen importando el archivo completo.
+- «Actualizar» desde Sheets marca la casilla por omisión (`item.skipUnchanged`); en archivos manuales viene desmarcada. Hasta 20,000 filas la revisión muestra cuántas ya están cargadas y cuántas son nuevas; en archivos mayores (Worker) el conteo se informa al importar. Si todo está igual no se guarda un lote vacío. `batch.skippedUnchanged` registra las omitidas.
+- No detecta filas que desaparecieron de la hoja (el almacén es de solo agregar): quitar un día de Sheets no lo quita de la app.
