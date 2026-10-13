@@ -1314,3 +1314,4 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .home-key__goal[data-goal="reached"] strong { color: var(--c-ok, #1d7a46); }
 .home-key__goal[data-goal="projected"] strong { color: var(--c-ink, #14213d); }
 .chart-goalnote { margin: var(--sp-2, 8px) 0 0; }
+.home-key__excl { margin: var(--sp-2, 8px) 0 0; }

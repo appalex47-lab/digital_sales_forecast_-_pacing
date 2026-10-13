@@ -146,12 +146,37 @@
     };
   }
 
+  /**
+   * Días cerrados que NO entran al «Venta real» del Total digital porque falta algún canal (el total exige los cuatro:
+   * si no, se compararía un total parcial contra el plan completo). Devuelve cuánta venta de los demás canales quedó fuera,
+   * para que la cifra de Inicio sea explicable contra la suma del archivo.
+   */
+  function excluded(state, ch, period) {
+    const run = state.fc && state.fc.run;
+    if (ch !== 'total' || !run || !run.total || !run.channels) return null;
+    const inPeriod = (d) => (period && period.type === 'month' ? d.slice(0, 7) === period.key : true);
+    const ids = Object.keys(run.channels);
+    const dates = [], missing = {}; let revenue = 0;
+    run.total.days.forEach((d, i) => {
+      if (!d.closed || d.counted || !inPeriod(d.date)) return;
+      let any = false;
+      ids.forEach((id) => {
+        const cd = run.channels[id].days[i];
+        if (cd && cd.counted && cd.actual && FP.metrics.isFiniteNumber(cd.actual.revenue)) { any = true; revenue += cd.actual.revenue; }
+        else missing[id] = (missing[id] || 0) + 1;
+      });
+      if (any) dates.push(d.date);
+    });
+    if (!dates.length) return null;
+    return { days: dates.length, revenue, dates, missing };
+  }
+
   /** Todo el resumen para el canal y periodo de Inicio. */
   function compute(state, h) {
     const period = periodOf(state, h), ch = h.channel || 'total';
     const w = why(state, ch, period);
-    return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), goal: goal(state, ch, period), trust: trust(state, w) };
+    return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), goal: goal(state, ch, period), excluded: excluded(state, ch, period), trust: trust(state, w) };
   }
 
-  FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf, goal };
+  FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf, goal, excluded };
 })(typeof window !== 'undefined' ? window : globalThis);
