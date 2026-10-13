@@ -814,6 +814,9 @@ td.neg { color: var(--c-err); font-weight: 600; }
 .chart-grid { stroke: var(--c-line); stroke-width: 1; }
 .chart-label { fill: var(--c-muted); font-size: 11px; font-family: var(--font-body, system-ui); font-variant-numeric: tabular-nums; }
 .chart-cut { stroke: var(--c-ink-soft); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-goal { stroke: var(--c-ink-soft); stroke-width: 1; stroke-dasharray: 1 4; opacity: .7; }
+.chart-dot { fill: var(--c-ink); stroke: #fff; stroke-width: 2; }
+.chart-label--strong { font-weight: 600; fill: var(--c-ink); }
 .chart-line { fill: none; stroke-width: 2.25; stroke-linejoin: round; }
 .chart-line--plan { stroke: var(--c-na); stroke-dasharray: 6 4; }
 .chart-line--actual { stroke: var(--c-accent); stroke-width: 2.75; }
@@ -1305,3 +1308,10 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .why-basis .ds-h4 { margin: 0 0 var(--sp-2, .5rem); }
 .why-cmp td.is-neg, .why-cmp td.is-pos { font-weight: 600; }
 .home-key__sub[data-cmp] { display: block; }
+
+/* Fecha estimada de cumplimiento de meta */
+.home-key__goal { margin: var(--sp-3, 12px) 0 0; padding-top: var(--sp-2, 8px); border-top: 1px solid var(--c-line, #e3e8f0); font-size: .95rem; }
+.home-key__goal[data-goal="reached"] strong { color: var(--c-ok, #1d7a46); }
+.home-key__goal[data-goal="projected"] strong { color: var(--c-ink, #14213d); }
+.chart-goalnote { margin: var(--sp-2, 8px) 0 0; }
+.home-key__excl { margin: var(--sp-2, 8px) 0 0; }

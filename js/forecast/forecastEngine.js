@@ -467,6 +467,60 @@
     return out;
   }
 
+  /* ---------- Fecha en que se alcanza la meta (según el forecast) ---------- */
+
+  const GOAL_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const longDay = (iso) => `${+iso.slice(8, 10)} de ${GOAL_MONTHS[+iso.slice(5, 7) - 1]}`;
+  const daysBetween = (a, b) => Math.round((Cal().parseDate(b) - Cal().parseDate(a)) / 86400000);
+
+  /**
+   * Primer día del periodo en que el acumulado del forecast (real en los días cerrados, proyección en los demás) alcanza la meta.
+   * @param days  días del motor con { date, counted, forecast }
+   * @param opts  { from, to, goal, cutoff, metric }  (meta = plan total del periodo)
+   * @returns { status, date, cumulative, goal, attainment, daysBeforeEnd }
+   *   reached     → ya se cumplió con venta real (fecha ≤ corte y día contado)
+   *   projected   → el forecast la alcanza en `date` (posterior al corte)
+   *   missed      → el periodo ya cerró sin alcanzarla
+   *   not_reached → el periodo sigue abierto y, al ritmo del forecast, no llega (attainment = cierre proyectado ÷ meta)
+   *   no_goal | not_evaluable → sin meta o con días sin forecast antes de alcanzarla: no se afirma nada
+   */
+  function goalDate(days, { from, to, goal, cutoff, metric = 'revenue' }) {
+    if (!M().isFiniteNumber(goal) || goal <= 0) return { status: 'no_goal', goal: null };
+    let cum = 0, inRange = 0;
+    for (const d of days) {
+      if (d.date < from || d.date > to) continue;
+      inRange++;
+      const v = d.forecast ? d.forecast[metric] : null;
+      if (!M().isFiniteNumber(v)) return { status: 'not_evaluable', goal, cumulative: cum, reason: `Hay días sin forecast (${d.date}).` };
+      cum += v;
+      if (cum + 0.005 >= goal) {
+        const real = Boolean(cutoff) && d.date <= cutoff && d.counted;
+        return { status: real ? 'reached' : 'projected', date: d.date, cumulative: cum, goal, attainment: cum / goal, daysBeforeEnd: daysBetween(d.date, to) };
+      }
+    }
+    if (!inRange) return { status: 'not_evaluable', goal, cumulative: 0, reason: 'El periodo no tiene días.' };
+    const closed = Boolean(cutoff) && to <= cutoff;
+    return { status: closed ? 'missed' : 'not_reached', goal, cumulative: cum, attainment: cum / goal };
+  }
+
+  /** goalDate de una serie del motor para un mes ({type:'month', key:'YYYY-MM'}) o el año ({type:'year'}). */
+  function periodGoal(series, period, { cutoff, metric = 'revenue' } = {}) {
+    const p = period && period.type === 'month' ? series.months.find((m) => m.key === period.key) : series.annual;
+    if (!p || !p.plan) return { status: 'no_goal', goal: null };
+    return goalDate(series.days, { from: p.firstDate, to: p.lastDate, goal: p.plan[metric], cutoff, metric });
+  }
+
+  /** Texto corto para la persona; null si no hay nada honesto que decir. `scope`: 'mes' | 'año'. */
+  function goalLabel(g, scope) {
+    if (!g) return null;
+    const pct = (v) => `${(v * 100).toFixed(1)} %`;
+    if (g.status === 'reached') return `Meta del ${scope} cumplida el ${longDay(g.date)}`;
+    if (g.status === 'projected') return `Alcanzas la meta del ${scope} el ${longDay(g.date)} (estimado)${g.daysBeforeEnd > 0 ? `, ${g.daysBeforeEnd} día${g.daysBeforeEnd === 1 ? '' : 's'} antes de cerrar` : ''}`;
+    if (g.status === 'missed') return `Meta del ${scope} no cumplida: cerró en ${pct(g.attainment)}`;
+    if (g.status === 'not_reached') return `Al ritmo actual no llegas a la meta del ${scope}: cierras en ${pct(g.attainment)} (estimado)`;
+    return null;
+  }
+
   function worstConfidence(list) {
     const order = ['insufficient', 'limited', 'sufficient', 'excellent'];
     const valid = list.filter(Boolean);
@@ -501,5 +555,5 @@
   }
 
   FP.forecastEngine = { effectiveConfig, planInputs, actualInputs, buildChannelRows, buildTotalRows, projectRows,
-    runForecast, generateForecast, worstConfidence, buildAlerts, historyAdequacy, backtest, backtestRows };
+    runForecast, generateForecast, worstConfidence, buildAlerts, historyAdequacy, backtest, backtestRows, goalDate, periodGoal, goalLabel, longDay };
 })(typeof window !== 'undefined' ? window : globalThis);

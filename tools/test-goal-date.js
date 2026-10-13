@@ -1,0 +1,37 @@
+// Fecha estimada de cumplimiento de meta.  node tools/test-goal-date.js  (desde la raíz)
+const fs = require('fs'), vm = require('vm');
+const html = fs.readFileSync('index.html', 'utf8');
+const srcs = [...html.matchAll(/<script src="(js\/[^"?]+)/g)].map((m) => m[1]).filter((f) => !/js\/(ui|app|export|worker)/.test(f));
+const ctx = { console, Math, Date, JSON, Map, Set, Intl, Number, String, Array, Object, RegExp, Error, Promise, setTimeout, clearTimeout, parseFloat, isNaN, Symbol, Uint8Array, TextEncoder };
+ctx.globalThis = ctx; ctx.window = undefined; vm.createContext(ctx);
+srcs.forEach((f) => vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f }));
+const M = ctx.FP.metrics, DM = ctx.FP.dataModel;
+let bad = 0;
+const E = ctx.FP.forecastEngine;
+const t = (n, c, d) => { console.log((c ? '✔ ' : '✘ ') + n + (!c && d !== undefined ? ' — ' + JSON.stringify(d) : '')); if (!c) bad++; };
+const mk = (vals, startDay = 1) => vals.map((v, i) => ({ date: `2026-10-${String(startDay + i).padStart(2, '0')}`, counted: v.c !== false, forecast: v.f === null ? null : { revenue: v.f !== undefined ? v.f : v } }));
+const days = mk([10, 10, 10, 10, 10]); // 50 en 5 días
+const g = (goal, cutoff) => E.goalDate(days, { from: '2026-10-01', to: '2026-10-05', goal, cutoff });
+t('meta 25 → se cruza el día 3 (acumulado 30)', g(25, '2026-10-05').date === '2026-10-03' && g(25, '2026-10-05').daysBeforeEnd === 2);
+t('día ≤ corte y contado → reached', g(25, '2026-10-05').status === 'reached');
+t('día > corte → projected', g(25, '2026-10-01').status === 'projected');
+t('día futuro no contado aunque ≤ corte → projected', E.goalDate(mk([{ f: 10, c: false }, 10, 10]), { from: '2026-10-01', to: '2026-10-03', goal: 10, cutoff: '2026-10-03' }).status === 'projected');
+t('meta exacta al último día', g(50, '2026-10-05').date === '2026-10-05' && g(50, '2026-10-05').daysBeforeEnd === 0);
+t('tolerancia de centavos: 49.996 cuenta como meta 50', E.goalDate(mk([10, 10, 10, 10, 9.996]), { from: '2026-10-01', to: '2026-10-05', goal: 50, cutoff: '2026-10-05' }).status === 'reached');
+t('no llega, periodo cerrado → missed con avance', g(60, '2026-10-05').status === 'missed' && Math.abs(g(60, '2026-10-05').attainment - 50 / 60) < 1e-9);
+t('no llega, periodo abierto → not_reached', g(60, '2026-10-02').status === 'not_reached');
+t('sin meta / meta 0 / null → no_goal', ['no_goal'].every((s) => g(0).status === s && g(null).status === s && g(undefined).status === s));
+t('un día sin forecast → not_evaluable (no inventa fecha)', E.goalDate(mk([10, { f: null }, 10]), { from: '2026-10-01', to: '2026-10-03', goal: 25 }).status === 'not_evaluable');
+t('periodo sin días → not_evaluable', E.goalDate(days, { from: '2027-01-01', to: '2027-01-31', goal: 5 }).status === 'not_evaluable');
+t('ignora días fuera del rango', E.goalDate(days, { from: '2026-10-03', to: '2026-10-05', goal: 15 }).date === '2026-10-04');
+t('métrica distinta de revenue', E.goalDate(days.map((d) => ({ ...d, forecast: { orders: 2 } })), { from: '2026-10-01', to: '2026-10-05', goal: 5, metric: 'orders' }).date === '2026-10-03');
+const L = (o, s) => E.goalLabel(o, s);
+t('texto reached', L(g(25, '2026-10-05'), 'mes') === 'Meta del mes cumplida el 3 de octubre', L(g(25, '2026-10-05'), 'mes'));
+t('texto projected con días antes y "estimado"', /^Alcanzas la meta del año el 3 de octubre \(estimado\), 2 días antes/.test(L(g(25, '2026-10-01'), 'año')), L(g(25, '2026-10-01'), 'año'));
+t('texto missed y not_reached con porcentaje', /cerró en 83\.3 %/.test(L(g(60, '2026-10-05'), 'mes')) && /cierras en 83\.3 % \(estimado\)/.test(L(g(60, '2026-10-02'), 'mes')));
+t('sin texto cuando no es evaluable', L({ status: 'not_evaluable' }, 'mes') === null && L({ status: 'no_goal' }, 'mes') === null && L(null, 'mes') === null);
+const se = { days, months: [{ key: '2026-10', firstDate: '2026-10-01', lastDate: '2026-10-05', plan: { revenue: 25 } }], annual: { firstDate: '2026-10-01', lastDate: '2026-10-05', plan: { revenue: 40 } } };
+t('periodGoal mes usa el plan del mes', E.periodGoal(se, { type: 'month', key: '2026-10' }, { cutoff: '2026-10-05' }).date === '2026-10-03');
+t('periodGoal año usa el plan anual', E.periodGoal(se, { type: 'year' }, { cutoff: '2026-10-05' }).date === '2026-10-04');
+t('periodGoal mes inexistente → no_goal', E.periodGoal(se, { type: 'month', key: '2030-01' }, {}).status === 'no_goal');
+console.log(bad ? `\n${bad} FALLAS` : '\nOK'); process.exit(bad ? 1 : 0);

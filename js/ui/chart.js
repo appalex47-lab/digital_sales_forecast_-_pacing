@@ -38,7 +38,7 @@
    * @param {object} p { dates, series: [{ values, cls }], metric, cutIndex, cutLabel, ariaLabel }
    * @returns html (o null si no hay datos)
    */
-  function lineChart({ dates, series, metric, cutIndex = -1, cutLabel = '', ariaLabel = '' }) {
+  function lineChart({ dates, series, metric, cutIndex = -1, cutLabel = '', ariaLabel = '', markers = [] }) {
     const esc = H().esc;
     const W = 900, Hh = 260, L = 70, R = 16, T = 14, B = 30;
     const all = series.flatMap((s) => s.values).filter((v) => v !== null && Number.isFinite(v));
@@ -69,6 +69,12 @@
       ${cut !== null ? `<line x1="${cut.toFixed(1)}" x2="${cut.toFixed(1)}" y1="${T}" y2="${Hh - B}" class="chart-cut"/>
         <text x="${(cut + 4).toFixed(1)}" y="${T + 10}" class="chart-label">${esc(cutLabel)}</text>` : ''}
       ${series.map((s) => `<path d="${path(s.values)}" class="chart-line ${s.cls}"/>`).join('')}
+      ${markers.filter((m) => m && m.index >= 0 && Number.isFinite(m.value)).map((m) => {
+        const mx = x(m.index), my = y(m.value), left = m.index > n * 0.6;
+        return `<g class="chart-marker" data-marker="goal"><line x1="${L}" x2="${W - R}" y1="${my.toFixed(1)}" y2="${my.toFixed(1)}" class="chart-goal"/>
+          <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="5" class="chart-dot"/>
+          <text x="${(left ? mx - 8 : mx + 8).toFixed(1)}" y="${(my - 8).toFixed(1)}" class="chart-label chart-label--strong" text-anchor="${left ? 'end' : 'start'}">${esc(m.label)}</text></g>`;
+      }).join('')}
     </svg></div>`;
   }
 

@@ -2776,3 +2776,8 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - Solo para Histórico, Plan y Venta real. Segmentos (su llave no incluye dimensión/segmento) y Productos (almacén propio) siguen importando el archivo completo.
 - «Actualizar» desde Sheets marca la casilla por omisión (`item.skipUnchanged`); en archivos manuales viene desmarcada. Hasta 20,000 filas la revisión muestra cuántas ya están cargadas y cuántas son nuevas; en archivos mayores (Worker) el conteo se informa al importar. Si todo está igual no se guarda un lote vacío. `batch.skippedUnchanged` registra las omitidas.
 - No detecta filas que desaparecieron de la hoja (el almacén es de solo agregar): quitar un día de Sheets no lo quita de la app.
+
+## Fecha estimada de cumplimiento de meta
+- `forecastEngine.goalDate(days, {from,to,goal,cutoff,metric})` recorre el forecast diario del periodo y devuelve el primer día en que el acumulado alcanza la meta (plan total del periodo). Estados: `reached` (día ≤ corte con venta real), `projected` (estimado), `missed` (periodo cerrado sin llegar), `not_reached` (abierto, no llega al ritmo actual), `no_goal`, `not_evaluable` (algún día sin forecast: no se inventa fecha).
+- `periodGoal(series, {type:'month',key}|{type:'year'})` y `goalLabel(g, 'mes'|'año')` dan el texto. Solo métricas aditivas (venta, pedidos, tráfico).
+- Se muestra en Inicio («¿Cómo voy?», `homeSummaryEngine.goal`), en la tabla «Pacing por periodo» (columna «Meta alcanzada») y en la gráfica acumulada (marcador y nota). Pruebas: `tools/test-goal-date.js`, `tools/regression/batch_meta_fecha.py`.

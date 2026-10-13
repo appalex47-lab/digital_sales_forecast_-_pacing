@@ -173,8 +173,16 @@
       { values: s.forecast, cls: 'chart-line--forecast', swatch: 'legend__swatch--forecast', label: 'Forecast' },
       { values: s.actual, cls: 'chart-line--actual', swatch: 'legend__swatch--actual', label: 'Actual acumulado' }
     ];
+    // Marcador: día en que el forecast acumulado alcanza la meta anual (solo métricas aditivas)
+    let markers = [], goalNote = '';
+    if (!ratio) {
+      const g = FP.forecastEngine.periodGoal(seriesOf(run, ch), { type: 'year' }, { cutoff: run.cutoff, metric: k });
+      const label = FP.forecastEngine.goalLabel(g, 'año');
+      if (label) goalNote = label;
+      if (g.date) markers = [{ index: days.findIndex((d) => d.date === g.date), value: g.goal, label: `Meta anual · ${FP.forecastEngine.longDay(g.date)}${g.status === 'projected' ? ' (est.)' : ''}` }];
+    }
     const svg = FP.chart.lineChart({ dates: days.map((d) => d.date), series: items, metric: k, cutIndex: s.cutoffIndex,
-      cutLabel: `corte ${run.cutoff}`, ariaLabel: `Plan, actual y forecast acumulados de ${chLabel(ch)}` });
+      cutLabel: `corte ${run.cutoff}`, ariaLabel: `Plan, actual y forecast acumulados de ${chLabel(ch)}`, markers });
     if (!svg) { $('fc-chart').innerHTML = '<div class="empty"><strong>Sin datos para graficar</strong></div>'; return; }
     $('fc-chart').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Tendencia acumulada · ${esc(chLabel(ch))} · ${esc(C().metrics[k].label)}</h3>
@@ -182,6 +190,7 @@
           <select id="fc-chart-ch" data-action="fc-channel">${['total', ...C().channelIds].map((c) =>
             `<option value="${c}" ${c === ch ? 'selected' : ''}>${esc(chLabel(c))}</option>`).join('')}</select></div></div>
       ${FP.chart.legend([items[0], items[2], items[1]], k)}
+      ${goalNote ? `<p class="chart-goalnote" data-goal-note><strong>${esc(goalNote)}.</strong></p>` : ''}
       ${svg}
       <p class="field__hint">${ratio ? 'Para CR y AOV el acumulado es la razón de sumas a cada fecha, no un promedio de días.' : 'El forecast parte del actual acumulado al corte y suma la proyección diaria del método (conserva la estacionalidad del plan).'}</p>`;
   }
@@ -204,6 +213,8 @@
       <td>${future ? pacePill('future') : pacePill(FP.gap.pacingStatus(t.compliance, thresholds || undefined))}</td>
     </tr>`;
   }
+
+  const longDayShort = (iso) => `${+iso.slice(8, 10)} ${['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][+iso.slice(5, 7) - 1]}`;
 
   function renderPeriods(state) {
     const esc = H().esc;
@@ -230,8 +241,19 @@
     let table = '';
     if (f.period === 'months') {
       const s = seriesOf(run, f.tableChannel);
-      table = `<table class="table ds-table">${head('Mes')}<tbody>${s.months.map((m, i) => periodRow(k, m, MONTHS[i], '', th)).join('')}
-        <tr class="row-total">${periodRow(k, s.annual, `<strong>Año ${run.year}</strong>`, '', th).replace(/^<tr>|<\/tr>$/g, '')}</tr></tbody></table>`;
+      const FE = FP.forecastEngine, additive = !['conversionRate', 'aov'].includes(k);
+      const goalCell = (period, scope) => {
+        if (!additive) return '';
+        const g = FE.periodGoal(s, period, { cutoff: run.cutoff, metric: k });
+        const t = g.status === 'reached' || g.status === 'projected' ? longDayShort(g.date) + (g.status === 'projected' ? ' <span class="cell-sub">estimado</span>' : ' <span class="cell-sub">cumplida</span>')
+          : g.status === 'missed' ? '<span class="cell-sub">No se cumplió</span>' : g.status === 'not_reached' ? `<span class="cell-sub">No llega (${esc((g.attainment * 100).toFixed(0))} %)</span>` : '<span class="cell-sub">—</span>';
+        return `<td data-goal="${esc(g.status)}" data-goal-date="${esc(g.date || '')}">${t}</td>`;
+      };
+      const inner = (html) => html.replace(/^<tr>|<\/tr>\s*$/g, '');   // contenido de las celdas, sin <tr>
+      const rowWithGoal = (html, cell, cls = '') => `<tr${cls}>${inner(html)}${cell}</tr>`;
+      const headG = additive ? head('Mes').replace('<th>Estado</th></tr>', '<th>Estado</th><th>Meta alcanzada</th></tr>') : head('Mes');
+      table = `<table class="table ds-table">${headG}<tbody>${s.months.map((m, i) => rowWithGoal(periodRow(k, m, MONTHS[i], '', th), goalCell({ type: 'month', key: m.key }))).join('')}
+        ${rowWithGoal(periodRow(k, s.annual, `<strong>Año ${run.year}</strong>`, '', th), goalCell({ type: 'year' }), ' class="row-total"')}</tbody></table>`;
     } else if (f.period === 'weeks') {
       const s = seriesOf(run, f.tableChannel);
       const weeks = s.weeks.filter((w) => w.firstDate.slice(0, 7) === f.month || w.lastDate.slice(0, 7) === f.month);

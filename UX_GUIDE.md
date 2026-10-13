@@ -695,3 +695,6 @@ Cada driver muestra «base → actual (Δ%)». Se leen dos bases por separado: c
 La tarjeta de Inicio muestra solo la lectura contra el plan (con «Plan → Real» por driver). La lectura contra el periodo anterior y su nota de «comparaciones distintas» viven en «Ver más → Por qué».
 ## Carga: actualizar desde Google Sheets
 «Actualizar» trae la hoja completa pero, por omisión, solo importa las filas nuevas o con valores distintos (casilla en la revisión). Se puede desmarcar para importar todo.
+
+## Fecha de meta
+Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya ocurrió con venta real. Si no llega, se dice con qué porcentaje cierra; si no es evaluable, no se muestra nada.
