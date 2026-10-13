@@ -26,7 +26,8 @@
     if (!built.pairs.length) return { status: 'no_base', coverage, note: built.notes[0] || null };
     const cur = DE.aggregate(built.pairs.map((p) => p.current)), base = DE.aggregate(built.pairs.map((p) => p.baseline));
     const delta = cur.revenue - base.revenue;
-    const out = { status: 'ok', delta, current: cur.revenue, baseline: base.revenue, coverage, effects: null, why: null };
+    const mt = (a) => ({ sessions: a.trafficVolume, orders: a.orders, revenue: a.revenue, cr: a.conversionRate, aov: a.aov });
+    const out = { status: 'ok', delta, current: cur.revenue, baseline: base.revenue, coverage, effects: null, why: null, metrics: { base: mt(base), cur: mt(cur) } };
     const ok = [cur, base].every((a) => fin(a.trafficVolume) && a.trafficVolume > 0 && fin(a.orders) && fin(a.revenue));
     if (!ok) { out.why = 'no_traffic'; return out; }
     const e = FP.trafficConversionEngine.effects({ t: base.trafficVolume, o: base.orders, r: base.revenue }, { t: cur.trafficVolume, o: cur.orders, r: cur.revenue });
@@ -52,8 +53,12 @@
     if (!built.pairs.length) return { status: 'no_base', coverage, note: built.notes[0] || null };
     const l1 = DE.level1(built.pairs, {});
     const drivers = (l1.drivers || []).filter((d) => fin(d.contribution));
-    return { status: 'ok', gap: l1.gap.abs, gapPct: l1.gap.pct, current: l1.gap.current, baseline: l1.gap.baseline, coverage,
-      drivers: drivers.map((d) => ({ id: d.driver, label: d.label, contribution: d.contribution })), method: l1.attribution && l1.attribution.method };
+    const mt = (a) => ({ sessions: a.trafficVolume, orders: a.orders, revenue: a.revenue, cr: a.conversionRate, aov: a.aov });
+    const byId = {}; drivers.forEach((d) => { byId[d.driver] = d.contribution; });
+    const effects = ['trafficVolume', 'conversionRate', 'aov'].every((k) => fin(byId[k])) ? { traffic: byId.trafficVolume, cr: byId.conversionRate, aov: byId.aov, delta: l1.gap.abs } : null;
+    return { status: 'ok', gap: l1.gap.abs, gapPct: l1.gap.pct, current: l1.gap.current, baseline: l1.gap.baseline, coverage, effects,
+      metrics: { base: mt(l1.baseline), cur: mt(l1.current) },
+      drivers: drivers.map((d) => ({ id: d.driver, label: d.label, contribution: d.contribution, baseline: d.baseline, current: d.current, deltaPct: d.deltaPct })), method: l1.attribution && l1.attribution.method };
   }
 
   /** 3 · Cómo va cada canal: las mismas cifras de Pacing/Forecast que las tarjetas de Inicio, canal por canal. */
