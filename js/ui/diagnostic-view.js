@@ -211,6 +211,16 @@
       </ol></details>`;
   }
 
+  /** Botón de Cohere junto al título de Hipótesis: solo el botón y el estado de la IA; el resto de la explicación va en el tooltip. */
+  function aiControl(state, d) {
+    const esc = H().esc, ai = state.dx;
+    const pill = FP.cohereProxy && FP.cohereProxy.available() ? H().pill('ok', 'IA por el servidor del equipo') : ai.apiKey ? H().pill('ok', 'API key configurada') : H().pill('na', 'Sin API key');
+    const tip = 'Hipótesis con Cohere (opcional). La API key, el modelo y si se recuerda en este navegador se configuran en Configuración de RevNavigator. Cohere solo recibe los datos ya calculados (brecha, drivers, señales, calidad) y reglas estrictas: no calcula ni cambia cifras, no inventa dimensiones y debe citar señales existentes. Su respuesta se valida; si falla, todo lo demás sigue funcionando.';
+    return `<div class="dx-ai-ctl">${pill}
+      <button type="button" class="btn btn--primary btn--small" data-action="dx-ai" ${d.status === 'ok' && ai.ai.status !== 'busy' ? '' : 'disabled'}>Generar hipótesis con Cohere</button>
+      <span class="help-dot" tabindex="0" role="note" title="${esc(tip)}" aria-label="${esc(tip)}">?</span></div>`;
+  }
+
   function renderHypotheses(state, d) {
     const esc = H().esc;
     const ai = state.dx.ai;
@@ -220,7 +230,7 @@
         ${ai.result.errors.length ? `<p class="field__hint">Validación: ${esc(ai.result.errors.join(' '))}</p>` : ''}`
       : ai.result ? `<p class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc(ai.result.errors.join(' '))} El diagnóstico matemático y las hipótesis por reglas siguen completos.</p>` : '';
     $('dx-hyps').innerHTML = `
-      <div class="subhead"><h3 class="panel__title">${stage('Hipótesis')} Hipótesis (${d.hypotheses.length})</h3></div>
+      <div class="subhead"><h3 class="panel__title">${stage('Hipótesis')} Hipótesis (${d.hypotheses.length})</h3>${aiControl(state, d)}</div>
       ${d.hypotheses.length ? d.hypotheses.map((h) => hypothesisCard(h, d)).join('') : '<p class="note">No hay evidencia suficiente para formular hipótesis.</p>'}
       ${aiBlock}
       <p class="field__hint">Cada hipótesis cita sus señales, declara el nivel de evidencia y queda como "Requiere investigación". Sin señales localizadas, la hipótesis es genérica y no nombra causas. No son recomendaciones.</p>`;
@@ -253,15 +263,11 @@
     const esc = H().esc;
     const ai = state.dx;
     $('dx-confidence').innerHTML = `
-      <div class="grid-2 grid-2--tight">
+      <div>
         <section><h4>Confianza de datos</h4>
           ${d.confidence.components.length ? `<ul class="alert-list">${d.confidence.components.map((c) => `<li>${confPill(c.level)} <span><strong>${esc(c.label)}.</strong> ${esc(c.note)}</span></li>`).join('')}</ul>` : ''}
           <p class="field__hint">${esc(d.confidence.note)}</p>
           ${(d.validation || []).length ? `<h4>Validaciones</h4><ul class="alert-list">${d.validation.map((v) => `<li>${H().pill(v.pass ? 'ok' : 'error', v.pass ? 'Cierra' : 'No cierra')} <span>${esc(v.label)}</span></li>`).join('')}</ul>` : ''}</section>
-        <section><h4>Hipótesis con Cohere (opcional)</h4>
-          <p class="field__hint">${FP.cohereProxy && FP.cohereProxy.available() ? H().pill('ok', 'IA por el servidor del equipo') : ai.apiKey ? H().pill('ok', 'API key configurada') : H().pill('na', 'Sin API key')} La API key, el modelo y si se recuerda en este navegador se configuran en <a href="#ajustes" data-nav="ajustes">Configuración de RevNavigator</a>.</p>
-          <button type="button" class="btn btn--primary" data-action="dx-ai" ${d.status === 'ok' && ai.ai.status !== 'busy' ? '' : 'disabled'}>Generar hipótesis con Cohere</button>
-          <p class="field__hint">Cohere solo recibe los datos ya calculados (brecha, drivers, señales, calidad) y reglas estrictas: no calcula ni cambia cifras, no inventa dimensiones y debe citar señales existentes. Su respuesta se valida; si falla, todo lo demás sigue funcionando.</p></section>
       </div>`;
   }
 

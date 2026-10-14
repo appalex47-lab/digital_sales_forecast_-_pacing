@@ -2796,3 +2796,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - La función exige sesión real (rechaza anónimas), pertenencia a un equipo, origen permitido (`ALLOWED_ORIGINS`, por omisión GitHub Pages), modelo `command-*`, ≤8 mensajes, `max_tokens` ≤4000, cuerpo ≤1 MB; descarta cualquier otro campo (tools, documentos…). Los errores de Cohere se traducen (`cohere_auth`, `cohere_quota`, `cohere_server`) sin reenviar su cuerpo.
 - Cliente: `js/ai/cohereProxy.js` (`FP.cohereProxy.available()`); `cohereClient` usa el proxy cuando hay sesión de equipo; la key local solo es respaldo si la función no existe o responde `not_configured`. Configuración → IA muestra el estado y un botón «Probar la conexión del servidor».
 - Pruebas: `tools/test-cohere-proxy.js`, `tools/regression/batch_cohere_proxy.py`.
+
+## Cuenta, Cohere en Diagnóstico/Narrativa y enlace a la hoja (2026-10-14)
+- Avatar de la barra superior = menú de cuenta (`navigation.renderAccountMenu`, acción `acct-menu`): con sesión muestra correo, equipo, acceso a Configuración y «Cerrar sesión» (`cloud-signout`); sin sesión ofrece «Iniciar sesión».
+- Diagnóstico: el botón «Generar hipótesis con Cohere» y el estado de la IA viven en el encabezado de Hipótesis (`aiControl`); la explicación larga está en el tooltip «?».
+- Narrativa: el panel `#nx-ai` (redacción de Cohere) va justo debajo del resumen ejecutivo y se oculta si no hay redacción.
+- Google Sheets: el enlace publicado no revela el archivo, así que cada hoja guardada admite un enlace de edición (`editUrl`, validado por `FP.sheetsLink.editUrl`; se deriva solo si se usó un enlace compartido) y muestra «Abrir hoja ↗». Prueba: `tools/regression/batch_cuenta_enlaces.py`.
