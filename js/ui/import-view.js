@@ -76,6 +76,10 @@
     const links = (state.sheets && state.sheets.links ? state.sheets.links : []).filter((l) => l.type === t);
     const when = (iso) => { try { return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
     const rows = links.map((l) => `<li class="sheets-link"><span><strong>${esc(l.label || 'Pestaña de Google Sheets')}</strong>
+        ${l.editUrl ? `<a class="btn btn--small" href="${esc(l.editUrl)}" target="_blank" rel="noopener noreferrer" data-sheets-open>Abrir hoja ↗</a>` : `<details class="disclosure sheets-edit"><summary>Agregar enlace para abrir la hoja</summary>
+          <div class="field"><label for="sheets-edit-${esc(l.id)}">Enlace de la hoja (el de la barra de direcciones al editarla)</label>
+          <input id="sheets-edit-${esc(l.id)}" type="url" data-draft autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…/edit">
+          <button type="button" class="btn btn--small" data-action="sheets-set-edit" data-id="${esc(l.id)}">Guardar</button></div></details>`}
         <span class="cell-sub">${l.rows !== undefined ? `${esc(F().integer(l.rows))} filas · ` : ''}traída ${esc(when(l.lastAt))}${l.kind === 'shared' ? ' · enlace compartido (todo el libro)' : ''}</span></span>
         <span class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="sheets-refresh" data-id="${esc(l.id)}">Actualizar</button>
         <button type="button" class="btn btn--small" data-action="sheets-remove" data-id="${esc(l.id)}">Quitar</button></span></li>`).join('');
@@ -91,6 +95,9 @@
           <input id="sheets-url-${t}" type="url" data-draft autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=…&single=true&output=csv"></div>
         <div class="field"><label for="sheets-label-${t}">Nombre para reconocerla (opcional)</label>
           <input id="sheets-label-${t}" type="text" data-draft autocomplete="off" placeholder="Ej.: Venta real 2026"></div>
+        <div class="field"><label for="sheets-edit-${t}">Enlace para abrir la hoja y agregar datos (opcional)</label>
+          <input id="sheets-edit-${t}" type="url" data-draft autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…/edit">
+          <span class="field__hint">El enlace publicado no permite abrir el archivo; con este enlace aparece «Abrir hoja» junto a la pestaña guardada.</span></div>
         <div class="btn-row"><button type="button" class="btn btn--primary" data-action="sheets-fetch" data-type="${t}">Traer y revisar</button></div>
         <p class="field__hint"><strong>Cuidado:</strong> cualquiera que tenga el enlace puede leer esa pestaña. Publica solo la pestaña de datos y, cuando ya no la uses, ve a Archivo → Compartir → Publicar en la web → «Dejar de publicar». Google tarda unos minutos en reflejar cambios.</p>
         <p class="field__hint">Tip de fechas: usa el formato <strong>AAAA-MM-DD</strong> (Formato → Número → Más formatos → Fecha y hora personalizada) para que no se confunda día con mes.</p>

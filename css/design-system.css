@@ -1460,7 +1460,7 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 .hmenu__q { display: none; font-weight: 800; }
 @media (max-width: 640px) { .hmenu__txt { display: none; } .hmenu__q { display: inline; } .hmenu__btn { min-width: 44px; min-height: 44px; justify-content: center; padding: 6px 8px; } }
 @media (max-width: 640px) { .topbar__actions .icon-btn[disabled] { display: none; } }   /* marcadores «próximamente»: ceden el sitio al menú Ayuda en celular */
-@media (max-width: 380px) { .topbar__actions .avatar { display: none; } }
+
 .learn-panel .learning-bar__body { display: block; }
 @media (min-width: 900px) { .learn-panel__cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
@@ -1555,3 +1555,12 @@ section.panel:has(> .panel__head:only-child > [data-own-head]) { display: none; 
 .tour-offer--soft .tour-offer__opts { margin-bottom: 8px; }
 
 .chip--ok { background: var(--ds-success-soft, #dcfce7); color: #14532d; border-color: transparent; }
+
+/* Menú de cuenta (avatar) */
+.avatar--btn { border: 0; cursor: pointer; font: inherit; font-weight: 700; }
+.avatar--btn:hover { filter: brightness(1.1); }
+.avatar--btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.hmenu--acct .hmenu__list { min-width: 240px; }
+.hmenu__who { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--ds-border, #e5e7eb); word-break: break-all; }
+a.hmenu__item { display: flex; align-items: center; text-decoration: none; }
+.sheets-link .sheets-edit { margin-top: 4px; }

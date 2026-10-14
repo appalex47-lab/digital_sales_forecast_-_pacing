@@ -152,16 +152,18 @@
   function renderAi(state) {
     const esc = H().esc;
     const ai = state.nx.ai;
-    if (ai.status === null) { $('nx-ai').innerHTML = ''; return; }
+    const box = $('nx-ai'), sec = box.closest('section');
+    if (sec) sec.hidden = ai.status === null;   // sin redacción de Cohere no se muestra un panel vacío
+    if (ai.status === null) { box.innerHTML = ''; return; }
     if (ai.status === 'busy') { $('nx-ai').innerHTML = '<p class="ds-loading" role="status">Redactando con Cohere…</p>'; return; }
     if (ai.status !== 'ok') {
-      $('nx-ai').innerHTML = `<div class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc((ai.errors || []).join(' '))} La narrativa determinística de arriba sigue disponible y no depende de Cohere.</div>`;
+      $('nx-ai').innerHTML = `<div class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc((ai.errors || []).join(' '))} La narrativa determinística sigue disponible y no depende de Cohere.</div>`;
       return;
     }
     const r = ai.result;
     $('nx-ai').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Redacción de Cohere <span class="chip">validada</span></h3>
-        <span class="field__hint">Redactó la narrativa de arriba en prosa; se verificó que no agregara ninguna cifra nueva.</span></div>
+        <span class="field__hint">Redactó el resumen y las secciones en prosa; se verificó que no agregara ninguna cifra nueva.</span></div>
       <p class="narrative-summary">${esc(r.summary)}</p>
       <div class="narrative-ai-body">${esc(r.narrative).split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join('')}</div>
       ${r.missingInfo && r.missingInfo.length ? `<p class="field__hint">Información que Cohere marcó como faltante: ${esc(r.missingInfo.join('; '))}.</p>` : ''}`;

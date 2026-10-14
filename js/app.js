@@ -294,7 +294,10 @@
       if (stagedItem && ST.canSkipUnchanged(type)) stagedItem.skipUnchanged = true;
       const rows = Math.max(0, r.rows - 1);
       const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind };
+      // Enlace para abrir la hoja: el que pegó la persona; si usó un enlace compartido (/d/<id>/), se deriva solo; si no, conserva el anterior
+      const prev = state.sheets.links.find((l) => l.id === id || (l.type === type && l.url === String(link.url).trim()));
+      const open = FP.sheetsLink.editUrl(link.editUrl) || (n.kind === 'shared' ? FP.sheetsLink.editUrl(link.url) : '') || (prev && prev.editUrl) || '';
+      const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind, ...(open ? { editUrl: open } : {}) };
       const i = state.sheets.links.findIndex((l) => l.id === id || (l.type === type && l.url === rec.url));
       if (i >= 0) state.sheets.links[i] = rec; else state.sheets.links.push(rec);
       saveSheetLinks(); clearDrafts('sheets-');
@@ -2151,11 +2154,20 @@
       const t = el.dataset.type;
       const url = (document.getElementById(`sheets-url-${t}`) || {}).value;
       const label = (document.getElementById(`sheets-label-${t}`) || {}).value;
-      return fetchSheet(t, { url, label });
+      const edit = (document.getElementById(`sheets-edit-${t}`) || {}).value;
+      if (String(edit || '').trim() && !FP.sheetsLink.editUrl(edit)) { FP.ui.toast('El enlace para abrir la hoja debe ser de Google Sheets (https://docs.google.com/spreadsheets/d/…).'); return; }
+      return fetchSheet(t, { url, label, editUrl: edit });
     },
     'sheets-refresh'(el) {
       const l = state.sheets.links.find((x) => x.id === el.dataset.id);
       if (l) return fetchSheet(l.type, l);
+    },
+    'sheets-set-edit'(el) {
+      const l = state.sheets.links.find((x) => x.id === el.dataset.id); if (!l) return;
+      const v = (document.getElementById(`sheets-edit-${l.id}`) || {}).value;
+      const u = FP.sheetsLink.editUrl(v);
+      if (!u) { FP.ui.toast('Pega el enlace de la hoja tal como lo ves al editarla (https://docs.google.com/spreadsheets/d/…/edit).'); return; }
+      l.editUrl = u; saveSheetLinks(); clearDrafts('sheets-'); render(); FP.ui.toast('Listo: ahora puedes abrir la hoja desde aquí.');
     },
     'sheets-remove'(el) {
       state.sheets.links = state.sheets.links.filter((x) => x.id !== el.dataset.id);
@@ -2348,6 +2360,7 @@
     /* ----- Fase 7: guía, ayuda y navegación ----- */
     help(el) { FP.help.open(el.dataset.id); },
     'help-menu'() { FP.navigation.toggleHelpMenu(); },
+    'acct-menu'() { FP.navigation.toggleAcctMenu(); },
     'help-section'() {
       const v = FP.guidanceConfig.VIEWS[state.view];
       if (v) FP.help.open(v.help, `Ayuda: ${v.title}`);

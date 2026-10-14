@@ -96,5 +96,19 @@
     return `Google Sheets - ${base}.csv`;
   }
 
-  FP.sheetsLink = { normalize, fetchCsv, looksLikeHtml, fileName, HOST };
+  /**
+   * Enlace para ABRIR la hoja y agregar información. Un enlace «publicado» (/d/e/…) no revela el id real del archivo,
+   * así que solo se puede abrir si la persona pegó el enlace de edición; un enlace compartido (/d/<id>/…) sí permite derivarlo.
+   * Devuelve la URL limpia (https://docs.google.com/spreadsheets/d/<id>/edit[#gid=N]) o '' si no es válida.
+   */
+  function editUrl(input) {
+    let u; try { u = new URL(String(input || '').trim()); } catch (e) { return ''; }
+    if (u.protocol !== 'https:' || u.hostname !== HOST) return '';
+    const m = /^\/spreadsheets\/d\/([A-Za-z0-9_-]+)(?:\/.*)?$/.exec(u.pathname);
+    if (!m || m[1] === 'e') return '';
+    const g = u.searchParams.get('gid') || (/(?:^|[#&])gid=(\d+)/.exec(u.hash || '') || [])[1];
+    return `https://${HOST}/spreadsheets/d/${m[1]}/edit${g && /^\d+$/.test(g) ? `#gid=${g}` : ''}`;
+  }
+
+  FP.sheetsLink = { normalize, fetchCsv, looksLikeHtml, fileName, editUrl, HOST };
 })(typeof window !== 'undefined' ? window : globalThis);

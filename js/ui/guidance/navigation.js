@@ -203,6 +203,39 @@
       </div></div>`;
   }
   const esc2 = (x) => H().esc(x);
+
+  /* Menú de cuenta (avatar): quién está en sesión, equipo y cerrar sesión. */
+  let acctOpen = false;
+  function renderAccountMenu(state) {
+    const el = $('topbar-account'); if (!el) return;
+    const ses = state.cloud && state.cloud.session;
+    const initials = ses && ses.email ? String(ses.email).replace(/@.*/, '').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'RN' : 'RN';
+    el.innerHTML = `<div class="hmenu hmenu--acct">
+      <button type="button" class="avatar avatar--btn" id="acct-menu-btn" data-action="acct-menu" aria-haspopup="menu" aria-expanded="${acctOpen}" aria-controls="acct-menu" aria-label="Cuenta${ses && ses.email ? `: ${esc2(ses.email)}` : ''}" title="${ses ? esc2(ses.email || 'Sesión iniciada') : 'Sin sesión iniciada'}">${esc2(initials)}</button>
+      <div class="hmenu__list" id="acct-menu" role="menu" aria-labelledby="acct-menu-btn" ${acctOpen ? '' : 'hidden'}>
+        <p class="hmenu__who">${ses ? `<strong>${esc2(ses.email || 'Sesión iniciada')}</strong><span class="cell-sub">Equipo: ${esc2(ses.teamName || '—')}</span>` : '<strong>Sin sesión iniciada</strong><span class="cell-sub">Tus datos solo están en este navegador.</span>'}</p>
+        ${ses ? '<a role="menuitem" class="hmenu__item" href="#ajustes">Configuración · Nube y equipo</a><button type="button" role="menuitem" class="hmenu__item" data-action="cloud-signout">Cerrar sesión</button>'
+      : '<button type="button" role="menuitem" class="hmenu__item" data-action="login-open">Iniciar sesión</button>'}
+      </div></div>`;
+  }
+  function setAcctMenu(open, focusBtn) {
+    acctOpen = !!open;
+    const btn = $('acct-menu-btn'), list = $('acct-menu'); if (!btn || !list) return;
+    btn.setAttribute('aria-expanded', String(acctOpen)); list.hidden = !acctOpen;
+    if (acctOpen) { const f = list.querySelector('[role="menuitem"]'); if (f) f.focus(); } else if (focusBtn) btn.focus();
+  }
+  function toggleAcctMenu() { setAcctMenu(!acctOpen, false); }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', (e) => {
+      if (!acctOpen) return;
+      const inside = e.target.closest && e.target.closest('#topbar-account'), item = e.target.closest && e.target.closest('.hmenu__item');
+      if (!inside || item) setAcctMenu(false, false);
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      if (acctOpen && e.key === 'Escape') { e.preventDefault(); setAcctMenu(false, true); }
+      if (acctOpen && e.key === 'Tab') setAcctMenu(false, false);
+    });
+  }
   function setHelpMenu(open, focusBtn) {
     helpOpen = !!open;
     const btn = $('help-menu-btn'), list = $('help-menu');
@@ -260,7 +293,7 @@
     const showNext = next.view !== view && !NO_NEXT.includes(view);
     const ctxHtml = CTX_VIEWS.includes(view) ? `<p class="ux-head__ctx">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
             ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>` : '';
-    renderHelpMenu(state);
+    renderHelpMenu(state); renderAccountMenu(state);
     $('ux-context').innerHTML = `<div class="ux-wrap">
       <div class="ux-head" data-tone="${tone}">
         ${view === 'inicio' ? '' : `<nav aria-label="Ruta" class="breadcrumbs ux-head__eyebrow"><ol>${['Inicio', ...(grp ? [grp.label] : []), ...extra].map((c, i, arr) => {
@@ -299,5 +332,5 @@
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
   }
 
-  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, toggleGroup, renderContextBar, toggleHelpMenu, markAnalystBlocks, applyMode };
+  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, toggleGroup, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
 })(typeof window !== 'undefined' ? window : globalThis);
