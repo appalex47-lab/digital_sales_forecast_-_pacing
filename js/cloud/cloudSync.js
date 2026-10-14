@@ -311,5 +311,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
+  FP.cloud = { rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);

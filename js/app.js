@@ -21,11 +21,12 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'paquete', 'segmentos', 'proyeccion'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'paquete', 'segmentos', 'proyeccion', 'cambios'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
     productQuality: [],
+    cx: { mode: 'ayer', sync: null, key: null },   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
     proj: { growth: 0.16, shares: null, channel: 'total', savedAt: null, savedTotal: null },   // Proyección del próximo año (en esta sesión)   // instantánea de los lotes de Productos para Calidad de datos (ver refreshProductQuality)
@@ -1027,6 +1028,7 @@
       } else FP.recoveryCenter.render(state);
     }
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }
+    else if (state.view === 'cambios') { ensureForecast(); FP.changesView.render(state); }
     else if (state.view === 'medir') FP.measureView.render(state);
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
     else if (state.view === 'paquete') FP.packageView.render(state, previewPackage());
@@ -2912,6 +2914,13 @@
       render();
       FP.diagnosticView.focusEvidence('drv-' + el.dataset.driver, { openMore: 'tree' });
     },
+    'chg-mode'(el) { state.cx.mode = el.dataset.mode; render(); },
+    async 'chg-owner'(el) {
+      const mail = state.cx.sync && state.cx.sync.userEmail; if (el.dataset.own === '1' && !mail) return;
+      const r = await FP.changeStore.update(el.dataset.key, { owner_email: el.dataset.own === '1' ? mail : null });
+      if (!r.ok) root.alert(r.error);
+      state.cx.key = null; render();
+    },
     'dx-evidence-back'() {
       const id = state.dx.evidenceFrom; state.dx.evidenceFrom = null; render();
       FP.diagnosticView.focusEvidence('hyp-' + id);
@@ -3480,6 +3489,14 @@
   }
 
   function bind() {
+    document.addEventListener('change', async (e) => {
+      const t = e.target; if (!t || !t.closest || !t.closest('#chg-body')) return;
+      const st = t.getAttribute('data-chg-status'), nt = t.getAttribute('data-chg-note');
+      if (st === null && nt === null) return;
+      const r = await FP.changeStore.update(st !== null ? st : nt, st !== null ? { status: t.value } : { note: t.value.trim() || null });
+      if (!r.ok) root.alert(r.error);
+      if (st !== null) { state.cx.key = null; render(); }
+    });
     document.addEventListener('click', (e) => {
       const el = e.target.closest('button[data-action]');
       if (el && !el.disabled && actions[el.dataset.action]) actions[el.dataset.action](el);

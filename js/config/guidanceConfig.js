@@ -28,7 +28,7 @@
       description: 'Describe el negocio, prepara datos, metas, estacionalidad y el plan distribuido.',
       views: ['carga', 'calidad', 'resumen', 'plan', 'estacionalidad', 'datos', 'configuracion', 'proyeccion'] },   // orden acordado: cargar → validar → metas → plan → estacionalidad → datos normalizados → configuración del plan
     { id: 'monitorear', question: '¿Cómo voy?', label: 'Monitorear', verb: 'Compara y proyecta',
-      description: 'Plan contra actual, gap, cumplimiento, forecast y alertas.', views: ['pacing'] },
+      description: 'Plan contra actual, gap, cumplimiento, forecast y alertas.', views: ['pacing', 'cambios'] },
     { id: 'diagnosticar', question: '¿Por qué?', label: 'Diagnosticar', verb: 'Diagnostica',
       description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'producto', 'segmentos', 'analisis'] },
     { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
@@ -83,6 +83,10 @@
       action: 'Compara cuánto deberías llevar de {{sale}} contra cuánto llevas realmente, y revisa la proyección de cierre.',
       produces: 'El cumplimiento a la fecha, la brecha contra el plan y un forecast del cierre del periodo.',
       help: ['pacing', 'gap', 'cumplimiento', 'forecast', 'forecastGap', 'performanceIndex'] },
+    cambios: { title: 'Qué cambió desde ayer', group: 'monitorear', purpose: 'Lo que se movió desde ayer o desde tu última visita, ordenado de lo más importante a lo menos.',
+      action: 'Revisa la venta de ayer contra el plan, qué canal movió el cierre, qué alertas son nuevas y qué cambió en los datos.',
+      produces: 'Una lectura de dos minutos de lo que cambió, con las alertas y su estado compartido por el equipo.',
+      help: ['pacing', 'gap', 'forecastGap'] },
     diagnostico: { title: '¿Por qué? Diagnóstico', group: 'diagnosticar', purpose: 'Qué variable matemática explica la brecha, dónde ocurre y qué investigar.',
       action: 'Descompón la brecha en Volumen × CR × AOV y revisa las señales por dimensión.',
       produces: 'Drivers, señales e hipótesis que orientan dónde investigar — nunca una causa confirmada.',
@@ -369,7 +373,7 @@
 
   /** Paso de la metodología que corresponde a cada vista (para "estás aquí"). */
   const VIEW_STEP = { proyeccion: 'meta', resumen: 'meta', plan: 'plan', estacionalidad: 'plan', configuracion: 'plan', carga: 'real', calidad: 'real', datos: 'real',
-    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing' };
+    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing' };
 
   /* Fase 9.1 — Microlearning: una idea por evento real, una sola vez, solo en modo Aprendiz. */
   const LESSONS = [

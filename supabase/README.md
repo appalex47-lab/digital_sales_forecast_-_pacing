@@ -5,6 +5,7 @@ No hay registro abierto ni sesiones anónimas. Todo el alta se hace en el panel 
 
 ## 1. Aplicar la migración (una vez)
 SQL Editor → pegar `APLICAR_TODO.sql` (o las dos migraciones en orden) → Run. Crea `teams`, `team_members`, `team_blobs` con RLS.
+Incluye `20261014_alertas_historia.sql` (tablas `alert_states` y `daily_snapshots`: estado compartido de alertas y foto diaria para «Qué cambió desde ayer»; sin ellas la app guarda eso solo en el navegador).
 No toca `cloud_blobs` (copias anónimas anteriores). Cuando ya no se necesiten: `drop table public.cloud_blobs;`.
 
 ## 2. Cerrar el registro
