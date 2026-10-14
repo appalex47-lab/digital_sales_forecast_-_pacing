@@ -1,11 +1,12 @@
 /**
- * cloudSync.js — Fase S1: copia en la nube (Supabase) con sesión anónima.
+ * cloudSync.js — Nube (Supabase) con acceso controlado por equipo.
  *
  * Sin dependencias: habla con Auth y REST de Supabase con fetch.
- *  - «Entrar sin login»: POST /auth/v1/signup sin credenciales crea un usuario ANÓNIMO (hay que activar
- *    «Anonymous sign-ins» en el proyecto). Su token se renueva solo; se guarda en localStorage.
+ *  - Acceso con correo y contraseña. NO hay registro abierto ni sesiones anónimas: las cuentas las da de alta la persona
+ *    administradora en el panel de Supabase (Authentication → Users) y se asignan a un equipo (tabla team_members).
+ *  - Un usuario pertenece a UN equipo. Todos los miembros ven y escriben los mismos datos (RLS por team_id, ver
+ *    supabase/migrations/20261013_teams_login.sql). Otro equipo solo ve lo suyo.
  *  - Cada clave de la app (sobre {schemaVersion,savedAt,data}) se serializa y se parte en filas de texto.
- *  - RLS en la base: cada usuario solo ve/escribe sus filas (auth.uid() = user_id).
  *  - La llave publishable es pública por diseño; nunca se usa service_role.
  */
 (function (root) {
@@ -19,7 +20,7 @@
   function saveSession(s) { try { if (s) root.localStorage.setItem(SESSION_KEY, JSON.stringify(s)); else root.localStorage.removeItem(SESSION_KEY); } catch (e) { /* sin storage */ } }
   function toSession(j) {
     return { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at || Math.floor(Date.now() / 1000) + (j.expires_in || 3600),
-      user_id: (j.user && j.user.id) || null, anonymous: !!(j.user && j.user.is_anonymous), email: (j.user && j.user.email) || null };
+      user_id: (j.user && j.user.id) || null, anonymous: !!(j.user && j.user.is_anonymous), email: (j.user && j.user.email) || null, team_id: j.team_id || null, team_name: j.team_name || null };
   }
   function authHeaders(extra) { return Object.assign({ apikey: cfg().publishableKey, 'Content-Type': 'application/json' }, extra || {}); }
   function explain(status, body) {
@@ -28,6 +29,8 @@
     if (code === 'signup_disabled' || /signups? not allowed/i.test(msg)) return 'Supabase tiene apagado el registro de usuarios (Authentication → Sign In / Providers → User Signups → «Allow new users to sign up»). Los inicios anónimos también lo necesitan. Actívalo y guarda.';
     if (code === 'anonymous_provider_disabled' || /anonymous sign-ins are disabled/i.test(msg)) return 'Los inicios anónimos están desactivados en Supabase (Authentication → Sign In / Providers → Allow anonymous sign-ins). Actívalos y guarda con «Save changes».';
     if (code === 'captcha_failed' || /captcha/i.test(msg)) return 'Supabase pide CAPTCHA y esta versión de la app todavía no lo envía. Desactiva CAPTCHA en Supabase hasta que lo publiquemos.';
+    if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.';
+    if (code === 'weak_password') return 'La contraseña es muy débil: usa al menos 8 caracteres.';
     if (code === 'email_exists' || code === 'identity_already_exists') return 'Ese correo ya tiene una cuenta. Usa «Entrar con mi correo» para abrirla.';
     if (code === 'email_address_invalid' || code === 'validation_failed') return 'Ese correo no es válido.';
     if (code === 'otp_expired' || /expired|invalid/i.test(msg) && code.startsWith('otp')) return 'El código es incorrecto o ya venció. Pide uno nuevo.';
@@ -70,14 +73,39 @@
     finally { try { if (id !== null && root.turnstile) root.turnstile.remove(id); } catch (e) { /* ya no existe */ } if (box && box.parentNode) box.parentNode.removeChild(box); }
   }
 
-  async function signInAnonymously(fetchImpl, opts) {
+  /** Entrar con correo y contraseña (cuenta creada por la persona administradora). Carga el equipo del usuario. */
+  async function loginPassword(email, password, opts) {
+    email = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Escribe un correo válido.' };
+    if (!password) return { ok: false, error: 'Escribe tu contraseña.' };
     const cp = await getCaptchaToken(opts); if (!cp.ok) return { ok: false, error: cp.error };
-    const f = fetchImpl || root.fetch.bind(root);
-    let res; try { res = await f(`${cfg().url}/auth/v1/signup`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(cp.token ? { data: {}, gotrue_meta_security: { captcha_token: cp.token } } : { data: {} }) }); }
+    const f = (opts && opts.fetchImpl) || root.fetch.bind(root);
+    const body = { email, password }; if (cp.token) body.gotrue_meta_security = { captcha_token: cp.token };
+    let res; try { res = await f(`${cfg().url}/auth/v1/token?grant_type=password`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }); }
     catch (e) { return { ok: false, error: 'No se pudo conectar con Supabase (sin conexión o bloqueado).' }; }
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) return { ok: false, error: explain(res.status, j) };
-    const s = toSession(j); saveSession(s); return { ok: true, session: s };
+    const sess = toSession(j);
+    if (sess.anonymous) return { ok: false, error: 'Las sesiones anónimas ya no se permiten.' };
+    const t = await loadTeam(sess, opts && opts.fetchImpl);
+    if (!t.ok) return t;       // sin equipo no se guarda la sesión: no habría a dónde sincronizar
+    sess.team_id = t.team_id; sess.team_name = t.team_name; saveSession(sess);
+    return { ok: true, session: sess };
+  }
+  /** Equipo del usuario (tabla team_members + teams, protegidas por RLS). */
+  async function loadTeam(session, fetchImpl) {
+    let rows; try { rows = await rest('team_members?select=team_id,teams(name)', { fetchImpl, session }); } catch (e) { return { ok: false, error: e.message }; }
+    const r = rows && rows[0];
+    if (!r || !r.team_id) return { ok: false, error: 'Tu usuario existe, pero todavía no pertenece a ningún equipo. Pide a la persona administradora que te agregue.' };
+    return { ok: true, team_id: r.team_id, team_name: (r.teams && r.teams.name) || null };
+  }
+  /** Cambio de contraseña de la persona que ya inició sesión. */
+  async function changePassword(newPassword, opts) {
+    if (String(newPassword || '').length < 8) return { ok: false, error: 'La contraseña nueva debe tener al menos 8 caracteres.' };
+    const se = await ensureSession({ fetchImpl: opts && opts.fetchImpl }); if (!se.ok) return { ok: false, error: 'Primero inicia sesión.' };
+    const r = await authCall('user', { method: 'PUT', body: { password: String(newPassword) }, session: se.session, fetchImpl: opts && opts.fetchImpl });
+    if (!r.ok) return { ok: false, error: /same|different/i.test(r.error) ? 'La contraseña nueva debe ser distinta a la actual.' : r.error };
+    return { ok: true };
   }
   async function refresh(s, fetchImpl) {
     const f = fetchImpl || root.fetch.bind(root);
@@ -85,15 +113,18 @@
     catch (e) { return { ok: false, error: 'No se pudo conectar con Supabase.' }; }
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.access_token) return { ok: false, error: explain(res.status, j), invalid: res.status === 400 || res.status === 401 };
-    const n = toSession(j); n.anonymous = s.anonymous; n.user_id = n.user_id || s.user_id; saveSession(n); return { ok: true, session: n };
+    const n = toSession(j); n.anonymous = s.anonymous; n.user_id = n.user_id || s.user_id; n.team_id = s.team_id; n.team_name = s.team_name; saveSession(n); return { ok: true, session: n };
   }
-  /** Sesión vigente: la guardada (renovada si caduca) o una anónima nueva. */
+  /** Sesión vigente: la guardada (renovada si caduca). Nunca crea una: hay que iniciar sesión. Una sesión anónima heredada se descarta. */
   async function ensureSession(opts) {
     let s = loadSession();
-    if (s && s.expires_at - 60 > Math.floor(Date.now() / 1000)) return { ok: true, session: s, created: false };
-    if (s) { const r = await refresh(s, opts && opts.fetchImpl); if (r.ok) return { ok: true, session: r.session, created: false }; if (!r.invalid) return r; }
-    if (opts && opts.noCreate) return { ok: false, error: 'Sin sesión.' };
-    const r = await signInAnonymously(opts && opts.fetchImpl, opts); return r.ok ? { ok: true, session: r.session, created: true } : r;
+    if (s && (s.anonymous || !s.team_id)) { saveSession(null); s = null; }
+    if (!s) return { ok: false, error: 'Inicia sesión para usar la nube.' };
+    if (s.expires_at - 60 > Math.floor(Date.now() / 1000)) return { ok: true, session: s, created: false };
+    const r = await refresh(s, opts && opts.fetchImpl);
+    if (r.ok) return { ok: true, session: r.session, created: false };
+    if (r.invalid) saveSession(null);
+    return { ok: false, error: r.invalid ? 'Tu sesión venció. Inicia sesión de nuevo.' : r.error };
   }
   function signOut() { saveSession(null); }
 
@@ -112,42 +143,6 @@
     return { ok: true, json: j };
   }
   const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
-
-  /** Paso 1 de vincular: pide a Supabase asociar el correo a la sesión anónima y mandar un código. */
-  async function linkEmailStart(email, opts) {
-    email = String(email || '').trim().toLowerCase();
-    if (!validEmail(email)) return { ok: false, error: 'Escribe un correo válido.' };
-    const se = await ensureSession(Object.assign({}, opts, { noCreate: true }));
-    if (!se.ok) return { ok: false, error: 'Primero sube una copia (se crea la sesión) y luego vincula tu correo.' };
-    if (!se.session.anonymous) return { ok: false, error: 'Esta sesión ya tiene un correo vinculado.' };
-    const r = await authCall('user', { method: 'PUT', body: { email }, session: se.session, fetchImpl: opts && opts.fetchImpl, redirectTo: redirectUrl() });
-    if (!r.ok) return r;
-    if (!r.json.new_email) return { ok: false, error: 'Supabase no pidió confirmar el correo (la opción «Confirm email» está apagada), así que no se enviará código. Actívala en Authentication → Sign In / Providers → Email y vuelve a intentar.' };
-    return { ok: true, email };
-  }
-  /** Paso 2 de vincular: confirma el código. La sesión anónima pasa a ser de ese correo, con los mismos datos. */
-  async function linkEmailConfirm(email, code, opts) {
-    const r = await authCall('verify', { body: { type: 'email_change', email: String(email).trim().toLowerCase(), token: String(code || '').trim() }, fetchImpl: opts && opts.fetchImpl });
-    if (!r.ok) return r;
-    if (!r.json.access_token) return { ok: false, error: 'Supabase no devolvió una sesión. Pide un código nuevo.' };
-    const sess = toSession(r.json); sess.anonymous = false; saveSession(sess); return { ok: true, session: sess };
-  }
-  /** Entrar con un correo que ya tiene cuenta (otro equipo, o tras borrar el navegador). */
-  async function loginStart(email, opts) {
-    email = String(email || '').trim().toLowerCase();
-    if (!validEmail(email)) return { ok: false, error: 'Escribe un correo válido.' };
-    const cp = await getCaptchaToken(opts); if (!cp.ok) return { ok: false, error: cp.error };
-    const body = { email, create_user: false }; if (cp.token) body.gotrue_meta_security = { captcha_token: cp.token };
-    const r = await authCall('otp', { body, fetchImpl: opts && opts.fetchImpl, loginCtx: true, redirectTo: redirectUrl() });
-    return r.ok ? { ok: true, email } : r;
-  }
-  async function loginConfirm(email, code, opts) {
-    const r = await authCall('verify', { body: { type: 'email', email: String(email).trim().toLowerCase(), token: String(code || '').trim() }, fetchImpl: opts && opts.fetchImpl });
-    if (!r.ok) return r;
-    if (!r.json.access_token) return { ok: false, error: 'Supabase no devolvió una sesión. Pide un código nuevo.' };
-    const sess = toSession(r.json); sess.anonymous = false; saveSession(sess); return { ok: true, session: sess };
-  }
-
 
   /** A dónde vuelve Supabase tras tocar el enlace del correo (debe estar en «Redirect URLs» del proyecto). */
   function redirectUrl() { try { return root.location && /^https?:/.test(root.location.protocol) ? root.location.origin + root.location.pathname : undefined; } catch (e) { return undefined; } }
@@ -172,7 +167,10 @@
     clean();
     if (!user || !user.id) return { ok: false, error: 'Abriste el enlace del correo, pero no pude confirmar la cuenta con Supabase. Intenta de nuevo.' };
     const sess = toSession({ access_token: at, refresh_token: p.get('refresh_token'), expires_in: Number(p.get('expires_in')) || 3600, expires_at: Number(p.get('expires_at')) || undefined, user });
-    sess.anonymous = !!user.is_anonymous && !user.email; saveSession(sess);
+    sess.anonymous = !!user.is_anonymous && !user.email;
+    if (sess.anonymous) return { ok: false, error: 'Las sesiones anónimas ya no se permiten.' };
+    const t = await loadTeam(sess, opts && opts.fetchImpl); if (!t.ok) return t;
+    sess.team_id = t.team_id; sess.team_name = t.team_name; saveSession(sess);
     return { ok: true, session: sess, type: p.get('type') || '' };
   }
 
@@ -196,9 +194,9 @@
   /** Sube un sobre (partido en trozos) y borra trozos sobrantes de una subida anterior más larga. */
   async function putKey(session, key, env, fetchImpl) {
     const table = cfg().table, text = JSON.stringify(env), parts = split(text, cfg().chunkChars), at = (env && env.savedAt && !isNaN(Date.parse(env.savedAt))) ? new Date(env.savedAt).toISOString() : new Date().toISOString();   // updated_at = fecha de guardado del dato: base de «gana el más nuevo»
-    const rows = parts.map((p, n) => ({ user_id: session.user_id, key, part: n, total: parts.length, payload: p, bytes: p.length, updated_at: at }));
+    const rows = parts.map((p, n) => ({ team_id: session.team_id, key, part: n, total: parts.length, payload: p, bytes: p.length, updated_at: at }));
     for (let b = 0; b < rows.length; b += 4) {
-      await rest(`${table}?on_conflict=user_id,key,part`, { method: 'POST', body: rows.slice(b, b + 4), prefer: 'resolution=merge-duplicates,return=minimal', fetchImpl, session });
+      await rest(`${table}?on_conflict=team_id,key,part`, { method: 'POST', body: rows.slice(b, b + 4), prefer: 'resolution=merge-duplicates,return=minimal', fetchImpl, session });
     }
     await rest(`${table}?key=eq.${encodeURIComponent(key)}&part=gte.${parts.length}`, { method: 'DELETE', fetchImpl, session });
     return { text, parts: parts.length, at };
@@ -220,17 +218,14 @@
         const { text, parts } = await putKey(session, key, env, fetchImpl);
         report.push({ key, bytes: text.length, parts, digest: digest(text) }); total += text.length;
       }
-      // claves que ya no existen localmente se quitan de la nube (la copia refleja lo local)
-      const names = new Set(report.map((r) => r.key));
-      const remote = await rest(`${table}?select=key&part=eq.0`, { fetchImpl, session });
-      for (const r of remote || []) if (!names.has(r.key)) await rest(`${table}?key=eq.${encodeURIComponent(r.key)}`, { method: 'DELETE', fetchImpl, session });
+      // En un equipo la nube es compartida: nunca se borran claves ajenas por no estar en este navegador.
     } catch (e) { return { ok: false, error: e.message, keys: report }; }
     return { ok: true, keys: report, bytes: total, userId: session.user_id, at: new Date().toISOString() };
   }
 
   /** Lee de la nube y arma los sobres. Devuelve { ok, items:[{key,envelope,bytes,digest}] }. */
   async function download({ fetchImpl } = {}) {
-    const se = await ensureSession({ fetchImpl, noCreate: true }); if (!se.ok) return { ok: false, error: 'Todavía no hay sesión ni copia en la nube en este navegador.' };
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: false, error: 'Inicia sesión para leer la copia de tu equipo.' };
     const session = se.session; let rows;
     try { rows = await rest(`${cfg().table}?select=key,part,total,payload&order=key.asc,part.asc`, { fetchImpl, session }); }
     catch (e) { return { ok: false, error: e.message }; }
@@ -272,7 +267,7 @@
    * del primer trozo). `provider`: { keys, read, write(key, envelope) }. Devuelve { ok, applied:[keys], pushedNewer:[keys] }.
    */
   async function pullNewer(provider, isDataKey, { fetchImpl } = {}) {
-    const se = await ensureSession({ fetchImpl, noCreate: true }); if (!se.ok) return { ok: true, applied: [], none: true };
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: true, applied: [], none: true };
     const session = se.session, applied = [];
     try {
       const metas = await rest(`${cfg().table}?select=key,total,updated_at&part=eq.0`, { fetchImpl, session });
@@ -296,15 +291,25 @@
     const d = await download(opts); if (!d.ok) return d;
     const remote = new Map(d.items.map((i) => [i.key, i])); const diffs = [];
     uploadReport.keys.forEach((k) => { const r = remote.get(k.key); if (!r) diffs.push(`${k.key}: falta en la nube`); else if (r.digest !== k.digest || r.bytes !== k.bytes) diffs.push(`${k.key}: no coincide`); });
-    remote.forEach((_, key) => { if (!uploadReport.keys.some((k) => k.key === key)) diffs.push(`${key}: sobra en la nube`); });
     return { ok: !diffs.length, diffs, keys: uploadReport.keys.length };
   }
 
+  /** Quita de la nube las claves con ese prefijo que ya no estén en `keep` (p. ej. trozos de productos de una subida anterior más larga). */
+  async function pruneKeys(prefix, keep, { fetchImpl } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+    try {
+      const remote = await rest(`${cfg().table}?select=key&part=eq.0`, { fetchImpl, session: se.session });
+      let n = 0;
+      for (const r of remote || []) if (String(r.key).startsWith(prefix) && !keep.has(r.key)) { await rest(`${cfg().table}?key=eq.${encodeURIComponent(r.key)}`, { method: 'DELETE', fetchImpl, session: se.session }); n++; }
+      return { ok: true, pruned: n };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function remove({ fetchImpl } = {}) {
-    const se = await ensureSession({ fetchImpl, noCreate: true }); if (!se.ok) return { ok: true, nothing: true };
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: true, nothing: true };
     try { await rest(`${cfg().table}?key=neq.__none__`, { method: 'DELETE', fetchImpl, session: se.session }); } catch (e) { return { ok: false, error: e.message }; }
     return { ok: true };
   }
 
-  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, linkEmailStart, linkEmailConfirm, loginStart, loginConfirm, validEmail, getCaptchaToken, loadSession, ensureSession, signInAnonymously, signOut, upload, download, verify, remove, digest, split };
+  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
