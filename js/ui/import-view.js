@@ -104,8 +104,23 @@
       </div></details>`;
   }
 
+  /** «Actualizar todo»: un solo paso para volver a leer todas las pestañas de Google Sheets guardadas. */
+  function sheetsAllBlock(state) {
+    const esc = H().esc, links = (state.sheets && state.sheets.links) || [], last = state.sheets && state.sheets.lastAll;
+    if (!links.length) return '';
+    const when = (iso) => { try { return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
+    const busy = state.sheets.busy ? 'disabled' : '';
+    return `<section class="panel sheets-all" aria-labelledby="sheets-all-t"><div class="panel__body sheets-all__row">
+        <div><h3 class="panel__title" id="sheets-all-t">Actualizar desde Google Sheets</h3>
+          <p class="field__hint">${links.length} pestaña${links.length === 1 ? '' : 's'} guardada${links.length === 1 ? '' : 's'} (${esc(links.map((l) => l.label || (C().dataTypes[l.type] || {}).label || l.type).join(' · '))}). Se leen todas juntas y quedan en revisión; solo entran las filas nuevas o cambiadas y nada se importa sin que lo confirmes.</p>
+          ${last ? `<p class="field__hint" data-sheets-last>Última vez ${esc(when(last.at))}: ${last.ok.length} lista${last.ok.length === 1 ? '' : 's'}${last.bad.length ? ` · <strong>${last.bad.length} con error</strong>: ${last.bad.map((b) => `${esc(b.label)} (${esc(b.error)})`).join('; ')}` : ''}.</p>` : ''}</div>
+        <div class="btn-row"><button type="button" class="btn btn--primary" data-action="sheets-refresh-all" ${busy}>${state.sheets.busy ? 'Trayendo…' : 'Actualizar todo'}</button></div>
+      </div></section>`;
+  }
+
   function renderCards(state) {
     const esc = H().esc;
+    const allEl = $('import-sheets-all'); if (allEl) allEl.innerHTML = sheetsAllBlock(state);
     $('import-cards').innerHTML = C().dataTypeIds.map((t) => {
       const dt = C().dataTypes[t];
       const col = state.store[t];

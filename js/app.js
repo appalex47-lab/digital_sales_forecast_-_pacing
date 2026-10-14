@@ -274,39 +274,70 @@
     state.sheets.links = s && s.data && Array.isArray(s.data.links) ? s.data.links.filter(ok).slice(0, 30) : [];
   }
   function saveSheetLinks() { storage.save(K.sheetsLinks, { links: state.sheets.links }); }
-  async function fetchSheet(type, link) {
+  /** Trae una pestaña y la deja «en revisión» (nada se importa sin confirmar). Devuelve { ok, rows } o { ok:false, error }. Sin avisos propios si `quiet`. */
+  async function fetchSheetCore(type, link, quiet) {
     const SL = FP.sheetsLink;
     const n = SL.normalize(link.url);
-    if (!n.ok) { FP.ui.toast(n.error); return; }
+    if (!n.ok) { if (!quiet) FP.ui.toast(n.error); return { ok: false, error: n.error }; }
+    if (!quiet) FP.ui.toast('Trayendo la pestaña de Google Sheets…');
+    const r = await SL.fetchCsv(n.csvUrl);
+    if (!r.ok) { if (!quiet) FP.ui.toast(r.error); return { ok: false, error: r.error }; }
+    const file = new File([r.text], SL.fileName(link.label, type), { type: 'text/csv' });
+    const card = document.getElementById(`up-${type}`);
+    await stageFiles([file], type, card ? card.closest('.upload-card').querySelector('.upload-card__state') : null);
+    // Actualizar desde Sheets: por omisión solo entran las filas nuevas o cambiadas (la hoja publicada siempre baja completa)
+    const stagedItem = state.staging.items.find((i) => i.staged.fileName === file.name);
+    if (stagedItem && ST.canSkipUnchanged(type)) stagedItem.skipUnchanged = true;
+    const rows = Math.max(0, r.rows - 1);
+    const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    // Enlace para abrir la hoja: el que pegó la persona; si usó un enlace compartido (/d/<id>/), se deriva solo; si no, conserva el anterior
+    const prev = state.sheets.links.find((l) => l.id === id || (l.type === type && l.url === String(link.url).trim()));
+    const open = SL.editUrl(link.editUrl) || (n.kind === 'shared' ? SL.editUrl(link.url) : '') || (prev && prev.editUrl) || '';
+    const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind, ...(open ? { editUrl: open } : {}) };
+    const i = state.sheets.links.findIndex((l) => l.id === id || (l.type === type && l.url === rec.url));
+    if (i >= 0) state.sheets.links[i] = rec; else state.sheets.links.push(rec);
+    saveSheetLinks();
+    return { ok: true, rows, kind: n.kind, label: rec.label || type };
+  }
+  const sheetButtons = () => [...document.querySelectorAll('[data-action="sheets-fetch"], [data-action="sheets-refresh"], [data-action="sheets-refresh-all"]')];
+  async function fetchSheet(type, link) {
     if (state.sheets.busy) return;
     state.sheets.busy = true;
-    const btns = [...document.querySelectorAll(`[data-action="sheets-fetch"][data-type="${type}"], [data-action="sheets-refresh"]`)];
-    btns.forEach((b) => { b.disabled = true; });
+    sheetButtons().forEach((b) => { b.disabled = true; });
     try {
-      FP.ui.toast('Trayendo la pestaña de Google Sheets…');
-      const r = await SL.fetchCsv(n.csvUrl);
-      if (!r.ok) { FP.ui.toast(r.error); return; }
-      const file = new File([r.text], SL.fileName(link.label, type), { type: 'text/csv' });
-      const card = document.getElementById(`up-${type}`);
-      await stageFiles([file], type, card ? card.closest('.upload-card').querySelector('.upload-card__state') : null);
-      // Actualizar desde Sheets: por omisión solo entran las filas nuevas o cambiadas (la hoja publicada siempre baja completa)
-      const stagedItem = state.staging.items.find((i) => i.staged.fileName === file.name);
-      if (stagedItem && ST.canSkipUnchanged(type)) stagedItem.skipUnchanged = true;
-      const rows = Math.max(0, r.rows - 1);
-      const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      // Enlace para abrir la hoja: el que pegó la persona; si usó un enlace compartido (/d/<id>/), se deriva solo; si no, conserva el anterior
-      const prev = state.sheets.links.find((l) => l.id === id || (l.type === type && l.url === String(link.url).trim()));
-      const open = FP.sheetsLink.editUrl(link.editUrl) || (n.kind === 'shared' ? FP.sheetsLink.editUrl(link.url) : '') || (prev && prev.editUrl) || '';
-      const rec = { id, type, url: String(link.url).trim(), label: String(link.label || '').trim(), lastAt: new Date().toISOString(), rows, kind: n.kind, ...(open ? { editUrl: open } : {}) };
-      const i = state.sheets.links.findIndex((l) => l.id === id || (l.type === type && l.url === rec.url));
-      if (i >= 0) state.sheets.links[i] = rec; else state.sheets.links.push(rec);
-      saveSheetLinks(); clearDrafts('sheets-');
+      const r = await fetchSheetCore(type, link, false);
+      if (!r.ok) return;
+      clearDrafts('sheets-');
       render();
-      FP.ui.toast(`Traje ${rows.toLocaleString('es-MX')} filas de Google Sheets. Revísalas abajo antes de importar.${n.kind === 'shared' ? ' Ojo: ese enlace comparte todo el libro; es más seguro publicar solo la pestaña.' : ''}`);
+      FP.ui.toast(`Traje ${r.rows.toLocaleString('es-MX')} filas de Google Sheets. Revísalas abajo antes de importar.${r.kind === 'shared' ? ' Ojo: ese enlace comparte todo el libro; es más seguro publicar solo la pestaña.' : ''}`);
       scrollToStaging();
     } finally {
       state.sheets.busy = false;
-      document.querySelectorAll('[data-action="sheets-fetch"], [data-action="sheets-refresh"]').forEach((b) => { b.disabled = false; });
+      sheetButtons().forEach((b) => { b.disabled = false; });
+    }
+  }
+  /** «Actualizar todo»: vuelve a leer todas las pestañas guardadas, una tras otra, y las deja juntas en revisión. Una que falle no detiene a las demás. */
+  async function fetchAllSheets() {
+    const links = state.sheets.links.slice();
+    if (!links.length) { FP.ui.toast('Todavía no hay pestañas de Google Sheets guardadas.'); return; }
+    if (state.sheets.busy) return;
+    state.sheets.busy = true;
+    sheetButtons().forEach((b) => { b.disabled = true; });
+    const ok = [], bad = [];
+    try {
+      FP.ui.toast(`Trayendo ${links.length} pestaña${links.length === 1 ? '' : 's'} de Google Sheets…`);
+      for (const l of links) {
+        let r;
+        try { r = await fetchSheetCore(l.type, l, true); } catch (e) { r = { ok: false, error: 'Error inesperado al leerla.' }; }
+        (r.ok ? ok : bad).push({ l, r });
+      }
+      state.sheets.lastAll = { at: new Date().toISOString(), ok: ok.map((x) => ({ label: x.l.label || x.l.type, rows: x.r.rows })), bad: bad.map((x) => ({ label: x.l.label || x.l.type, error: x.r.error })) };
+      render();
+      FP.ui.toast(`${ok.length} de ${links.length} pestañas listas para revisar${bad.length ? `; ${bad.length} no se pudo${bad.length === 1 ? '' : 'ieron'} traer (ver abajo)` : ''}. Nada se importa hasta que lo confirmes.`);
+      if (ok.length) scrollToStaging();
+    } finally {
+      state.sheets.busy = false;
+      sheetButtons().forEach((b) => { b.disabled = false; });
     }
   }
 
@@ -2169,6 +2200,7 @@
       if (!u) { FP.ui.toast('Pega el enlace de la hoja tal como lo ves al editarla (https://docs.google.com/spreadsheets/d/…/edit).'); return; }
       l.editUrl = u; saveSheetLinks(); clearDrafts('sheets-'); render(); FP.ui.toast('Listo: ahora puedes abrir la hoja desde aquí.');
     },
+    'sheets-refresh-all'() { return fetchAllSheets(); },
     'sheets-remove'(el) {
       state.sheets.links = state.sheets.links.filter((x) => x.id !== el.dataset.id);
       saveSheetLinks(); render();
@@ -2865,6 +2897,24 @@
       state.dx.run = null;
       saveDiagnosticSettings();
       render();
+    },
+    /** Evidencia a un clic: salta a la señal que respalda una hipótesis (abre «Ver todas» si hace falta), la resalta y deja volver. */
+    'dx-evidence'(el) {
+      const id = el.dataset.sig, run = state.dx.run;
+      const idx = run ? run.signals.findIndex((x) => x.id === id) : -1;
+      state.dx.evidenceFrom = el.dataset.hyp || null;
+      if (idx >= 12) state.dx.showAllSignals = true;
+      render();
+      FP.diagnosticView.focusEvidence('sig-' + id);
+    },
+    'dx-evidence-driver'(el) {
+      state.dx.evidenceFrom = el.dataset.hyp || null;
+      render();
+      FP.diagnosticView.focusEvidence('drv-' + el.dataset.driver, { openMore: 'tree' });
+    },
+    'dx-evidence-back'() {
+      const id = state.dx.evidenceFrom; state.dx.evidenceFrom = null; render();
+      FP.diagnosticView.focusEvidence('hyp-' + id);
     },
     'dx-toggle-signals'() { state.dx.showAllSignals = !state.dx.showAllSignals; render(); },
     async 'dx-proxy-test'() {

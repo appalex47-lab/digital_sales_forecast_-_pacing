@@ -145,7 +145,6 @@
     const list = (rows, val) => rows.length ? `<ol class="sgrank__list">${rows.map((r) => `<li><span>${esc(r.label)}</span><strong>${val(r)}</strong></li>`).join('')}</ol>` : '<p class="field__hint">Sin segmentos con volumen suficiente.</p>';
     const nav = [...(decHtml ? [['sg-dec', 'Qué explica el cambio']] : []), ...(dimsHtml ? [['sg-dims', 'Todas las dimensiones']] : []), ['sg-h', 'Lo que destaca'], ['sg-m', 'Mapa'], ['sg-opp', 'Oportunidad'], ...(trend ? [['sg-chg', 'CR semanal']] : []), ['sg-oth', 'Ticket y clientes']];   // una entrada por tarjeta
     const cap = (t) => t;
-    const hasChanges = true;
     return {
       nav,
       html: [

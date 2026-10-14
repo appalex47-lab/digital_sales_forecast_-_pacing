@@ -127,7 +127,7 @@
     const hasProducts = FP.productStore && FP.productStore.available() && (FP.productStore.meta || {}).batches;
     const fromProducts = hasProducts ? ['category', 'product', 'geography'] : [];
     const unavailable = d.availability.unavailable.filter((x) => !fromProducts.includes(x.dimension)).map((x) => x.label);
-    const branches = d.driverTree.map((t) => `<details class="driver-node" ${t.driver === d.level1.mainDriver ? 'open' : ''}>
+    const branches = d.driverTree.map((t) => `<details class="driver-node" id="drv-${esc(t.driver)}" ${t.driver === d.level1.mainDriver ? 'open' : ''}>
       <summary><strong>${esc(t.label)}</strong> <span class="num">${esc(signed(moneyKey, t.contribution))}</span> <span class="cell-sub-inline">${esc(spct(t.deltaPct))}</span></summary>
       ${t.branches.length ? t.branches.map((b) => `<div class="tree-branch"><h5>${esc(b.label)}${b.reference === 'yoy' ? ' <span class="chip">vs año anterior</span>' : ''}</h5>
         <ul>${b.groups.map((g) => `<li><span>${esc(g.label)}</span><span class="num">${esc(signed(moneyKey, g.contribution))}</span>
@@ -178,6 +178,7 @@
     const list = state.dx.showAllSignals ? all : all.slice(0, 12);
     $('dx-signals').innerHTML = `
       <div class="subhead"><h3 class="panel__title">${stage('Señal')} Señales (${all.length})</h3>
+        ${state.dx.evidenceFrom ? `<button type="button" class="btn btn--small" data-action="dx-evidence-back">↩ Volver a la hipótesis</button>` : ''}
         ${all.length > 12 ? `<button type="button" class="btn btn--small" data-action="dx-toggle-signals">${state.dx.showAllSignals ? 'Ver menos' : 'Ver todas'}</button>` : ''}</div>
       ${all.length ? `<div class="table-wrap"><table class="table ds-table">
         <thead><tr><th>#</th><th>Investigación</th><th>Tipo</th><th>Dónde</th><th>Métrica</th><th class="num">Actual</th><th class="num">Referencia</th><th class="num">Δ %</th><th>Evidencia</th></tr></thead>
@@ -198,7 +199,9 @@
     const esc = H().esc;
     const sigs = h.relatedSignals.map((id) => d.signals.find((s) => s.id === id)).filter(Boolean);
     const evidenceLabel = { localized: 'Evidencia localizada', general: 'Evidencia general', secondary: 'Señal secundaria', counter_signal: 'Señal contraria', data_quality: 'Calidad de dato' }[h.evidenceLevel] || 'Evidencia';
-    return `<details class="hyp">
+    const ev = sigs.map((x) => `<button type="button" class="chip chip--link" data-action="dx-evidence" data-sig="${esc(x.id)}" data-hyp="${esc(h.id)}" title="Ir a la señal ${esc(x.id)} en la tabla de Señales">${esc(x.id)} · ${esc(String(x.evidence || '').length > 48 ? String(x.evidence).slice(0, 47) + '…' : x.evidence)}</button>`).join(' ');
+    const drv = h.driver && d.driverTree && d.driverTree.some((t) => t.driver === h.driver) ? `<button type="button" class="chip chip--link" data-action="dx-evidence-driver" data-driver="${esc(h.driver)}" data-hyp="${esc(h.id)}" title="Abrir este driver en el árbol de drivers">Ver driver en el árbol</button>` : '';
+    return `<div class="hyp-wrap" id="hyp-${esc(h.id)}"><details class="hyp">
       <summary>${H().pill(PRIO[h.priority][0], PRIO[h.priority][1])} <span class="hyp__text">${esc(h.hypothesis)}</span>
         <span class="chip">${h.source === 'cohere' ? 'Redactada con Cohere' : 'Reglas'}</span> <span class="chip chip--quiet">${esc(h.statusLabel)}</span></summary>
       <ol class="hyp__chain">
@@ -208,7 +211,8 @@
         ${h.justification ? `<li><strong>Justificación</strong><span class="cell-sub">${esc(h.justification)}</span></li>` : ''}
         <li><strong>Mecanismo</strong><span class="cell-sub">${esc(h.mechanism || '—')}</span></li>
         <li><strong>Qué validar</strong>${(h.validationNeeded || []).map((v) => `<span class="cell-sub">• ${esc(v)}</span>`).join('') || '<span class="cell-sub">—</span>'}</li>
-      </ol></details>`;
+      </ol></details>
+      ${ev || drv ? `<p class="hyp__ev"><span class="hyp__ev-l">Evidencia:</span> ${ev} ${drv}</p>` : ''}</div>`;
   }
 
   /** Botón de Cohere junto al título de Hipótesis: solo el botón y el estado de la IA; el resto de la explicación va en el tooltip. */
@@ -280,6 +284,24 @@
       d.hidden = !has; if (has) any = true;
     });
     const layer = root.querySelector('.dx-layer'); if (layer) layer.hidden = !any;
+  }
+
+  /** Lleva a un elemento del diagnóstico (abriendo lo que lo esconda), lo resalta unos segundos y le da el foco. */
+  function focusEvidence(id, opts) {
+    const root = document.getElementById('view-diagnostico'); if (!root) return;
+    setTimeout(() => {
+      if (opts && opts.openMore) { const m = root.querySelector(`details.dx-more[data-dx-more="${opts.openMore}"]`); if (m) m.open = true; }
+      const el = document.getElementById(id); if (!el) return;
+      for (let up = el.parentElement && el.parentElement.closest('details'); up; up = up.parentElement && up.parentElement.closest('details')) up.open = true;
+      if (el.tagName === 'DETAILS') el.open = true;
+      root.querySelectorAll('.is-evidence').forEach((x) => x.classList.remove('is-evidence'));
+      el.classList.add('is-evidence');
+      const reduce = root.ownerDocument.defaultView.matchMedia && root.ownerDocument.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+      try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ }
+      setTimeout(() => el.classList.remove('is-evidence'), 3500);
+    }, 0);
   }
 
   function render(state) {
@@ -361,5 +383,5 @@
       <p class="field__hint">Mismos cálculos que <a href="#producto" data-nav="producto">Categoría → Producto</a>, donde puedes bajar hasta SKU, estado o sucursal.</p>`;
   }
 
-  FP.diagnosticView = { render, periodOptions, syncMore, renderProducts: (state) => { renderProducts(state); syncMore(); } };
+  FP.diagnosticView = { render, focusEvidence, periodOptions, syncMore, renderProducts: (state) => { renderProducts(state); syncMore(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

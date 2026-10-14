@@ -27,7 +27,6 @@
     { id: 'herramienta', label: 'Herramienta', hint: 'Estado, modo de uso y otras preferencias', sections: ['st-estado', 'st-modo', 'st-otras'] },
     { id: 'negocio', label: 'Negocio', hint: 'Contexto del negocio (Business Setup)', sections: ['st-negocio'] }
   ];
-  const SECTIONS = ['st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-nube', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio'];
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   /** Resumen de una línea de cada sección (estado actual), para decidir si hace falta abrirla. */
   function metaFor(state, id) {
@@ -288,5 +287,5 @@
     });
   }
 
-  FP.settingsView = { render, aliasPanel, showTab, TABS, SECTIONS };
+  FP.settingsView = { render, aliasPanel, showTab, TABS };
 })(typeof window !== 'undefined' ? window : globalThis);

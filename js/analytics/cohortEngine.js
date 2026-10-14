@@ -81,7 +81,6 @@
     }
 
     const latestActive = entities.filter((item) => activeAt(item.series, periodsSafe[latestIndex], c.minActivity));
-    const latestActiveSet = new Set(latestActive.map((x) => x.entity));
     const previousActive = previousIndex >= 0
       ? entities.filter((item) => activeAt(item.series, periodsSafe[previousIndex], c.minActivity))
       : [];
