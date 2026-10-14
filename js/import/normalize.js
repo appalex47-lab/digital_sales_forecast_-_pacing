@@ -263,7 +263,7 @@
       apiKey = connection && connection.apiKey ? connection.apiKey : '';
       if (!model && connection && connection.model) model = connection.model;
     }
-    if (!apiKey) {
+    if (!apiKey && !(FP.cohereProxy && FP.cohereProxy.available())) {
       return { ok: false, status: 'unavailable', mapping: staticMapping, usedAI: false,
         mapped: [], unmapped: unknownHeaders, errors: ['No hay conexión Cohere configurada en Ajustes. El mapeo estático se conserva.'] };
     }

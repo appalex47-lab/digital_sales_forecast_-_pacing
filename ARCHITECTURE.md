@@ -2790,3 +2790,9 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - Pruebas: `tools/test-cloud-sync.js`, `tools/regression/batch_cloud_s1.py`.
 - Productos en la nube: `js/cloud/productSync.js` exporta los bloques de IndexedDB (columnas tipadas → arreglos, gzip+base64, trozos de ~20 000 renglones) como claves `productsCloud:*` con manifiesto; `restore` valida que estén todos los trozos antes de reemplazar lo local y recalcula los resúmenes. Tope 100 MB comprimido. No participa en la sincronización automática. Prueba: `tools/regression/batch_cloud_productos.py`.
 - Altas: `team_invites` + trigger sobre `auth.users` (ver `supabase/README.md`).
+
+## Proxy de Cohere (Edge Function `cohere-proxy`)
+- La API key de Cohere vive solo en el secreto `COHERE_API_KEY` de Supabase; el navegador no la ve. `supabase/functions/cohere-proxy/handler.js` (lógica pura, probada en Node) + `index.ts` (Deno).
+- La función exige sesión real (rechaza anónimas), pertenencia a un equipo, origen permitido (`ALLOWED_ORIGINS`, por omisión GitHub Pages), modelo `command-*`, ≤8 mensajes, `max_tokens` ≤4000, cuerpo ≤1 MB; descarta cualquier otro campo (tools, documentos…). Los errores de Cohere se traducen (`cohere_auth`, `cohere_quota`, `cohere_server`) sin reenviar su cuerpo.
+- Cliente: `js/ai/cohereProxy.js` (`FP.cohereProxy.available()`); `cohereClient` usa el proxy cuando hay sesión de equipo; la key local solo es respaldo si la función no existe o responde `not_configured`. Configuración → IA muestra el estado y un botón «Probar la conexión del servidor».
+- Pruebas: `tools/test-cohere-proxy.js`, `tools/regression/batch_cohere_proxy.py`.

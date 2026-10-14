@@ -525,6 +525,8 @@
       // Site Key PÚBLICA de Cloudflare Turnstile (la Secret Key vive solo en Supabase). Vacía = sin CAPTCHA.
       turnstileSiteKey: '0x4AAAAAAFUpjBAaF6uT9DhY',
       table: 'team_blobs',
+      cohereProxy: true,                 // con sesión de equipo, Cohere se llama por la Edge Function «cohere-proxy» (la key vive en Supabase)
+      cohereProxyName: 'cohere-proxy',
       chunkChars: 400000,       // tamaño máximo de texto por fila
       // S2: lo que NO se sincroniza solo (preferencias por dispositivo)
       autoSkipKeys: ['uxSettings', 'productSettings', 'productsCloud'],

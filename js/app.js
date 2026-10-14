@@ -153,7 +153,8 @@
         model: state.dx.model || C.diagnostics.cohere.model
       };
     },
-    isConfigured() { return Boolean(state.dx.apiKey); }
+    /** Hay IA disponible si hay sesión de equipo (servidor) o una key local. */
+    isConfigured() { return Boolean(state.dx.apiKey) || Boolean(FP.cohereProxy && FP.cohereProxy.available()); }
   };
 
   /* ================= Persistencia ================= */
@@ -2790,7 +2791,7 @@
       const rc = state.rc;
       const sc = rc.scenarioStore.scenarios.find((s) => s.scenarioId === rc.actionScenario);
       const hyp = sc ? rc.analysis.hypotheses.find((h) => h.id === sc.links.hypothesisId) : null;
-      if (!state.dx.apiKey) { FP.ui.toast('Pega tu API key de Cohere en Configuración de RevNavigator.'); return; }
+      if (!FP.cohereConnection.isConfigured()) { FP.ui.toast('Inicia sesión (o pega tu API key de Cohere en Configuración de RevNavigator).'); return; }
       rc.ai = { status: 'busy', actions: [], errors: [] }; render();
       const input = { hypothesis: hyp || (sc ? { id: sc.links.hypothesisId, hypothesis: sc.links.hypothesis, driver: sc.links.driver } : null),
         signals: rc.analysis.signals.filter((s) => (sc ? sc.links.signalIds : []).includes(s.id)), scenario: sc,
@@ -2849,6 +2850,12 @@
       render();
     },
     'dx-toggle-signals'() { state.dx.showAllSignals = !state.dx.showAllSignals; render(); },
+    async 'dx-proxy-test'() {
+      state.dx.proxyTest = { busy: true, msg: null, ok: false }; render();
+      const r = await FP.cohereClient.chatJson({ system: 'Responde únicamente con JSON.', user: 'Devuelve {"ok": true}.', schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }, model: state.dx.model || undefined, audit: { purpose: 'Prueba de conexión' } });
+      state.dx.proxyTest = { busy: false, ok: r.ok, msg: r.ok ? `Funciona: Cohere respondió por ${r.via === 'server' ? 'el servidor del equipo' : 'este navegador (respaldo)'}.` : (r.errors && r.errors[0]) || 'No respondió.' };
+      render();
+    },
     'dx-key-clear'() {
       state.dx.apiKey = ''; state.dx.rememberKey = false; saveDiagnosticSettings();
       FP.ui.toast('La API key se quitó de este navegador. Para volver a usar Cohere, pega una nueva.'); render();
@@ -2861,7 +2868,7 @@
       const keyInput = document.getElementById('dx-key-input');   // vive en Configuración: solo se lee si está a la vista (si no, manda el estado)
       const key = keyInput && keyInput.offsetParent !== null ? keyInput.value : undefined;
       if (key !== undefined) state.dx.apiKey = key.trim();
-      if (!state.dx.apiKey) { FP.ui.toast('Pega tu API key de Cohere en Configuración de RevNavigator para generar hipótesis con IA.'); return; }
+      if (!FP.cohereConnection.isConfigured()) { FP.ui.toast('Inicia sesión (o pega tu API key de Cohere en Configuración de RevNavigator) para generar hipótesis con IA.'); return; }
       state.dx.ai = { status: 'busy', result: null };
       render();
       const result = await FP.cohereDiagnostic.generateWithCohere(d, { apiKey: state.dx.apiKey, model: state.dx.model });
@@ -2879,7 +2886,7 @@
     async 'nx-ai'() {
       const n = ensureNarrative();
       if (!n) { FP.ui.toast('Todavía no hay narrativa calculada.'); return; }
-      if (!state.dx.apiKey) { FP.ui.toast('Pega tu API key de Cohere en Configuración de RevNavigator para redactar con IA.'); return; }
+      if (!FP.cohereConnection.isConfigured()) { FP.ui.toast('Inicia sesión (o pega tu API key de Cohere en Configuración de RevNavigator) para redactar con IA.'); return; }
       state.nx.ai = { status: 'busy', result: null, errors: [] };
       render();
       const result = await FP.cohereNarrative.narrate(n, { apiKey: state.dx.apiKey, model: state.dx.model });
