@@ -14,7 +14,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
 Qs = {'Planear': '¿Qué quiero alcanzar?', 'Monitorear': '¿Cómo voy?', 'Diagnosticar': '¿Por qué?', 'Recuperar': '¿Qué hago?', 'Medir y aprender': '¿Funcionó?'}
-VIEWS = {'planear': ['carga', 'calidad', 'resumen', 'plan', 'estacionalidad', 'datos', 'configuracion', 'proyeccion'], 'monitorear': ['pacing'], 'diagnosticar': ['diagnostico', 'producto', 'segmentos', 'analisis'], 'recuperar': ['reforecast', 'recovery'], 'medir': ['medir', 'narrativa', 'paquete']}
+VIEWS = {'planear': ['carga', 'calidad', 'resumen', 'plan', 'estacionalidad', 'datos', 'configuracion', 'proyeccion'], 'monitorear': ['pacing', 'cambios'], 'diagnosticar': ['diagnostico', 'producto', 'segmentos', 'analisis'], 'recuperar': ['reforecast', 'recovery'], 'medir': ['medir', 'narrativa', 'paquete']}
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
