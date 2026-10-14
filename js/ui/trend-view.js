@@ -29,10 +29,6 @@
     insufficient_history: ['Historia insuficiente', 'No hay suficientes períodos válidos para clasificar la tendencia con confianza.', 'No debe interpretarse como estable, crecimiento o caída.']
   };
   function pill(pattern) { const [kind, label] = PATTERN[pattern] || ['na', pattern || 'Sin clasificar']; const help = PATTERN_HELP[pattern]; return `<span class="pill pill--${kind}"${help ? ` title="${esc(help[1])}" aria-label="${esc(help[0])}: ${esc(help[1])}"` : ''}>${esc(label)}</span>`; }
-  function patternHelp() {
-    const rows = Object.keys(PATTERN).map((key) => { const h = PATTERN_HELP[key]; return `<div class="pattern-help__item"><strong>${esc(h[0])}</strong><span>${esc(h[1])}</span><small>${esc(h[2])}</small></div>`; }).join('');
-    return `<details class="disclosure pattern-help"><summary>¿Cómo interpretar los patrones?</summary><div class="pattern-help__grid">${rows}</div><p class="field__hint">Los patrones describen el comportamiento de la serie de ventas. No son causas, diagnósticos del negocio ni garantías de lo que ocurrirá después.</p></details>`;
-  }
   const NA = '<span class="na" title="No hay datos comparables: no se muestra 0 % ni −100 %.">N/A</span>';
   function signedPct(v) { return typeof v === 'number' && Number.isFinite(v) ? F().signedPercent(v, 1) : NA; }
   let MK = 'revenue';                                   // métrica vigente del render (revenue | orders | units)
@@ -67,13 +63,10 @@
     const opts = (meta.dateMin && meta.dateMax && FP.temporalEngine) ? FP.temporalEngine.options(meta.dateMin, meta.dateMax, pt, pt === 'day' ? 90 : 24) : [];
     const defaultFocus = [...opts].reverse().find(x => !x.partial)?.key || opts.at(-1)?.key || '';
     const focusKey = a.focusKey || defaultFocus;
-    const focusLabel = t.focus?.label || (opts.find(x => x.key === focusKey)?.label || focusKey || 'Último período completo disponible');
     const ci = a.comparisonInfo || null;
     const comparisonNote = ci && ci.message ? `<div class="note note--warning analysis-comparison-warning"><strong>Comparación no disponible (N/A).</strong> ${esc(ci.message)} Puedes cambiar la comparación o el canal sin recargar la página.</div>`
       : ci && ci.partial ? `<div class="note analysis-comparison-info"><strong>Período en curso.</strong> ${esc(ci.note || '')}</div>`
       : ci && ci.truncated ? `<div class="note analysis-comparison-info">${esc(ci.note || '')}</div>` : '';
-    const temporalCards = [t.yoy, t.mom, t.wow, t.dod].filter(Boolean).map(x => `<span class="temporal-chip ${x.available ? '' : 'is-muted'}"${x.text ? ` title="${esc(x.text)}"` : ''}><strong>${esc(x.id.toUpperCase())}</strong> ${x.available ? signedPct(x.change) : 'N/A'}${x.text ? ` <small>${esc(x.text)}</small>` : ''}</span>`).join('');
-    const seasonNote = t.seasonality?.status === 'available' ? `<small>Estacionalidad: ${esc(String(t.seasonality.comparablePeriods))} período(s) comparables · índice ${signedPct((t.seasonality.index || 1) - 1)}</small>` : `<small>Estacionalidad: histórico insuficiente para este periodo.</small>`;
     return `<div class="analysis-filter-bar">
       <div class="settings-grid analysis-period-controls">
         <div class="field"><label for="an-channel">Canal</label><select id="an-channel" data-action="an-channel">${FP.analysisContext.channelList().map(c => `<option value="${c}" ${c === (a.channel || 'total') ? 'selected' : ''}>${esc(FP.analysisContext.channelLabel(c))}</option>`).join('')}</select></div>
@@ -325,7 +318,6 @@
       </section>` : ''}
     </aside>`;
   }
-  function finiteLocal(v){ return typeof v==='number' && Number.isFinite(v); }
 
   function forecastPanel(a) {
     const f = a.forecast;
@@ -354,15 +346,6 @@
     </div></section>`;
   }
 
-  function explanation(r) {
-    const p = r.pattern;
-    const map = {
-      growth_sustained: `crece de forma persistente durante ${r.consecutivePeriods} períodos consecutivos`, growth_accelerating: `crece y la velocidad del crecimiento está aumentando`, growth_decelerating: `sigue creciendo, pero la velocidad del crecimiento está disminuyendo`,
-      decline_sustained: `presenta deterioro sostenido durante ${r.consecutivePeriods} períodos consecutivos`, decline_accelerating: `cae y la velocidad de la caída está aumentando`, decline_decelerating: `sigue cayendo, pero la velocidad de la caída está disminuyendo`,
-      recovery: 'muestra señales de recuperación después de un período de deterioro', strong_recovery: 'muestra una recuperación consistente después de un deterioro relevante', trend_break: 'presenta una ruptura respecto de la dirección anterior', stable: 'permanece dentro de un rango de variación estable', volatile: 'presenta oscilaciones frecuentes sin una dirección persistente', anomaly: 'presenta un movimiento extraordinario respecto de su histórico', insufficient_history: 'no tiene suficiente historia para una clasificación robusta'
-    };
-    return `${r.entity} ${map[p] || 'tiene un patrón no clasificado'}. ${r.startPeriod ? `La tendencia identificada comienza en ${r.startPeriod}.` : ''} ${r.cumulativeChange !== null ? `El cambio acumulado desde el primer dato disponible es ${signedPct(r.cumulativeChange)}.` : ''}`.trim();
-  }
   /** Aviso de materialidad en Contribución: la tabla oculta lo que pesa menos del umbral, pero el cambio neto y la concentración siguen contando TODAS las entidades. */
   function matNote(a, c) {
     if (!(Number(a.minSharePct) > 0)) return '';

@@ -18,7 +18,6 @@
   };
   const srcLabel = (s) => SOURCE_LABEL[s] || s || '—';
   const money = (v) => (v === null || v === undefined ? '—' : F().currency(v, 2));
-  const moneyC = (v) => (v === null || v === undefined ? '—' : F().currencyCompact(v));
   const int = (v) => (v === null || v === undefined ? '—' : F().integer(v));
   const diffCell = (target, plan) => {
     if (target === null || target === undefined || plan === null || plan === undefined) return '<td class="num">—</td>';
