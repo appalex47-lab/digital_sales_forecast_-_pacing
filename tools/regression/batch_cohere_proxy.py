@@ -30,7 +30,7 @@ async def main():
         async def prep():
             await q.goto(u + '#ajustes'); await q.reload(); await q.wait_for_timeout(1500)
             await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
-            await q.evaluate("document.getElementById('st-adv').open=true; const e=document.getElementById('st-ia'); if(e) e.open=true"); await q.wait_for_timeout(250)
+            await q.evaluate("FP.app.state.stTab='ia'; FP.app.render()"); await q.wait_for_timeout(250)
         await prep()
         chk('C1 sin sesión: se explica que se usa la key pegada y no hay botón de probar el servidor', await q.locator('[data-ai-local]').count() == 1 and await q.locator('[data-action="dx-proxy-test"]').count() == 0)
         chk('C2 sin sesión ni key la IA no está disponible', await q.evaluate("FP.cohereConnection.isConfigured()") is False)

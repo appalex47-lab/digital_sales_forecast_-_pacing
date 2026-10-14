@@ -214,7 +214,7 @@
       <button type="button" class="avatar avatar--btn" id="acct-menu-btn" data-action="acct-menu" aria-haspopup="menu" aria-expanded="${acctOpen}" aria-controls="acct-menu" aria-label="Cuenta${ses && ses.email ? `: ${esc2(ses.email)}` : ''}" title="${ses ? esc2(ses.email || 'Sesión iniciada') : 'Sin sesión iniciada'}">${esc2(initials)}</button>
       <div class="hmenu__list" id="acct-menu" role="menu" aria-labelledby="acct-menu-btn" ${acctOpen ? '' : 'hidden'}>
         <p class="hmenu__who">${ses ? `<strong>${esc2(ses.email || 'Sesión iniciada')}</strong><span class="cell-sub">Equipo: ${esc2(ses.teamName || '—')}</span>` : '<strong>Sin sesión iniciada</strong><span class="cell-sub">Tus datos solo están en este navegador.</span>'}</p>
-        ${ses ? '<a role="menuitem" class="hmenu__item" href="#ajustes">Configuración · Nube y equipo</a><button type="button" role="menuitem" class="hmenu__item" data-action="cloud-signout">Cerrar sesión</button>'
+        ${ses ? '<button type="button" role="menuitem" class="hmenu__item" data-action="settings-go" data-tab="cuenta">Cuenta y nube</button><button type="button" role="menuitem" class="hmenu__item" data-action="cloud-signout">Cerrar sesión</button>'
       : '<button type="button" role="menuitem" class="hmenu__item" data-action="login-open">Iniciar sesión</button>'}
       </div></div>`;
   }

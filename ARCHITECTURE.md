@@ -2802,3 +2802,8 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - Diagnóstico: el botón «Generar hipótesis con Cohere» y el estado de la IA viven en el encabezado de Hipótesis (`aiControl`); la explicación larga está en el tooltip «?».
 - Narrativa: el panel `#nx-ai` (redacción de Cohere) va justo debajo del resumen ejecutivo y se oculta si no hay redacción.
 - Google Sheets: el enlace publicado no revela el archivo, así que cada hoja guardada admite un enlace de edición (`editUrl`, validado por `FP.sheetsLink.editUrl`; se deriva solo si se usó un enlace compartido) y muestra «Abrir hoja ↗». Prueba: `tools/regression/batch_cuenta_enlaces.py`.
+
+## Configuración en pestañas (2026-10-14)
+- Las 13 secciones desplegables de Configuración pasaron a **secciones fijas** (sin `<details>`) agrupadas en cinco pestañas: Cuenta y nube (`st-nube`), Inteligencia artificial (`st-ia*`), Datos (`st-fuentes`, `st-equivalencias`, `st-almacenamiento`), Herramienta (`st-estado`, `st-modo`, `st-otras`) y Negocio (`st-negocio`, que vive en `index.html`). Cada sección conserva su resumen de estado en el encabezado (`stsec__meta`).
+- Estado: `state.stTab` (por omisión `herramienta`). Acciones `st-tab` (cambia de pestaña) y `settings-go` (menú de la cuenta → «Cuenta y nube»). Un enlace a una sección (`state.ajustesSection`, p. ej. `#negocio`) o el regreso desde un correo de Supabase abren su pestaña. Teclado: flechas, Inicio y Fin (patrón WAI-ARIA de pestañas). Se eliminaron «Expandir/Contraer todo», el índice y `state.stOpen`.
+- Prueba: `tools/regression/batch_ajustes_tabs.py` (sustituye a `batch_al.py` y `batch_adv7.py`).

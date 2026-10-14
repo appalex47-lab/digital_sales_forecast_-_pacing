@@ -47,7 +47,7 @@ async def main():
         await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         m2 = await q.evaluate("[FP.app.state.ux.mode, document.body.classList.contains('mode-learner')]")
         chk('R-10 el interruptor alterna Aprendiz ↔ Analista', m1 == ['learner', True] and m2 == ['analyst', False], (m1, m2))
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(200)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(200)
         st = await q.evaluate("[...document.querySelectorAll('#st-modo [data-action=\"ux-mode\"]')].map(b=>b.innerText.trim())")
         chk('R-10 el selector de Configuración ofrece solo Aprendiz y Analista', st == ['Aprendiz', 'Analista'], st)
         # quien tenía guardado «Ejecutivo» pasa a Analista, sin errores

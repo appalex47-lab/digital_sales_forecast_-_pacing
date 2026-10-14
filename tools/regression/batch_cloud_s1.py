@@ -70,7 +70,7 @@ async def main():
             await q.goto(u + h); await q.wait_for_timeout(1200)
             await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
         async def openNube():
-            await q.evaluate("document.getElementById('st-adv').open=true; document.getElementById('st-nube').open=true"); await q.wait_for_timeout(250)
+            await q.evaluate("FP.app.state.stTab='cuenta'; FP.app.render()"); await q.wait_for_timeout(250)
         async def login(email, pw):
             await q.evaluate("FP.app.actions['login-open']()"); await q.wait_for_selector('#login-dialog[open]')
             await q.fill('#login-email', email); await q.fill('#login-password', pw); await q.click('#login-dialog [data-action="login-submit"]'); await q.wait_for_timeout(1200)
