@@ -2781,3 +2781,10 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - `forecastEngine.goalDate(days, {from,to,goal,cutoff,metric})` recorre el forecast diario del periodo y devuelve el primer día en que el acumulado alcanza la meta (plan total del periodo). Estados: `reached` (día ≤ corte con venta real), `projected` (estimado), `missed` (periodo cerrado sin llegar), `not_reached` (abierto, no llega al ritmo actual), `no_goal`, `not_evaluable` (algún día sin forecast: no se inventa fecha).
 - `periodGoal(series, {type:'month',key}|{type:'year'})` y `goalLabel(g, 'mes'|'año')` dan el texto. Solo métricas aditivas (venta, pedidos, tráfico).
 - Se muestra en Inicio («¿Cómo voy?», `homeSummaryEngine.goal`), en la tabla «Pacing por periodo» (columna «Meta alcanzada») y en la gráfica acumulada (marcador y nota). Pruebas: `tools/test-goal-date.js`, `tools/regression/batch_meta_fecha.py`.
+
+## Acceso por equipo (nube)
+- `cloudSync.js`: inicio de sesión con correo y contraseña (`loginPassword`), `changePassword`, `loadTeam`. Sin `signup` ni sesiones anónimas (una sesión anónima heredada se descarta). La sesión guarda `team_id`/`team_name`; sin equipo no se guarda sesión.
+- Tabla `team_blobs` (por `team_id`) con RLS vía `my_team_id()`; `team_members` tiene PK `user_id` (un usuario, un equipo). Migración y guía de alta: `supabase/`.
+- La nube es compartida por el equipo: subir ya no borra claves ajenas; «Borrar copia» la quita para todo el equipo (se avisa en la confirmación).
+- UI: ventana `#login-dialog` (`login-open`/`login-submit`), panel Nube con cambio de contraseña. En https y sin sesión se ofrece una vez por visita.
+- Pruebas: `tools/test-cloud-sync.js`, `tools/regression/batch_cloud_s1.py`.

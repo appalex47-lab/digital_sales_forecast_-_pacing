@@ -45,7 +45,7 @@
     settings: null,
     staging: { items: [], activeId: null, issueFilter: 'all' },
     sheets: { links: [], busy: false },
-    cloud: { busy: false, msg: null, tone: null, last: null, session: null, auth: { step: null, email: '' }, auto: { on: false, last: null, error: null, pulled: [] } },   // Fase S1: copia en la nube (Supabase)   // Fase 15: enlaces de Google Sheets publicados (solo URL)
+    cloud: { busy: false, msg: null, tone: null, last: null, session: null, auto: { on: false, last: null, error: null, pulled: [] } },   // Fase S1: copia en la nube (Supabase)   // Fase 15: enlaces de Google Sheets publicados (solo URL)
     quality: null,
     availableYears: [],
     qualityType: 'historical',
@@ -2606,40 +2606,34 @@
       });
     },
     'cloud-delete'() {
-      if (!window.confirm('Se borrará la copia de la nube de esta sesión. Tus datos locales no se tocan. ¿Continuar?')) return;
+      if (!window.confirm('Se borrará la copia de la nube de TODO tu equipo (todas las personas del equipo la comparten). Tus datos locales no se tocan. ¿Continuar?')) return;
       return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; });
     },
 
-    /* ----- Fase S3: cuenta con correo (código de 6 dígitos) ----- */
-    'cloud-link-send'() {
-      const email = ((document.getElementById('cloud-email') || {}).value || '').trim();
+    /* ----- Acceso por equipo: correo y contraseña (cuentas creadas por la persona administradora) ----- */
+    'login-open'() { openLogin(); },
+    'login-cancel'() { closeLogin(); },
+    async 'login-submit'() {
+      const email = ((document.getElementById('login-email') || {}).value || '').trim(), pw = (document.getElementById('login-password') || {}).value || '';
+      const msg = document.getElementById('login-msg'), btn = document.querySelector('#login-dialog [data-action="login-submit"]');
+      const say = (t, bad) => { if (msg) { msg.textContent = t || ''; msg.hidden = !t; msg.className = 'note' + (bad ? ' note--warning' : ''); } };
+      if (btn) btn.disabled = true; say('Entrando…');
+      let r; try { r = await FP.cloud.loginPassword(email, pw, {}); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+      if (btn) btn.disabled = false;
+      if (!r.ok) { say(r.error, true); return; }
+      const pwEl = document.getElementById('login-password'); if (pwEl) pwEl.value = '';
+      closeLogin(); cloudRefreshSession();
+      cloudNote(`Entraste como ${r.session.email} · equipo ${r.session.team_name || 'sin nombre'}. Usa «Restaurar desde la nube» para traer los datos del equipo.`, 'ok');
+      render();
+    },
+    'cloud-password-change'() {
+      const a = (document.getElementById('cloud-pw-new') || {}).value || '', b = (document.getElementById('cloud-pw-new2') || {}).value || '';
+      if (a !== b) { cloudNote('Las dos contraseñas nuevas no coinciden.', 'bad'); render(); return; }
       return cloudRun(async () => {
-        const r = await FP.cloud.linkEmailStart(email, {});
-        if (!r.ok) return cloudNote(r.error, 'bad');
-        state.cloud.auth = { step: 'link', email: r.email }; clearDrafts('cloud-');
-        cloudNote(`Te mandé un correo a ${r.email}. Ábrelo y toca el enlace de confirmación (o, si trae un código, escríbelo abajo). Si no llega en un minuto, revisa spam.`, 'ok');
+        const r = await FP.cloud.changePassword(a, {});
+        cloudNote(r.ok ? 'Contraseña cambiada. Úsala la próxima vez que inicies sesión.' : r.error, r.ok ? 'ok' : 'bad');
       });
     },
-    'cloud-login-send'() {
-      const email = ((document.getElementById('cloud-email') || {}).value || '').trim();
-      return cloudRun(async () => {
-        const r = await FP.cloud.loginStart(email, {});
-        if (!r.ok) return cloudNote(r.error, 'bad');
-        state.cloud.auth = { step: 'login', email: r.email }; clearDrafts('cloud-');
-        cloudNote(`Te mandé un correo a ${r.email}. Ábrelo y toca el enlace para entrar (o, si trae un código, escríbelo abajo).`, 'ok');
-      });
-    },
-    'cloud-code-confirm'() {
-      const code = ((document.getElementById('cloud-code') || {}).value || '').trim();
-      const { step, email } = state.cloud.auth || {};
-      return cloudRun(async () => {
-        const r = step === 'login' ? await FP.cloud.loginConfirm(email, code, {}) : await FP.cloud.linkEmailConfirm(email, code, {});
-        if (!r.ok) return cloudNote(r.error, 'bad');
-        state.cloud.auth = { step: null, email: '' }; clearDrafts('cloud-');
-        cloudNote(step === 'login' ? `Entraste como ${email}. Ahora puedes usar «Restaurar desde la nube».` : `Listo: ${email} quedó vinculado a tu copia. Ya puedes entrar desde otro equipo con tu correo.`, 'ok');
-      });
-    },
-    'cloud-auth-cancel'() { state.cloud.auth = { step: null, email: '' }; clearDrafts('cloud-'); cloudNote(null); render(); },
 
     'cloud-auto-toggle'(el) {
       const on = !!el.checked; FP.cloud.setAuto(on); state.cloud.auto.on = on; state.cloud.auto.error = null;
@@ -2654,7 +2648,7 @@
         cloudNote(`Sincronización automática encendida. Subí ${r.pushed} ajuste(s)${pull.applied && pull.applied.length ? ` y traje ${pull.applied.length} más nuevos de la nube (recarga para aplicarlos)` : ''}.`, 'ok');
       });
     },
-    'cloud-signout'() { FP.cloud.setAuto(false); state.cloud.auto.on = false; FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión de nube cerrada en este navegador. La copia sigue en Supabase, pero esta sesión anónima ya no podrá abrirla.', 'warn'); render(); },
+    'cloud-signout'() { FP.cloud.setAuto(false); state.cloud.auto.on = false; FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión cerrada en este navegador. La copia de tu equipo sigue en Supabase; vuelve a iniciar sesión para usarla.', 'warn'); render(); },
     async 'storage-retry-writes'() {
       const st = await repo.retryFailed();
       state.persist = st; render();
@@ -3314,6 +3308,33 @@
   }
 
   /** Recorrido guiado: activa el paso y navega a su vista. */
+  /** Ventana de inicio de sesión (correo y contraseña). Sin registro: las cuentas las crea la persona administradora. */
+  function closeLogin() { const d = document.getElementById('login-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
+  function openLogin() {
+    closeLogin();
+    const d = document.createElement('dialog'); d.id = 'login-dialog'; d.className = 'tour-offer login-dialog'; d.setAttribute('aria-labelledby', 'login-t');
+    d.innerHTML = `<form id="login-form" novalidate><p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="login-t">Inicia sesión</h2>
+      <p class="field__hint">Entra con la cuenta que te dio la persona administradora. No hay registro abierto. Con tu sesión ves y guardas los mismos datos que tu equipo.</p>
+      <div class="field"><label for="login-email">Correo</label><input id="login-email" type="email" autocomplete="username" placeholder="tu@empresa.com"></div>
+      <div class="field"><label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password"></div>
+      <p class="note" id="login-msg" role="status" hidden></p>
+      <div class="tour-offer__btns"><button type="submit" class="btn btn--primary" data-action="login-submit">Entrar</button><button type="button" class="btn" data-action="login-cancel">Ahora no</button></div></form>`;
+    d.addEventListener('close', () => d.remove());
+    d.querySelector('#login-form').addEventListener('submit', (e) => { e.preventDefault(); actions['login-submit'](); });
+    document.body.appendChild(d);
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    const em = d.querySelector('#login-email'); if (em) em.focus();
+  }
+  /** Al arrancar en el sitio publicado (https) sin sesión, se ofrece iniciar sesión una vez por visita (Esc o «Ahora no» la cierran). */
+  function maybePromptLogin() {
+    try {
+      if (!root.location || root.location.protocol !== 'https:' || state.cloud.session) return;
+      if (root.sessionStorage.getItem('fp.loginAsked') === '1') return;
+      root.sessionStorage.setItem('fp.loginAsked', '1');
+    } catch (e) { return; }
+    openLogin();
+  }
+
   /** Al activar el Modo Aprendiz se ofrece el recorrido guiado (ventana con foco atrapado; Esc o «Ahora no» la cierran). */
   function closeTourOffer() { const d = document.getElementById('tour-offer'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
   function offerTour(modal = true) {
@@ -3520,7 +3541,7 @@
       const ah = await FP.cloud.consumeAuthHash({});
       if (ah) {
         state.stOpen['st-adv'] = true; state.stOpen['st-nube'] = true; state.view = 'ajustes';
-        cloudNote(ah.ok ? (ah.session.email ? `Listo: ${ah.session.email} quedó confirmado. ${ah.type === 'magiclink' ? 'Ya entraste: usa «Restaurar desde la nube».' : 'Tu copia quedó ligada a ese correo.'}` : 'Sesión abierta.') : ah.error, ah.ok ? 'ok' : 'bad');
+        cloudNote(ah.ok ? `Entraste como ${ah.session.email} · equipo ${ah.session.team_name || ''}.${ah.type === 'recovery' ? ' Cambia tu contraseña abajo.' : ''}` : ah.error, ah.ok ? 'ok' : 'bad');
       }
     } catch (e) { /* sin enlace de correo */ }
     // S2: antes de cargar nada, trae lo liviano que en la nube sea más nuevo (si no, la app podría volver a guardar su copia vieja y pisarlo)
@@ -3552,6 +3573,7 @@
     FP.ui.renderEdgeCases();
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
+    maybePromptLogin();
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
@@ -3617,7 +3639,7 @@
   }
 
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
-  function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s ? { userId: s.user_id, anonymous: s.anonymous, email: s.email || null } : null; }
+  function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s && !s.anonymous && s.team_id ? { userId: s.user_id, email: s.email || null, teamId: s.team_id, teamName: s.team_name || null } : null; }
   const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   async function cloudRun(fn) {
     if (state.cloud.busy) return;

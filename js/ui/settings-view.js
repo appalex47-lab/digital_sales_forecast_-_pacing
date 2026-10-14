@@ -28,7 +28,7 @@
     switch (id) {
       case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${st && st.passed === st.total ? 'operativo' : 'con fallas'}`; }
       case 'st-modo': { const m = (FP.guidanceConfig.MODES || []).find((x) => x[0] === state.ux.mode); return m ? esc(m[1]) : ''; }
-      case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? (c.session.email ? `Cuenta ${esc(c.session.email)}` : 'Sesión anónima · sin correo vinculado') : 'Sin conectar'); }
+      case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? `Equipo ${esc(c.session.teamName || '')} · ${esc(c.session.email || '')}` : 'Sin sesión'); }
       case 'st-adv': return 'Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA';
       case 'st-otras': return plural(ELSEWHERE.length, 'preferencia', 'preferencias');
       case 'st-fuentes': { const b = FP.dataSources.build(state); return `${b.summary.activeSources} de ${b.summary.liveSources} fuentes con datos`; }
@@ -161,37 +161,31 @@
   }
 
 
-  /** Fase S1/S3: copia en la nube (Supabase). Entra sin login (sesión anónima) y, opcionalmente, vincula un correo con código. */
+  /** Nube (Supabase) con acceso por equipo: correo y contraseña; todos los miembros del equipo comparten la misma copia. */
   function cloudPanel(state) {
-    const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session, au = c.auth || {};
+    const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session;
     const dis = c.busy ? 'disabled' : '';
-    const who = s ? (s.email ? `cuenta de <strong>${esc(s.email)}</strong> (correo verificado)` : `anónima activa (${esc(String(s.userId || '').slice(0, 8))}…) · <strong>sin correo vinculado</strong>`) : 'aún no hay sesión; se crea sola al subir';
-    let account = '';
-    if (au.step) {
-      account = `<div class="field"><label class="field__hint" for="cloud-code">Si el correo a ${esc(au.email)} trae un código, escríbelo aquí (si trae un enlace, solo tócalo)</label>
-          <input id="cloud-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" data-draft placeholder="123456"></div>
-        <div class="btn-row"><button type="button" class="btn btn--primary" data-action="cloud-code-confirm" ${dis}>Confirmar código</button>
-          <button type="button" class="btn btn--small" data-action="cloud-auth-cancel" ${dis}>Cancelar</button></div>`;
-    } else if (!(s && s.email)) {
-      account = `<div class="field"><label class="field__hint" for="cloud-email">Tu correo (para no perder la copia al borrar el navegador o cambiar de equipo; te llegará un enlace de confirmación)</label>
-          <input id="cloud-email" type="email" autocomplete="email" data-draft placeholder="tu@correo.com"></div>
-        <div class="btn-row"><button type="button" class="btn" data-action="cloud-link-send" ${dis} ${s && s.anonymous ? '' : 'disabled'}>Vincular mi correo</button>
-          <button type="button" class="btn" data-action="cloud-login-send" ${dis}>Entrar con mi correo</button></div>
-        <p class="field__hint">«Vincular» une tu correo a la copia que ya subiste (primero sube una). «Entrar» sirve en otro equipo o tras borrar el navegador, con un correo ya vinculado. Si entras con una cuenta distinta a la actual, verás la copia de esa cuenta.</p>`;
-    }
-    return `${accStart(state, 'st-nube', 'Nube (Supabase)', 'Guarda una copia de tus datos en tu proyecto de Supabase y la restaura. Entras sin login: la app abre una sesión anónima y cada cuenta solo puede ver sus propios datos.')}
+    const who = s ? `<strong>${esc(s.email || '')}</strong> · equipo <strong>${esc(s.teamName || 'sin nombre')}</strong>` : 'sin sesión: inicia sesión para usar la nube';
+    const account = s
+      ? `<div class="field"><label class="field__hint" for="cloud-pw-new">Cambiar mi contraseña (mínimo 8 caracteres)</label>
+          <input id="cloud-pw-new" type="password" autocomplete="new-password" placeholder="Contraseña nueva">
+          <input id="cloud-pw-new2" type="password" autocomplete="new-password" placeholder="Repite la contraseña nueva"></div>
+        <div class="btn-row"><button type="button" class="btn" data-action="cloud-password-change" ${dis}>Cambiar contraseña</button></div>`
+      : `<div class="btn-row"><button type="button" class="btn btn--primary" data-action="login-open" ${dis}>Iniciar sesión</button></div>
+        <p class="field__hint">Las cuentas las crea la persona administradora de tu equipo; no hay registro abierto. Si olvidaste tu contraseña, pídele que la restablezca.</p>`;
+    return `${accStart(state, 'st-nube', 'Nube (Supabase)', 'Guarda una copia de tus datos en tu proyecto de Supabase y la restaura. Inicias sesión con tu cuenta; todas las personas de tu equipo ven los mismos datos y otro equipo solo ve los suyos.')}
         <div class="panel__body stack">
           <ul class="plain-list">
             <li>Sesión: ${who}</li>
             <li>Qué viaja: tus datos y configuración guardados en este navegador. <strong>No viaja</strong> la API key de Cohere ni los datos de Productos.</li>
             <li>Dónde: tu proyecto de Supabase, protegido por reglas de acceso por cuenta. Confirma con tu empresa que es un destino permitido antes de subir información real.</li>
-            ${s && s.anonymous ? '<li>Sin correo vinculado, si borras los datos del navegador o entras desde otro equipo, la copia queda inaccesible. Vincula tu correo abajo.</li>' : ''}
+            <li>Es una copia <strong>compartida por el equipo</strong>: subir reemplaza lo que haya subido otra persona para esas mismas claves, y «Borrar» la quita para todos.</li>
           </ul>
           <div class="btn-row">
-            <button type="button" class="btn btn--primary" data-action="cloud-upload" ${dis}>${c.busy ? 'Trabajando…' : 'Subir copia a la nube'}</button>
-            <button type="button" class="btn" data-action="cloud-download" ${dis}>Restaurar desde la nube</button>
-            <button type="button" class="btn btn--small" data-action="cloud-delete" ${dis}>Borrar copia de la nube</button>
-            ${s ? `<button type="button" class="btn btn--small" data-action="cloud-signout" ${dis}>Cerrar sesión de nube</button>` : ''}
+            <button type="button" class="btn btn--primary" data-action="cloud-upload" ${dis || !s ? 'disabled' : ''}>${c.busy ? 'Trabajando…' : 'Subir copia a la nube'}</button>
+            <button type="button" class="btn" data-action="cloud-download" ${dis || !s ? 'disabled' : ''}>Restaurar desde la nube</button>
+            <button type="button" class="btn btn--small" data-action="cloud-delete" ${dis || !s ? 'disabled' : ''}>Borrar copia de la nube</button>
+            ${s ? `<button type="button" class="btn btn--small" data-action="cloud-signout" ${dis}>Cerrar sesión</button>` : ''}
             ${c.restored ? '<button type="button" class="btn btn--small btn--primary" data-action="bc-reload">Recargar y aplicar</button>' : ''}
           </div>
           <div class="field field--check"><label><input type="checkbox" data-action="cloud-auto-toggle" ${c.auto && c.auto.on ? 'checked' : ''} ${s ? '' : 'disabled'} ${dis}> Sincronizar automáticamente metas, supuestos y ajustes</label>

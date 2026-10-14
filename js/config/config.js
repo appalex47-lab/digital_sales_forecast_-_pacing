@@ -517,14 +517,14 @@
     /* ----- Fase 8.1: almacenamiento IndexedDB y capa Categoría → Producto ----- */
     /**
      * Fase S1: nube (Supabase). URL del proyecto y llave PÚBLICA (publishable); nunca service_role.
-     * La seguridad real son las políticas RLS de la base (cada sesión solo ve sus filas).
+     * La seguridad real son las políticas RLS de la base (cada equipo solo ve sus filas).
      */
     cloud: {
       url: 'https://odsaouldxxjurniizefc.supabase.co',
       publishableKey: 'sb_publishable_CGIWMEMCuMmo22T6MtmOgg_7vKGa-V4',
       // Site Key PÚBLICA de Cloudflare Turnstile (la Secret Key vive solo en Supabase). Vacía = sin CAPTCHA.
       turnstileSiteKey: '0x4AAAAAAFUpjBAaF6uT9DhY',
-      table: 'cloud_blobs',
+      table: 'team_blobs',
       chunkChars: 400000,       // tamaño máximo de texto por fila
       // S2: lo que NO se sincroniza solo (preferencias por dispositivo)
       autoSkipKeys: ['uxSettings', 'productSettings'],
