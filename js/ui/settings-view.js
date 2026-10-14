@@ -19,8 +19,15 @@
     { what: 'Recorrido guiado y glosario', desc: 'Guía opcional para aprender la herramienta.', view: 'ayuda', where: '¿Cómo funciona?' }
   ];
 
-  /* ---------- Desplegables: cada sección es un <details> con su título y un resumen que se ve aunque esté cerrada ---------- */
-  const SECTIONS = ['st-adv', 'st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-nube', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio'];
+  /* ---------- Secciones fijas agrupadas en pestañas: cada pestaña muestra sus secciones completas, sin desplegables ---------- */
+  const TABS = [
+    { id: 'cuenta', label: 'Cuenta y nube', hint: 'Sesión, equipo y copia en la nube', sections: ['st-nube'] },
+    { id: 'ia', label: 'Inteligencia artificial', hint: 'Conexión con Cohere y control de lo que se envía', sections: ['st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad'] },
+    { id: 'datos', label: 'Datos', hint: 'Fuentes, equivalencias y almacenamiento', sections: ['st-fuentes', 'st-equivalencias', 'st-almacenamiento'] },
+    { id: 'herramienta', label: 'Herramienta', hint: 'Estado, modo de uso y otras preferencias', sections: ['st-estado', 'st-modo', 'st-otras'] },
+    { id: 'negocio', label: 'Negocio', hint: 'Contexto del negocio (Business Setup)', sections: ['st-negocio'] }
+  ];
+  const SECTIONS = ['st-estado', 'st-modo', 'st-otras', 'st-fuentes', 'st-equivalencias', 'st-almacenamiento', 'st-nube', 'st-ia', 'st-ia-log', 'st-ia-aprendido', 'st-ia-privacidad', 'st-negocio'];
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   /** Resumen de una línea de cada sección (estado actual), para decidir si hace falta abrirla. */
   function metaFor(state, id) {
@@ -29,7 +36,6 @@
       case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${st && st.passed === st.total ? 'operativo' : 'con fallas'}`; }
       case 'st-modo': { const m = (FP.guidanceConfig.MODES || []).find((x) => x[0] === state.ux.mode); return m ? esc(m[1]) : ''; }
       case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? `Equipo ${esc(c.session.teamName || '')} · ${esc(c.session.email || '')}` : 'Sin sesión'); }
-      case 'st-adv': return 'Fuentes, equivalencias, almacenamiento, otras preferencias y el detalle de la IA';
       case 'st-otras': return plural(ELSEWHERE.length, 'preferencia', 'preferencias');
       case 'st-fuentes': { const b = FP.dataSources.build(state); return `${b.summary.activeSources} de ${b.summary.liveSources} fuentes con datos`; }
       case 'st-equivalencias': return plural(FP.aliases.rules().length, 'equivalencia', 'equivalencias');
@@ -41,14 +47,13 @@
       default: return '';
     }
   }
-  /** Abre un desplegable: el título (h3) y el resumen van dentro del <summary>, que es el botón que lo abre y lo cierra. */
+  /** Sección fija (no desplegable): título, resumen del estado actual a la derecha y su contenido siempre a la vista. */
   function accStart(state, id, title, desc) {
-    const open = state.stOpen && state.stOpen[id] !== undefined ? state.stOpen[id] : false;
-    return `<details class="panel stacc" id="${id}" data-st="${id}" tabindex="-1" ${open ? 'open' : ''}>
-      <summary class="stacc__sum"><h3 class="panel__title stacc__title">${title}</h3><span class="stacc__meta">${metaFor(state, id)}</span></summary>
-      <div class="stacc__body">${desc ? `<p class="panel__desc">${desc}</p>` : ''}`;
+    return `<section class="panel stsec" id="${id}" data-st="${id}" tabindex="-1" aria-labelledby="${id}-t">
+      <header class="stsec__head"><h3 class="panel__title stsec__title" id="${id}-t">${title}</h3><span class="stsec__meta">${metaFor(state, id)}</span></header>
+      <div class="stsec__body">${desc ? `<p class="panel__desc">${desc}</p>` : ''}`;
   }
-  const accEnd = () => '</div></details>';
+  const accEnd = () => '</div></section>';
 
   /**
    * Fase I · «Fuentes de datos» (Configuración): qué fuentes existen, su estado, cuándo se cargó cada una por última vez, qué periodo cubre,
@@ -200,34 +205,36 @@
   function render(state) {
     const esc = H().esc;
     const ai = state.dx;
-    const link = (id, label) => `<li><a href="#${id}" data-jump="${id}">${esc(label)}</a></li>`;
+    const tab = TABS.some((t) => t.id === state.stTab) ? state.stTab : 'herramienta';
+    const cur = TABS.find((t) => t.id === tab);
     $('settings-view').innerHTML = `
       <section class="panel" aria-labelledby="t-settings">
         <div class="panel__head"><div data-own-head>
           <h2 class="panel__title" id="t-settings">Configuración de RevNavigator</h2>
-          <p class="panel__desc">Lo que configuras una vez y vale para toda la herramienta. Cada sección es un desplegable: ábrela para ver o cambiar lo que contiene; el resumen de cada una se ve aunque esté cerrada. Tu plan se configura aparte, en Configuración de planeación.</p>
+          <p class="panel__desc">Lo que configuras una vez y vale para toda la herramienta, agrupado por tema. Tu plan se configura aparte, en Configuración de planeación.</p>
         </div></div>
-        <div class="panel__body stack">
-          <div class="btn-row"><button type="button" class="btn" data-action="st-expand-all">Expandir todo</button><button type="button" class="btn" data-action="st-collapse-all">Contraer todo</button></div>
-          <nav aria-label="Secciones de esta pantalla"><div class="stindex">
-            <div><p class="stgroup">Herramienta</p><ul class="plain-list">${link('st-estado', 'Estado de la herramienta')}${link('st-modo', 'Modo de uso')}${link('st-otras', 'Otras preferencias')}${link('st-negocio', 'Negocio (Business Setup)')}</ul></div>
-            <div><p class="stgroup">Datos</p><ul class="plain-list">${link('st-fuentes', 'Fuentes de datos')}${link('st-equivalencias', 'Equivalencias de nombres')}${link('st-almacenamiento', 'Almacenamiento')}${link('st-nube', 'Nube')}</ul></div>
-            <div><p class="stgroup">Inteligencia artificial</p><ul class="plain-list">${link('st-ia', 'Conexión con Cohere')}${link('st-ia-log', 'Qué se envió a Cohere')}${link('st-ia-aprendido', 'Lo que la IA aprendió')}${link('st-ia-privacidad', 'Datos personales protegidos')}</ul></div>
-          </div></nav>
+        <div class="panel__body">
+          <div class="sttabs" role="tablist" aria-label="Secciones de Configuración">${TABS.map((t) => `<button type="button" role="tab" class="sttab" id="sttab-${t.id}" data-action="st-tab" data-tab="${t.id}" aria-selected="${t.id === tab}" aria-controls="stp-${t.id}" tabindex="${t.id === tab ? 0 : -1}"><span class="sttab__l">${esc(t.label)}</span><span class="sttab__h">${esc(t.hint)}</span></button>`).join('')}</div>
         </div>
       </section>
-
-      <p class="stgroup stgroup--page">Básico · Herramienta</p>
+      <div class="st-pane" id="stp-herramienta" data-pane="herramienta" role="tabpanel" aria-labelledby="sttab-herramienta">
       ${accStart(state, 'st-estado', 'Estado de la herramienta', 'El detalle de las píldoras del encabezado: año, meta anual, canales, estado de los datos y estado del motor.')}
         <div class="panel__body"><dl class="status-bar__list" id="status-bar"></dl></div>
       ${accEnd()}
-
       ${accStart(state, 'st-modo', 'Modo de uso', 'Cuánto detalle y ayuda se muestra en cada vista. Aprendiz explica más y te guía paso a paso; Analista muestra el detalle completo.')}
         <div class="panel__body">${H().segmented('ux-mode', FP.guidanceConfig.MODES, state.ux.mode)}</div>
-      ${accEnd()}`;
-    const advOpen = state.stOpen && state.stOpen['st-adv'] !== undefined ? state.stOpen['st-adv'] : false;
+      ${accEnd()}
+      ${accStart(state, 'st-otras', 'Otras preferencias, en su vista', 'Siguen donde se usan: cambian el resultado de esa vista.')}
+        <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table">
+          <thead><tr><th scope="col">Qué</th><th scope="col">Para qué sirve</th><th scope="col">Dónde está</th></tr></thead>
+          <tbody>${ELSEWHERE.map((r) => `<tr><th scope="row">${esc(r.what)}</th><td class="wrap">${esc(r.desc)}</td><td class="wrap"><a href="#${r.view}" data-nav="${r.view}">${esc(r.where)}</a></td></tr>`).join('')}</tbody>
+        </table></div></div>
+      ${accEnd()}
+      </div>`;
     const bEl = $('settings-view-b');
     if (bEl) bEl.innerHTML = `
+      <div class="st-pane" id="stp-cuenta" data-pane="cuenta" role="tabpanel" aria-labelledby="sttab-cuenta">${cloudPanel(state)}</div>
+      <div class="st-pane" id="stp-ia" data-pane="ia" role="tabpanel" aria-labelledby="sttab-ia">
       ${accStart(state, 'st-ia', 'Conexión con Cohere (análisis con IA)', 'La usan Diagnóstico, Recovery Center, Narrativa y el mapeo semántico de importaciones. Todas comparten esta misma conexión de Cohere; no se crea otra API key. Cohere no calcula ni cambia cifras.')}
         <div class="panel__body stack">
           ${FP.cohereProxy && FP.cohereProxy.available()
@@ -240,62 +247,46 @@
             <input id="dx-key-input" type="password" autocomplete="off" value="${esc(ai.apiKey || '')}" data-action="dx-key" placeholder="Pega tu API key"></div>
           <div class="field field--check"><label><input type="checkbox" data-action="dx-remember" ${ai.rememberKey ? 'checked' : ''}> Recordar la key en este navegador</label>
             <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta ni se sube a la nube. Cualquiera con acceso a este navegador podría verla.</span></div>
-          <div class="note note--warning"><strong>Límite de seguridad.</strong> Esta app corre completa en tu navegador: una API key guardada aquí <em>no es un secreto seguro</em>. Cualquier extensión, script del mismo sitio o persona con acceso a este equipo puede leerla; ocultarla o codificarla no lo evita. Úsala solo en equipos personales, no la recuerdes en equipos compartidos y crea en Cohere una key propia con límite de gasto que puedas revocar. La protección completa requiere un servidor intermedio (proxy) que guarde la key; esta app no lo tiene.</div>
+          <div class="note note--warning"><strong>Límite de seguridad.</strong> Esta app corre completa en tu navegador: una API key guardada aquí <em>no es un secreto seguro</em>. Cualquier extensión, script del mismo sitio o persona con acceso a este equipo puede leerla; ocultarla o codificarla no lo evita. Úsala solo en equipos personales, no la recuerdes en equipos compartidos y crea en Cohere una key propia con límite de gasto que puedas revocar. Con sesión de equipo la app usa el servidor intermedio (proxy) y esta key no hace falta.</div>
           <div class="btn-row"><button type="button" class="btn btn--small" data-action="dx-key-clear" ${ai.apiKey ? '' : 'disabled'}>Quitar la key de este navegador</button></div>
           <div class="field"><label for="dx-model" class="field__hint">Modelo</label>
             <input id="dx-model" type="text" value="${esc(ai.model)}" data-action="dx-model"></div>
         </div>
       ${accEnd()}
-      <p class="stgroup stgroup--page">Avanzado</p>
-      <details class="panel stacc" id="st-adv" data-st="st-adv" tabindex="-1" ${advOpen ? 'open' : ''}>
-        <summary class="stacc__sum"><h3 class="panel__title stacc__title">Opciones avanzadas</h3><span class="stacc__meta">${metaFor(state, 'st-adv')}</span></summary>
-        <div class="stacc__body">
-      ${accStart(state, 'st-otras', 'Otras preferencias, en su vista', 'Siguen donde se usan: cambian el resultado de esa vista.')}
-        <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table">
-          <thead><tr><th scope="col">Qué</th><th scope="col">Para qué sirve</th><th scope="col">Dónde está</th></tr></thead>
-          <tbody>${ELSEWHERE.map((r) => `<tr><th scope="row">${esc(r.what)}</th><td class="wrap">${esc(r.desc)}</td><td class="wrap"><a href="#${r.view}" data-nav="${r.view}">${esc(r.where)}</a></td></tr>`).join('')}</tbody>
-        </table></div></div>
-      ${accEnd()}
-
-      <p class="stgroup stgroup--page">Datos</p>
+      ${aiControlPanels(state)}
+      </div>
+      <div class="st-pane" id="stp-datos" data-pane="datos" role="tabpanel" aria-labelledby="sttab-datos">
       ${sourcesPanel(state)}
       ${aliasPanel(state)}
       ${accStart(state, 'st-almacenamiento', 'Almacenamiento', 'Dónde se guardan tus datos en este navegador.')}
         <div class="panel__body">${FP.productView.storageBlock(state, { heading: false })}</div>
       ${accEnd()}
-      ${cloudPanel(state)}
-
-      <p class="stgroup stgroup--page">Inteligencia artificial</p>
-      ${aiControlPanels(state)}
-        </div>
-      </details>`;
-    // Negocio vive en el HTML (no lo pinta esta función): su resumen y su estado abierto se sincronizan aquí
-    const bz = FP.config.business || {}, nb = document.getElementById('st-negocio');
+      </div>`;
+    showTab(tab);
+    // Negocio vive en el HTML (no lo pinta esta función): solo se actualiza su resumen
+    const bz = FP.config.business || {};
     const meta = document.getElementById('st-negocio-meta');
     if (meta) meta.textContent = bz.configured ? `${bz.name || 'Sin nombre'} · ${FP.config.currency}` : `Sin configurar · moneda ${FP.config.currency}`;
-    if (nb && state.stOpen && state.stOpen['st-negocio'] !== undefined && nb.open !== state.stOpen['st-negocio']) nb.open = state.stOpen['st-negocio'];
+    showTab(tab);
   }
 
-  // Los vínculos internos de esta pantalla abren la sección (si está cerrada) y llevan a ella sin cambiar de vista
+  /** Muestra solo los paneles de la pestaña activa (Negocio vive en el HTML y se reconoce por data-pane). */
+  function showTab(tab) {
+    const root_ = document.getElementById('view-ajustes'); if (!root_) return;
+    root_.querySelectorAll('[data-pane]').forEach((el) => { el.hidden = el.dataset.pane !== tab; });
+    root_.querySelectorAll('.sttab').forEach((b) => { const on = b.dataset.tab === tab; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+  }
+
+  // Flechas, Inicio y Fin cambian de pestaña (patrón de pestañas de WAI-ARIA)
   if (typeof document !== 'undefined') {
-    document.addEventListener('click', (e) => {
-      const a = e.target.closest && e.target.closest('a[data-jump]');
-      if (!a) return;
-      e.preventDefault();
-      const el = document.getElementById(a.dataset.jump);
-      if (!el) return;
-      for (let up = el.parentElement && el.parentElement.closest('details'); up; up = up.parentElement && up.parentElement.closest('details')) { if (!up.open) up.open = true; }   // «Avanzado» también se abre
-      if (el.tagName === 'DETAILS' && !el.open) el.open = true;   // dispara «toggle»: queda registrado en state.stOpen
-      el.scrollIntoView({ block: 'start' });
-      const sum = el.querySelector ? el.querySelector('summary') : null;
-      try { (sum || el).focus({ preventScroll: true }); } catch (err) { /* sin foco */ }
+    document.addEventListener('keydown', (e) => {
+      const t = e.target && e.target.closest && e.target.closest('.sttab'); if (!t) return;
+      const all = [...document.querySelectorAll('#view-ajustes .sttab')]; const i = all.indexOf(t);
+      const n = e.key === 'ArrowRight' ? (i + 1) % all.length : e.key === 'ArrowLeft' ? (i - 1 + all.length) % all.length : e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : -1;
+      if (n < 0) return;
+      e.preventDefault(); all[n].focus(); all[n].click();
     });
-    // «toggle» no burbujea: se escucha en captura para recordar qué secciones están abiertas aunque la pantalla se repinte
-    document.addEventListener('toggle', (e) => {
-      const d = e.target;
-      if (d && d.matches && d.matches('details[data-st]') && FP.app && FP.app.state) (FP.app.state.stOpen || (FP.app.state.stOpen = {}))[d.dataset.st] = d.open;
-    }, true);
   }
 
-  FP.settingsView = { render, aliasPanel, SECTIONS };
+  FP.settingsView = { render, aliasPanel, showTab, TABS, SECTIONS };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -80,7 +80,7 @@ async def main():
         await q.goto(u + '#producto'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
         chk('R-5 dentro de la misma sección (Diagnosticar → Producto) sigue abierta solo esa', [x['g'] for x in n if x['exp'] == 'true'] == ['diagnosticar'], n)
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(400); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(400); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         n = await q.evaluate(NAV)
         chk('R-5 en Configuración (fuera de las 5 secciones) todas quedan cerradas', all(x['exp'] == 'false' for x in n), n)
         await q.focus('.snav__toggle[data-value="recuperar"]'); await q.keyboard.press('Enter'); await q.wait_for_timeout(450)
@@ -118,7 +118,7 @@ async def main():
         await q.goto(u + '#inicio'); await q.wait_for_timeout(300)
         link = await q.evaluate("(()=>{const a=document.querySelector('.app-nav a[data-nav=\"ajustes\"]');return a?[a.innerText.trim(),a.getBoundingClientRect().height>0]:null})()")
         chk('R-3 la entrada «Configuración de RevNavigator» está en el menú, fuera de las 5 secciones y siempre visible', link == ['Configuración de RevNavigator', True], link)
-        await q.click('.app-nav a[data-nav="ajustes"]'); await q.wait_for_timeout(700); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.click('.app-nav a[data-nav="ajustes"]'); await q.wait_for_timeout(700); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         sv = await q.evaluate("""()=>{const v=document.getElementById('view-ajustes');const has=i=>!!v.querySelector('#'+i);
           return {vis:!v.hidden,h2:(v.querySelector('h2')||{}).innerText,secs:['st-modo','st-ia','st-almacenamiento','st-negocio'].map(has),
             ctl:['dx-key-input','dx-model'].map(has),bc:['bc-status','bc-form','bc-actions'].map(has),mode:v.querySelectorAll('#st-modo [data-action="ux-mode"]').length,
@@ -143,7 +143,7 @@ async def main():
         sv2 = await q.evaluate("[!!FP.app.state.bc.storedAt, location.hash]")
         chk('R-3 Negocio: «proponer», escribir el nombre y «guardar» funcionan desde Configuración y lo guardado persiste al recargar', sv1[0] is True and sv1[1] is False and sv2[0] is True, (sv1, sv2))
         # Modo de uso desde Configuración
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         await q.click('#st-modo [data-action="ux-mode"][data-value="learner"]'); await q.wait_for_timeout(400)
         await q.evaluate("(document.getElementById('tour-offer')||{remove(){}}).remove()")
         m1 = await q.evaluate("FP.app.state.ux.mode")
@@ -151,6 +151,7 @@ async def main():
         m2 = await q.evaluate("FP.app.state.ux.mode")
         chk('R-3 modo de uso: el selector de Configuración cambia el modo de toda la app', m1 == 'learner' and m2 == 'analyst', (m1, m2))
         # API key de Cohere: se configura aquí y la usan las demás vistas
+        await q.evaluate("FP.app.state.stTab='ia';FP.app.render()"); await q.wait_for_timeout(200)
         await q.fill('#dx-key-input', 'clave-de-prueba-123'); await q.press('#dx-key-input', 'Tab'); await q.wait_for_timeout(200)
         await q.fill('#dx-model', 'modelo-de-prueba'); await q.press('#dx-model', 'Tab'); await q.wait_for_timeout(200)
         await q.check('#st-ia [data-action="dx-remember"]'); await q.wait_for_timeout(300)
@@ -164,7 +165,8 @@ async def main():
         # Almacenamiento: salió de Producto y vive en Configuración
         await q.goto(u + '#producto'); await q.wait_for_timeout(700)
         pr = await q.evaluate("[document.getElementById('pa-status').innerText.includes('Pruebas de almacenamiento'), !!document.querySelector('#pa-status a[data-nav=\"ajustes\"]')]")
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(900); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(900); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
+        await q.evaluate("FP.app.state.stTab='datos';FP.app.render()"); await q.wait_for_timeout(200)
         al2 = await q.evaluate("(()=>{const t=document.getElementById('st-almacenamiento').innerText;return [/Modo:/.test(t),/Migración:/.test(t),/Espacio usado:/.test(t)&&!/Espacio usado: —/.test(t),!!document.querySelector('#st-almacenamiento [data-action=\"storage-tests\"]')]})()")
         chk('R-3 Almacenamiento: ya no está en Producto (que enlaza a Configuración) y en Configuración muestra modo, migración, espacio usado y pruebas', pr == [False, True] and all(al2), (pr, al2))
         chk('R-3 en la pantalla siguen enlazadas, sin moverse, las preferencias de su vista (planeación, opciones de lectura, parámetros del forecast, recorrido)', True)
@@ -187,6 +189,7 @@ async def main():
         chk('R-8 el encabezado NO trae la ficha completa (ni «Meta anual» ni «Canales configurados»)', 'Meta anual' not in hd['headerText'] and 'Canales configurados' not in hd['headerText'] and not hd['barInHeader'], hd['headerText'][:160])
         # la ficha completa existe solo en Configuración
         where = {}
+        await q.evaluate("FP.app.state.stTab='herramienta'")
         for v in ('inicio', 'pacing', 'carga', 'resumen', 'ajustes'):
             await q.goto(u + '#' + v); await q.wait_for_timeout(350)
             where[v] = await q.evaluate("(()=>{const b=document.getElementById('status-bar');return b?{vis:!!b.offsetParent,inside:!!b.closest('#view-ajustes'),items:b.querySelectorAll('.status-item').length}:null})()")
@@ -194,7 +197,7 @@ async def main():
         tx = await q.evaluate("document.getElementById('status-bar').innerText")
         chk('R-8 en Configuración la ficha trae las 5 cifras (Año seleccionado, Meta anual, Canales configurados, Estado de datos, Estado del motor)', all(w in tx for w in ('Año seleccionado', 'Meta anual', 'Canales configurados', 'Estado de datos', 'Estado del motor')), tx[:200])
         # las píldoras coinciden con el detalle
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         cmp_ = await q.evaluate("""()=>{const hs=[...document.querySelectorAll('#topbar-status .pill')].map(p=>p.className+'|'+p.innerText.trim());const ds=[...document.querySelectorAll('#status-bar .pill')].map(p=>p.className+'|'+p.innerText.trim());
           return {h:hs,d:ds}}""")
         okc = cmp_['h'][0].split('|')[1] == cmp_['d'][0].split('|')[1] and cmp_['h'][0].split('|')[0] == cmp_['d'][0].split('|')[0] and cmp_['h'][1].split('|')[0] == cmp_['d'][1].split('|')[0] and cmp_['h'][1].split('|')[1].endswith(cmp_['d'][1].split('|')[1])
@@ -214,7 +217,7 @@ async def main():
         other = '2027' if str(y0) != '2027' else '2025'
         await q.select_option('#topbar-year', other); await q.wait_for_timeout(700)
         y1 = await q.evaluate("[FP.app.state.year, document.getElementById('topbar-year').value]")
-        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("FP.app.actions['st-expand-all']()"); await q.wait_for_timeout(150)
+        await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         y2 = await q.evaluate("document.getElementById('year-select').value")
         await q.select_option('#year-select', str(y0)); await q.wait_for_timeout(700)
         y3 = await q.evaluate("[FP.app.state.year, document.getElementById('topbar-year').value]")

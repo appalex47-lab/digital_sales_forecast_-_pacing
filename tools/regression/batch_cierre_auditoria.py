@@ -35,7 +35,7 @@ async def main():
         st = await q.evaluate("FP.app.state.storage && FP.app.state.persist ? FP.app.state.persist.state : (FP.app.repo ? FP.app.repo.status().state : 'n/a')")
         chk('P1 estado de persistencia accesible (saved/pending)', st in ('saved', 'pending', 'n/a'), st)
         await q.goto(u + '#ajustes'); await q.reload(); await q.wait_for_timeout(1200)
-        await q.evaluate("document.querySelectorAll('details').forEach(d=>d.open=true)")
+        await q.evaluate("document.querySelectorAll('details').forEach(d=>d.open=true); FP.app.state.stTab='ia'; FP.app.render()")
         has = await q.evaluate("!!document.querySelector('[data-action=dx-key-clear]') && /no es un secreto seguro/.test(document.body.innerText)")
         chk('S1 Configuración advierte que la key en el navegador no es un secreto seguro y permite quitarla', has)
         fail_sim = """(async()=>{

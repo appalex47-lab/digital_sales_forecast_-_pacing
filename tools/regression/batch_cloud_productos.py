@@ -85,7 +85,7 @@ async def main():
         chk('P2 con un tope diminuto el paquete se rechaza antes de subir', b['tooBig'] is True and len(rows) == 0, b)
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(1200)
         await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
-        await q.evaluate("document.getElementById('st-adv').open=true; document.getElementById('st-nube').open=true"); await q.wait_for_timeout(250)
+        await q.evaluate("FP.app.state.stTab='cuenta'; FP.app.render()"); await q.wait_for_timeout(250)
         await q.click('[data-action="cloud-upload"]'); await q.wait_for_timeout(9000)
         msg = await q.inner_text('#cloud-msg')
         pk = sorted({y['key'] for y in rows if y['key'].startswith('productsCloud')})

@@ -26,7 +26,7 @@
 
   const state = {
     productQuality: [],
-    stOpen: {},   // qué desplegables de Configuración están abiertos (por id); todos cerrados al empezar
+    stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
     proj: { growth: 0.16, shares: null, channel: 'total', savedAt: null, savedTotal: null },   // Proyección del próximo año (en esta sesión)   // instantánea de los lotes de Productos para Calidad de datos (ver refreshProductQuality)
     view: 'resumen',
@@ -1004,10 +1004,10 @@
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
     else if (state.view === 'ajustes') {
+      if (state.ajustesSection) { const tb = FP.settingsView.TABS.find((t) => t.sections.includes('st-' + state.ajustesSection)); if (tb) state.stTab = tb.id; }   // un enlace a una sección abre su pestaña
       FP.settingsView.render(state); FP.ui.renderStatus(state); FP.businessView.render(state); ensureStorageEstimate();   // la ficha de estado se repinta porque settings-view reescribe su contenedor
       if (state.ajustesSection) {   // llegada desde un enlace a una sección (p. ej. #negocio)
         const el = document.getElementById('st-' + state.ajustesSection); state.ajustesSection = null;
-        if (el && el.tagName === 'DETAILS') { el.open = true; }   // el desplegable se abre al llegar desde un enlace (dispara «toggle» y queda registrado)
         if (el) setTimeout(() => { el.scrollIntoView({ block: 'start' }); try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 0);
       }
     }
@@ -2238,8 +2238,12 @@
     },
 
     /* ----- Configuración: expandir o contraer todos los desplegables ----- */
-    'st-expand-all'() { state.stOpen = Object.fromEntries(FP.settingsView.SECTIONS.map((id) => [id, true])); render(); },
-    'st-collapse-all'() { state.stOpen = Object.fromEntries(FP.settingsView.SECTIONS.map((id) => [id, false])); render(); },
+    'st-tab'(el) { state.stTab = el.dataset.tab; FP.settingsView.showTab(state.stTab); },
+    /** Lleva directo a una pestaña de Configuración (p. ej. desde el menú de la cuenta). */
+    'settings-go'(el) {
+      state.stTab = el.dataset.tab || 'herramienta';
+      if (root.location.hash === '#ajustes') render(); else root.location.hash = 'ajustes';
+    },
 
     /* ----- Fase I: consolidado de cuarentena ----- */
     'q-filter'(el) { state.qFilters[el.dataset.key] = el.value; state.qFilters.page = 1; render(); },
@@ -3567,7 +3571,7 @@
     try {
       const ah = await FP.cloud.consumeAuthHash({});
       if (ah) {
-        state.stOpen['st-adv'] = true; state.stOpen['st-nube'] = true; state.view = 'ajustes';
+        state.stTab = 'cuenta'; state.view = 'ajustes';
         cloudNote(ah.ok ? `Entraste como ${ah.session.email} · equipo ${ah.session.team_name || ''}.${ah.type === 'recovery' ? ' Cambia tu contraseña abajo.' : ''}` : ah.error, ah.ok ? 'ok' : 'bad');
       }
     } catch (e) { /* sin enlace de correo */ }
