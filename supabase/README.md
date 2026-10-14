@@ -30,3 +30,8 @@ Restablecer contraseña: Authentication → Users → ⋯ → Send password reco
 
 ## 4. Redirect URLs
 Authentication → URL Configuration: Site URL y Redirect URLs con la URL real de GitHub Pages (para enlaces de recuperación).
+
+## 5. Proxy de Cohere (Edge Function `cohere-proxy`)
+1. La función ya está desplegada (código en `functions/cohere-proxy/`; CLI: `supabase functions deploy cohere-proxy`).
+2. Edge Functions → Secrets → agrega `COHERE_API_KEY` con tu key de Cohere (solo ahí; nunca en el chat ni en el repositorio). Opcional: `ALLOWED_ORIGINS` (lista separada por comas).
+3. En la app: Configuración → IA → «Probar la conexión del servidor». Con el proxy activo se puede borrar la key guardada en el navegador.

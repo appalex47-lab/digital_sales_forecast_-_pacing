@@ -259,7 +259,7 @@
           <p class="field__hint">${esc(d.confidence.note)}</p>
           ${(d.validation || []).length ? `<h4>Validaciones</h4><ul class="alert-list">${d.validation.map((v) => `<li>${H().pill(v.pass ? 'ok' : 'error', v.pass ? 'Cierra' : 'No cierra')} <span>${esc(v.label)}</span></li>`).join('')}</ul>` : ''}</section>
         <section><h4>Hipótesis con Cohere (opcional)</h4>
-          <p class="field__hint">${ai.apiKey ? H().pill('ok', 'API key configurada') : H().pill('na', 'Sin API key')} La API key, el modelo y si se recuerda en este navegador se configuran en <a href="#ajustes" data-nav="ajustes">Configuración de RevNavigator</a>.</p>
+          <p class="field__hint">${FP.cohereProxy && FP.cohereProxy.available() ? H().pill('ok', 'IA por el servidor del equipo') : ai.apiKey ? H().pill('ok', 'API key configurada') : H().pill('na', 'Sin API key')} La API key, el modelo y si se recuerda en este navegador se configuran en <a href="#ajustes" data-nav="ajustes">Configuración de RevNavigator</a>.</p>
           <button type="button" class="btn btn--primary" data-action="dx-ai" ${d.status === 'ok' && ai.ai.status !== 'busy' ? '' : 'disabled'}>Generar hipótesis con Cohere</button>
           <p class="field__hint">Cohere solo recibe los datos ya calculados (brecha, drivers, señales, calidad) y reglas estrictas: no calcula ni cambia cifras, no inventa dimensiones y debe citar señales existentes. Su respuesta se valida; si falla, todo lo demás sigue funcionando.</p></section>
       </div>`;

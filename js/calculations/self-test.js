@@ -563,7 +563,7 @@
       diagNoSeg.availability.unavailable.some((d) => d.dimension === 'device') &&
       !diagNoSeg.hypotheses.some((h) => /dispositivo|mobile|nuevo/i.test(h.hypothesis)));
     test('Fase 5: IA', 'Test 8: sin Cohere el diagnóstico matemático sigue completo', () => {
-      const pr = CO.generateWithCohere(diagNoSeg, { apiKey: '' });
+      const pr = CO.generateWithCohere(diagNoSeg, { apiKey: '', fetchImpl: null });   // sin red: con sesión de equipo la IA iría al servidor
       return typeof pr.then === 'function' && diagNoSeg.level1Drivers.length === 3 && diagNoSeg.hypotheses.every((h) => h.source === 'rules');
     });
     test('Fase 5: IA', 'Test 9: JSON inválido o con señales inventadas no rompe nada', () => {
@@ -663,7 +663,7 @@
       return r.valid && r.warnings.some((w) => /restricción/.test(w));
     });
     test('Fase 6: IA', 'Falla o JSON inválido de Cohere no rompe el módulo', () => {
-      const pr = FP.cohereActions.suggestActions({ hypothesis: { id: 'h1', hypothesis: 'x', driver: 'conversionRate' } }, { apiKey: '' });
+      const pr = FP.cohereActions.suggestActions({ hypothesis: { id: 'h1', hypothesis: 'x', driver: 'conversionRate' } }, { apiKey: '', fetchImpl: null });
       const a = FP.cohereActions.parseAndValidate('no es json', { knownSignals: new Set(['s1']) });
       const b = FP.cohereActions.parseAndValidate('{"actions":[{"actionId":"ai_1","action":"Revisar","rationale":"r","relatedDriver":"precio","relatedSignals":[],"informationNeeded":[]},{"actionId":"ai_2","action":"Auditar checkout","rationale":"r","relatedDriver":"conversionRate","relatedSignals":["s1","s9"],"informationNeeded":["funnel"]}]}', { knownSignals: new Set(['s1']) });
       return typeof pr.then === 'function' && !a.ok && b.ok && b.actions.length === 1 && b.actions[0].relatedSignals.join() === 's1';

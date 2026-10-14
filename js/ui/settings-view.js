@@ -34,7 +34,7 @@
       case 'st-fuentes': { const b = FP.dataSources.build(state); return `${b.summary.activeSources} de ${b.summary.liveSources} fuentes con datos`; }
       case 'st-equivalencias': return plural(FP.aliases.rules().length, 'equivalencia', 'equivalencias');
       case 'st-almacenamiento': return 'Dónde se guardan tus datos';
-      case 'st-ia': return `${ai.apiKey ? 'API key en uso' : 'Sin API key'} · IA ${state.settings.enableAI === false ? 'desactivada' : 'activada'}`;
+      case 'st-ia': return `${FP.cohereProxy && FP.cohereProxy.available() ? 'Servidor del equipo' : ai.apiKey ? 'API key en uso' : 'Sin API key'} · IA ${state.settings.enableAI === false ? 'desactivada' : 'activada'}`;
       case 'st-ia-log': return plural(FP.aiAudit.count(), 'consulta en esta sesión', 'consultas en esta sesión');
       case 'st-ia-aprendido': return plural(Object.keys(FP.importer.learnedMappings()).length, 'columna aprendida', 'columnas aprendidas');
       case 'st-ia-privacidad': return plural((state.settings.piiColumns || []).length, 'columna marcada a mano', 'columnas marcadas a mano');
@@ -230,7 +230,13 @@
     if (bEl) bEl.innerHTML = `
       ${accStart(state, 'st-ia', 'Conexión con Cohere (análisis con IA)', 'La usan Diagnóstico, Recovery Center, Narrativa y el mapeo semántico de importaciones. Todas comparten esta misma conexión de Cohere; no se crea otra API key. Cohere no calcula ni cambia cifras.')}
         <div class="panel__body stack">
-          <div class="field"><label for="dx-key-input" class="field__hint">API key de Cohere</label>
+          ${FP.cohereProxy && FP.cohereProxy.available()
+            ? `<div class="note note--ok" data-ai-server><strong>La IA usa el servidor de tu equipo.</strong> Con tu sesión, Cohere se llama desde tu Supabase y la API key vive allá, no en este navegador. No necesitas pegar ninguna key.</div>
+               <div class="btn-row"><button type="button" class="btn btn--small" data-action="dx-proxy-test" ${ai.proxyTest && ai.proxyTest.busy ? 'disabled' : ''}>${ai.proxyTest && ai.proxyTest.busy ? 'Probando…' : 'Probar la conexión del servidor'}</button></div>
+               ${ai.proxyTest && ai.proxyTest.msg ? `<p class="note ${ai.proxyTest.ok ? 'note--ok' : 'note--warning'}" id="dx-proxy-msg" role="status">${esc(ai.proxyTest.msg)}</p>` : ''}
+               <p class="field__hint">La key de abajo es solo un respaldo para cuando no inicies sesión o el servidor no esté disponible.</p>`
+            : '<p class="field__hint" data-ai-local>Sin sesión de equipo: la IA usa la API key pegada aquí. Al iniciar sesión pasará al servidor del equipo y podrás quitarla de este navegador.</p>'}
+          <div class="field"><label for="dx-key-input" class="field__hint">API key de Cohere (respaldo)</label>
             <input id="dx-key-input" type="password" autocomplete="off" value="${esc(ai.apiKey || '')}" data-action="dx-key" placeholder="Pega tu API key"></div>
           <div class="field field--check"><label><input type="checkbox" data-action="dx-remember" ${ai.rememberKey ? 'checked' : ''}> Recordar la key en este navegador</label>
             <span class="field__hint">Se guarda en localStorage de este navegador y nunca se exporta ni se sube a la nube. Cualquiera con acceso a este navegador podría verla.</span></div>
