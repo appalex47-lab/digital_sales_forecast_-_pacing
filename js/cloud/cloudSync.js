@@ -294,11 +294,22 @@
     return { ok: !diffs.length, diffs, keys: uploadReport.keys.length };
   }
 
+  /** Quita de la nube las claves con ese prefijo que ya no estén en `keep` (p. ej. trozos de productos de una subida anterior más larga). */
+  async function pruneKeys(prefix, keep, { fetchImpl } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+    try {
+      const remote = await rest(`${cfg().table}?select=key&part=eq.0`, { fetchImpl, session: se.session });
+      let n = 0;
+      for (const r of remote || []) if (String(r.key).startsWith(prefix) && !keep.has(r.key)) { await rest(`${cfg().table}?key=eq.${encodeURIComponent(r.key)}`, { method: 'DELETE', fetchImpl, session: se.session }); n++; }
+      return { ok: true, pruned: n };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   async function remove({ fetchImpl } = {}) {
     const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: true, nothing: true };
     try { await rest(`${cfg().table}?key=neq.__none__`, { method: 'DELETE', fetchImpl, session: se.session }); } catch (e) { return { ok: false, error: e.message }; }
     return { ok: true };
   }
 
-  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, remove, digest, split };
+  FP.cloud = { consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);

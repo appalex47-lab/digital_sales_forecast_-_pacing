@@ -2586,11 +2586,16 @@
     'cloud-upload'() {
       return cloudRun(async () => {
         await repo.flush();
-        const up = await FP.cloud.upload(cloudProvider, {});
+        cloudNote('Preparando productos…'); render();
+        const bundle = await FP.productSync.build(repo);
+        if (bundle.tooBig) return cloudNote(`Los productos pesan ${fmtKb(bundle.bytes)} ya comprimidos y rebasan el tope de ${fmtKb(FP.productSync.MAX_BYTES)} (el plan gratuito de Supabase tiene 500 MB en total). No se subió nada; reduce el rango de fechas de productos o pide ampliar el plan.`, 'bad');
+        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), {});
         if (!up.ok) return cloudNote(up.error, 'bad');
         const v = await FP.cloud.verify(up, {});
+        const pr = await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {});
         state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
-        cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
+        const prod = bundle.items ? ` Productos: ${(bundle.rows || 0).toLocaleString('es-MX')} renglones de venta (${fmtKb(bundle.bytes)} comprimidos).` : ' Sin productos cargados.';
+        cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.${prod}${pr.ok ? '' : ' (No pude limpiar trozos viejos de productos.)'}` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
       });
     },
     'cloud-download'() {
@@ -2599,9 +2604,11 @@
         const d = await FP.cloud.download({});
         if (!d.ok) return cloudNote(d.error, 'bad');
         if (!d.items.length) return cloudNote('No hay copia en la nube todavía. Primero usa «Subir copia a la nube».', 'warn');
-        for (const it of d.items) { const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+        for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
         await repo.flush();
-        cloudNote(`Copia restaurada: ${d.items.length} bloques de datos. Recarga para verlos aplicados.`, 'ok');
+        const pr = await FP.productSync.restore(repo, d.items);
+        if (!pr.ok) { cloudNote(`Se restauraron los datos generales, pero ${pr.error}`, 'bad'); state.cloud.restored = true; return; }
+        cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
       });
     },

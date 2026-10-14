@@ -2788,3 +2788,5 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - La nube es compartida por el equipo: subir ya no borra claves ajenas; «Borrar copia» la quita para todo el equipo (se avisa en la confirmación).
 - UI: ventana `#login-dialog` (`login-open`/`login-submit`), panel Nube con cambio de contraseña. En https y sin sesión se ofrece una vez por visita.
 - Pruebas: `tools/test-cloud-sync.js`, `tools/regression/batch_cloud_s1.py`.
+- Productos en la nube: `js/cloud/productSync.js` exporta los bloques de IndexedDB (columnas tipadas → arreglos, gzip+base64, trozos de ~20 000 renglones) como claves `productsCloud:*` con manifiesto; `restore` valida que estén todos los trozos antes de reemplazar lo local y recalcula los resúmenes. Tope 100 MB comprimido. No participa en la sincronización automática. Prueba: `tools/regression/batch_cloud_productos.py`.
+- Altas: `team_invites` + trigger sobre `auth.users` (ver `supabase/README.md`).

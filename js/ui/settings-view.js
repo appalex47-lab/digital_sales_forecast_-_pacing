@@ -177,7 +177,7 @@
         <div class="panel__body stack">
           <ul class="plain-list">
             <li>Sesión: ${who}</li>
-            <li>Qué viaja: tus datos y configuración guardados en este navegador. <strong>No viaja</strong> la API key de Cohere ni los datos de Productos.</li>
+            <li>Qué viaja: tus datos y configuración guardados en este navegador. Los datos de Productos viajan comprimidos (tope de 100 MB); <strong>no viaja</strong> la API key de Cohere.</li>
             <li>Dónde: tu proyecto de Supabase, protegido por reglas de acceso por cuenta. Confirma con tu empresa que es un destino permitido antes de subir información real.</li>
             <li>Es una copia <strong>compartida por el equipo</strong>: subir reemplaza lo que haya subido otra persona para esas mismas claves, y «Borrar» la quita para todos.</li>
           </ul>

@@ -527,7 +527,7 @@
       table: 'team_blobs',
       chunkChars: 400000,       // tamaño máximo de texto por fila
       // S2: lo que NO se sincroniza solo (preferencias por dispositivo)
-      autoSkipKeys: ['uxSettings', 'productSettings'],
+      autoSkipKeys: ['uxSettings', 'productSettings', 'productsCloud'],
       autoDebounceMs: 4000,
       skipKeys: ['cohereApiKey', 'storageMigration', 'cloudSession']   // secretos y banderas locales: nunca viajan a la nube
     },
