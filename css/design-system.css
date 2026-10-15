@@ -1573,3 +1573,17 @@ tr.is-evidence { outline-offset: -3px; }
 .chg-alert--done { opacity: .75; }
 .chip-btn { border: 1px solid var(--ds-border-strong); background: transparent; color: inherit; border-radius: 999px; padding: 6px 14px; cursor: pointer; font: inherit; }
 .chip-btn.is-on { background: var(--ds-accent); border-color: var(--ds-accent); color: #fff; }
+
+/* ---------- Clientes y LTV ---------- */
+.cus-controls { display: flex; flex-wrap: wrap; gap: var(--ds-s4); margin: var(--ds-s3) 0; }
+.cus-chart { width: 100%; max-width: 760px; height: auto; display: block; }
+.cus-seg--new { fill: var(--ds-accent); background: var(--ds-accent); }
+.cus-seg--rec { fill: var(--ds-actual); background: var(--ds-actual); }
+.cus-seg--rea { fill: var(--ds-forecast); background: var(--ds-forecast); }
+.cus-ax { font-size: 10px; fill: var(--ds-text-muted); }
+.cus-grid { stroke: var(--ds-border); stroke-width: 1; }
+.cus-legend { display: flex; flex-wrap: wrap; gap: var(--ds-s4); align-items: center; margin: var(--ds-s2) 0 var(--ds-s3); font-size: var(--ds-fs-helper); }
+.cus-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.cus-weak td { opacity: .65; }
+.cus-total td { font-weight: 600; background: var(--ds-surface-2); }
+.cus-heat td { min-width: 52px; }

@@ -551,7 +551,7 @@
         /** Fase 8.4: estado, sucursal y entrega dejan de ser obligatorios (un producto sin geografía se conserva como "No disponible"). */
         required: ['date', 'channel', 'sku'],
         recommended: ['state', 'branch', 'delivery'],
-        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades']
+        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades', 'id_pedido', 'id_cliente']
       },
       funnelType: {
         id: 'productFunnel', label: 'Productos · funnel (GA4)',
@@ -575,6 +575,9 @@
         { key: 'branch', label: 'Sucursal (código)', kind: 'branch', synonyms: ['sucursal', 'tienda', 'branch', 'store', 'sucursal_asignada', 'id_sucursal', 'store_id', 'codigo_sucursal'] },
         { key: 'branchName', label: 'Nombre de sucursal', kind: 'text', synonyms: ['nombre_sucursal', 'sucursal_nombre', 'store_name', 'nombre_tienda'] },
         { key: 'delivery', label: 'Tipo de entrega', kind: 'delivery', synonyms: ['tipo_entrega', 'entrega', 'tipo_de_entrega', 'modalidad', 'delivery_type', 'metodo_entrega'] },
+        /** Opcionales (clientes): sin ellas todo funciona igual. El ID de cliente debe venir ya anonimizado desde el sistema de origen. */
+        { key: 'orderId', label: 'ID de pedido', kind: 'id', synonyms: ['id_pedido', 'pedido', 'numero_pedido', 'no_pedido', 'folio_pedido', 'order_id', 'id_orden', 'orden', 'transaction_id', 'id_transaccion'] },
+        { key: 'customerId', label: 'ID de cliente', kind: 'id', synonyms: ['id_cliente', 'cliente', 'customer_id', 'client_id', 'id_paciente', 'paciente', 'user_id', 'id_usuario'] },
         { key: 'extraDimension', label: 'Otra dimensión (se suma por renglón)', kind: 'text', synonyms: ['fuente', 'source', 'dispositivo', 'device', 'subcanal'] },
         { key: 'revenue', label: 'Venta', kind: 'number', metric: true, synonyms: ['venta', 'ventas', 'revenue', 'sales', 'importe', 'monto', 'venta_neta'] },
         { key: 'orders', label: 'Pedidos', kind: 'number', metric: true, synonyms: ['pedidos', 'orders', 'ordenes', 'transacciones', 'transactions'] },
@@ -589,6 +592,15 @@
         { key: 'beginCheckout', label: 'Inicios de checkout', kind: 'number', metric: true, synonyms: ['inicio_checkout', 'begin_checkout', 'items_checked_out', 'checkout', 'inicios_checkout'] },
         { key: 'purchasesGa4', label: 'Compras GA4', kind: 'number', metric: true, synonyms: ['compras_ga4', 'items_purchased', 'purchase', 'compras'] }
       ],
+      /**
+       * Clientes (ID de pedido + ID de cliente en el archivo de venta). Valores que NO cuentan como cliente (compra sin cuenta).
+       * reactivationDays: sin pedidos por más de estos días y regresa = «reactivado» (farmacia: ciclos de 30 a 90 días en crónicos → 180 días ≈ dos ciclos perdidos).
+       * warmupDays: el histórico cargado debe cubrir al menos estos días antes de un mes para confiar en «nuevo» en ese mes.
+       */
+      customers: {
+        reactivationDays: 180, warmupDays: 180, windows: [30, 60, 90, 180, 365], minCohort: 30,
+        placeholders: ['0', '00', '000', 'null', 'none', 'n/a', 'na', 'nan', 'undefined', 'sin cliente', 'sin_cliente', 'anonimo', 'anónimo', 'invitado', 'guest', 'desconocido', '-', '--']
+      },
       /** Métricas por archivo (lista fija; la Fase 8.5 de métricas configurables está en pausa). */
       metrics: ['revenue', 'orders', 'units'],
       funnelMetrics: ['views', 'addToCart', 'beginCheckout', 'purchasesGa4'],
