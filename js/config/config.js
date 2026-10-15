@@ -667,7 +667,7 @@
       delimiters: [',', ';', '\t', '|'],
       previewRows: 20,
       pageSize: 50,
-      maxFileSizeMB: 100,          // histórico, plan, actual y segmentos (antes 15)
+      maxFileSizeMB: 250,          // histórico, plan, actual y segmentos (antes 15; subió a 100 y luego a 250 porque segmentos pesa ~120 MB)
       workerMinBytes: 4 * 1024 * 1024,   // los CSV de este tamaño o más se leen, traducen y validan en un Worker (la página no se congela)
       maxProductsFileSizeMB: 300,  // productos (igual que antes: 20 × 15)
       // Normalización semántica opcional por Cohere.

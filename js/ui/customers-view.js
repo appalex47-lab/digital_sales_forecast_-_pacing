@@ -102,7 +102,7 @@
     const warm = r.monthly.filter((m) => !m.reliableNew).length;
     const t = cohortTables(r);
     el.innerHTML = `
-      <p class="field__hint">Datos de ${esc(mlabel(r.minDay))} a ${esc(r.maxDay)} · ${esc(F().integer(s.orders))} pedidos de ${esc(F().integer(s.customers))} clientes. Vive solo en este navegador: el ID de cliente no se sube a la nube.</p>
+      <p class="field__hint">Datos de ${esc(mlabel(r.minDay))} a ${esc(r.maxDay)} · ${esc(F().integer(s.orders))} pedidos de ${esc(F().integer(s.customers))} clientes. El ID de cliente (anonimizado) viaja con los productos a la nube de tu equipo, comprimido.</p>
       <div class="cus-controls">
         <label class="field"><span class="field__label">Canal</span><select data-cu="channel">${chOpts}</select></label>
         <label class="field"><span class="field__label">Reactivado = vuelve tras más de</span><select data-cu="reactivationDays">${rea}</select></label>

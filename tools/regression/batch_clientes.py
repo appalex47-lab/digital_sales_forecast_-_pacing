@@ -63,14 +63,22 @@ async def main():
         # recargar el mismo archivo no duplica pedidos
         await q.evaluate("FP.app.actions['p-mock-clientes']()"); await wait_ready(q)
         await q.evaluate("FP.app.actions['commit-staged']()")
-        for _ in range(60):
+        for _ in range(400):
             await q.wait_for_timeout(1000)
             if await q.evaluate("FP.app.state.staging.items.length") == 0: break
         info2 = await q.evaluate("FP.customerStore.info()")
         chk('K15 recargar el mismo archivo no duplica pedidos ni clientes', info2['orders'] == info['orders'] and info2['customers'] == info['customers'], (info, info2))
         # quitar el archivo quita sus pedidos
-        bid = await q.evaluate("FP.productStore.listBatches().then(l=>l.map(x=>x.id))")
-        for i in bid: await q.evaluate("(id)=>FP.productStore.removeBatch(id)", i)
+        for _ in range(30):   # esperar a que el libro termine de guardar el último archivo (el guardado de pedidos va después de los productos)
+            bid = await q.evaluate("FP.productStore.listBatches().then(l=>l.map(x=>x.id))")
+            lb = await q.evaluate("FP.customerStore.info().then(x=>x?x.batches.map(b=>b.id):[])")
+            if sorted(bid) == sorted(lb):
+                await q.wait_for_timeout(2500)   # que no quede un guardado a medias
+                bid2 = await q.evaluate("FP.productStore.listBatches().then(l=>l.map(x=>x.id))")
+                lb2 = await q.evaluate("FP.customerStore.info().then(x=>x?x.batches.map(b=>b.id):[])")
+                if sorted(bid2) == sorted(bid) and sorted(lb2) == sorted(lb): break
+            await q.wait_for_timeout(500)
+        await q.evaluate("""(async()=>{for(const b of await FP.productStore.listBatches()) await FP.productStore.removeBatch(b.id)})()""")
         info3 = await q.evaluate("FP.customerStore.info()")
         chk('K16 quitar los archivos vacía el libro de clientes', info3 is None, info3)
         # solo una de las dos columnas: se carga como siempre y se avisa
@@ -82,6 +90,21 @@ async def main():
           const st=FP.productImport.stage(csv,{fileName:'y.csv',kind:'sales'});const r=await FP.productImport.process(st,{settings:{}});
           return {c:r.summary.customers,issues:Object.keys(r.summary.issuesByType),orders:r.draft.ledger.orders.size,canImport:r.canImport}})()""")
         chk('K19 compras sin cliente o sin pedido no entran a clientes, pero sí a productos, y se avisa', r2['orders'] == 2 and r2['c']['withoutCustomer'] == 2 and r2['c']['withoutOrder'] == 1 and 'LINES_WITHOUT_CUSTOMER' in r2['issues'] and 'LINES_WITHOUT_ORDER' in r2['issues'] and r2['canImport'], r2)
+        # el libro de clientes viaja con los productos a la nube y se restaura (se vuelve a cargar el ejemplo: K16 lo había vaciado)
+        await q.evaluate("FP.app.actions['p-mock-clientes']()"); await wait_ready(q)
+        await q.evaluate("FP.app.actions['commit-staged']()")
+        for _ in range(400):
+            await q.wait_for_timeout(1000)
+            if await q.evaluate("FP.app.state.staging.items.length") == 0: break
+        await q.wait_for_timeout(2500)
+        sy = await q.evaluate("""(async()=>{const repo=FP.productStore.repo;const b=await FP.productSync.build(repo);
+          const before=await FP.customerStore.info();
+          const items=[...b.items.entries()].map(([key,envelope])=>({key,envelope}));
+          await repo.setMeta('productCustomerLedger',{ledger:null});FP.customerStore.reset();
+          const empty=await FP.customerStore.info();
+          const r=await FP.productSync.restore(repo,items);const after=await FP.customerStore.info();
+          return {inBundle:!!b.items.get('productsCloud:meta'),ok:r.ok,before:before&&before.orders,empty,after:after&&after.orders,cust:after&&after.customers,custB:before&&before.customers}})()""")
+        chk('K20 el libro de clientes se sube con los productos y se restaura igual', sy['inBundle'] and sy['ok'] and sy['empty'] is None and sy['after'] == sy['before'] and sy['cust'] == sy['custB'], sy)
         chk('K17 sin errores de página', not errs, errs)
         await b.close()
     print('RESULTADO batch_clientes: ' + ('OK' if not fails else 'FALLAS: ' + ', '.join(fails)))

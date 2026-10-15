@@ -104,6 +104,7 @@
     for (const m of await IDB().getAll(db, 'meta')) if (/^product/.test(m.key)) await IDB().del(db, 'meta', m.key);
     for (const store of STORES) if ((decoded[store] || []).length) await IDB().putMany(db, store, decoded[store]);
     for (const m of decoded.meta || []) await IDB().put(db, 'meta', m);
+    if (FP.customerStore) FP.customerStore.reset();           // el libro de clientes viaja en `meta`: se vuelve a leer
     if (FP.productStore) await FP.productStore.init(repo);   // recalcula los resúmenes que no viajaron
     return { ok: true, rows: (man.stores.productDays || {}).rows || 0, funnel: (man.stores.productFunnel || {}).rows || 0 };
   }

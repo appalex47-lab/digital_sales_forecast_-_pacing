@@ -2662,6 +2662,7 @@
         for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
         await repo.flush();
         const pr = await FP.productSync.restore(repo, d.items);
+        state.cu.status = 'idle';
         if (!pr.ok) { cloudNote(`Se restauraron los datos generales, pero ${pr.error}`, 'bad'); state.cloud.restored = true; return; }
         cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
