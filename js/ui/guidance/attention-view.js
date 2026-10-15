@@ -47,7 +47,7 @@
   }
 
   /* ---------- Piezas de HTML ---------- */
-  const attrs = (st, S, key) => `data-action="route-go" data-view="${H().esc(st.view)}" data-step="${H().esc(st.id)}" data-finding="${H().esc(st.findingId || '')}" data-key="${H().esc(key)}"${st.channel ? ` data-channel="${H().esc(st.channel)}"` : ''}`;
+  const attrs = (st, S, key) => `data-action="route-go" data-route="${H().esc(st.id)}" data-view="${H().esc(st.view)}" data-step="${H().esc(st.id)}" data-finding="${H().esc(st.findingId || '')}" data-key="${H().esc(key)}"${st.channel ? ` data-channel="${H().esc(st.channel)}"` : ''}`;
   const money = (v) => (fin(v) ? F().currency(Math.abs(v), 0) : '—');
 
   function findingHtml(fd, key) {
@@ -66,7 +66,7 @@
       <p class="att__why"><strong>Por qué importa:</strong> ${esc(fd.why)}</p>
       ${sup}
       <details class="att__more"><summary>Evidencia y qué sigue</summary><dl>${detail.map(([t, xs]) => `<dt>${esc(t)}</dt>${xs.map((x) => `<dd>${esc(x)}</dd>`).join('')}`).join('')}</dl></details>
-      <p class="att__go"><button type="button" class="btn btn--ghost" data-action="route-go" data-view="${esc(fd.next.view)}" data-step="${esc(fd.step)}" data-finding="${esc(fd.id)}" data-key="${esc(key)}"${fd.next.channel ? ` data-channel="${esc(fd.next.channel)}"` : ''}>${esc(fd.next.label)}</button></p></li>`;
+      <p class="att__go"><button type="button" class="btn btn--ghost" data-action="route-go" data-route="${esc(fd.step)}" data-view="${esc(fd.next.view)}" data-step="${esc(fd.step)}" data-finding="${esc(fd.id)}" data-key="${esc(key)}"${fd.next.channel ? ` data-channel="${esc(fd.next.channel)}"` : ''}>${esc(fd.next.label)}</button></p></li>`;
   }
 
   function attentionHtml(att, S, key) {
@@ -91,23 +91,56 @@
       <p class="ds-card__sub">${ctx}</p>${body}${rest}${how}</section>`;
   }
 
-  function stepRow(st, S, key) {
+  /* ---------- Ruta activa: pasos con estado, avance y otras rutas ---------- */
+  const DOT = { done: '✓', blocked: '·', waiting: '◔', attention: '!' };
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const dateLbl = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${Number(m[3])} ${MESES[Number(m[2]) - 1]} ${m[1]}` : (iso || ''); };
+  const stepNote = (st) => (st.state === 'done' ? 'Hecho' : st.state === 'blocked' ? `Bloqueado: primero ${((st.blockedBy || []).map((b) => (FP.attentionEngine.STEPS[b] || {}).title || b)[0] || 'el paso previo').toLowerCase()}`
+    : st.state === 'waiting' ? `En espera${st.waitingUntil ? ` · ${dateLbl(st.waitingUntil)}` : ''}` : st.state === 'in_progress' ? 'En curso' : st.state === 'attention' ? 'Requiere atención' : 'Disponible');
+
+  function stepperHtml(chain, activeId) {
     const { esc } = H();
-    return `<li class="nbs__row" data-step="${esc(st.id)}" data-state="${esc(st.state)}"><div><strong>${esc(st.title)}</strong><div class="ds-card__sub">${esc(STATE_LABEL[st.state] || st.state)}${st.waitingUntil ? ` · desde el ${esc(st.waitingUntil)}` : ''}${st.blockedBy && st.blockedBy.length ? ` · primero: ${esc(st.blockedBy.map((b) => (FP.attentionEngine.STEPS[b] || {}).title || b).join(', '))}` : ''}</div></div>
-      ${st.state === 'blocked' || st.state === 'done' ? '' : `<button type="button" class="btn btn--ghost" ${attrs(st, S, key)}>${esc(st.cta || 'Abrir')}</button>`}</li>`;
+    const n = chain.steps.length;
+    return `<ol class="nbs__steps" aria-label="Pasos de la ruta activa" data-count="${n}">${chain.steps.map((st, i) => {
+      const cur = st.id === activeId;
+      return `<li class="nbs__st nbs__st--${esc(st.state)}${cur ? ' is-cur' : ''}" data-step="${esc(st.id)}" data-state="${esc(st.state)}"${cur ? ' aria-current="step"' : ''}>
+        <span class="nbs__dot" aria-hidden="true">${st.state === 'done' ? '✓' : (cur ? i + 1 : (DOT[st.state] || i + 1))}</span>
+        <span class="nbs__stt">${esc(st.title)}</span>
+        <span class="nbs__sts">${esc(stepNote(st))}</span></li>`; }).join('')}</ol>`;
+  }
+
+  function routeCard(o, S, key) {
+    const { esc } = H();
+    const wait = o.state === 'waiting';
+    const blocked = o.state === 'blocked';
+    const tags = [wait ? '<span class="nbs__tag nbs__tag--wait">En espera</span>' : blocked ? '<span class="nbs__tag nbs__tag--wait">Bloqueada</span>' : '<span class="nbs__tag nbs__tag--att">Atención</span>',
+      o.support ? `<span class="nbs__tag nbs__tag--ok">Respaldo ${esc(o.support.level)}</span>` : ''].join('');
+    return `<li class="nbs__route" data-route="${esc(o.id)}" data-state="${esc(o.state)}">
+      <div>${tags}</div><strong>${esc(o.title)}</strong>
+      ${o.decision ? `<p class="ds-card__sub"><b>Decisión que habilita:</b> ${esc(o.decision)}</p>` : ''}
+      ${(o.needs || []).length ? `<p class="ds-card__sub"><b>Necesita:</b> ${esc(o.needs.join('; '))}</p>` : ''}
+      ${o.reuses && o.reuses.length ? `<p class="nbs__shared">♻ ${blocked ? 'Se habilita al completar' : 'Comparte con la ruta activa'}: ${esc(o.reuses.join('; '))}. No se repite.</p>` : ''}
+      ${o.waitingUntil ? `<p class="nbs__shared">Entra a tu ruta a partir del ${esc(dateLbl(o.waitingUntil))}.</p>` : ''}
+      ${o.state === 'blocked' || o.state === 'done' ? '' : `<button type="button" class="btn btn--ghost" ${attrs(o, S, key)}>${esc(wait ? 'Ver seguimiento' : 'Abrir esta ruta')}</button>`}</li>`;
   }
 
   function nextStepHtml(att, S, key) {
-    const { esc } = H(), p = att.route.primary;
+    const { esc } = H(), p = att.route.primary, ch = att.route.chain;
     const waiting = p.state === 'waiting';
+    const idx = Math.max(0, ch.steps.findIndex((x) => x.id === p.id));
     const facts = [['Resultado esperado', p.expected], (p.needs || []).length ? ['Datos que se necesitan', p.needs.join('; ')] : null, ['Estado', STATE_LABEL[p.state] || p.state], ['Termina cuando', p.exit]].filter(Boolean);
-    const sec = att.route.secondary.length ? `<h4 class="ds-h4 nbs__h">Otras rutas</h4><ul class="nbs__list">${att.route.secondary.map((s) => stepRow(s, S, key)).join('')}</ul>` : '';
-    return `<section class="ds-card ds-card--accent home__next nbs" id="nbs" aria-labelledby="nbs-t" data-block="nextstep" data-step="${esc(p.id)}" data-state="${esc(p.state)}">
-      <div class="home__row"><h3 class="ds-section-title" id="nbs-t">Tu siguiente mejor paso</h3><span class="ds-badge ${p.state === 'in_progress' ? 'ds-badge--forecast' : ''}">${esc(STATE_LABEL[p.state] || p.state)}</span></div>
+    const o = att.route.others;
+    const others = o.length ? `<h4 class="ds-h4 nbs__h">Otras rutas</h4><ul class="nbs__routes">${o.map((x) => routeCard(x, S, key)).join('')}</ul>${att.route.moreOthers ? `<p class="ds-card__sub">Hay ${att.route.moreOthers} ruta${att.route.moreOthers === 1 ? '' : 's'} más; se ven en «Qué necesita atención».</p>` : ''}` : '';
+    const label = waiting ? 'Ver seguimiento' : (p.state === 'in_progress' ? `Continuar: ${p.cta || 'Abrir'}` : (p.cta || 'Abrir'));
+    const many = ch.total > 1;
+    return `<section class="ds-card ds-card--accent home__next nbs" id="nbs" aria-labelledby="nbs-t" data-block="nextstep" data-step="${esc(p.id)}" data-state="${esc(p.state)}" data-done="${ch.doneCount}" data-total="${ch.total}">
+      <div class="home__row"><h3 class="ds-section-title" id="nbs-t">Tu siguiente mejor paso</h3><span class="ds-badge ${p.state === 'in_progress' ? 'ds-badge--forecast' : ''}">${many ? `Ruta activa · paso ${idx + 1} de ${ch.total}` : esc(STATE_LABEL[p.state] || p.state)}</span></div>
+      ${many ? `<div class="nbs__bar" role="progressbar" aria-label="Avance de la ruta" aria-valuemin="0" aria-valuemax="${ch.total}" aria-valuenow="${ch.doneCount}" aria-valuetext="${ch.doneCount} de ${ch.total} pasos completados"><i style="width:${Math.round(100 * ch.doneCount / ch.total)}%"></i></div>
+      <p class="ds-card__sub">${esc(((att.findings.find((x) => x.id === p.findingId) || {}).title) || '')}${p.findingId ? ' · ' : ''}${esc(FP.navigation.contextLabel({ channel: S.channel }))} · ${esc(S.period.type === 'month' ? S.period.key : `Año ${S.period.key}`)} · Tu avance se guarda en este navegador</p>${stepperHtml(ch, p.id)}` : ''}
       <p class="home__next-t">${esc(p.title)}</p><p class="ds-card__sub">${esc(p.why || '')}</p>
       <dl class="nbs__facts">${facts.map(([t, v]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       ${waiting ? `<p class="field__hint">En espera: todavía no hay venta real de toda la ventana. Vuelve a partir del ${esc(p.waitingUntil)}.</p>` : ''}
-      <p><button type="button" class="btn btn--primary btn--lg" ${attrs(p, S, key)}>${esc(waiting ? 'Ver seguimiento' : (p.cta || 'Abrir'))}</button></p>${sec}</section>`;
+      <p><button type="button" class="btn btn--primary btn--lg" ${attrs(p, S, key)}>${esc(label)}</button></p>${others}</section>`;
   }
 
   /** Aviso corto ANTES de las cifras cuando los datos no están al día o están incompletos (no bloquea el resto de la página). */
@@ -118,15 +151,73 @@
     return `<div class="att__banner att__banner--${esc(d.severity)}" role="status" data-banner="${esc(d.id)}"><strong>Antes de leer las cifras:</strong> ${esc(d.title)}. ${esc(d.what)} <button type="button" class="link-btn" data-action="scroll-to" data-target="att">Ver detalle</button></div>`;
   }
 
+  /* ---------- Origen de la navegación: de qué hallazgo y paso vengo, y cómo volver ---------- */
+  const OKEY = 'fp.route.origin.v1';
+  const snaps = {};
+  const slim = (chain) => chain.steps.map((x) => ({ id: x.id, title: x.title, view: x.view, cta: x.cta, channel: x.channel || null, state: x.state, findingId: x.findingId || null }));
+  function snapshot(state, key, att, S, f) {
+    const routes = {};
+    const add = (r) => { routes[r.id] = { id: r.id, findingTitle: ((att.findings.find((x) => x.id === r.findingId) || {}).title) || r.title, chain: slim(r.chain || att.route.chain) }; };
+    add({ ...att.route.primary, chain: att.route.chain }); att.route.others.forEach(add);
+    snaps[key] = { routes, ctxLabel: FP.navigation.contextLabel({ channel: S.channel }), channel: S.channel, periodLabel: S.period.type === 'month' ? S.period.key : `Año ${S.period.key}`,
+      periodType: S.period.type, periodKey: S.period.key, ref: f && f.run ? f.run.referenceDate : null, year: state.year };
+  }
+  function setOrigin(state, d) {
+    const sn = snaps[d.key]; if (!sn) return;
+    let r = sn.routes[d.route];
+    if (!r) { const own = Object.values(sn.routes).find((x) => x.chain.some((c) => c.id === d.step)); r = own || { id: d.step, findingTitle: '', chain: [{ id: d.step, title: (FP.attentionEngine.STEPS[d.step] || {}).title || d.step, view: d.view, state: 'available' }] }; }
+    state.ux.origin = { key: d.key, route: r.id, step: d.step, view: d.view, findingTitle: r.findingTitle, chain: r.chain, ctxLabel: sn.ctxLabel, channel: sn.channel, periodLabel: sn.periodLabel, ref: sn.ref, year: sn.year, at: new Date().toISOString() };
+    try { root.sessionStorage.setItem(OKEY, JSON.stringify(state.ux.origin)); } catch (e) { /* sin sessionStorage: el origen vive solo en memoria */ }
+  }
+  function clearOrigin(state) { state.ux.origin = null; try { root.sessionStorage.removeItem(OKEY); } catch (e) { /* nada */ } }
+  function loadOrigin(state) {
+    if (state.ux.origin !== undefined && state.ux.origin !== null) return;
+    if (state.ux._originLoaded) return;
+    state.ux._originLoaded = true;
+    try { const v = JSON.parse(root.sessionStorage.getItem(OKEY) || 'null'); if (v && v.chain && v.step) state.ux.origin = v; } catch (e) { /* sin origen guardado */ }
+  }
+
+  /** Barra «Vienes de Inicio» sobre el módulo destino: hallazgo, contexto, avance, regreso y siguiente paso. */
+  function originHtml(state, status) {
+    loadOrigin(state);
+    const o = state.ux.origin;
+    if (!o || o.view !== state.view) return '';
+    const { esc } = H();
+    const STEPS = FP.attentionEngine.STEPS;
+    const idx = Math.max(0, o.chain.findIndex((c) => c.id === o.step));
+    let done = false;
+    try { const def = STEPS[o.step]; done = Boolean(def && o.step !== 'complete_data' && def.done({ status, readiness: { allBlockingDone: false }, summary: {}, staleDays: false })); } catch (e) { done = false; }
+    const next = o.chain.slice(idx + 1).find((c) => c.state !== 'done');
+    const segs = o.chain.map((c, i) => `<i class="${i < idx || (i === idx && done) || c.state === 'done' ? 'd' : i === idx ? 'c' : ''}"></i>`).join('');
+    const run = state.fc && state.fc.run, cur = state.ux.ctx || {};
+    const changed = (run && o.ref && run.referenceDate !== o.ref) || state.year !== o.year || (cur.channel && o.channel && cur.channel !== o.channel);
+    const nextAttrs = next ? `data-action="route-go" data-route="${esc(o.route)}" data-view="${esc(next.view)}" data-step="${esc(next.id)}" data-finding="${esc(next.findingId || '')}" data-key="${esc(o.key)}"${next.channel ? ` data-channel="${esc(next.channel)}"` : ''}` : '';
+    return `<div class="ux-wrap"><div class="route-origin" data-origin="${esc(o.route)}" data-step="${esc(o.step)}" data-done="${done ? 1 : 0}">
+      <div class="route-origin__l"><p class="route-origin__t"><strong>Vienes de Inicio · Hallazgo: «${esc(o.findingTitle || (STEPS[o.step] || {}).title || '')}»</strong>
+        <span class="chip">${esc(o.ctxLabel)}</span><span class="chip">${esc(o.periodLabel)}</span>${o.ref ? `<span class="chip">Datos al ${esc(dateLbl(o.ref))}</span>` : ''}</p>
+        <p class="route-origin__p"><span class="route-origin__segs" aria-hidden="true">${segs}</span><span>Ruta: paso ${idx + 1} de ${o.chain.length} · ${esc((STEPS[o.step] || {}).title || '')}</span></p>
+        ${changed ? '<p class="route-origin__warn" role="status">Cambiaron la fecha, el año o el canal desde que abriste este hallazgo. Vuelve a Inicio para reevaluar la ruta.</p>' : ''}</div>
+      <div class="route-origin__r"><button type="button" class="btn btn--ghost" data-action="route-back">← Volver al hallazgo en Inicio</button>
+        <button type="button" class="route-origin__x" data-action="route-dismiss" aria-label="Cerrar la ruta de trabajo">×</button></div>
+      ${done ? `<p class="route-origin__done" role="status"><span>✓ <strong>Paso completado</strong>: ${esc((STEPS[o.step] || {}).exit || '')}${next ? ` Siguiente: <strong>${esc(next.title)}</strong>.` : ' Ya no quedan pasos en esta ruta.'}</span>${next && next.view !== state.view ? `<button type="button" class="btn btn--primary" ${nextAttrs}>Ir al paso ${idx + 2} →</button>` : ''}</p>` : ''}
+    </div></div>`;
+  }
+  function renderOrigin(state, status) {
+    const el = document.getElementById('route-origin'); if (!el) return;
+    let html = ''; try { html = originHtml(state, status); } catch (e) { html = ''; }
+    el.innerHTML = html;
+  }
+
   /** Calcula y arma las piezas. Si algo falla devuelve vacío y Inicio sigue con lo que ya tenía. */
   function build(state, h, f, S, status, ready) {
     const input = buildInput(state, h, f, S, status, ready);
     const att = FP.attentionEngine.evaluate(input);
     const key = ctxKey(state, h, S);
     const p = att.route.primary;
+    snapshot(state, key, att, S, f);
     const next = { label: p.cta || p.title, reason: p.why || '', view: p.view, step: p.id, attrs: attrs(p, S, key), title: p.title };
     return { att, key, html: attentionHtml(att, S, key), nextHtml: nextStepHtml(att, S, key), banner: bannerHtml(att), next };
   }
 
-  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL };
+  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml };
 })(typeof window !== 'undefined' ? window : globalThis);
