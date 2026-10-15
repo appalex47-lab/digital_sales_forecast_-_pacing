@@ -68,6 +68,8 @@ async def main():
         chk('F8b años parciales al teclear (0002, 0020, 0202) se ignoran: no cambian el año ni la fecha', r6 == [y_before, None], r6)
         # píldoras en el menú
         pl = await q.evaluate("""()=>{const pp=document.getElementById('snav-pills'),m=document.querySelector('.snav__mode');return {t:[...pp.querySelectorAll('a')].map(a=>a.innerText.trim()),before:!!(pp.compareDocumentPosition(m)&4)}}""")
+        ph = await q.evaluate("[...document.querySelectorAll('#snav-pills a')].map(a=>Math.round(a.getBoundingClientRect().height))")
+        chk('F9b las píldoras del menú son compactas (cada enlace ≤ 32 px de alto, no 49)', len(ph) == 2 and max(ph) <= 32, ph)
         chk('F9 en el menú, justo arriba del modo Aprendiz, están «Datos…» y «Motor: …»', len(pl['t']) == 2 and pl['before'] and pl['t'][0].startswith('Datos') and pl['t'][1].startswith('Motor:'), pl)
         # móvil: cajón del menú y encabezado sin desborde
         for w in (390, 320):

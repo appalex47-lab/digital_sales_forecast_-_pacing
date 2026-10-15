@@ -972,6 +972,7 @@
     document.querySelectorAll('table tbody th:not([scope])').forEach((th) => th.setAttribute('scope', 'row'));
     const status = FP.contextEngine.collectStatus(state);
     FP.navigation.renderContextBar(state, status);
+    if (FP.attentionView) FP.attentionView.renderOrigin(state, status);
     const exp = document.getElementById(`ux-exp-${state.view}`);
     if (exp) exp.innerHTML = FP.help.explainer(state.view, u.mode);
     if (FP.whyHub) FP.whyHub.render(state.view);
@@ -2413,10 +2414,16 @@
     'scroll-to'(el) { const t = document.getElementById(el.dataset.target); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
     'route-go'(el) {
       const d = el.dataset;
-      if (FP.attentionView) FP.attentionView.markStarted(d.key, d.step, d.finding);
+      if (FP.attentionView) { FP.attentionView.markStarted(d.key, d.step, d.finding); if (d.view !== 'inicio') FP.attentionView.setOrigin(state, d); }
       if (d.channel) state.ux.routeCtx = { channel: d.channel };
       actions.go({ dataset: { view: d.view } });
     },
+    'route-back'() {
+      if (FP.attentionView) FP.attentionView.clearOrigin(state);
+      actions.go({ dataset: { view: 'inicio' } });
+      setTimeout(() => actions['scroll-to']({ dataset: { target: 'nbs' } }), 200);
+    },
+    'route-dismiss'() { if (FP.attentionView) FP.attentionView.clearOrigin(state); render(); },
     go(el) {
       FP.help.close();
       const v = el.dataset.view;

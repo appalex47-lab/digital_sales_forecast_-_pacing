@@ -20,7 +20,7 @@
   const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
   /* Umbrales (únicos puntos de ajuste; la interfaz los muestra en «Cómo se decide»). */
-  const RULES = {
+  const RULES = { maxRoutes: 3,
     staleDays: 3,                 // la venta real más reciente tiene más de 3 días respecto a «Datos al»: datos desactualizados
     driverMinShare: 0.3,          // un driver entra como hallazgo si aporta al menos 30 % de la brecha (en valor absoluto)
     coverageHigh: 0.9,            // respaldo alto: ≥ 90 % de los días comparados…
@@ -239,6 +239,17 @@
     monitor: { title: 'Monitorea el pacing', view: 'pacing', deps: [], expected: 'Detectar a tiempo si el ritmo cambia.', needs: [], exit: 'No hay un paso pendiente; se revisa de nuevo con la siguiente carga de venta.', done: () => false }
   };
 
+  /** Decisión que habilita cada paso (se muestra en «Otras rutas»). */
+  const DECISION = { complete_data: 'Poder confiar en las cifras para decidir.', fix_quality: 'Poder confiar en las cifras para decidir.', review_gap: 'Saber qué driver explica la brecha y dónde mirar.',
+    investigate_cr: 'Elegir una hipótesis de conversión a validar.', investigate_aov: 'Elegir una hipótesis de ticket a validar.', investigate_traffic: 'Elegir una hipótesis de tráfico a validar.',
+    review_channel: 'Reasignar esfuerzo entre canales.', evaluate_levers: 'Decidir qué palancas usar para cerrar el mes o el año.', simulate: 'Elegir qué recuperación probar.',
+    plan_action: 'Comprometer una acción con responsable y fechas.', follow_up: 'Mantener o retirar la acción según su resultado.', monitor: 'Reaccionar a tiempo si el ritmo cambia.' };
+  const CTA = { complete_data: 'Completar datos', fix_quality: 'Corregir calidad', review_gap: 'Abrir el diagnóstico', investigate_cr: 'Investigar conversión', investigate_aov: 'Investigar ticket',
+    investigate_traffic: 'Investigar tráfico', review_channel: 'Ver el canal', evaluate_levers: 'Ver forecast y escenarios', simulate: 'Simular recuperación', plan_action: 'Plantear una acción',
+    follow_up: 'Ver seguimiento', monitor: 'Ver pacing' };
+  STEPS.complete_data.decision = DECISION.complete_data;
+  Object.keys(STEPS).forEach((k) => { STEPS[k].decision = DECISION[k]; STEPS[k].cta = CTA[k]; });
+
   function buildStep(id, input, origin) {
     const def = STEPS[id];
     const done = Boolean(def.done(input));
@@ -253,6 +264,34 @@
     else state = 'available';
     return { id, title: def.title, view: def.view, state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
       startedAt: started ? started.at : null, origin: origin ? origin.id : null, waitingUntil: origin && origin.waitingUntil || null };
+  }
+
+  /** Ruta de trabajo de un paso: lista ordenada de pasos con su estado real (datos), para mostrar avance. */
+  function chainFor(primary, findings, steps, input) {
+    const std = ['complete_data', 'review_gap', 'simulate', 'plan_action', 'follow_up'];
+    let ids;
+    const id = primary.id;
+    if (id === 'monitor') ids = ['monitor'];
+    else if (id === 'follow_up') ids = ['follow_up'];
+    else if (id === 'review_channel') ids = ['complete_data', 'review_channel'];
+    else if (id === 'evaluate_levers') ids = ['complete_data', 'evaluate_levers', 'simulate', 'plan_action', 'follow_up'];
+    else if (/^investigate_/.test(id)) ids = ['complete_data', 'review_gap', id, 'simulate', 'plan_action', 'follow_up'];
+    else if (id === 'fix_quality') ids = ['fix_quality', ...std];
+    else ids = std.slice();
+    if (!ids.includes(id) && STEPS[id]) ids.unshift(id);
+    const out = ids.map((sid) => {
+      const f = findings.find((x) => x.step === sid);
+      const st = buildStep(sid, input, f || null);
+      const hit = steps.find((x) => x.id === sid);
+      const base = { ...st, title: STEPS[sid].title, cta: (hit && hit.cta) || STEPS[sid].cta, view: (hit && hit.view) || STEPS[sid].view, channel: (hit && hit.channel) || null, findingId: (hit && hit.findingId) || (f && f.id) || null, why: (hit && hit.why) || null };
+      if (sid === 'follow_up' && base.state !== 'done' && base.state !== 'waiting') {
+        const noAct = !(input.status.actions && input.status.actions.count > 0);
+        if (noAct) { base.state = 'blocked'; base.blockedBy = ['plan_action']; }
+      }
+      return base;
+    });
+    const doneCount = out.filter((x) => x.state === 'done').length;
+    return { steps: out, doneCount, total: out.length, activeId: id };
   }
 
   /** Reglas del paso principal: primero lo que bloquea, luego la desviación, después lo que decide y mide. */
@@ -292,7 +331,16 @@
     const actionable = steps.filter((s) => !s.soft && s.state !== 'done' && s.state !== 'blocked');
     const primary = actionable[0] || steps[0];
     const secondary = steps.filter((s) => s !== primary && s.state !== 'done').slice(0, 3);
-    return { primary, secondary, all: steps };
+    const chain = chainFor(primary, findings, steps, input);
+    const inChain = new Set(chain.steps.map((c) => c.id));
+    const pool = steps.filter((s) => s !== primary && !s.soft && s.state !== 'done' && !inChain.has(s.id));
+    const others = pool.slice(0, RULES.maxRoutes - 1).map((s) => {
+      const own = chainFor(s, findings, steps, input).steps;
+      const at = own.findIndex((c) => c.id === s.id);
+      const reuses = own.slice(0, at < 0 ? 0 : at).filter((c) => inChain.has(c.id) && c.state !== 'done').map((c) => c.title);   // lo previo que ya está en la ruta activa
+      return { ...s, decision: DECISION[s.id] || null, reuses, chain: chainFor(s, findings, steps, input) };
+    });
+    return { primary, secondary, all: steps, chain, others, moreOthers: Math.max(0, pool.length - others.length) };
   }
 
   function evaluate(input) {

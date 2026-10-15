@@ -102,4 +102,29 @@ ok('Canal: el canal rezagado enlaza a Pacing con ese canal', Boolean(ch) && ch.n
 c.channel = 'app'; ok('Canal: si ya se mira un canal, no se repite el hallazgo por canal', !AE.evaluate(c).findings.some((x) => x.kind === 'channel'));
 // visibles
 ok('Visibles: máximo 3 hallazgos y el resto va aparte', r.visible.length <= 3 && r.visible.length + r.rest.length === r.findings.length, [r.visible.length, r.rest.length]);
+
+// ===== Etapa 2: cadena de la ruta activa y otras rutas =====
+{
+  let q = AE.evaluate(under(mk()));
+  const ch = q.route.chain;
+  ok('E2 cadena brecha: completar datos → brecha → simular → acción → seguimiento', ch.steps.map((x) => x.id).join() === 'complete_data,review_gap,simulate,plan_action,follow_up', ch.steps.map((x) => x.id));
+  ok('E2 el estado de cada paso sale de datos: datos listos = hecho, brecha disponible, simular bloqueado, seguimiento bloqueado (sin acción)',
+    ch.steps[0].state === 'done' && ch.steps[1].state === 'available' && ch.steps[2].state === 'blocked' && ch.steps[4].state === 'blocked', ch.steps.map((x) => x.id + ':' + x.state));
+  ok('E2 avance = pasos hechos de total', ch.doneCount === 1 && ch.total === 5, [ch.doneCount, ch.total]);
+  let i = under(mk()); i.status.visited = { diagnostico: true }; i.status.diagnostic = { visited: true, hypotheses: 2 };
+  q = AE.evaluate(i);
+  ok('E2 con el diagnóstico visto y con hipótesis, la brecha queda hecha y simular se habilita (por datos, no por clic)', q.route.chain.steps[1].state === 'done' && q.route.chain.steps[2].state !== 'blocked', q.route.chain.steps.map((x) => x.id + ':' + x.state));
+  ok('E2 un paso hecho no reaparece como pendiente: el principal ya no es la brecha', q.route.primary.id !== 'review_gap' && q.route.chain.steps.find((x) => x.id === 'review_gap').state === 'done', q.route.primary.id);
+  ok('E2 ninguna ruta secundaria repite pasos de la ruta activa', q.route.others.every((o) => !q.route.chain.steps.some((c) => c.id === o.id)), q.route.others.map((o) => o.id));
+  ok('E2 máximo 3 rutas visibles (activa + 2) y el resto se cuenta', q.route.others.length <= 2 && typeof q.route.moreOthers === 'number', [q.route.others.length, q.route.moreOthers]);
+  i = under(mk()); i.summary.channels = { status: 'ok', rows: [{ id: 'whatsapp', label: 'WhatsApp', state: 'ok', pacing: 'below', compliance: 0.9, actual: 1000, forecastGapPct: -0.05 }] };
+  q = AE.evaluate(i);
+  const oc = q.route.all.find((o) => o.id === 'review_channel');
+  ok('E2 el canal rezagado es una ruta candidata y su decisión habilitada está definida', Boolean(oc) && /Reasignar/.test(AE.STEPS.review_channel.decision) && q.route.others.length + q.route.moreOthers >= 2, [q.route.all.map((o) => o.id), q.route.moreOthers]);
+  i = mk(); i.status.actions = { count: 1, open: 1, withoutMeasurement: 1 }; i.actions = [{ actionId: 'A1', title: 'Promo', status: 'in_progress', endDate: '2026-10-10' }];
+  q = AE.evaluate(i);
+  const fu = q.route.chain.steps.find((x) => x.id === 'follow_up');
+  ok('E2 intervención con fecha futura: el seguimiento queda «en espera» con su fecha', q.route.primary.id === 'follow_up' && fu.state === 'waiting' && fu.waitingUntil === '2026-10-10', [q.route.primary.id, fu && fu.state]);
+  ok('E2 estable: la ruta es solo monitorear', AE.evaluate(mk()).route.chain.steps.map((x) => x.id).join() === 'monitor');
+}
 console.log(`\nattention-engine: ${n - fails}/${n}`); process.exit(fails ? 1 : 0);
