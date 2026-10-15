@@ -2409,6 +2409,14 @@
     glossary() { FP.help.openGlossary(); },
     'glossary-search'(el) { FP.help.filterGlossary(el.value); },
     'help-close'() { FP.help.close(); },
+    /* Inicio → destino: abre el módulo, conserva canal y periodo (ux.ctx) y recuerda en este navegador que el paso se abrió. El paso NO se da por hecho: lo completa el motor con datos. */
+    'scroll-to'(el) { const t = document.getElementById(el.dataset.target); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+    'route-go'(el) {
+      const d = el.dataset;
+      if (FP.attentionView) FP.attentionView.markStarted(d.key, d.step, d.finding);
+      if (d.channel) state.ux.routeCtx = { channel: d.channel };
+      actions.go({ dataset: { view: d.view } });
+    },
     go(el) {
       FP.help.close();
       const v = el.dataset.view;
@@ -3060,13 +3068,28 @@
       fc.run = null;
       render();
     },
+    /* Selector global «Datos al» (encabezado): fija la fecha de referencia que ya usan Pacing, Forecast, Reforecast, Diagnóstico y Recovery. */
+    'set-ref-date'(el) {
+      const v = el.value;
+      if (!v) { delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); return; }
+      if (!Cal.isValidISODate(v)) { FP.ui.toast('Fecha inválida.'); render(); return; }
+      const y = Number(v.slice(0, 4));
+      if (y < 2000 || y > 2100) return;   // al teclear el año dígito por dígito el navegador pasa por 0002, 0020, 0202…: se ignora sin redibujar
+      if (y !== state.year) { loadYearScoped(y); refresh(); resetPeriod(); }
+      state.fc.settings.referenceDate = v;
+      saveForecastSettings(); state.fc.run = null; state.rf.run = null;
+      render();
+      if (state.ux.refOpen) setTimeout(() => { const i = document.getElementById('topbar-date'); if (i) i.focus(); }, 0);
+      FP.ui.toast(`Reporte calculado al ${v}.`);
+    },
     'fc-ref-last'() {
       if (!state.fc.lastActualDate) return;
       state.fc.settings.referenceDate = state.fc.lastActualDate;
-      saveForecastSettings(); state.fc.run = null; render();
+      state.ux.refOpen = false; saveForecastSettings(); state.fc.run = null; render();
       FP.ui.toast(`Fecha de referencia fijada en ${state.fc.lastActualDate}, último día con real.`);
     },
-    'fc-ref-today'() { delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); },
+    'ref-toggle'() { state.ux.refOpen = !state.ux.refOpen; render(); if (state.ux.refOpen) setTimeout(() => { const i = document.getElementById('topbar-date'); if (i) i.focus(); }, 0); },
+    'fc-ref-today'() { state.ux.refOpen = false; delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); },
     'fc-backtest'() {
       const run = ensureForecast();
       const planVersion = FP.planning.getOriginalPlan(state.planning.registry);
@@ -3586,13 +3609,22 @@
       const el = e.target.closest('input[data-action="glossary-search"]');
       if (el) FP.help.filterGlossary(el.value);
     });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') FP.help.close(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      FP.help.close();
+      if (state.ux.refOpen) { state.ux.refOpen = false; render(); const b = document.getElementById('topbar-ref'); if (b) b.focus(); }
+    });
+    document.addEventListener('click', (e) => {   // clic fuera del panel de fecha: se cierra
+      if (state.ux.refOpen && !e.target.closest('.hdate')) { state.ux.refOpen = false; render(); }
+    });
     root.addEventListener('hashchange', () => {
+      state.ux.refOpen = false;   // el panel de fecha se cierra al cambiar de vista
       const prev = state.view;
       readHash();
       if (prev !== state.view) {
         // Contexto persistente: se lee de la vista que se deja y se aplica a la nueva (con nota si se ajusta)
         state.ux.ctx = FP.navigation.extractContext(prev, state);
+        if (state.ux.routeCtx) { Object.assign(state.ux.ctx, state.ux.routeCtx); state.ux.routeCtx = null; }
         state.ux.ctxNote = FP.navigation.applyContext(state.view, state) || null;
       }
       render();

@@ -679,10 +679,32 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
 .hstatus__year { height: 26px; padding: 0 22px 0 12px; border-radius: var(--ds-r-pill); border: 1px solid rgba(255, 255, 255, .28); background-color: rgba(255, 255, 255, .12);
   color: var(--ds-on-nav); font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; color-scheme: dark; }
 .hstatus__year option { color: var(--ds-text); background: var(--ds-surface); }
+.hdate { position: relative; display: inline-flex; align-items: center; }
+.hdate__btn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--ds-r-pill); border: 1px solid rgba(255, 255, 255, .32); background: rgba(255, 255, 255, .14); color: var(--ds-on-nav);
+  font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hdate__btn:hover { background: rgba(255, 255, 255, .22); }
+.hdate__yr { font-weight: 400; opacity: .75; }
+.hdate__yr::before { content: "· "; }
+.hdate__panel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 60; width: min(320px, calc(100vw - 32px)); padding: var(--ds-s4); border-radius: var(--ds-r-md, 12px);
+  background: var(--ds-surface); color: var(--ds-text); border: 1px solid var(--ds-border, #d7dcea); box-shadow: 0 10px 30px rgba(15, 30, 61, .28); display: grid; gap: 6px; }
+.hdate__panel[hidden] { display: none; }
+.hdate__pl { font-size: var(--ds-fs-caption); font-weight: 600; color: var(--ds-text-muted, #5b6580); margin-top: 6px; }
+.hdate__pl:first-child { margin-top: 0; }
+.hdate__panel .hdate__in, .hdate__panel .hstatus__year { height: 36px; width: 100%; padding: 0 10px; border-radius: 8px; border: 1px solid var(--ds-control-border, #7D8A9F); background-color: var(--ds-surface); color: var(--ds-text); box-sizing: border-box; }
+.hdate__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hdate__chips:empty { display: none; }
+.hdate__b { height: 28px; padding: 0 12px; border-radius: var(--ds-r-pill); border: 1px solid var(--ds-border-strong, #b9c1d6); background: transparent; color: var(--ds-link, #2457d6); font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; }
+.hdate__b:hover { background: rgba(36, 87, 214, .08); }
+.hdate__scope { margin: 8px 0 0; padding-top: 10px; border-top: 1px solid var(--ds-border, #e4e8f2); font-size: var(--ds-fs-caption); color: var(--ds-text-muted, #5b6580); line-height: 1.4; }
+.hdate__btn:focus-visible { outline: 2px solid var(--ds-on-nav); outline-offset: 2px; }
+.hdate__panel :focus-visible, .hdate__b:focus-visible { outline: 2px solid #1F5FE0; outline-offset: 2px; }
+@media (max-width: 480px) { .hdate__yr { display: none; } .hdate__btn { padding: 0 10px; gap: 6px; } }
+@media (pointer: coarse), (max-width: 760px) { .hdate__btn { height: 44px; } .hdate__panel .hdate__in, .hdate__panel .hstatus__year, .hdate__b { height: 44px; } }
 @media (max-width: 1024px) { .topbar__search { display: none; } .topbar { grid-template-columns: auto 1fr auto; } }
+@media (max-width: 860px) { .hdate__panel { right: auto; left: 0; } }
 /* Con el menú en cajón (≤ 860 px) las píldoras pasan a una segunda fila del encabezado; --ds-header-h crece para que el cajón siga empezando bajo el encabezado */
 @media (max-width: 860px) {
-  :root { --ds-header-h: 90px; }
+  :root { --ds-header-h: 94px; }
   .topbar { height: auto; grid-template-columns: 1fr auto; grid-template-rows: 56px auto; row-gap: 0; }
   .topbar__brand { grid-row: 1; }
   .topbar__actions { grid-row: 1; grid-column: 2; }
@@ -823,7 +845,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
   /* encabezado sticky con «?» al final: su área ampliada (14 px) quedaba tapada por la columna vecina, que se pinta encima; con ese relleno cae dentro de su propia celda */
   th:has(> .help-dot:last-child) { padding-right: 22px; }
   .switch::before { content: ""; position: absolute; inset: -10px -2px; }
-  .hstatus__link { min-height: 44px; align-items: center; }
+  .hstatus__link, .snav__pills .hstatus__link { min-height: 44px; align-items: center; }
   .hstatus__year { height: 44px; }
   .ux-context__actions .btn, .ux-context__inner > .next-step .btn { min-height: 44px; }
   /* los campos tenían 36 px con más especificidad que la regla general */
@@ -836,11 +858,11 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
   .table th:last-child, .table td:last-child, .ds-table th:last-child, .ds-table td:last-child { padding-right: 24px; }
 }
 /* Alto del encabezado con el menú en cajón (≤ 860 px): fila de marca (56) + fila de píldoras + aire (8).
-   Las píldoras miden 44 px solo donde hay objetivo táctil (≤ 760 px o pantalla táctil); en 761–860 px con ratón miden 26 px y el encabezado 90 px. */
-@media (max-width: 860px) { :root { --ds-header-h: 90px; } }
+   Las píldoras miden 44 px solo donde hay objetivo táctil (≤ 760 px o pantalla táctil); en 761–860 px con ratón miden 30 px y el encabezado 94 px. */
+@media (max-width: 860px) { :root { --ds-header-h: 94px; } }
 @media (max-width: 760px), (max-width: 860px) and (pointer: coarse) { :root { --ds-header-h: 108px; } }
 /* ≤ 340 px: las tres píldoras pasan a dos filas de 44 px + 4 px entre ellas: 56 + 92 + 8 = 156 */
-@media (max-width: 340px) { :root { --ds-header-h: 156px; } }
+@media (max-width: 340px) { :root { --ds-header-h: 108px; } }
 
 
 /* =========================================================
@@ -1587,3 +1609,33 @@ tr.is-evidence { outline-offset: -3px; }
 .cus-weak td { opacity: .65; }
 .cus-total td { font-weight: 600; background: var(--ds-surface-2); }
 .cus-heat td { min-width: 52px; }
+
+
+/* ---------- Inicio: «Qué necesita atención» y «Tu siguiente mejor paso» (etapa 1 del rediseño) ---------- */
+.att__banner { display: block; padding: var(--ds-s3) var(--ds-s4); border-radius: var(--ds-r-md); border: 1px solid var(--c-warn, #B7791F); background: var(--c-warn-soft, #FFF6E0); color: var(--ds-text); margin-bottom: var(--ds-s3); }
+.att__banner--blocking { border-color: var(--c-err, #B42318); background: var(--c-err-soft, #FDECEA); }
+.att__list { list-style: none; margin: var(--ds-s3) 0 0; padding: 0; display: grid; gap: var(--ds-s3); }
+.att__item { border: 1px solid var(--ds-border); border-left-width: 4px; border-radius: var(--ds-r-md); padding: var(--ds-s3) var(--ds-s4); background: var(--ds-surface); }
+.att__item--blocking { border-left-color: var(--c-err, #B42318); }
+.att__item--attention { border-left-color: var(--c-warn, #B7791F); }
+.att__item--warning, .att__item--info, .att__item--waiting { border-left-color: var(--ds-border-strong, #8A94A6); }
+.att__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-s2); }
+.att__t { font-size: var(--ds-fs-body, 1rem); }
+.att__what, .att__why, .att__sup { margin: var(--ds-s2) 0 0; }
+.att__sup { color: var(--ds-text-2); font-size: var(--ds-fs-helper, .875rem); }
+.att__more { margin-top: var(--ds-s2); }
+.att__more summary { cursor: pointer; color: var(--ds-accent); font-weight: 600; }
+.att__more dl { margin: var(--ds-s2) 0 0; }
+.att__more dt { font-weight: 650; margin-top: var(--ds-s2); }
+.att__more dd { margin: 2px 0 0 var(--ds-s3); color: var(--ds-text-2); }
+.att__go { margin: var(--ds-s3) 0 0; }
+.att__stable { margin: var(--ds-s3) 0 0; }
+.att__rest { margin-top: var(--ds-s3); }
+.nbs__facts { display: grid; gap: var(--ds-s2); margin: var(--ds-s3) 0; }
+.nbs__facts > div { display: grid; grid-template-columns: minmax(130px, 200px) 1fr; gap: var(--ds-s3); }
+.nbs__facts dt { font-weight: 650; color: var(--ds-text-2); }
+.nbs__facts dd { margin: 0; }
+.nbs__h { margin: var(--ds-s4) 0 var(--ds-s2); }
+.nbs__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ds-s2); }
+.nbs__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-s3); padding: var(--ds-s2) 0; border-top: 1px solid var(--ds-border); }
+@media (max-width: 560px) { .nbs__facts > div { grid-template-columns: 1fr; gap: 2px; } }

@@ -175,7 +175,7 @@
     } else whyHtml = '<p class="field__hint">Sin plan ni periodo anterior con venta real para comparar. Elige un mes o carga más historia.</p>';
     const why = `<div class="home-key__col" data-key="why"><h4>¿Por qué?</h4>${whyHtml}</div>`;
     const Wh = S.where, pick = Wh.status === 'ok' && Wh.picks[0];
-    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><button type="button" class="link-btn" data-action="go" data-view="${esc(next.view)}">${esc(next.label)}</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
+    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><button type="button" class="link-btn" ${next.attrs || `data-action="go" data-view="${esc(next.view)}"`}>${esc(next.label)}</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
     const todo = `<div class="home-key__col" data-key="todo"><h4>¿Qué hago hoy?</h4>${nextTxt}${pick ? `<p><span class="field__hint">Dónde mirar</span><br><strong>${esc(pick.dimensionLabel)} · ${esc(pick.segment)}</strong> <span class="field__hint">(${esc(sMoney(pick.delta))})</span></p>` : ''}${Wh.status === 'ok' && Wh.quality.length ? `<p class="home-key__alert">Revisa el tráfico de «${esc(Wh.quality[0].label)}»</p>` : ''}</div>`;
     const chips = S.channels.status === 'ok' ? S.channels.rows.map((r) => `<span class="ds-badge" data-chip="${esc(r.id)}">${esc(r.label)} · ${r.state === 'ok' ? esc(FP.pacingView.paceLabel(r.pacing)) : r.state === 'no_plan' ? 'Sin plan' : 'Sin venta real'}</span>`).join(' ') : '';
     const T = S.trust, cov = T.coverage;
@@ -195,13 +195,17 @@
   ];
 
   /** Calcula una vez y devuelve las piezas: { key, blocks:[{id,title,hint,html}] } (html = bloque completo, igual que antes). */
-  function build(state, h, f, next) {
+  function build(state, h, f, next, extra) {
     let S;
     try { S = FP.homeSummaryEngine.compute(state, h); } catch (e) { const msg = `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo calcular el resumen general: ${H().esc(String((e && e.message) || e))}</p></section>`; return { key: '', blocks: [{ id: 'error', title: 'Resumen general', hint: 'No se pudo calcular', html: msg }] }; }
     const safe = (fn) => { try { return fn(S, {}); } catch (e) { return `<section class="ds-card home-sum" data-block="error"><p class="field__hint">No se pudo mostrar este bloque: ${H().esc(String((e && e.message) || e))}</p></section>`; } };
+    // Etapa 1 del rediseño: hallazgos priorizados + siguiente mejor paso (lee los mismos cálculos; si falla, Inicio queda como estaba)
+    let att = null;
+    try { if (f && extra && extra.status && FP.attentionView) att = FP.attentionView.build(state, h, f, S, extra.status, extra.ready); } catch (e) { att = null; }
+    if (att) next = att.next;
     let key = '';
     try { key = f ? keyBlock(S, f, next) : ''; } catch (e) { key = `<section class="ds-card home-key" data-block="error"><p class="field__hint">No se pudo mostrar lo esencial: ${H().esc(String((e && e.message) || e))}</p></section>`; }
-    return { key, blocks: BLOCKS.map(([id, fn, title, hint]) => ({ id, title, hint, html: safe(fn) })) };
+    return { key, attention: att ? att.html : '', nextStep: att ? att.nextHtml : '', banner: att ? att.banner : '', next: att ? att.next : null, route: att ? att.att : null, blocks: BLOCKS.map(([id, fn, title, hint]) => ({ id, title, hint, html: safe(fn) })) };
   }
 
   /** HTML de los 4 bloques sin plegar (para pruebas y para quien los quiera sueltos). */

@@ -47,16 +47,44 @@
       ? `${q.totals.imported} registros de ${q.totals.files} archivo${q.totals.files === 1 ? '' : 's'}${q.totals.rejected ? `, ${q.totals.rejected} filas rechazadas` : ''}`
       : 'Carga archivos o genera datos de prueba';
 
-    // Encabezado: solo las píldoras. Año = selector; datos y motor = enlaces al detalle en Configuración de RevNavigator.
+    // Encabezado: año + «Datos al» (fecha de referencia global). Las píldoras de datos y motor viven en el menú, sobre el modo Aprendiz.
     const dataKind = q ? QPILL[q.status] : 'empty', dataText = q ? q.statusText : 'Sin datos';
     const engineP = st ? { kind: st.ok ? 'ok' : 'error', text: st.ok ? 'Operativo' : 'Con fallas' } : { kind: 'na', text: 'Sin ejecutar' };
     const link = (label, kind, shown, text) => `<a class="hstatus__link" href="#ajustes" data-section="estado" aria-label="${esc(label)}: ${esc(text)}. Ver el detalle en Configuración de RevNavigator" title="Ver el detalle en Configuración de RevNavigator">${pill(kind, shown)}</a>`;
+    const pills = $('snav-pills');
+    if (pills) pills.innerHTML = `${link('Estado de datos', dataKind, dataText, dataText)}${link('Estado del motor', engineP.kind, `Motor: ${engineP.text}`, engineP.text)}`;
+    const fc = state.fc || {}, fixed = fc.settings && fc.settings.referenceDate;
+    const d0 = new Date(), todayIso = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`;
+    const refShown = fixed || (fc.run && fc.run.referenceDate) || todayIso;
+    const last = fc.lastActualDate;
     const top = $('topbar-status');
+    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const fmtD = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${Number(m[3])} ${MES[Number(m[2]) - 1]} ${m[1]}` : iso; };
+    const open = !!(state.ux && state.ux.refOpen);
+    // Un solo control: botón «Datos al …» que abre un panel con fecha, atajos y año.
     if (top) top.innerHTML = `
-      <select id="topbar-year" class="hstatus__year" data-action="set-year" aria-label="Año seleccionado">${years.map((y) =>
-        `<option value="${y}" ${y === state.year ? 'selected' : ''}>${y}</option>`).join('')}</select>
-      ${link('Estado de datos', dataKind, dataText, dataText)}
-      ${link('Estado del motor', engineP.kind, `Motor: ${engineP.text}`, engineP.text)}`;
+      <span class="hdate">
+        <button type="button" id="topbar-ref" class="hdate__btn" data-action="ref-toggle" aria-haspopup="dialog" aria-expanded="${open}" aria-controls="topbar-ref-panel"
+          title="Fecha y año del reporte de ventas">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M4 1.5v2M12 1.5v2M2 6h12M3 3h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span class="hdate__txt">Datos al ${esc(fmtD(refShown))}${fixed ? '' : ' · hoy'}</span>
+          <span class="hdate__yr">${esc(String(state.year))}</span>
+          <svg viewBox="0 0 10 6" width="9" height="6" aria-hidden="true" focusable="false"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <div id="topbar-ref-panel" class="hdate__panel" role="dialog" aria-label="Fecha y año del reporte" ${open ? '' : 'hidden'}>
+          <label class="hdate__pl" for="topbar-date">Fecha de corte</label>
+          <input type="date" id="topbar-date" class="hdate__in" value="${esc(refShown)}" data-action="set-ref-date" aria-describedby="topbar-date-h">
+          <div class="hdate__chips">
+            ${last && last !== refShown ? `<button type="button" class="hdate__b" data-action="fc-ref-last" aria-label="Ir al último día con venta real, ${esc(last)}">Último real (${esc(fmtD(last))})</button>` : ''}
+            ${fixed ? `<button type="button" class="hdate__b" data-action="fc-ref-today" aria-label="Quitar la fecha fija y volver a hoy">Hoy</button>` : ''}
+          </div>
+          <label class="hdate__pl" for="topbar-year">Año (cambia solo si eliges una fecha de otro año)</label>
+          <select id="topbar-year" class="hstatus__year" data-action="set-year" aria-label="Año seleccionado">${years.map((y) =>
+            `<option value="${y}" ${y === state.year ? 'selected' : ''}>${y}</option>`).join('')}</select>
+          <p class="hdate__scope" id="topbar-date-h">${fixed ? 'Fecha fija: el reporte se calcula como si fuera ese día.' : 'Sin fecha fija: el reporte usa el día de hoy.'}
+            Mueve Inicio, Pacing, Forecast, Reforecast, Diagnóstico y Recovery. No mueve Productos, Segmentos ni Clientes.</p>
+        </div>
+      </span>`;
     const bar = $('status-bar');   // la ficha completa solo existe en Configuración de RevNavigator
     if (bar) bar.innerHTML = `
       <div class="status-item"><dt><label for="year-select">Año seleccionado</label></dt>
