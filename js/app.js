@@ -21,12 +21,13 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'paquete', 'segmentos', 'proyeccion', 'cambios'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'paquete', 'segmentos', 'proyeccion', 'cambios', 'clientes'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
     productQuality: [],
-    cx: { mode: 'ayer', sync: null, key: null },   // «Qué cambió desde ayer»
+    cx: { mode: 'ayer', sync: null, key: null },
+    cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
     proj: { growth: 0.16, shares: null, channel: 'total', savedAt: null, savedTotal: null },   // Proyección del próximo año (en esta sesión)   // instantánea de los lotes de Productos para Calidad de datos (ver refreshProductQuality)
@@ -1028,6 +1029,7 @@
       } else FP.recoveryCenter.render(state);
     }
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }
+    else if (state.view === 'clientes') FP.customersView.render(state);
     else if (state.view === 'cambios') { ensureForecast(); FP.changesView.render(state); }
     else if (state.view === 'medir') FP.measureView.render(state);
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
@@ -1158,7 +1160,7 @@
         onProgress: (d, t) => { item.progress = d / t; progressRender(); } });
       state.staging.items = state.staging.items.filter((i) => i !== item);
       state.staging.activeId = state.staging.items[0] ? state.staging.items[0].staged.id : null;
-      state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null;
+      state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle';
       await refreshProductQuality();
       render();
       const m = batch.storedMerge;
@@ -1988,6 +1990,7 @@
       if (!root.confirm('¿Borrar todos los datos guardados de esta app en este navegador? Incluye archivos importados, metas y ajustes.')) return;
       storage.clear();
       if (FP.productStore) FP.productStore.reset();
+      if (FP.customerStore) FP.customerStore.reset();
       state.pa = { ...state.pa, result: null, counts: null, from: null, to: null, periodType: null, drill: [], geo: {}, next: null, trace: null };
       state.an = { ...state.an, rows: [], selected: null, key: null, error: null, priorities: null, risks: null, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } };
       state.store = ST.createStore();
@@ -2659,6 +2662,7 @@
         for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
         await repo.flush();
         const pr = await FP.productSync.restore(repo, d.items);
+        state.cu.status = 'idle';
         if (!pr.ok) { cloudNote(`Se restauraron los datos generales, pero ${pr.error}`, 'bad'); state.cloud.restored = true; return; }
         cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
@@ -2913,6 +2917,10 @@
       state.dx.evidenceFrom = el.dataset.hyp || null;
       render();
       FP.diagnosticView.focusEvidence('drv-' + el.dataset.driver, { openMore: 'tree' });
+    },
+    'p-mock-clientes'() {
+      addProductStaged(FP.productImport.stage(FP.mockProducts.customersCase(), { fileName: 'productos_venta_con_clientes_demo.csv', kind: 'sales' }));
+      root.location.hash = '#carga';
     },
     'chg-mode'(el) { state.cx.mode = el.dataset.mode; render(); },
     async 'chg-owner'(el) {
@@ -3490,6 +3498,11 @@
 
   function bind() {
     document.addEventListener('change', async (e) => {
+      const tt = e.target;
+      if (tt && tt.getAttribute && tt.getAttribute('data-cu')) {
+        const k = tt.getAttribute('data-cu');
+        state.cu.opts[k] = k === 'channel' ? tt.value : Number(tt.value); state.cu.status = 'idle'; render(); return;
+      }
       const t = e.target; if (!t || !t.closest || !t.closest('#chg-body')) return;
       const st = t.getAttribute('data-chg-status'), nt = t.getAttribute('data-chg-note');
       if (st === null && nt === null) return;
@@ -3629,7 +3642,7 @@
     migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo });
     state.storageKind = storage.kind;
     state.storage = { mode: repo.mode, migration: migrationState, error: repo.lastError };
-    if (FP.productStore) { await FP.productStore.init(repo); await refreshProductQuality(); }
+    if (FP.productStore) { await FP.productStore.init(repo); if (FP.customerStore) FP.customerStore.reset(); await refreshProductQuality(); }
   }
 
   async function init() {

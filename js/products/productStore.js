@@ -289,6 +289,8 @@
       parts: new Map(), catalog: new Map(), issues: newIssues(), conflicts: [],
       summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0 },
       sumSameKey: kind === 'sales' && Boolean(sumSameKey),
+      /** Clientes (opcional): solo con ID de pedido E ID de cliente mapeados. Una entrada por pedido; no toca los bloques de producto. */
+      ledger: kind === 'sales' && idx.orderId !== undefined && idx.customerId !== undefined && FP.customerEngine ? FP.customerEngine.draftLedger(C().products.customers.placeholders) : null,
       dates: new Set(), channels: new Set(), states: new Set(), branches: new Set(), deliveries: new Set(), cities: new Set(),
       geoObs: { stateRegion: new Map(), branchRegion: new Map(), branch: new Map() },
       settings: { dateFormat, numberFormat }
@@ -349,6 +351,10 @@
       });
       const date = dr.value, channel = cr.value;
       d.dates.add(date); d.channels.add(channel);
+      if (d.ledger) {
+        const ri = metrics.indexOf('revenue');
+        d.ledger.add({ order: get(cells, 'orderId'), customer: get(cells, 'customerId'), day: FP.customerEngine.dayNum(date), channel, revenue: ri >= 0 && sts[ri] === ST.observed ? vals[ri] : NaN });
+      }
       if (kind === 'sales') {
         d.states.add(sIdx); if (bLabel) d.branches.add(bLabel); d.deliveries.add(dIdx); if (cLabel) d.cities.add(`${sIdx}\u0001${cLabel}`);
         // Observaciones para el modelo geográfico (región por estado/sucursal, ubicación y nombre de sucursal)
@@ -904,6 +910,10 @@
         channels: [...draft.channels], states: draft.states.size, branches: draft.branches.size },
       storedMerge: report, issuesByType: draft.issues.byType, issueExamples: draft.issues.examples, conflicts: draft.conflicts.slice(0, 500)
     };
+    if (draft.ledger && draft.ledger.orders.size && FP.customerStore) {
+      try { batch.customers = await FP.customerStore.commit(draft.ledger, { id, fileName }); }
+      catch (e) { batch.customers = { error: e.message }; }
+    }
     await IDB().put(repo.db, 'productBatches', batch);
     const all = [meta.dateMin, meta.dateMax, batch.summary.dateMin, batch.summary.dateMax].filter(Boolean).sort();
     meta = { ...meta,
@@ -1103,6 +1113,7 @@
     }
     clearBlockCache();
     await IDB().del(repo.db, 'productBatches', id);
+    if (FP.customerStore) { try { await FP.customerStore.removeBatch(id); } catch (e) { /* sin libro de clientes */ } }
     // Resumen: se recalcula con los archivos que quedan
     const rest = await IDB().getAll(repo.db, 'productBatches');
     if (!rest.length) {
@@ -1138,6 +1149,7 @@
     newAcc, mergeAcc, accumulateJoint, accumulatePartition, finalize, rollupsOf, accFromRollup, GROUPS, funnelJoinable, upgradeV1Block,
     catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, aggregateScan, mergeMaps, crossRevenue, skuTrace, listBatches, removeBatch, counts,
     get meta() { return meta; },
+    get repo() { return repo; },
     reset() { catalog.list = []; catalog.bySku = new Map(); meta = emptyMeta(); resetDims(); },
     _resetCatalog() { catalog.list = []; catalog.bySku = new Map(); resetDims(); }
   };

@@ -118,5 +118,42 @@
     ].join('\n');
   }
 
-  FP.mockProducts = { catalog, branches, generate, qualityCase, geoCase, CATS, STATES, REGION, CITIES };
+
+  /**
+   * Venta con ID de pedido e ID de cliente (solo QA/demostración). Clientes con dos comportamientos:
+   * crónicos (recompra cada 30–90 días, a veces se pierden y regresan) y puntuales (1 a 3 compras sueltas).
+   * Una línea por producto del pedido; el ID de cliente es un código sin datos personales.
+   */
+  function customersCase({ from = '2025-01-01', to = '2026-09-22', customers = 3000, skus = 120, seed = 21 } = {}) {
+    const cat = catalog(skus), br = branches(), r = rng(seed);
+    const head = 'fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente';
+    const out = [head], span = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+    const chs = ['ecommerce', 'app', 'whatsapp', 'llamadas'], chW = [0.55, 0.3, 0.09, 0.06];
+    const pickCh = () => { let x = r(), i = 0; while (i < 3 && x > chW[i]) { x -= chW[i]; i++; } return chs[i]; };
+    let order = 0;
+    const emit = (cust, mainCh, dayOffset, chronic) => {
+      const d = FP.calendar.addDays(from, dayOffset);
+      const ch = r() < 0.85 ? mainCh : pickCh(), b = br[Math.floor(r() * br.length)], dom = ch === 'ecommerce' || ch === 'app' ? r() < 0.6 : r() < 0.3;
+      const id = `P${String(++order).padStart(7, '0')}`, lines = chronic ? 1 + Math.floor(r() * 2) : 1 + Math.floor(r() * 3);
+      for (let l = 0; l < lines; l++) {
+        const c = cat[chronic ? 150 % skus + Math.floor(r() * 12) : Math.floor(r() * skus)] || cat[0];
+        const units = 1 + Math.floor(r() * 3);
+        out.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${b.region},${b.state},${b.city},${b.id},${b.name},${dom ? 'domicilio' : 'recoleccion'},${Math.round(units * c.price * 100) / 100},1,${units},${id},C${String(cust).padStart(6, '0')}`);
+      }
+    };
+    for (let c = 1; c <= customers; c++) {
+      const chronic = r() < 0.3, mainCh = pickCh();
+      let day = Math.floor(Math.pow(r(), 1.3) * span);
+      if (chronic) {
+        const cycle = 30 + Math.floor(r() * 61);
+        while (day <= span) { emit(c, mainCh, day, true); day += cycle + Math.floor(r() * 10) - 3; if (r() < 0.04) day += 200 + Math.floor(r() * 150); }
+      } else {
+        const n = r() < 0.6 ? 1 : r() < 0.7 ? 2 : 3;
+        for (let k = 0; k < n && day <= span; k++) { emit(c, mainCh, day, false); day += 20 + Math.floor(r() * 200); }
+      }
+    }
+    return out.join('\n');
+  }
+
+  FP.mockProducts = { catalog, branches, generate, qualityCase, geoCase, customersCase, CATS, STATES, REGION, CITIES };
 })(typeof window !== 'undefined' ? window : globalThis);

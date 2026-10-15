@@ -80,6 +80,8 @@
     const mappingIssues = PS().validateMapping(staged.mapping, kind);
     if (mappingIssues.length) return { draft: null, mappingIssues, canImport: false, summary: null, elapsedMs: 0 };
     const draft = PS().createDraft(staged.headers, staged.mapping, { kind, dateFormat: settings.dateFormat || 'auto', numberFormat: settings.numberFormat || 'dot', sumSameKey: settings.sumSameKey !== false });
+    const idxOf = (k) => staged.headers.some((h) => staged.mapping[h] === k);
+    if (kind === 'sales' && idxOf('orderId') !== idxOf('customerId')) draft.issues.add('CUSTOMER_COLUMNS_INCOMPLETE', 'warning', null, idxOf('orderId') ? 'id_cliente' : 'id_pedido', '', 'Para analizar clientes hacen falta las DOS columnas (ID de pedido e ID de cliente). Solo se mapeó una: el archivo se carga como siempre y no se arma el análisis de clientes.');
     const text = staged.text, delim = staged.delimiter, total = text.length;
     let pos = staged.headerEnd, line = staged.headerLine, n = 0;
     const expected = staged.headers.length;
@@ -114,6 +116,13 @@
         const miss = all.filter((d) => !draft.parts.has(`${d}|${ch}`));
         if (miss.length) draft.issues.add('PERIOD_INCOMPLETE', 'warning', null, 'fecha', `${ch}: ${miss.length} días`, `${ch} no tiene filas en ${miss.length} de ${all.length} días del rango (${miss.slice(0, 3).join(', ')}${miss.length > 3 ? '…' : ''}).`);
       });
+    }
+    if (draft.ledger) {
+      const st = draft.ledger.stats; let conflicts = 0; draft.ledger.orders.forEach((o) => { if (o.conflict) conflicts++; });
+      draft.summary.customers = { orders: draft.ledger.orders.size, lines: st.lines, withoutCustomer: st.withoutCustomer, withoutOrder: st.withoutOrder, unknownRevenueLines: st.unknownRevenueLines, conflictOrders: conflicts };
+      if (st.withoutCustomer) draft.issues.add('LINES_WITHOUT_CUSTOMER', 'info', null, 'id_cliente', st.withoutCustomer, `${st.withoutCustomer} líneas no traen un ID de cliente válido (vacío o marcador como 0, null o invitado): cuentan en la venta de productos, pero no entran al análisis de clientes.`);
+      if (st.withoutOrder) draft.issues.add('LINES_WITHOUT_ORDER', 'warning', null, 'id_pedido', st.withoutOrder, `${st.withoutOrder} líneas no traen ID de pedido: no entran al análisis de clientes.`);
+      if (conflicts) draft.issues.add('ORDER_WITH_TWO_CUSTOMERS', 'warning', null, 'id_pedido', conflicts, `${conflicts} pedidos aparecen con dos IDs de cliente distintos: se conserva el primero.`);
     }
     const stored = PS().available() ? await PS().compareWithStored(draft) : null;
     return {

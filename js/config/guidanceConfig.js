@@ -30,7 +30,7 @@
     { id: 'monitorear', question: '¿Cómo voy?', label: 'Monitorear', verb: 'Compara y proyecta',
       description: 'Plan contra actual, gap, cumplimiento, forecast y alertas.', views: ['pacing', 'cambios'] },
     { id: 'diagnosticar', question: '¿Por qué?', label: 'Diagnosticar', verb: 'Diagnostica',
-      description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'producto', 'segmentos', 'analisis'] },
+      description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'producto', 'segmentos', 'analisis', 'clientes'] },
     { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
       description: 'Reforecast, escenarios y plan de acción.', views: ['reforecast', 'recovery'] },
     { id: 'medir', question: '¿Funcionó?', label: 'Medir y aprender', verb: 'Mide',
@@ -87,6 +87,10 @@
       action: 'Revisa la venta de ayer contra el plan, qué canal movió el cierre, qué alertas son nuevas y qué cambió en los datos.',
       produces: 'Una lectura de dos minutos de lo que cambió, con las alertas y su estado compartido por el equipo.',
       help: ['pacing', 'gap', 'forecastGap'] },
+    clientes: { title: 'Clientes y LTV', group: 'diagnosticar', purpose: 'Cuántos clientes son nuevos, recurrentes o reactivados, cuánto tardan en volver y cuánto vale un cliente en el tiempo.',
+      action: 'Revisa la mezcla mensual de clientes, la retención por cohorte y el LTV; elige el canal y cuándo un cliente cuenta como reactivado.',
+      produces: 'Nuevos vs recurrentes por mes, retención y valor del cliente por cohorte de adquisición, con avisos cuando el histórico no alcanza.',
+      help: ['historico', 'senal'] },
     diagnostico: { title: '¿Por qué? Diagnóstico', group: 'diagnosticar', purpose: 'Qué variable matemática explica la brecha, dónde ocurre y qué investigar.',
       action: 'Descompón la brecha en Volumen × CR × AOV y revisa las señales por dimensión.',
       produces: 'Drivers, señales e hipótesis que orientan dónde investigar — nunca una causa confirmada.',
@@ -373,7 +377,7 @@
 
   /** Paso de la metodología que corresponde a cada vista (para "estás aquí"). */
   const VIEW_STEP = { proyeccion: 'meta', resumen: 'meta', plan: 'plan', estacionalidad: 'plan', configuracion: 'plan', carga: 'real', calidad: 'real', datos: 'real',
-    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing' };
+    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing', clientes: 'senales' };
 
   /* Fase 9.1 — Microlearning: una idea por evento real, una sola vez, solo en modo Aprendiz. */
   const LESSONS = [

@@ -100,6 +100,7 @@
     estacionalidad: I('<path d="M3 15c3-8 5-8 9 0s6 8 9 0"/>'),
     plan: I('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'),
     configuracion: I('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
+    clientes: I('<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5a3 3 0 010 6M18 14c2 .6 3 2.5 3 6"/>'),
     cambios: I('<path d="M4 12h4l2-6 4 12 2-6h4"/>'),
     pacing: I('<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>'),
     reforecast: I('<path d="M4 18l5-6 4 3 7-9"/><path d="M16 6h4v4"/>'),
