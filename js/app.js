@@ -2409,6 +2409,14 @@
     glossary() { FP.help.openGlossary(); },
     'glossary-search'(el) { FP.help.filterGlossary(el.value); },
     'help-close'() { FP.help.close(); },
+    /* Inicio → destino: abre el módulo, conserva canal y periodo (ux.ctx) y recuerda en este navegador que el paso se abrió. El paso NO se da por hecho: lo completa el motor con datos. */
+    'scroll-to'(el) { const t = document.getElementById(el.dataset.target); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+    'route-go'(el) {
+      const d = el.dataset;
+      if (FP.attentionView) FP.attentionView.markStarted(d.key, d.step, d.finding);
+      if (d.channel) state.ux.routeCtx = { channel: d.channel };
+      actions.go({ dataset: { view: d.view } });
+    },
     go(el) {
       FP.help.close();
       const v = el.dataset.view;
@@ -3606,6 +3614,7 @@
       if (prev !== state.view) {
         // Contexto persistente: se lee de la vista que se deja y se aplica a la nueva (con nota si se ajusta)
         state.ux.ctx = FP.navigation.extractContext(prev, state);
+        if (state.ux.routeCtx) { Object.assign(state.ux.ctx, state.ux.routeCtx); state.ux.routeCtx = null; }
         state.ux.ctxNote = FP.navigation.applyContext(state.view, state) || null;
       }
       render();

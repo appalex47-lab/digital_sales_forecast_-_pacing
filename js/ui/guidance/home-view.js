@@ -151,13 +151,14 @@ ${cards}
     // Vacío o solo plan: primeros pasos y preparación → recorrido → qué está pasando (sin cambios).
     let body;
     if (f && !planOnly && FP.homeSummaryView) {
-      const sum = FP.homeSummaryView.build(state, h, f, next), more = FP.homeSummaryView.more;
-      body = `${sum.key}
+      const sum = FP.homeSummaryView.build(state, h, f, next, { status, ready }), more = FP.homeSummaryView.more;
+      body = `${sum.banner || ''}${sum.key}
+      ${sum.attention || ''}${sum.nextStep || ''}
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
       ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
       ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}
       <p class="home-layer"><strong>Metodología y ayuda</strong> · cómo se calcula y qué falta</p>
-      ${more('flow', 'Recorrido del sistema y preparación de datos', '6 etapas, % de preparación y siguiente paso completo', `${flowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`)}`;
+      ${more('flow', 'Recorrido del sistema y preparación de datos', '6 etapas y % de preparación', `${flowBlock}\n\n${setupBlock(readyCard + (sum.nextStep ? '' : '\n' + nextCard), ' home__top--ready-first')}`)}`;
     } else body = f && !planOnly
       ? `${flowBlock}\n\n${nowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
       : `${setupBlock(nextCard + '\n' + readyCard)}\n\n${flowBlock}\n\n${nowBlock}`;

@@ -1598,3 +1598,33 @@ tr.is-evidence { outline-offset: -3px; }
 .cus-weak td { opacity: .65; }
 .cus-total td { font-weight: 600; background: var(--ds-surface-2); }
 .cus-heat td { min-width: 52px; }
+
+
+/* ---------- Inicio: «Qué necesita atención» y «Tu siguiente mejor paso» (etapa 1 del rediseño) ---------- */
+.att__banner { display: block; padding: var(--ds-s3) var(--ds-s4); border-radius: var(--ds-r-md); border: 1px solid var(--c-warn, #B7791F); background: var(--c-warn-soft, #FFF6E0); color: var(--ds-text); margin-bottom: var(--ds-s3); }
+.att__banner--blocking { border-color: var(--c-err, #B42318); background: var(--c-err-soft, #FDECEA); }
+.att__list { list-style: none; margin: var(--ds-s3) 0 0; padding: 0; display: grid; gap: var(--ds-s3); }
+.att__item { border: 1px solid var(--ds-border); border-left-width: 4px; border-radius: var(--ds-r-md); padding: var(--ds-s3) var(--ds-s4); background: var(--ds-surface); }
+.att__item--blocking { border-left-color: var(--c-err, #B42318); }
+.att__item--attention { border-left-color: var(--c-warn, #B7791F); }
+.att__item--warning, .att__item--info, .att__item--waiting { border-left-color: var(--ds-border-strong, #8A94A6); }
+.att__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-s2); }
+.att__t { font-size: var(--ds-fs-body, 1rem); }
+.att__what, .att__why, .att__sup { margin: var(--ds-s2) 0 0; }
+.att__sup { color: var(--ds-text-2); font-size: var(--ds-fs-helper, .875rem); }
+.att__more { margin-top: var(--ds-s2); }
+.att__more summary { cursor: pointer; color: var(--ds-accent); font-weight: 600; }
+.att__more dl { margin: var(--ds-s2) 0 0; }
+.att__more dt { font-weight: 650; margin-top: var(--ds-s2); }
+.att__more dd { margin: 2px 0 0 var(--ds-s3); color: var(--ds-text-2); }
+.att__go { margin: var(--ds-s3) 0 0; }
+.att__stable { margin: var(--ds-s3) 0 0; }
+.att__rest { margin-top: var(--ds-s3); }
+.nbs__facts { display: grid; gap: var(--ds-s2); margin: var(--ds-s3) 0; }
+.nbs__facts > div { display: grid; grid-template-columns: minmax(130px, 200px) 1fr; gap: var(--ds-s3); }
+.nbs__facts dt { font-weight: 650; color: var(--ds-text-2); }
+.nbs__facts dd { margin: 0; }
+.nbs__h { margin: var(--ds-s4) 0 var(--ds-s2); }
+.nbs__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ds-s2); }
+.nbs__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-s3); padding: var(--ds-s2) 0; border-top: 1px solid var(--ds-border); }
+@media (max-width: 560px) { .nbs__facts > div { grid-template-columns: 1fr; gap: 2px; } }

@@ -1,0 +1,315 @@
+/**
+ * attentionEngine.js — «Qué necesita atención» y «Tu siguiente mejor paso» (Inicio, etapa 1 del rediseño).
+ *
+ * NO calcula métricas de negocio. Lee lo que ya calcularon los motores existentes y lo ordena con reglas explícitas:
+ *   - status    → FP.contextEngine.collectStatus(state)   (datos cargados, plan, forecast, reforecast, diagnóstico, escenarios, acciones)
+ *   - readiness → FP.contextEngine.dataReadiness(status)  (qué falta para que el análisis sea confiable)
+ *   - summary   → FP.homeSummaryEngine.compute(state, h)  (brecha contra el plan, aporte de cada driver, canales, confianza de datos)
+ *   - actions   → plan de acciones (estado, fecha de fin, mediciones)
+ *
+ * Cada hallazgo separa: hecho observado · descomposición cuantitativa · hipótesis (solo como pregunta a validar) · información que falta ·
+ * próxima comprobación. Una contribución cuantitativa NUNCA se presenta como causa demostrada.
+ *
+ * El «respaldo de la evidencia» no es una probabilidad: es una regla visible sobre cobertura de días comparados y calidad de datos.
+ * Los pasos de la ruta tienen estado (bloqueado, disponible, en curso, completado, requiere atención, en espera); un paso solo se completa
+ * cuando se cumple su criterio de salida con datos reales, nunca por haber hecho clic.
+ */
+(function (root) {
+  'use strict';
+  const FP = (root.FP = root.FP || {});
+  const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  /* Umbrales (únicos puntos de ajuste; la interfaz los muestra en «Cómo se decide»). */
+  const RULES = {
+    staleDays: 3,                 // la venta real más reciente tiene más de 3 días respecto a «Datos al»: datos desactualizados
+    driverMinShare: 0.3,          // un driver entra como hallazgo si aporta al menos 30 % de la brecha (en valor absoluto)
+    coverageHigh: 0.9,            // respaldo alto: ≥ 90 % de los días comparados…
+    coverageMid: 0.6,             // …medio: ≥ 60 %; menos, bajo
+    maxVisible: 3                 // hallazgos visibles; el resto va en «Ver los demás»
+  };
+
+  const DRIVER = {
+    trafficVolume: { id: 'traffic', name: 'Tráfico', short: 'el volumen de sesiones' },
+    conversionRate: { id: 'cr', name: 'Conversión', short: 'la tasa de conversión' },
+    aov: { id: 'aov', name: 'Ticket promedio', short: 'el ticket promedio' }
+  };
+  const money = (v) => (fin(v) ? `$${Math.round(Math.abs(v)).toLocaleString('es-MX')}` : '—');
+  const pct = (v, d = 1) => (fin(v) ? `${(Math.abs(v) * 100).toFixed(d)} %` : '—');
+  const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+
+  /** Respaldo de la evidencia: regla visible sobre cobertura de días comparados y calidad de datos. */
+  function support(input) {
+    const cov = input.summary && input.summary.whyPlan && input.summary.whyPlan.coverage;
+    const q = input.status && input.status.data ? input.status.data.quality : null;
+    const ratio = cov && cov.expected ? cov.paired / cov.expected : null;
+    const excluded = input.summary && input.summary.excluded;
+    let level, why;
+    if (!fin(ratio)) { level = 'bajo'; why = 'No hay días comparables entre el plan y la venta real.'; }
+    else if (q === 'invalid') { level = 'bajo'; why = 'Hay filas rechazadas o con errores en los datos cargados.'; }
+    else if (ratio >= RULES.coverageHigh && q === 'ready' && !excluded) { level = 'alto'; why = `Se compararon ${cov.paired} de ${cov.expected} días y los datos no traen avisos.`; }
+    else if (ratio >= RULES.coverageMid) {
+      level = 'medio';
+      const bits = [`se compararon ${cov.paired} de ${cov.expected} días`];
+      if (q === 'warnings') bits.push('los datos traen avisos de calidad');
+      if (excluded) bits.push(`${excluded.days} día${excluded.days === 1 ? '' : 's'} sin contar porque falta algún canal`);
+      why = bits.join('; ').replace(/^./, (c) => c.toUpperCase()) + '.';
+    } else { level = 'bajo'; why = `Solo se compararon ${cov.paired} de ${cov.expected} días.`; }
+    return { level, why, rule: `Alto: ≥ ${RULES.coverageHigh * 100} % de días comparados y datos sin avisos. Medio: ≥ ${RULES.coverageMid * 100} % o con avisos. Bajo: menos, o datos con errores.` };
+  }
+
+  /* ---------- Hallazgos ---------- */
+
+  function dataFindings(input) {
+    const { status: s, readiness: r, summary: S, referenceDate } = input;
+    const out = [];
+    const missing = r.items.filter((i) => i.blocking && !i.done);
+    if (missing.length) {
+      out.push({ id: 'data_missing', kind: 'data', severity: 'blocking', priority: 0, amount: null,
+        title: 'Completa la información necesaria para el diagnóstico',
+        what: `Falta: ${missing.map((m) => m.label.toLowerCase()).join(', ')}.`,
+        why: 'Sin esa información no se puede evaluar de forma confiable la brecha contra el plan.',
+        evidence: [`Preparación de datos: ${r.percent} % (${r.label.toLowerCase()}).`],
+        support: null, missing: missing.map((m) => m.label), next: { view: missing[0].view, label: 'Ir a preparación de datos' }, step: 'complete_data' });
+    }
+    if (s.data.quality === 'invalid') {
+      out.push({ id: 'data_invalid', kind: 'data', severity: 'blocking', priority: 0, amount: null,
+        title: 'Corrige los errores de los datos cargados',
+        what: 'Hay filas rechazadas o registros con errores.', why: 'Los errores pueden cambiar la venta, el plan o la comparación; el diagnóstico no se debe leer como confiable.',
+        evidence: [`Calidad de datos: ${s.data.qualityText || 'con errores'}.`], support: null, missing: [], next: { view: 'calidad', label: 'Revisar la calidad de datos' }, step: 'fix_quality' });
+    }
+    const last = s.actual && s.actual.lastDate;
+    if (last && referenceDate) {
+      const age = daysBetween(last, referenceDate);
+      if (age > RULES.staleDays) out.push({ id: 'data_stale', kind: 'data', severity: 'attention', priority: 0.5, amount: null,
+        title: 'La venta real no está al día',
+        what: `La última venta real cargada es del ${last}, ${age} días antes de ${referenceDate}.`,
+        why: 'Las cifras de Inicio dejan fuera esos días: el cumplimiento y el forecast pueden verse mejor o peor de lo que es.',
+        evidence: [`Última venta real: ${last}.`, `Fecha del reporte: ${referenceDate}.`], support: null, missing: ['Venta real de los días recientes'],
+        next: { view: 'carga', label: 'Cargar la venta real reciente' }, step: 'complete_data' });
+    }
+    if (S && S.excluded) out.push({ id: 'data_channels', kind: 'data', severity: 'attention', priority: 0.6, amount: S.excluded.revenue,
+      title: 'Faltan canales en algunos días',
+      what: `${S.excluded.days} día${S.excluded.days === 1 ? '' : 's'} no entran al total porque falta la venta de algún canal.`,
+      why: 'El total digital exige los cuatro canales; si no, se compararía un total parcial contra el plan completo.',
+      evidence: [`Venta de los demás canales en esos días: ${money(S.excluded.revenue)}.`], support: null, missing: Object.keys(S.excluded.missing || {}),
+      next: { view: 'carga', label: 'Completar los canales faltantes' }, step: 'complete_data' });
+    if (s.data.quality === 'warnings') out.push({ id: 'data_warnings', kind: 'data', severity: 'warning', priority: 7, amount: null,
+      title: 'Hay avisos de calidad en los datos',
+      what: `Calidad de datos: ${s.data.qualityText || 'con advertencias'}.`, why: 'Los avisos no bloquean el análisis, pero conviene revisarlos antes de actuar.',
+      evidence: [], support: null, missing: [], next: { view: 'calidad', label: 'Revisar los avisos' }, step: 'fix_quality' });
+    return out;
+  }
+
+  function deviationFindings(input, blocked) {
+    const { status: s, summary: S } = input;
+    const out = [];
+    if (blocked || !s.forecast.available) return out;
+    const sup = support(input);
+    const th = input.thresholds || (FP.config && FP.config.forecast && FP.config.forecast.pacingThresholds);
+    const pace = fin(s.forecast.compliance) ? FP.gap.pacingStatus(s.forecast.compliance, th) : 'insufficient_data';
+    const below = pace === 'below';
+    const gapAbs = fin(s.forecast.gapToDate) ? Math.abs(s.forecast.gapToDate) : null;
+    if (below && fin(s.forecast.gapToDate) && s.forecast.gapToDate < 0) {
+      out.push({ id: 'gap', kind: 'gap', severity: 'attention', priority: 1, amount: -gapAbs,
+        title: 'Investiga la brecha de ventas',
+        what: `La venta acumulada va ${money(gapAbs)} por debajo de la trayectoria del plan (${pct(1 - s.forecast.compliance)} menos).`,
+        why: 'Si el ritmo no cambia, la brecha se arrastra al cierre del periodo.',
+        evidence: [`Venta real a la fecha: ${money(s.forecast.actualToDate)}.`, `Plan a la fecha: ${money(s.forecast.planToDate)}.`, `Cumplimiento: ${pct(s.forecast.compliance)}.`],
+        support: sup, missing: [], next: { view: 'diagnostico', label: 'Ver diagnóstico de brecha' }, step: 'review_gap',
+        nextCheck: 'Abrir el diagnóstico y ver qué driver (tráfico, conversión o ticket) aporta más a la diferencia.' });
+    }
+    // Drivers: solo los que restan y pesan al menos driverMinShare de la brecha. Es contribución cuantitativa, no causa.
+    const wp = S && S.whyPlan;
+    if (below && wp && wp.status === 'ok' && wp.drivers && fin(wp.gap) && wp.gap < 0) {
+      const total = Math.abs(wp.gap);
+      const neg = wp.drivers.filter((d) => fin(d.contribution) && d.contribution < 0 && Math.abs(d.contribution) / total >= RULES.driverMinShare && DRIVER[d.id])
+        .sort((a, b) => a.contribution - b.contribution).slice(0, 2);
+      neg.forEach((d, i) => {
+        const meta = DRIVER[d.id], k = meta.id, share = Math.abs(d.contribution) / total;
+        const hasSeg = s.data.segments > 0, hasProd = Boolean(input.hasProducts);
+        const dest = k === 'aov' ? { view: hasProd ? 'producto' : 'diagnostico', label: hasProd ? 'Analizar mix y composición de venta' : 'Ver drivers' }
+          : k === 'traffic' ? { view: hasSeg ? 'segmentos' : 'diagnostico', label: hasSeg ? 'Ver segmentos de tráfico' : 'Ver drivers' }
+            : { view: 'diagnostico', label: 'Ver drivers' };
+        const title = k === 'cr' ? 'Investiga la caída de conversión' : k === 'aov' ? 'Investiga el cambio en el ticket promedio' : 'Investiga el menor volumen de sesiones';
+        const missing = [];
+        if (k === 'cr' && !hasSeg) missing.push('Segmentos de GA4 (dispositivo, fuente) para ubicar dónde cae la conversión');
+        if (k === 'aov' && !hasProd) missing.push('Productos de venta para ver el mix y las unidades por pedido');
+        if (k === 'traffic' && !hasSeg) missing.push('Segmentos de GA4 para ver qué fuente o dispositivo mueve el tráfico');
+        out.push({ id: `driver_${meta.id}`, kind: 'driver', severity: 'attention', priority: 2 + i * 0.1, amount: d.contribution,
+          title,
+          what: `${meta.name} aporta ${money(d.contribution)} a la brecha (${pct(share, 0)} de la diferencia contra el plan).`,
+          why: 'Es la parte de la diferencia que se explica con esa pieza de Venta = Sesiones × Conversión × Ticket.',
+          evidence: [`Plan: ${fmtDriver(d.id, d.baseline)} → Real: ${fmtDriver(d.id, d.current)}${fin(d.deltaPct) ? ` (${d.deltaPct >= 0 ? '+' : '−'}${pct(d.deltaPct)})` : ''}.`,
+            `Los tres efectos suman la brecha de ${money(wp.gap)}.`],
+          decomposition: 'Descomposición cuantitativa del Diagnóstico (Nivel 1, Plan contra Real).',
+          hypothesis: hypothesisText(d.id), support: sup, missing, next: dest, step: `investigate_${meta.id}`,
+          nextCheck: k === 'cr' ? 'Ubicar en qué canal, dispositivo o paso del embudo cae la conversión.' : k === 'aov' ? 'Ver si cambió el mix de productos o las unidades por pedido.' : 'Ver qué fuente o dispositivo explica el menor volumen.',
+          note: 'Contribución cuantitativa: no demuestra que ésta sea la causa.' });
+      });
+    } else if (below && wp && wp.status === 'ok' && !wp.effects) {
+      out.push({ id: 'driver_unavailable', kind: 'driver', severity: 'info', priority: 5, amount: null,
+        title: 'No se puede separar la brecha en tráfico, conversión y ticket',
+        what: 'Falta alguno de los tres indicadores en el plan o en la venta real.', why: 'Sin esa separación no hay un driver que investigar con respaldo cuantitativo.',
+        evidence: [], support: sup, missing: ['Sesiones (volumen) en el real, y volumen/CR/AOV en el plan'], next: { view: 'carga', label: 'Revisar qué falta cargar' }, step: 'complete_data' });
+    }
+    // Forecast de cierre contra la meta
+    const fgp = s.forecast.forecastGapPct;
+    if (fin(fgp) && fin(s.forecast.forecastGap) && s.forecast.forecastGap < 0 && 1 + fgp < (th ? th.onPlanFrom : 0.95)) {
+      const good = pace === 'on_plan' || pace === 'above';
+      out.push({ id: 'forecast', kind: 'forecast', severity: 'attention', priority: good ? 1.5 : 3, amount: s.forecast.forecastGap,
+        title: good ? 'Vas bien hoy, pero el cierre está en riesgo' : 'Evalúa las palancas para cerrar la brecha',
+        what: `El forecast de cierre queda ${money(s.forecast.forecastGap)} por debajo de la meta (${pct(fgp)}).`,
+        why: good ? 'El cumplimiento actual no garantiza llegar a la meta: el forecast proyecta que el ritmo de lo que falta no alcanza.' : 'Aunque se corrija el ritmo, el cierre proyectado queda corto.',
+        evidence: [`Forecast: ${money(s.forecast.forecast)} contra meta ${money(s.forecast.target)}.`, `Método: ${s.forecast.method}.`, `Cumplimiento a la fecha: ${pct(s.forecast.compliance)}.`],
+        support: sup, missing: [], next: { view: 'reforecast', label: 'Ver forecast y escenarios' }, step: 'evaluate_levers',
+        nextCheck: 'Abrir el reforecast para ver cuánto hay que vender por día y qué palancas lo cierran. No modifica la meta ni el forecast base.' });
+    }
+    // Canal más rezagado (solo cuando se mira el total digital)
+    if (input.channel === 'total' && S && S.channels && S.channels.status === 'ok') {
+      const lag = S.channels.rows.filter((r) => r.state === 'ok' && r.pacing === 'below' && fin(r.compliance)).sort((a, b) => a.compliance - b.compliance)[0];
+      if (lag) out.push({ id: `channel_${lag.id}`, kind: 'channel', severity: 'attention', priority: 4, amount: null,
+        title: `Revisa el canal ${lag.label}`, what: `${lag.label} va al ${pct(lag.compliance)} de su plan a la fecha.`,
+        why: 'Muestra dónde está la desviación; no repite el diagnóstico global.',
+        evidence: [`Venta acumulada de ${lag.label}: ${money(lag.actual)}.`, fin(lag.forecastGapPct) ? `Forecast contra meta del canal: ${lag.forecastGapPct >= 0 ? '+' : '−'}${pct(lag.forecastGapPct)}.` : null].filter(Boolean),
+        support: sup, missing: [], next: { view: 'pacing', label: 'Ver el canal', channel: lag.id }, step: 'review_channel',
+        nextCheck: 'Abrir Pacing con ese canal y ver si el rezago es de todo el periodo o reciente.' });
+    }
+    return out;
+  }
+
+  const fmtDriver = (id, v) => (!fin(v) ? '—' : id === 'cr' || id === 'conversionRate' ? `${(v * 100).toFixed(2)} %` : id === 'trafficVolume' ? Math.round(v).toLocaleString('es-MX') : `$${Math.round(v).toLocaleString('es-MX')}`);
+  const hypothesisText = (id) => (id === 'cr' || id === 'conversionRate'
+    ? 'Hipótesis a validar (no demostrada): un cambio en el embudo, el checkout, la búsqueda o la mezcla de tráfico podría estar bajando la conversión.'
+    : id === 'aov' ? 'Hipótesis a validar (no demostrada): un cambio en el mix de productos o en las unidades por pedido podría estar moviendo el ticket.'
+      : 'Hipótesis a validar (no demostrada): una fuente, campaña o dispositivo podría estar trayendo menos sesiones.');
+
+  function followFindings(input) {
+    const { status: s, actions = [], referenceDate } = input;
+    if (!s.actions || !s.actions.open) return [];
+    const measured = new Set((input.measuredActionIds || []));
+    const open = actions.filter((a) => ['proposed', 'approved', 'in_progress', 'completed', 'measuring'].includes(a.status) && !measured.has(a.actionId));
+    if (!open.length) return [];
+    const due = open.filter((a) => !a.endDate || !referenceDate || a.endDate <= referenceDate);
+    const waiting = open.filter((a) => a.endDate && referenceDate && a.endDate > referenceDate).sort((a, b) => a.endDate.localeCompare(b.endDate));
+    if (due.length) return [{ id: 'followup', kind: 'followup', severity: 'attention', priority: 2.5, amount: null,
+      title: 'Evalúa el resultado de la intervención',
+      what: `${due.length} acción${due.length === 1 ? '' : 'es'} sin medir: ${due.slice(0, 2).map((a) => a.title).join('; ')}${due.length > 2 ? '…' : ''}.`,
+      why: 'Una acción sin medición no deja aprendizaje y no se puede saber si funcionó.',
+      evidence: due.slice(0, 3).map((a) => `${a.actionId}: ${a.title}${a.endDate ? ` (terminó el ${a.endDate})` : ''}.`), support: null, missing: [],
+      next: { view: 'medir', label: 'Ver seguimiento' }, step: 'follow_up', nextCheck: 'Medir contra la línea base y registrar la conclusión.' }];
+    const w = waiting[0];
+    return [{ id: 'followup_wait', kind: 'followup', severity: 'waiting', priority: 8, amount: null,
+      title: 'Hay una intervención en curso',
+      what: `${w.title} termina el ${w.endDate}; todavía no se puede medir.`, why: 'Un resultado que aún no ocurre no se presenta como observado.',
+      evidence: [`Revisión: a partir del ${w.endDate}.`], support: null, missing: ['Venta real de los días de la ventana de la acción'],
+      next: { view: 'medir', label: 'Ver seguimiento' }, step: 'follow_up', waitingUntil: w.endDate, nextCheck: `Medir el ${w.endDate} o después, cuando haya venta real de toda la ventana.` }];
+  }
+
+  /* ---------- Ruta: pasos con estado ---------- */
+
+  /**
+   * Catálogo de pasos. exit(input) decide si el paso está COMPLETADO con datos reales (no por haber hecho clic).
+   * deps: pasos que deben estar completados antes de que éste esté disponible.
+   */
+  const STEPS = {
+    complete_data: { title: 'Completa la información necesaria', view: 'carga', deps: [], expected: 'Datos suficientes y sin errores para que el diagnóstico sea confiable.',
+      needs: ['Meta, plan y venta real del periodo'], exit: 'La preparación de datos no tiene faltantes bloqueantes ni errores, y la venta real está al día.',
+      done: (i) => i.readiness.allBlockingDone && i.status.data.quality !== 'invalid' && !i.staleDays && !(i.summary && i.summary.excluded) },
+    fix_quality: { title: 'Corrige la calidad de datos', view: 'calidad', deps: [], expected: 'Un archivo sin filas rechazadas.', needs: ['Los archivos con aviso o error'],
+      exit: 'Calidad de datos sin errores.', done: (i) => i.status.data.quality !== 'invalid' },
+    review_gap: { title: 'Investiga la brecha de ventas', view: 'diagnostico', deps: ['complete_data'], expected: 'Saber qué parte de la diferencia aporta cada driver.',
+      needs: ['Plan y venta real del periodo'], exit: 'El diagnóstico se calculó con los datos y filtros actuales.',
+      done: (i) => Boolean(i.status.visited.diagnostico) && i.status.diagnostic.hypotheses !== null },
+    investigate_cr: { title: 'Investiga la caída de conversión', view: 'diagnostico', deps: ['review_gap'], expected: 'Ubicar en qué canal, dispositivo o paso del embudo cae la conversión.',
+      needs: ['Segmentos de GA4 o datos de embudo, si existen'], exit: 'Se revisó el detalle de conversión y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+    investigate_aov: { title: 'Investiga el cambio en el ticket promedio', view: 'producto', deps: ['review_gap'], expected: 'Ver si cambió el mix de productos o las unidades por pedido.',
+      needs: ['Productos de venta'], exit: 'Se revisó el mix y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+    investigate_traffic: { title: 'Investiga el menor volumen de sesiones', view: 'segmentos', deps: ['review_gap'], expected: 'Ver qué fuente o dispositivo mueve el tráfico.',
+      needs: ['Segmentos de GA4'], exit: 'Se revisó el detalle de tráfico y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+    review_channel: { title: 'Revisa el canal rezagado', view: 'pacing', deps: ['complete_data'], expected: 'Saber si el rezago es de todo el periodo o reciente.',
+      needs: ['Venta real del canal'], exit: 'Pacing abierto en ese canal.', done: () => false },
+    evaluate_levers: { title: 'Evalúa las palancas para cerrar la brecha', view: 'reforecast', deps: ['complete_data'], expected: 'Cuánto hay que vender por día y qué escenarios cierran la brecha.',
+      needs: ['Forecast y plan del periodo'], exit: 'El reforecast calculado para este canal y periodo.', done: (i) => Boolean(i.status.visited.reforecast) && i.status.reforecast.available },
+    simulate: { title: 'Simula una recuperación', view: 'recovery', deps: ['review_gap'], expected: 'Un escenario guardado ligado a una hipótesis.', needs: ['Un diagnóstico con hipótesis'],
+      exit: 'Hay al menos un escenario guardado.', done: (i) => i.status.scenarios.count > 0 },
+    plan_action: { title: 'Plantea una acción', view: 'recovery', deps: ['simulate'], expected: 'Una acción en el plan con responsable y fechas.', needs: ['Un escenario'],
+      exit: 'Hay al menos una acción en el plan.', done: (i) => i.status.actions.count > 0 },
+    follow_up: { title: 'Evalúa el resultado de la intervención', view: 'medir', deps: [], expected: 'Un resultado medido contra la línea base y una conclusión.',
+      needs: ['Venta real de toda la ventana de la acción'], exit: 'Cada acción abierta tiene una medición registrada.', done: (i) => i.status.actions.withoutMeasurement === 0 && i.status.actions.count > 0 },
+    monitor: { title: 'Monitorea el pacing', view: 'pacing', deps: [], expected: 'Detectar a tiempo si el ritmo cambia.', needs: [], exit: 'No hay un paso pendiente; se revisa de nuevo con la siguiente carga de venta.', done: () => false }
+  };
+
+  function buildStep(id, input, origin) {
+    const def = STEPS[id];
+    const done = Boolean(def.done(input));
+    const blockedBy = def.deps.filter((d) => !STEPS[d].done(input));
+    const started = input.progress && input.progress[id];
+    let state;
+    if (done) state = 'done';
+    else if (blockedBy.length) state = 'blocked';
+    else if (origin && origin.waitingUntil) state = 'waiting';
+    else if (started) state = 'in_progress';
+    else if (origin && origin.severity === 'blocking') state = 'attention';
+    else state = 'available';
+    return { id, title: def.title, view: def.view, state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
+      startedAt: started ? started.at : null, origin: origin ? origin.id : null, waitingUntil: origin && origin.waitingUntil || null };
+  }
+
+  /** Reglas del paso principal: primero lo que bloquea, luego la desviación, después lo que decide y mide. */
+  function chooseRoute(findings, input) {
+    const steps = [];
+    const seen = new Set();
+    const push = (f) => {
+      const id = f.step; if (!id || seen.has(id)) return null;
+      seen.add(id);
+      const st = buildStep(id, input, f);
+      // el destino puede ser más específico que el del catálogo (canal, mix, segmentos)
+      st.view = f.next.view || st.view; st.cta = f.next.label; st.channel = f.next.channel || null; st.title = f.title || st.title; st.why = f.why; st.findingId = f.id;
+      st.what = f.what; st.support = f.support; st.nextCheck = f.nextCheck || null;
+      st.soft = f.severity === 'warning' || f.severity === 'info';     // un aviso suave nunca es el paso principal
+      steps.push(st); return st;
+    };
+    findings.forEach(push);
+    // Cadena de decisión tras el diagnóstico: simular → actuar. Solo si hay brecha y el diagnóstico ya se calculó.
+    const gap = findings.find((f) => f.kind === 'gap' || f.kind === 'driver');
+    if (gap) {
+      const diag = steps.find((s) => s.id === 'review_gap');
+      if (diag && diag.state === 'done') {
+        const noHyp = input.status.diagnostic.hypotheses === 0 && input.status.scenarios.count === 0;
+        if (noHyp) steps.push({ id: 'more_evidence', title: 'Busca más evidencia', view: 'diagnostico', cta: 'Probar otra comparación o cargar segmentos', state: 'available', deps: ['review_gap'], blockedBy: [],
+          expected: 'Una hipótesis con respaldo para poder simular.', needs: ['Segmentos de GA4 o un periodo distinto'], exit: 'El diagnóstico trae al menos una hipótesis.',
+          why: 'El diagnóstico no tiene hipótesis: sin evidencia no se simula.', findingId: gap.id, origin: gap.id });
+        else { push({ ...gap, step: 'simulate', title: STEPS.simulate.title, next: { view: 'recovery', label: 'Simular recuperación' }, why: 'Hay diagnóstico; el siguiente paso es probar qué cambio cerraría la brecha.' });
+          push({ ...gap, step: 'plan_action', title: STEPS.plan_action.title, next: { view: 'recovery', label: 'Plantear una acción' }, why: 'Una acción con responsable y fechas convierte el escenario en algo medible.' }); }
+      }
+    }
+    const hasActionable = steps.some((s) => !s.soft && s.state !== 'done' && s.state !== 'blocked');
+    if (!hasActionable) {
+      const m = { ...STEPS.monitor }; steps.push({ id: 'monitor', title: m.title, view: m.view, cta: 'Ver pacing', state: 'available', deps: [], blockedBy: [], expected: m.expected, needs: m.needs, exit: m.exit,
+        why: 'No hay una desviación relevante: lo útil es seguir el ritmo y reaccionar a tiempo.', findingId: null, origin: null, what: 'Sin desviaciones relevantes con los datos disponibles.' });
+    }
+    // Principal = primer paso que no esté completado ni bloqueado; si todos lo están, el primero.
+    const actionable = steps.filter((s) => !s.soft && s.state !== 'done' && s.state !== 'blocked');
+    const primary = actionable[0] || steps[0];
+    const secondary = steps.filter((s) => s !== primary && s.state !== 'done').slice(0, 3);
+    return { primary, secondary, all: steps };
+  }
+
+  function evaluate(input) {
+    const staleDays = (() => { const l = input.status.actual && input.status.actual.lastDate; return l && input.referenceDate ? Math.max(0, daysBetween(l, input.referenceDate)) > RULES.staleDays : false; })();
+    const inp = { ...input, staleDays };
+    const dataF = dataFindings(inp);
+    const blocked = dataF.some((f) => f.severity === 'blocking');
+    const dev = deviationFindings(inp, blocked);
+    const fol = followFindings(inp);
+    const findings = [...dataF, ...dev, ...fol].sort((a, b) => a.priority - b.priority || Math.abs(b.amount || 0) - Math.abs(a.amount || 0));
+    // El orden de los pasos sigue la prioridad de los hallazgos, salvo que una intervención vencida pasa antes de las palancas.
+    const route = chooseRoute(findings, inp);
+    const stable = !findings.some((f) => f.severity === 'blocking' || f.severity === 'attention');
+    return { state: blocked ? 'blocked' : stable ? 'stable' : 'attention', findings, visible: findings.slice(0, RULES.maxVisible), rest: findings.slice(RULES.maxVisible), route,
+      rules: RULES, stableNote: stable ? 'No hay una desviación relevante con los datos disponibles. Lo útil es monitorear el pacing.' : null };
+  }
+
+  FP.attentionEngine = { evaluate, support, RULES, STEPS };
+  if (typeof module !== 'undefined' && module.exports) module.exports = FP.attentionEngine;
+})(typeof window !== 'undefined' ? window : globalThis);
