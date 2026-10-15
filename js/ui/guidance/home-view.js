@@ -162,13 +162,20 @@ ${cards}
     } else body = f && !planOnly
       ? `${flowBlock}\n\n${nowBlock}\n\n${setupBlock(readyCard + '\n' + nextCard, ' home__top--ready-first')}`
       : `${setupBlock(nextCard + '\n' + readyCard)}\n\n${flowBlock}\n\n${nowBlock}`;
+    // Fase 6: si la fecha elegida cae fuera de la venta real cargada, Inicio lo dice y ofrece volver al último día con real
+    let lastReal = null;
+    try { ['actual', 'historical'].forEach((t) => FP.dataStore.records(state.store, t).forEach((r) => { if (r.date && r.metrics && r.metrics.revenue && r.metrics.revenue.value !== null && (!lastReal || r.date > lastReal)) lastReal = r.date; })); } catch (e) { lastReal = null; }
+    const refSel = state.fc && state.fc.settings && state.fc.settings.referenceDate;
+    const lastShown = state.fc && state.fc.lastActualDate;
+    const rangeNotice = lastReal && (!f || planOnly) && lastReal !== lastShown
+      ? `<div class="att__banner att__banner--warning" role="status" data-banner="range"><strong>La fecha o el año elegido (${esc(refSel || state.year)}) no tiene venta real.</strong> La venta real cargada llega hasta ${esc(lastReal)}. <button type="button" class="link-btn" data-action="set-ref-date" value="${esc(lastReal)}">Ir al ${esc(lastReal)}</button></div>` : '';
     $('home').innerHTML = `<div class="home">
       <header class="home__head">
         <div data-own-head><h2 class="ds-page-title">Inicio</h2>
           <p class="ds-lede">Centro de control: qué está pasando, contra qué se compara y qué sigue.</p></div>
         ${controls}
       </header>
-
+${rangeNotice}
 ${body}
 
       <details class="ds-accordion">
