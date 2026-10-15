@@ -127,4 +127,33 @@ ok('Visibles: máximo 3 hallazgos y el resto va aparte', r.visible.length <= 3 &
   ok('E2 intervención con fecha futura: el seguimiento queda «en espera» con su fecha', q.route.primary.id === 'follow_up' && fu.state === 'waiting' && fu.waitingUntil === '2026-10-10', [q.route.primary.id, fu && fu.state]);
   ok('E2 estable: la ruta es solo monitorear', AE.evaluate(mk()).route.chain.steps.map((x) => x.id).join() === 'monitor');
 }
+
+// ===== Canales de contacto (WhatsApp, Llamadas): sin GA4, volumen = mensajes / llamadas =====
+{
+  const mkc = (ch, o = {}) => { const i = under(mk()); i.channel = ch; i.summary.channel = ch; i.status.data.segments = 50000; i.segmentChannels = ['ecommerce', 'app']; i.status.visited = { diagnostico: true }; i.status.diagnostic = { visited: true, hypotheses: 2 };
+    i.summary.whyPlan.drivers = [{ id: 'trafficVolume', label: 'Volumen', contribution: -25000, baseline: 3000, current: 2400, deltaPct: -0.2 }, { id: 'conversionRate', label: 'Conversión', contribution: -20000, baseline: 0.2, current: 0.17, deltaPct: -0.15 }, { id: 'aov', label: 'Ticket', contribution: -5000, baseline: 900, current: 880, deltaPct: -0.02 }];
+    return Object.assign(i, o); };
+  let q = AE.evaluate(mkc('whatsapp'));
+  const tr = q.findings.find((f) => f.id === 'driver_traffic'), cr2 = q.findings.find((f) => f.id === 'driver_cr');
+  ok('WA: el hallazgo de volumen habla de «mensajes», no de sesiones, y no pide segmentos de GA4', Boolean(tr) && /mensajes/.test(tr.title) && !/sesiones/i.test(tr.title) && tr.missing.length === 0 && !/GA4/.test(tr.missing.join()), tr && [tr.title, tr.missing]);
+  ok('WA: el volumen se investiga en Pacing con ese canal (no en Tráfico y conversión/GA4) y la comprobación dice que GA4 aplica a Ecommerce y App', Boolean(tr) && tr.next.view === 'pacing' && tr.next.channel === 'whatsapp' && /GA4 aplica a Ecommerce y App/.test(tr.nextCheck), tr && [tr.next, tr.nextCheck]);
+  ok('WA: la hipótesis de volumen menciona campaña, horario o evento y no fuente ni dispositivo', Boolean(tr) && /campaña|horario|evento/.test(tr.hypothesis) && !/dispositivo|fuente/.test(tr.hypothesis), tr && tr.hypothesis);
+  ok('WA: la conversión es «de mensajes a pedido» y no pide GA4', Boolean(cr2) && /mensajes a pedido/.test(cr2.title) && cr2.missing.length === 0 && /tiempos de respuesta/.test(cr2.hypothesis), cr2 && [cr2.title, cr2.missing]);
+  const st = q.route.all.find((x) => x.id === 'investigate_traffic');
+  ok('WA: el paso trae resultado esperado y datos adaptados al canal (sin «segmentos de GA4»)', Boolean(st) && /mensajes/.test(st.expected) && !/GA4/.test(st.needs.join()) && /Ya lo revisé/.test(st.exit), st && [st.expected, st.needs, st.exit]);
+  q = AE.evaluate(mkc('llamadas'));
+  ok('Llamadas: el volumen se llama «llamadas»', /llamadas/.test(q.findings.find((f) => f.id === 'driver_traffic').title));
+  q = AE.evaluate(mkc('ecommerce'));
+  ok('Ecommerce con GA4: sigue hablando de sesiones y manda a Tráfico y conversión', q.findings.find((f) => f.id === 'driver_traffic').next.view === 'segmentos' && /sesiones/.test(q.findings.find((f) => f.id === 'driver_traffic').title));
+  q = AE.evaluate(mkc('ecommerce', { segmentChannels: ['app'] }));
+  ok('Ecommerce sin GA4 propio (solo App lo tiene): se pide cargar segmentos de Ecommerce', q.findings.find((f) => f.id === 'driver_traffic').missing.length === 1 && q.findings.find((f) => f.id === 'driver_traffic').next.view === 'diagnostico');
+  q = AE.evaluate(mkc('total'));
+  ok('Total digital: usa GA4 si algún canal lo tiene', q.findings.find((f) => f.id === 'driver_traffic').next.view === 'segmentos');
+  // un paso de juicio solo se completa si el usuario lo confirma
+  let i = mkc('whatsapp'); q = AE.evaluate(i);
+  const prim = q.route.primary.id;
+  ok('Paso de juicio: sin confirmación sigue siendo el principal y no se completa solo', /^investigate_/.test(prim) && q.route.primary.state !== 'done', [prim, q.route.primary.state]);
+  i = mkc('whatsapp', { progress: { [prim]: { at: '2026-09-23T10:00:00Z', reviewed: { at: '2026-09-23T10:05:00Z', note: 'campaña' } } } }); q = AE.evaluate(i);
+  ok('Paso de juicio: con «Ya lo revisé» queda hecho y la ruta avanza a otro paso', q.route.all.find((x) => x.id === prim).state === 'done' && q.route.primary.id !== prim, [q.route.primary.id]);
+}
 console.log(`\nattention-engine: ${n - fails}/${n}`); process.exit(fails ? 1 : 0);

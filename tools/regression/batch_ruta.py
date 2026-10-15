@@ -84,6 +84,22 @@ async def main():
             chk('R15 la × cierra la ruta de trabajo y borra el origen guardado', x == [False, None], x)
         else:
             chk('R14 hay una ruta de canal para abrir', False, 'sin botón de canal')
+        # canal de contacto (WhatsApp): sin GA4; paso de juicio que confirma el usuario
+        await q.goto(U + '#inicio'); await q.wait_for_timeout(1000); await q.evaluate(NOTOUR)
+        await q.select_option('#home-ch', 'whatsapp'); await q.wait_for_timeout(900)
+        await q.click('#nbs button.btn--primary'); await q.wait_for_timeout(1500)
+        await q.click('[data-action="route-back"]'); await q.wait_for_timeout(1500)
+        W = await q.evaluate("""()=>{const n=document.getElementById('nbs');return {step:n.dataset.step,txt:n.innerText,steps:[...n.querySelectorAll('.nbs__st')].map(e=>e.dataset.step+':'+e.dataset.state)}}""")
+        chk('R19 WhatsApp: tras revisar la brecha, el paso es de juicio, habla de «mensajes» y NO pide segmentos de GA4', W['step'].startswith('investigate_') and 'mensajes' in W['txt'] and 'GA4' not in W['txt'], W)
+        await q.click('#nbs button.btn--primary'); await q.wait_for_timeout(1500)
+        T = await q.evaluate("""()=>{const o=document.querySelector('.route-origin');return {hash:location.hash,txt:o?o.innerText:'',btn:!!document.querySelector('.route-origin [data-action="route-reviewed"]'),done:o&&o.dataset.done,ch:FP.app.state.ux.ctx.channel}}""")
+        chk('R20 el paso de juicio NO se completa solo: la barra pide «Ya lo revisé» (con hipótesis opcional) y conserva el canal', T['btn'] and T['done'] == '0' and 'Ya lo revisé' in T['txt'] and T['ch'] == 'whatsapp', T)
+        await q.fill('#route-note', 'bajó por la campaña de agosto'); await q.click('[data-action="route-reviewed"]'); await q.wait_for_timeout(900)
+        T2 = await q.evaluate("""()=>{const o=document.querySelector('.route-origin');return {done:o&&o.dataset.done,txt:o?o.innerText:'',saved:JSON.stringify(JSON.parse(localStorage.getItem('fp.route.v1')||'{}')).includes('campaña de agosto')}}""")
+        chk('R21 al confirmar queda «Revisado por ti» con tu hipótesis, se guarda y ofrece el siguiente paso', T2['done'] == '1' and 'Revisado por ti' in T2['txt'] and 'campaña de agosto' in T2['txt'] and T2['saved'], T2)
+        await q.click('[data-action="route-back"]'); await q.wait_for_timeout(1500)
+        W2 = await q.evaluate("""()=>{const n=document.getElementById('nbs');return {step:n.dataset.step,steps:[...n.querySelectorAll('.nbs__st')].map(e=>e.dataset.step+':'+e.dataset.state)}}""")
+        chk('R22 al volver a Inicio, el paso confirmado ya no es el principal y la ruta avanzó', not W2['step'].startswith('investigate_cr') or any(x.endswith(':done') and x.startswith('investigate_') for x in W2['steps']), W2)
         # accesibilidad y teclado
         a11 = await q.evaluate("""()=>{const bad=[];document.querySelectorAll('#route-origin button,#nbs button').forEach(x=>{if(!(x.innerText||'').trim()&&!x.getAttribute('aria-label'))bad.push('sin nombre')});return bad}""")
         chk('R16 los botones de la ruta y de la barra tienen nombre accesible', not a11, a11)

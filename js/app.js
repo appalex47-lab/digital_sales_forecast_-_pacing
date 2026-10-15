@@ -2423,6 +2423,11 @@
       actions.go({ dataset: { view: 'inicio' } });
       setTimeout(() => actions['scroll-to']({ dataset: { target: 'nbs' } }), 200);
     },
+    'route-reviewed'(el) {
+      const note = (document.getElementById('route-note') || {}).value || '';
+      if (FP.attentionView) FP.attentionView.markReviewed(el.dataset.key, el.dataset.step, note);
+      render();
+    },
     'route-dismiss'() { if (FP.attentionView) FP.attentionView.clearOrigin(state); render(); },
     go(el) {
       FP.help.close();
