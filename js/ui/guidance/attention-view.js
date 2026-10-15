@@ -75,7 +75,7 @@
     const { esc } = H();
     const sup = fd.support ? `<p class="att__sup" data-support="${esc(fd.support.level)}"><strong>Respaldo de la evidencia: ${esc(fd.support.level)}.</strong> ${esc(fd.support.why)}</p>` : '';
     const detail = [
-      ['Hecho observado', [fd.what, ...(fd.evidence || [])]],
+      (fd.evidence || []).length ? ['Hecho observado', fd.evidence] : null,
       fd.decomposition ? ['Descomposición cuantitativa', [fd.decomposition, fd.note].filter(Boolean)] : null,
       fd.hypothesis ? ['Hipótesis a validar', [fd.hypothesis]] : null,
       (fd.missing || []).length ? ['Información que falta', fd.missing] : null,
@@ -85,8 +85,7 @@
       <div class="att__head"><span class="ds-badge ${SEV_BADGE[fd.severity] ? `ds-badge--${SEV_BADGE[fd.severity]}` : ''}">${esc(SEV_LABEL[fd.severity] || fd.severity)}</span><strong class="att__t">${esc(fd.title)}</strong></div>
       <p class="att__what">${esc(fd.what)}</p>
       <p class="att__why"><strong>Por qué importa:</strong> ${esc(fd.why)}</p>
-      ${sup}
-      <details class="att__more"><summary>Evidencia y qué sigue</summary><dl>${detail.map(([t, xs]) => `<dt>${esc(t)}</dt>${xs.map((x) => `<dd>${esc(x)}</dd>`).join('')}`).join('')}</dl></details>
+      <details class="att__more"><summary>Evidencia y qué sigue</summary>${sup}<dl>${detail.map(([t, xs]) => `<dt>${esc(t)}</dt>${xs.map((x) => `<dd>${esc(x)}</dd>`).join('')}`).join('')}</dl></details>
       <p class="att__go"><button type="button" class="btn btn--ghost" data-action="route-go" data-route="${esc(fd.step)}" data-view="${esc(fd.next.view)}" data-step="${esc(fd.step)}" data-finding="${esc(fd.id)}" data-key="${esc(key)}"${fd.next.channel ? ` data-channel="${esc(fd.next.channel)}"` : ''}>${esc(fd.next.label)}</button></p></li>`;
   }
 

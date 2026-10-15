@@ -175,7 +175,7 @@
     } else whyHtml = '<p class="field__hint">Sin plan ni periodo anterior con venta real para comparar. Elige un mes o carga más historia.</p>';
     const why = `<div class="home-key__col" data-key="why"><h4>¿Por qué?</h4>${whyHtml}</div>`;
     const Wh = S.where, pick = Wh.status === 'ok' && Wh.picks[0];
-    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><button type="button" class="link-btn" ${next.attrs || `data-action="go" data-view="${esc(next.view)}"`}>${esc(next.label)}</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
+    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><strong>${esc(next.label)}</strong><br><button type="button" class="link-btn" data-action="scroll-to" data-target="nbs">Ver el paso y cómo sigue ↓</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
     const todo = `<div class="home-key__col" data-key="todo"><h4>¿Qué hago hoy?</h4>${nextTxt}${pick ? `<p><span class="field__hint">Dónde mirar</span><br><strong>${esc(pick.dimensionLabel)} · ${esc(pick.segment)}</strong> <span class="field__hint">(${esc(sMoney(pick.delta))})</span></p>` : ''}${Wh.status === 'ok' && Wh.quality.length ? `<p class="home-key__alert">Revisa el tráfico de «${esc(Wh.quality[0].label)}»</p>` : ''}</div>`;
     const chips = S.channels.status === 'ok' ? S.channels.rows.map((r) => `<span class="ds-badge" data-chip="${esc(r.id)}">${esc(r.label)} · ${r.state === 'ok' ? esc(FP.pacingView.paceLabel(r.pacing)) : r.state === 'no_plan' ? 'Sin plan' : 'Sin venta real'}</span>`).join(' ') : '';
     const T = S.trust, cov = T.coverage;
