@@ -153,7 +153,7 @@ ${cards}
     if (f && !planOnly && FP.homeSummaryView) {
       const sum = FP.homeSummaryView.build(state, h, f, next, { status, ready }), more = FP.homeSummaryView.more;
       body = `${sum.banner || ''}${sum.key}
-      ${sum.attention || ''}${sum.nextStep || ''}
+      ${sum.nextStep || ''}${sum.attention || ''}
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
       ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
       ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}

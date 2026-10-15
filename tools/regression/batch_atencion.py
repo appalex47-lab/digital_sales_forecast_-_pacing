@@ -43,9 +43,9 @@ async def main():
           order:(()=>{const ids=[...document.querySelectorAll('#home [data-block]')].map(e=>e.dataset.block);return ids.slice(0,3)})(),
           facts:[...document.querySelectorAll('#nbs .nbs__facts dt')].map(e=>e.innerText),
           btn:!!document.querySelector('#nbs button[data-action="route-go"].btn--primary'),oldDup:document.querySelectorAll('#home [data-key="todo"] [data-action="route-go"]').length})""")
-        chk('A1 Inicio trae «Qué necesita atención» y «Tu siguiente mejor paso» justo después de «Lo esencial»', r['att'] and r['nbs'] and r['order'][:3] == ['key', 'attention', 'nextstep'], r)
+        chk('A1 Inicio trae «Qué necesita atención» y «Tu siguiente mejor paso» justo después de «Lo esencial» (primero la acción, luego los hallazgos)', r['att'] and r['nbs'] and r['order'][:3] == ['key', 'nextstep', 'attention'], r)
         chk('A2 el siguiente paso muestra resultado esperado, datos que se necesitan, estado y criterio de salida, con un botón principal', all(any(f.startswith(x) for f in r['facts']) for x in ('Resultado esperado', 'Estado', 'Termina cuando')) and r['btn'], r)
-        chk('A3 «¿Qué hago hoy?» de Lo esencial usa el mismo paso que el bloque principal (una sola fuente)', r['oldDup'] == 1, r)
+        chk('A3 «¿Qué hago hoy?» de Lo esencial apunta al paso del bloque principal sin repetirlo (una sola fuente)', r['oldDup'] == 0, r)
         step = r['step']
         # sin repetir: el paso principal aparece una sola vez como botón primario
         # navegación contextual
