@@ -687,7 +687,8 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
   font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; white-space: nowrap; }
 .hdate__b:hover { background: rgba(255, 255, 255, .16); }
 .hdate__in:focus-visible, .hdate__b:focus-visible { outline: 2px solid var(--ds-on-nav); outline-offset: 2px; }
-.snav__pills { display: flex; flex-wrap: wrap; gap: 6px; padding: var(--ds-s2) var(--ds-s3); }
+.snav__pills { display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; align-items: flex-start; align-self: start; padding: var(--ds-s2) var(--ds-s3); }
+.snav__pills .hstatus__link { display: inline-flex; padding: 0; min-height: 24px; }
 @media (max-width: 480px) { .hdate__l { display: none; } .hdate__b { padding: 0 7px; } .hdate__b--last { display: none; } }   /* «Último real» sigue en Pacing */
 @media (pointer: coarse) { .hdate__in, .hdate__b { height: 44px; } }
 @media (max-width: 1024px) { .topbar__search { display: none; } .topbar { grid-template-columns: auto 1fr auto; } }
@@ -834,7 +835,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
   /* encabezado sticky con «?» al final: su área ampliada (14 px) quedaba tapada por la columna vecina, que se pinta encima; con ese relleno cae dentro de su propia celda */
   th:has(> .help-dot:last-child) { padding-right: 22px; }
   .switch::before { content: ""; position: absolute; inset: -10px -2px; }
-  .hstatus__link { min-height: 44px; align-items: center; }
+  .hstatus__link, .snav__pills .hstatus__link { min-height: 44px; align-items: center; }
   .hstatus__year { height: 44px; }
   .ux-context__actions .btn, .ux-context__inner > .next-step .btn { min-height: 44px; }
   /* los campos tenían 36 px con más especificidad que la regla general */
