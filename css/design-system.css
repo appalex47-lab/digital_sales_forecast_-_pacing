@@ -1682,3 +1682,8 @@ tr.is-evidence { outline-offset: -3px; }
 .route-origin__done { flex-basis: 100%; margin: 0; background: #E3F4EA; border: 1px solid #9BD3B3; color: #14633A; border-radius: 10px; padding: var(--ds-s2) var(--ds-s3); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-s2); font-size: var(--ds-fs-caption); }
 .route-origin-host:empty { display: none; }
 @media (pointer: coarse), (max-width: 760px) { .route-origin__x { min-width: 44px; min-height: 44px; } }
+
+.route-origin__todo { flex-basis: 100%; background: #fff; border: 1px dashed #D6B35B; border-radius: 10px; padding: var(--ds-s2) var(--ds-s3); font-size: var(--ds-fs-caption); }
+.route-origin__form { display: flex; flex-wrap: wrap; gap: var(--ds-s2); margin-top: var(--ds-s2); }
+.route-origin__form input { flex: 1 1 260px; min-height: 36px; padding: 0 10px; border: 1px solid var(--ds-control-border, #7D8A9F); border-radius: 8px; background: var(--ds-surface); color: var(--ds-text); font: inherit; }
+.nbs__how { margin-top: var(--ds-s2); }

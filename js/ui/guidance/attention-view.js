@@ -30,7 +30,28 @@
     } catch (e) { /* sin almacenamiento: la ruta se calcula igual, solo no recuerda qué paso se abrió */ }
   }
 
+  /** Confirmación personal de un paso de juicio (elegir una hipótesis): solo tú puedes saber que ya lo revisaste. Se guarda en este navegador. */
+  function markReviewed(key, stepId, note) {
+    if (!key || !stepId) return;
+    try {
+      const all = readAll(); const cur = all[key] || {}; const e = cur[stepId] || { at: new Date().toISOString() };
+      e.reviewed = { at: new Date().toISOString(), note: String(note || '').slice(0, 280) }; cur[stepId] = e; all[key] = cur;
+      root.localStorage.setItem(KEY, JSON.stringify(all));
+    } catch (e) { /* sin almacenamiento: el paso se queda como en curso */ }
+  }
+
   /* ---------- Entrada del motor a partir de lo que ya calculó la app ---------- */
+  let segMemo = { ref: null, n: -1, channels: [] };
+  /** Canales que tienen segmentos de GA4 cargados (se recalcula solo si cambian los datos). */
+  function segmentChannels(state) {
+    const recs = state.store && state.store.segments && state.store.segments.records;
+    if (!Array.isArray(recs)) return [];
+    if (segMemo.ref === recs && segMemo.n === recs.length) return segMemo.channels;
+    const set = new Set(); for (let i = 0; i < recs.length; i++) { const c = recs[i] && recs[i].channel; if (c) set.add(c); }
+    segMemo = { ref: recs, n: recs.length, channels: [...set] };
+    return segMemo.channels;
+  }
+
   function buildInput(state, h, f, S, status, ready) {
     const run = f.run, p = f.p, plan = state.rc && state.rc.plan ? state.rc.plan : { actions: [], measurements: [] };
     // Las cifras de brecha y forecast son las del periodo que muestra Inicio (mes o año), no las del año completo de collectStatus.
@@ -42,7 +63,7 @@
       forecast: p.forecast ? p.forecast.revenue : null, forecastGap: p.forecastGap.revenue.gap, forecastGapPct: p.forecastGap.revenue.gapPct };
     const st = { ...status, forecast };
     const pm = FP.productStore && FP.productStore.available && FP.productStore.available() ? FP.productStore.meta : null;
-    return { referenceDate: run.referenceDate, year: state.year, channel: S.channel, status: st, readiness: ready, summary: S, thresholds: run.settings && run.settings.pacingThresholds,
+    return { referenceDate: run.referenceDate, year: state.year, channel: S.channel, segmentChannels: segmentChannels(state), status: st, readiness: ready, summary: S, thresholds: run.settings && run.settings.pacingThresholds,
       actions: plan.actions || [], measuredActionIds: (plan.measurements || []).map((m) => m.actionId), hasProducts: Boolean(pm && pm.batches), progress: progressFor(ctxKey(state, h, S)) };
   }
 
@@ -140,7 +161,8 @@
       <p class="home__next-t">${esc(p.title)}</p><p class="ds-card__sub">${esc(p.why || '')}</p>
       <dl class="nbs__facts">${facts.map(([t, v]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       ${waiting ? `<p class="field__hint">En espera: todavía no hay venta real de toda la ventana. Vuelve a partir del ${esc(p.waitingUntil)}.</p>` : ''}
-      <p><button type="button" class="btn btn--primary btn--lg" ${attrs(p, S, key)}>${esc(label)}</button></p>${others}</section>`;
+      <p><button type="button" class="btn btn--primary btn--lg" ${attrs(p, S, key)}>${esc(label)}</button></p>
+      ${waiting ? '' : '<p class="field__hint nbs__how">Cómo sigue: el botón abre el módulo con tu canal y periodo. Allí verás una barra con este paso; al terminar lo confirmas (o se completa solo con los datos) y regresas aquí para ver la ruta avanzada.</p>'}${others}</section>`;
   }
 
   /** Aviso corto ANTES de las cifras cuando los datos no están al día o están incompletos (no bloquea el resto de la página). */
@@ -186,7 +208,9 @@
     const STEPS = FP.attentionEngine.STEPS;
     const idx = Math.max(0, o.chain.findIndex((c) => c.id === o.step));
     let done = false;
-    try { const def = STEPS[o.step]; done = Boolean(def && o.step !== 'complete_data' && def.done({ status, readiness: { allBlockingDone: false }, summary: {}, staleDays: false })); } catch (e) { done = false; }
+    const prog = progressFor(o.key);
+    const def0 = STEPS[o.step] || {}, manual = Boolean(def0.manual), rev = prog[o.step] && prog[o.step].reviewed;
+    try { done = manual ? Boolean(rev) : Boolean(def0.done && o.step !== 'complete_data' && def0.done({ status, readiness: { allBlockingDone: false }, summary: {}, staleDays: false })); } catch (e) { done = false; }
     const next = o.chain.slice(idx + 1).find((c) => c.state !== 'done');
     const segs = o.chain.map((c, i) => `<i class="${i < idx || (i === idx && done) || c.state === 'done' ? 'd' : i === idx ? 'c' : ''}"></i>`).join('');
     const run = state.fc && state.fc.run, cur = state.ux.ctx || {};
@@ -195,11 +219,13 @@
     return `<div class="ux-wrap"><div class="route-origin" data-origin="${esc(o.route)}" data-step="${esc(o.step)}" data-done="${done ? 1 : 0}">
       <div class="route-origin__l"><p class="route-origin__t"><strong>Vienes de Inicio · Hallazgo: «${esc(o.findingTitle || (STEPS[o.step] || {}).title || '')}»</strong>
         <span class="chip">${esc(o.ctxLabel)}</span><span class="chip">${esc(o.periodLabel)}</span>${o.ref ? `<span class="chip">Datos al ${esc(dateLbl(o.ref))}</span>` : ''}</p>
-        <p class="route-origin__p"><span class="route-origin__segs" aria-hidden="true">${segs}</span><span>Ruta: paso ${idx + 1} de ${o.chain.length} · ${esc((STEPS[o.step] || {}).title || '')}</span></p>
+        <p class="route-origin__p"><span class="route-origin__segs" aria-hidden="true">${segs}</span><span>Ruta: paso ${idx + 1} de ${o.chain.length} · ${esc((o.chain[idx] && o.chain[idx].title) || (STEPS[o.step] || {}).title || '')}</span></p>
         ${changed ? '<p class="route-origin__warn" role="status">Cambiaron la fecha, el año o el canal desde que abriste este hallazgo. Vuelve a Inicio para reevaluar la ruta.</p>' : ''}</div>
       <div class="route-origin__r"><button type="button" class="btn btn--ghost" data-action="route-back">← Volver al hallazgo en Inicio</button>
         <button type="button" class="route-origin__x" data-action="route-dismiss" aria-label="Cerrar la ruta de trabajo">×</button></div>
-      ${done ? `<p class="route-origin__done" role="status"><span>✓ <strong>Paso completado</strong>: ${esc((STEPS[o.step] || {}).exit || '')}${next ? ` Siguiente: <strong>${esc(next.title)}</strong>.` : ' Ya no quedan pasos en esta ruta.'}</span>${next && next.view !== state.view ? `<button type="button" class="btn btn--primary" ${nextAttrs}>Ir al paso ${idx + 2} →</button>` : ''}</p>` : ''}
+      ${manual && !done ? `<div class="route-origin__todo"><label for="route-note"><strong>Cuando termines de revisar:</strong> escribe la hipótesis que vas a validar (opcional) y confírmalo. La app no puede saber por sí sola que ya lo revisaste.</label>
+        <div class="route-origin__form"><input id="route-note" type="text" maxlength="280" placeholder="Ej.: bajó el volumen desde la semana de la campaña X"><button type="button" class="btn btn--primary" data-action="route-reviewed" data-key="${esc(o.key)}" data-step="${esc(o.step)}">Ya lo revisé</button></div></div>` : ''}
+      ${done ? `<p class="route-origin__done" role="status"><span>✓ <strong>${manual ? 'Revisado por ti' : 'Paso completado'}</strong>${manual && rev && rev.note ? `: «${esc(rev.note)}»` : manual ? '' : `: ${esc((STEPS[o.step] || {}).exit || '')}`}${next ? ` Siguiente: <strong>${esc(next.title)}</strong>.` : ' Ya no quedan pasos en esta ruta.'}</span>${next && next.view !== state.view ? `<button type="button" class="btn btn--primary" ${nextAttrs}>Ir al paso ${idx + 2} →</button>` : ''}</p>` : ''}
     </div></div>`;
   }
   function renderOrigin(state, status) {
@@ -219,5 +245,5 @@
     return { att, key, html: attentionHtml(att, S, key), nextHtml: nextStepHtml(att, S, key), banner: bannerHtml(att), next };
   }
 
-  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml };
+  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml, markReviewed };
 })(typeof window !== 'undefined' ? window : globalThis);

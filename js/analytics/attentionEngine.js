@@ -100,6 +100,16 @@
     return out;
   }
 
+  /** Canales de contacto (WhatsApp, Llamadas): su «volumen» son mensajes o llamadas, no sesiones; GA4 (fuente, dispositivo) no aplica. */
+  const CONTACT = { whatsapp: 'mensajes', llamadas: 'llamadas' };
+  const contactNoun = (ch) => CONTACT[ch] || null;
+  /** ¿Hay segmentos de GA4 para este canal? Con «total» basta que algún canal los tenga (cubren Ecommerce y App, no el resto). */
+  function hasSegFor(input) {
+    const sc = input.segmentChannels, ch = input.channel;
+    if (!Array.isArray(sc)) return (input.status.data.segments || 0) > 0 && !contactNoun(ch);
+    return ch === 'total' || !ch ? sc.length > 0 : sc.includes(ch);
+  }
+
   function deviationFindings(input, blocked) {
     const { status: s, summary: S } = input;
     const out = [];
@@ -126,24 +136,28 @@
         .sort((a, b) => a.contribution - b.contribution).slice(0, 2);
       neg.forEach((d, i) => {
         const meta = DRIVER[d.id], k = meta.id, share = Math.abs(d.contribution) / total;
-        const hasSeg = s.data.segments > 0, hasProd = Boolean(input.hasProducts);
+        const hasSeg = hasSegFor(input), hasProd = Boolean(input.hasProducts), noun = contactNoun(input.channel);
         const dest = k === 'aov' ? { view: hasProd ? 'producto' : 'diagnostico', label: hasProd ? 'Analizar mix y composición de venta' : 'Ver drivers' }
-          : k === 'traffic' ? { view: hasSeg ? 'segmentos' : 'diagnostico', label: hasSeg ? 'Ver segmentos de tráfico' : 'Ver drivers' }
+          : k === 'traffic' ? (noun ? { view: 'pacing', label: `Ver el volumen de ${noun} en Pacing`, channel: input.channel } : { view: hasSeg ? 'segmentos' : 'diagnostico', label: hasSeg ? 'Ver segmentos de tráfico' : 'Ver drivers' })
             : { view: 'diagnostico', label: 'Ver drivers' };
-        const title = k === 'cr' ? 'Investiga la caída de conversión' : k === 'aov' ? 'Investiga el cambio en el ticket promedio' : 'Investiga el menor volumen de sesiones';
+        const title = k === 'cr' ? (noun ? `Investiga la caída de la conversión de ${noun} a pedido` : 'Investiga la caída de conversión') : k === 'aov' ? 'Investiga el cambio en el ticket promedio'
+          : (noun ? `Investiga el menor volumen de ${noun}` : 'Investiga el menor volumen de sesiones');
         const missing = [];
-        if (k === 'cr' && !hasSeg) missing.push('Segmentos de GA4 (dispositivo, fuente) para ubicar dónde cae la conversión');
+        // GA4 solo aplica a Ecommerce y App: en WhatsApp y Llamadas no se pide (no existe); se investiga con el volumen diario y el calendario.
+        if (k === 'cr' && !hasSeg && !noun) missing.push('Segmentos de GA4 (dispositivo, fuente) para ubicar dónde cae la conversión');
         if (k === 'aov' && !hasProd) missing.push('Productos de venta para ver el mix y las unidades por pedido');
-        if (k === 'traffic' && !hasSeg) missing.push('Segmentos de GA4 para ver qué fuente o dispositivo mueve el tráfico');
+        if (k === 'traffic' && !hasSeg && !noun) missing.push('Segmentos de GA4 para ver qué fuente o dispositivo mueve el tráfico');
         out.push({ id: `driver_${meta.id}`, kind: 'driver', severity: 'attention', priority: 2 + i * 0.1, amount: d.contribution,
           title,
           what: `${meta.name} aporta ${money(d.contribution)} a la brecha (${pct(share, 0)} de la diferencia contra el plan).`,
-          why: 'Es la parte de la diferencia que se explica con esa pieza de Venta = Sesiones × Conversión × Ticket.',
+          why: `Es la parte de la diferencia que se explica con esa pieza de Venta = ${noun ? noun.charAt(0).toUpperCase() + noun.slice(1) : 'Sesiones'} × Conversión × Ticket.`,
           evidence: [`Plan: ${fmtDriver(d.id, d.baseline)} → Real: ${fmtDriver(d.id, d.current)}${fin(d.deltaPct) ? ` (${d.deltaPct >= 0 ? '+' : '−'}${pct(d.deltaPct)})` : ''}.`,
             `Los tres efectos suman la brecha de ${money(wp.gap)}.`],
           decomposition: 'Descomposición cuantitativa del Diagnóstico (Nivel 1, Plan contra Real).',
-          hypothesis: hypothesisText(d.id), support: sup, missing, next: dest, step: `investigate_${meta.id}`,
-          nextCheck: k === 'cr' ? 'Ubicar en qué canal, dispositivo o paso del embudo cae la conversión.' : k === 'aov' ? 'Ver si cambió el mix de productos o las unidades por pedido.' : 'Ver qué fuente o dispositivo explica el menor volumen.',
+          hypothesis: hypothesisText(d.id, input.channel), support: sup, missing, next: dest, step: `investigate_${meta.id}`,
+          nextCheck: k === 'cr' ? (noun ? `Ver si la conversión de ${noun} a pedido cae por semana y si coincide con tiempos de respuesta, asesores disponibles o falta de stock.` : 'Ubicar en qué canal, dispositivo o paso del embudo cae la conversión.')
+            : k === 'aov' ? 'Ver si cambió el mix de productos o las unidades por pedido.'
+              : (noun ? `Ver desde qué semana cae el volumen de ${noun} y si coincide con una campaña, un cambio de horario o un evento. Este canal no tiene fuente ni dispositivo: GA4 aplica a Ecommerce y App.` : 'Ver qué fuente o dispositivo explica el menor volumen.'),
           note: 'Contribución cuantitativa: no demuestra que ésta sea la causa.' });
       });
     } else if (below && wp && wp.status === 'ok' && !wp.effects) {
@@ -178,10 +192,17 @@
   }
 
   const fmtDriver = (id, v) => (!fin(v) ? '—' : id === 'cr' || id === 'conversionRate' ? `${(v * 100).toFixed(2)} %` : id === 'trafficVolume' ? Math.round(v).toLocaleString('es-MX') : `$${Math.round(v).toLocaleString('es-MX')}`);
-  const hypothesisText = (id) => (id === 'cr' || id === 'conversionRate'
-    ? 'Hipótesis a validar (no demostrada): un cambio en el embudo, el checkout, la búsqueda o la mezcla de tráfico podría estar bajando la conversión.'
-    : id === 'aov' ? 'Hipótesis a validar (no demostrada): un cambio en el mix de productos o en las unidades por pedido podría estar moviendo el ticket.'
-      : 'Hipótesis a validar (no demostrada): una fuente, campaña o dispositivo podría estar trayendo menos sesiones.');
+  const hypothesisText = (id, ch) => {
+    const noun = contactNoun(ch);
+    if (noun) return id === 'cr' || id === 'conversionRate'
+      ? `Hipótesis a validar (no demostrada): los tiempos de respuesta, los asesores disponibles, el abandono de la conversación o la falta de stock podrían estar bajando la conversión de ${noun} a pedido.`
+      : id === 'aov' ? 'Hipótesis a validar (no demostrada): un cambio en el mix de productos o en las unidades por pedido podría estar moviendo el ticket.'
+        : `Hipótesis a validar (no demostrada): una campaña, un cambio de horario o de cobertura, o un evento podrían estar trayendo menos ${noun}.`;
+    return id === 'cr' || id === 'conversionRate'
+      ? 'Hipótesis a validar (no demostrada): un cambio en el embudo, el checkout, la búsqueda o la mezcla de tráfico podría estar bajando la conversión.'
+      : id === 'aov' ? 'Hipótesis a validar (no demostrada): un cambio en el mix de productos o en las unidades por pedido podría estar moviendo el ticket.'
+        : 'Hipótesis a validar (no demostrada): una fuente, campaña o dispositivo podría estar trayendo menos sesiones.';
+  };
 
   function followFindings(input) {
     const { status: s, actions = [], referenceDate } = input;
@@ -211,6 +232,7 @@
    * Catálogo de pasos. exit(input) decide si el paso está COMPLETADO con datos reales (no por haber hecho clic).
    * deps: pasos que deben estar completados antes de que éste esté disponible.
    */
+  const reviewedBy = (i, id) => Boolean(i.progress && i.progress[id] && i.progress[id].reviewed);
   const STEPS = {
     complete_data: { title: 'Completa la información necesaria', view: 'carga', deps: [], expected: 'Datos suficientes y sin errores para que el diagnóstico sea confiable.',
       needs: ['Meta, plan y venta real del periodo'], exit: 'La preparación de datos no tiene faltantes bloqueantes ni errores, y la venta real está al día.',
@@ -221,13 +243,13 @@
       needs: ['Plan y venta real del periodo'], exit: 'El diagnóstico se calculó con los datos y filtros actuales.',
       done: (i) => Boolean(i.status.visited.diagnostico) && i.status.diagnostic.hypotheses !== null },
     investigate_cr: { title: 'Investiga la caída de conversión', view: 'diagnostico', deps: ['review_gap'], expected: 'Ubicar en qué canal, dispositivo o paso del embudo cae la conversión.',
-      needs: ['Segmentos de GA4 o datos de embudo, si existen'], exit: 'Se revisó el detalle de conversión y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+      needs: ['Segmentos de GA4 o datos de embudo, si existen'], exit: 'Revisas el detalle y eliges una hipótesis a validar; lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).', done: (i) => reviewedBy(i, 'investigate_cr'), manual: true },
     investigate_aov: { title: 'Investiga el cambio en el ticket promedio', view: 'producto', deps: ['review_gap'], expected: 'Ver si cambió el mix de productos o las unidades por pedido.',
-      needs: ['Productos de venta'], exit: 'Se revisó el mix y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+      needs: ['Productos de venta'], exit: 'Revisas el detalle y eliges una hipótesis a validar; lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).', done: (i) => reviewedBy(i, 'investigate_aov'), manual: true },
     investigate_traffic: { title: 'Investiga el menor volumen de sesiones', view: 'segmentos', deps: ['review_gap'], expected: 'Ver qué fuente o dispositivo mueve el tráfico.',
-      needs: ['Segmentos de GA4'], exit: 'Se revisó el detalle de tráfico y se eligió una hipótesis a validar (no se marca solo).', done: () => false },
+      needs: ['Segmentos de GA4'], exit: 'Revisas el detalle y eliges una hipótesis a validar; lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).', done: (i) => reviewedBy(i, 'investigate_traffic'), manual: true },
     review_channel: { title: 'Revisa el canal rezagado', view: 'pacing', deps: ['complete_data'], expected: 'Saber si el rezago es de todo el periodo o reciente.',
-      needs: ['Venta real del canal'], exit: 'Pacing abierto en ese canal.', done: () => false },
+      needs: ['Venta real del canal'], exit: 'Revisas si el rezago es de todo el periodo o reciente y lo confirmas tú con «Ya lo revisé».', done: (i) => reviewedBy(i, 'review_channel'), manual: true },
     evaluate_levers: { title: 'Evalúa las palancas para cerrar la brecha', view: 'reforecast', deps: ['complete_data'], expected: 'Cuánto hay que vender por día y qué escenarios cierran la brecha.',
       needs: ['Forecast y plan del periodo'], exit: 'El reforecast calculado para este canal y periodo.', done: (i) => Boolean(i.status.visited.reforecast) && i.status.reforecast.available },
     simulate: { title: 'Simula una recuperación', view: 'recovery', deps: ['review_gap'], expected: 'Un escenario guardado ligado a una hipótesis.', needs: ['Un diagnóstico con hipótesis'],
@@ -250,8 +272,22 @@
   STEPS.complete_data.decision = DECISION.complete_data;
   Object.keys(STEPS).forEach((k) => { STEPS[k].decision = DECISION[k]; STEPS[k].cta = CTA[k]; });
 
+  /** Definición del paso adaptada al canal: WhatsApp y Llamadas se miden en mensajes o llamadas y no tienen GA4 (fuente, dispositivo). */
+  function stepDef(id, input) {
+    const d = STEPS[id], noun = contactNoun(input && input.channel);
+    if (!noun) return d;
+    const confirm = 'Lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).';
+    if (id === 'investigate_traffic') return { ...d, title: `Investiga el menor volumen de ${noun}`, view: 'pacing', cta: `Ver el volumen de ${noun}`,
+      expected: `Ver desde qué semana cae el volumen de ${noun} y si coincide con una campaña, un cambio de horario o un evento.`,
+      needs: ['Volumen diario del canal (ya está en tu venta real)', 'Calendario de campañas y eventos, si lo llevas'], exit: `Revisas el volumen por semana contra el plan y eliges una hipótesis a validar. ${confirm}` };
+    if (id === 'investigate_cr') return { ...d, title: `Investiga la caída de la conversión de ${noun} a pedido`, view: 'diagnostico', cta: 'Ver drivers',
+      expected: `Ver si la conversión de ${noun} a pedido cae por semana y si coincide con tiempos de respuesta, asesores disponibles o falta de stock.`,
+      needs: ['Pedidos y volumen diarios del canal (ya están en tu venta real)'], exit: `Revisas la conversión por semana y eliges una hipótesis a validar. ${confirm}` };
+    return d;
+  }
+
   function buildStep(id, input, origin) {
-    const def = STEPS[id];
+    const def = stepDef(id, input);
     const done = Boolean(def.done(input));
     const blockedBy = def.deps.filter((d) => !STEPS[d].done(input));
     const started = input.progress && input.progress[id];
@@ -262,7 +298,7 @@
     else if (started) state = 'in_progress';
     else if (origin && origin.severity === 'blocking') state = 'attention';
     else state = 'available';
-    return { id, title: def.title, view: def.view, state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
+    return { id, title: def.title, view: def.view, manual: Boolean(def.manual), reviewed: Boolean(input.progress && input.progress[id] && input.progress[id].reviewed), state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
       startedAt: started ? started.at : null, origin: origin ? origin.id : null, waitingUntil: origin && origin.waitingUntil || null };
   }
 
@@ -283,7 +319,8 @@
       const f = findings.find((x) => x.step === sid);
       const st = buildStep(sid, input, f || null);
       const hit = steps.find((x) => x.id === sid);
-      const base = { ...st, title: STEPS[sid].title, cta: (hit && hit.cta) || STEPS[sid].cta, view: (hit && hit.view) || STEPS[sid].view, channel: (hit && hit.channel) || null, findingId: (hit && hit.findingId) || (f && f.id) || null, why: (hit && hit.why) || null };
+      const sd = stepDef(sid, input);
+      const base = { ...st, title: (hit && hit.title) || sd.title, cta: (hit && hit.cta) || sd.cta, view: (hit && hit.view) || sd.view, channel: (hit && hit.channel) || null, findingId: (hit && hit.findingId) || (f && f.id) || null, why: (hit && hit.why) || null };
       if (sid === 'follow_up' && base.state !== 'done' && base.state !== 'waiting') {
         const noAct = !(input.status.actions && input.status.actions.count > 0);
         if (noAct) { base.state = 'blocked'; base.blockedBy = ['plan_action']; }
