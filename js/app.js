@@ -3079,15 +3079,17 @@
       state.fc.settings.referenceDate = v;
       saveForecastSettings(); state.fc.run = null; state.rf.run = null;
       render();
+      if (state.ux.refOpen) setTimeout(() => { const i = document.getElementById('topbar-date'); if (i) i.focus(); }, 0);
       FP.ui.toast(`Reporte calculado al ${v}.`);
     },
     'fc-ref-last'() {
       if (!state.fc.lastActualDate) return;
       state.fc.settings.referenceDate = state.fc.lastActualDate;
-      saveForecastSettings(); state.fc.run = null; render();
+      state.ux.refOpen = false; saveForecastSettings(); state.fc.run = null; render();
       FP.ui.toast(`Fecha de referencia fijada en ${state.fc.lastActualDate}, último día con real.`);
     },
-    'fc-ref-today'() { delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); },
+    'ref-toggle'() { state.ux.refOpen = !state.ux.refOpen; render(); if (state.ux.refOpen) setTimeout(() => { const i = document.getElementById('topbar-date'); if (i) i.focus(); }, 0); },
+    'fc-ref-today'() { state.ux.refOpen = false; delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); },
     'fc-backtest'() {
       const run = ensureForecast();
       const planVersion = FP.planning.getOriginalPlan(state.planning.registry);
@@ -3607,8 +3609,16 @@
       const el = e.target.closest('input[data-action="glossary-search"]');
       if (el) FP.help.filterGlossary(el.value);
     });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') FP.help.close(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      FP.help.close();
+      if (state.ux.refOpen) { state.ux.refOpen = false; render(); const b = document.getElementById('topbar-ref'); if (b) b.focus(); }
+    });
+    document.addEventListener('click', (e) => {   // clic fuera del panel de fecha: se cierra
+      if (state.ux.refOpen && !e.target.closest('.hdate')) { state.ux.refOpen = false; render(); }
+    });
     root.addEventListener('hashchange', () => {
+      state.ux.refOpen = false;   // el panel de fecha se cierra al cambiar de vista
       const prev = state.view;
       readHash();
       if (prev !== state.view) {

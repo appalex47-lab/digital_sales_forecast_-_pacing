@@ -11,6 +11,11 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:420] if d and not ok else ''))
     if not ok: fails.append(n)
 U = f'http://127.0.0.1:{port}/index.html'
+async def openref(q):
+    """Abre el panel único de fecha/año del encabezado si está cerrado."""
+    if not await q.is_visible('#topbar-date'):
+        await q.click('#topbar-ref')
+
 async def seed(q):
     await q.goto(U + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
     await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1500)
@@ -63,11 +68,11 @@ async def main():
         chk('A7 el progreso de un canal no se mezcla con el de otro', step not in s4, s4)
         await q.select_option('#home-ch', 'total'); await q.wait_for_timeout(700)
         # datos desactualizados → aviso antes de las cifras
-        await q.fill('#topbar-date', '2026-10-20'); await q.dispatch_event('#topbar-date', 'change'); await q.wait_for_timeout(1500)
+        await openref(q); await q.fill('#topbar-date', '2026-10-20'); await q.dispatch_event('#topbar-date', 'change'); await q.wait_for_timeout(1500)
         bn = await q.evaluate("""()=>{const b=document.querySelector('.att__banner');const k=document.querySelector('[data-block=key]');return {has:!!b,txt:b?b.innerText:'',before:b&&k?!!(b.compareDocumentPosition(k)&4):false,finding:!!document.querySelector('#att [data-finding=data_stale]')}}""")
         chk('A8 con la venta real vieja respecto a «Datos al», un aviso aparece ANTES de las cifras y hay un hallazgo de datos desactualizados', bn['has'] and bn['before'] and bn['finding'] and 'Antes de leer las cifras' in bn['txt'], bn)
         await q.click('.att__banner [data-action="scroll-to"]'); await q.wait_for_timeout(600)
-        await q.click('#topbar-status .hdate__b[data-action="fc-ref-today"]'); await q.wait_for_timeout(1200)
+        await openref(q); await q.click('#topbar-status .hdate__b[data-action="fc-ref-today"]'); await q.wait_for_timeout(1200)
         # accesibilidad básica
         a11 = await q.evaluate("""()=>{const out=[];document.querySelectorAll('#att button,#nbs button').forEach(b=>{if(!(b.innerText||'').trim()&&!b.getAttribute('aria-label'))out.push('btn sin nombre')});
           const secs=['att','nbs'].map(id=>{const e=document.getElementById(id);return e&&e.getAttribute('aria-labelledby')&&document.getElementById(e.getAttribute('aria-labelledby'))});return {out,secs:secs.every(Boolean)}}""")

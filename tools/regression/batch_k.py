@@ -14,6 +14,11 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
 TITLES = {'inicio': 'Inicio', 'carga': 'Carga de datos', 'pacing': 'Pacing & Forecast', 'diagnostico': '¿Por qué? Diagnóstico', 'ajustes': 'Configuración de RevNavigator', 'plan': 'Plan'}
+async def openref(q):
+    """Abre el panel único de fecha/año del encabezado si está cerrado."""
+    if not await q.is_visible('#topbar-date'):
+        await q.click('#topbar-ref')
+
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); q = await b.new_page(viewport={'width': 1280, 'height': 900}); u = f'http://127.0.0.1:{port}/index.html'
@@ -50,7 +55,7 @@ async def main():
         an = await q.evaluate("(()=>{const a=document.getElementById('route-announcer');return [a.getAttribute('role'),a.getAttribute('aria-live'),a.getAttribute('aria-atomic'),getComputedStyle(a).position,a.getBoundingClientRect().width<=1]})()")
         chk('J el anunciador es role=status + aria-live=polite, está oculto a la vista y no ocupa espacio', an[0] == 'status' and an[1] == 'polite' and an[2] == 'true' and an[3] == 'absolute' and an[4] is True, an)
         await q.goto(u + '#pacing'); await q.wait_for_timeout(300)
-        await q.click('#topbar-year'); await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
+        await openref(q); await q.click('#topbar-year'); await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
         t1 = await q.evaluate("document.title")
         chk('J un cambio de filtro dentro de la misma vista no repite el anuncio ni cambia el título', t1 == 'Pacing & Forecast · RevNavigator', t1)
         # ---------- estados con región viva ----------
@@ -74,9 +79,9 @@ async def main():
         # ---------- objetivos táctiles del encabezado y el menú en móvil ----------
         m = await b.new_page(viewport={'width': 390, 'height': 800}); await prepare(m, u); await m.goto(u + '#pacing'); await m.wait_for_timeout(600)
         tt = await m.evaluate("""()=>{const r=e=>{const b=e.getBoundingClientRect();return [Math.round(b.width),Math.round(b.height)]};const st=document.getElementById('topbar-status');
-          return {year:r(document.getElementById('topbar-year')),links:[...st.querySelectorAll('a')].map(r),menu:r(document.querySelector('.menu-toggle')),bell:r(document.querySelector('.topbar__actions .icon-btn')),hdr:Math.round(document.querySelector('.app-header').getBoundingClientRect().height),navTop:Math.round(document.getElementById('app-nav').getBoundingClientRect().top),sw:document.documentElement.scrollWidth-innerWidth}}""")
+          return {year:r(document.getElementById('topbar-ref')),links:[...st.querySelectorAll('a')].map(r),menu:r(document.querySelector('.menu-toggle')),bell:r(document.querySelector('.topbar__actions .icon-btn')),hdr:Math.round(document.querySelector('.app-header').getBoundingClientRect().height),navTop:Math.round(document.getElementById('app-nav').getBoundingClientRect().top),sw:document.documentElement.scrollWidth-innerWidth}}""")
         okt = tt['year'][1] >= 44 and all(h >= 44 for w, h in tt['links']) and tt['menu'][0] >= 44 and tt['menu'][1] >= 44 and ((tt['bell'][0] >= 44 and tt['bell'][1] >= 44) or tt['bell'] == [0, 0])
-        chk('J móvil 390 px: año, píldoras, menú y notificaciones miden ≥ 44 px y el cajón del menú empieza justo bajo el encabezado, sin desborde', okt and abs(tt['hdr'] - tt['navTop']) <= 1 and tt['sw'] <= 0, tt)
+        chk('J móvil 390 px: control de fecha/año, menú y notificaciones miden ≥ 44 px y el cajón del menú empieza justo bajo el encabezado, sin desborde', okt and abs(tt['hdr'] - tt['navTop']) <= 1 and tt['sw'] <= 0, tt)
         await m.close()
         # ---------- el encabezado en dos filas y el cajón del menú siempre quedan alineados, con ratón y con pantalla táctil ----------
         bad = []
