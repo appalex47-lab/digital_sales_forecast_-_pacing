@@ -184,8 +184,10 @@ async def main():
             headerText:document.querySelector('.app-header').innerText,barInHeader:!!document.querySelector('.app-header #status-bar')}}""")
         chk('R-8 el encabezado sigue el orden marca → buscador → estado → notificaciones, y las píldoras quedan entre el buscador y las notificaciones sin solaparse', hd['kids'][:4] == ['topbar__brand', 'topbar__search', 'topbar__status', 'topbar__actions'] and hd['order'], (hd['kids'], hd['order']))
         it = hd['items']
-        chk('R-8 tres píldoras: año (selector con nombre accesible), estado de datos y estado del motor, cada una con texto y color', len(it) == 3 and it[0]['tag'] == 'SELECT' and hd['yearName'] == 'Año seleccionado' and '2026' in hd['yearOpts'] and it[1]['tag'] == 'A' and it[2]['tag'] == 'A' and it[1]['text'].startswith('Datos') and it[2]['text'].startswith('Motor:') and 'pill--' in it[1]['cls'] and 'pill--' in it[2]['cls'], hd)
-        chk('R-8 las píldoras de datos y motor son enlaces a Configuración con nombre accesible que dice a dónde llevan y objetivo ≥ 24 px', all(x['href'] == '#ajustes' and x['sec'] == 'estado' and 'Configuración de RevNavigator' in x['name'] and x['h'] >= 24 for x in it[1:]), it[1:])
+        chk('R-8 el encabezado trae el año (selector con nombre accesible) y «Datos al» (fecha); las píldoras de datos y motor ya no están ahí', len(it) == 2 and it[0]['tag'] == 'SELECT' and hd['yearName'] == 'Año seleccionado' and '2026' in hd['yearOpts'] and it[1]['tag'] == 'SPAN' and 'Datos al' in it[1]['text'] and not any(x['tag'] == 'A' for x in it), hd)
+        pl = await q.evaluate("""()=>{const a=[...document.querySelectorAll('#snav-pills a')];const foot=document.querySelector('.snav__foot'),mode=document.querySelector('.snav__mode'),pp=document.getElementById('snav-pills');
+          return {n:a.length,t:a.map(x=>x.innerText.trim()),href:a.map(x=>x.getAttribute('href')),sec:a.map(x=>x.dataset.section),name:a.map(x=>x.getAttribute('aria-label')),h:a.map(x=>Math.round(x.getBoundingClientRect().height)),cls:a.map(x=>(x.querySelector('.pill')||{className:''}).className),above:!!(pp&&mode&&(pp.compareDocumentPosition(mode)&Node.DOCUMENT_POSITION_FOLLOWING)),inFoot:!!(pp&&foot&&foot.contains(pp))}}""")
+        chk('R-8 en el menú, sobre el modo Aprendiz, van las píldoras de datos y de motor (enlaces a Configuración, con nombre accesible, texto y color, ≥ 24 px)', pl['n'] == 2 and pl['above'] and pl['inFoot'] and pl['t'][0].startswith('Datos') and pl['t'][1].startswith('Motor:') and all(h == '#ajustes' for h in pl['href']) and all(s == 'estado' for s in pl['sec']) and all('Configuración de RevNavigator' in n for n in pl['name']) and all(h >= 24 for h in pl['h']) and all('pill--' in c for c in pl['cls']), pl)
         chk('R-8 el encabezado NO trae la ficha completa (ni «Meta anual» ni «Canales configurados»)', 'Meta anual' not in hd['headerText'] and 'Canales configurados' not in hd['headerText'] and not hd['barInHeader'], hd['headerText'][:160])
         # la ficha completa existe solo en Configuración
         where = {}
@@ -198,17 +200,17 @@ async def main():
         chk('R-8 en Configuración la ficha trae las 5 cifras (Año seleccionado, Meta anual, Canales configurados, Estado de datos, Estado del motor)', all(w in tx for w in ('Año seleccionado', 'Meta anual', 'Canales configurados', 'Estado de datos', 'Estado del motor')), tx[:200])
         # las píldoras coinciden con el detalle
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(500); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
-        cmp_ = await q.evaluate("""()=>{const hs=[...document.querySelectorAll('#topbar-status .pill')].map(p=>p.className+'|'+p.innerText.trim());const ds=[...document.querySelectorAll('#status-bar .pill')].map(p=>p.className+'|'+p.innerText.trim());
+        cmp_ = await q.evaluate("""()=>{const hs=[...document.querySelectorAll('#snav-pills .pill')].map(p=>p.className+'|'+p.innerText.trim());const ds=[...document.querySelectorAll('#status-bar .pill')].map(p=>p.className+'|'+p.innerText.trim());
           return {h:hs,d:ds}}""")
         okc = cmp_['h'][0].split('|')[1] == cmp_['d'][0].split('|')[1] and cmp_['h'][0].split('|')[0] == cmp_['d'][0].split('|')[0] and cmp_['h'][1].split('|')[0] == cmp_['d'][1].split('|')[0] and cmp_['h'][1].split('|')[1].endswith(cmp_['d'][1].split('|')[1])
         chk('R-8 cada píldora del encabezado dice y colorea lo mismo que su detalle en Configuración (datos y motor)', okc, cmp_)
         # clic en la píldora → Configuración, sección «Estado»
         await q.goto(u + '#pacing'); await q.wait_for_timeout(400)
-        await q.click('#topbar-status a[aria-label^="Estado de datos"]'); await q.wait_for_timeout(700)
+        await q.click('#snav-pills a[aria-label^="Estado de datos"]'); await q.wait_for_timeout(700)
         c1 = await q.evaluate("[location.hash, !document.getElementById('view-ajustes').hidden, document.activeElement && document.activeElement.id]")
         chk('R-8 clic en la píldora de datos → abre Configuración de RevNavigator y lleva a «Estado de la herramienta»', c1 == ['#ajustes', True, 'st-estado'], c1)
         await q.evaluate("window.scrollTo(0, document.body.scrollHeight); document.activeElement.blur()"); await q.wait_for_timeout(200)
-        await q.click('#topbar-status a[aria-label^="Estado del motor"]'); await q.wait_for_timeout(700)
+        await q.click('#snav-pills a[aria-label^="Estado del motor"]'); await q.wait_for_timeout(700)
         c2 = await q.evaluate("[location.hash, document.activeElement && document.activeElement.id, Math.round(document.getElementById('st-estado').getBoundingClientRect().top) < window.innerHeight]")
         chk('R-8 ya estando en Configuración, la píldora del motor vuelve a llevar a esa sección (aunque la dirección no cambie)', c2[0] == '#ajustes' and c2[1] == 'st-estado' and c2[2] is True, c2)
         # el año se cambia desde el encabezado
@@ -233,7 +235,7 @@ async def main():
             mr = await m2.evaluate("""()=>{const r=e=>e.getBoundingClientRect();const st=r(document.getElementById('topbar-status')),brand=r(document.querySelector('.topbar__brand')),h=r(document.querySelector('.app-header')),nav=r(document.getElementById('app-nav'));
               const it=[...document.getElementById('topbar-status').children].map(e=>{const b=r(e);return b.right<=innerWidth+0.5&&b.left>=0&&b.height>=24});
               return {sw:document.documentElement.scrollWidth-innerWidth,below:st.top>=brand.bottom-1,hdrBottom:Math.round(h.bottom),navTop:Math.round(nav.top),allInside:it.every(Boolean),n:it.length}}""")
-            chk(f'R-8 {w}px: las píldoras van en una fila bajo la marca, caben en pantalla (sin desborde), son tocables y el cajón del menú empieza justo bajo el encabezado', mr['sw'] <= 0 and mr['below'] and mr['allInside'] and mr['n'] == 3 and abs(mr['hdrBottom'] - mr['navTop']) <= 1, mr)
+            chk(f'R-8 {w}px: el año y «Datos al» van en una fila bajo la marca, caben en pantalla (sin desborde), son tocables y el cajón del menú empieza justo bajo el encabezado', mr['sw'] <= 0 and mr['below'] and mr['allInside'] and mr['n'] == 2 and abs(mr['hdrBottom'] - mr['navTop']) <= 1, mr)
             await m2.close()
         wide = []
         for w in (1920, 1440, 1280, 1100, 1025, 900):

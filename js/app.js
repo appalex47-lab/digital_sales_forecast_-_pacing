@@ -3060,6 +3060,19 @@
       fc.run = null;
       render();
     },
+    /* Selector global «Datos al» (encabezado): fija la fecha de referencia que ya usan Pacing, Forecast, Reforecast, Diagnóstico y Recovery. */
+    'set-ref-date'(el) {
+      const v = el.value;
+      if (!v) { delete state.fc.settings.referenceDate; saveForecastSettings(); state.fc.run = null; render(); return; }
+      if (!Cal.isValidISODate(v)) { FP.ui.toast('Fecha inválida.'); render(); return; }
+      const y = Number(v.slice(0, 4));
+      if (y < 2000 || y > 2100) return;   // al teclear el año dígito por dígito el navegador pasa por 0002, 0020, 0202…: se ignora sin redibujar
+      if (y !== state.year) { loadYearScoped(y); refresh(); resetPeriod(); }
+      state.fc.settings.referenceDate = v;
+      saveForecastSettings(); state.fc.run = null; state.rf.run = null;
+      render();
+      FP.ui.toast(`Reporte calculado al ${v}.`);
+    },
     'fc-ref-last'() {
       if (!state.fc.lastActualDate) return;
       state.fc.settings.referenceDate = state.fc.lastActualDate;

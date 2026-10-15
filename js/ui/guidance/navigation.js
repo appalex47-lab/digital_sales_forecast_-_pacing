@@ -171,6 +171,7 @@
         <div class="snav__items" id="snav-g-${esc(g.id)}" ${open ? '' : 'hidden'}>${g.views.map((v) => item(v, G().VIEWS[v].title)).join('')}</div></div>`;
       }).join('')}
       <div class="snav__foot">
+        <div class="snav__pills" id="snav-pills" role="group" aria-label="Estado de la herramienta"></div>
         <div class="snav__mode"><span id="snav-mode-l">Modo Aprendiz</span>
           <button type="button" class="switch" role="switch" aria-checked="${learner}" aria-labelledby="snav-mode-l"
             data-action="ux-mode" data-value="${learner ? 'analyst' : 'learner'}"></button></div>

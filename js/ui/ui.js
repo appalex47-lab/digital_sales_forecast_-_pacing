@@ -47,16 +47,27 @@
       ? `${q.totals.imported} registros de ${q.totals.files} archivo${q.totals.files === 1 ? '' : 's'}${q.totals.rejected ? `, ${q.totals.rejected} filas rechazadas` : ''}`
       : 'Carga archivos o genera datos de prueba';
 
-    // Encabezado: solo las píldoras. Año = selector; datos y motor = enlaces al detalle en Configuración de RevNavigator.
+    // Encabezado: año + «Datos al» (fecha de referencia global). Las píldoras de datos y motor viven en el menú, sobre el modo Aprendiz.
     const dataKind = q ? QPILL[q.status] : 'empty', dataText = q ? q.statusText : 'Sin datos';
     const engineP = st ? { kind: st.ok ? 'ok' : 'error', text: st.ok ? 'Operativo' : 'Con fallas' } : { kind: 'na', text: 'Sin ejecutar' };
     const link = (label, kind, shown, text) => `<a class="hstatus__link" href="#ajustes" data-section="estado" aria-label="${esc(label)}: ${esc(text)}. Ver el detalle en Configuración de RevNavigator" title="Ver el detalle en Configuración de RevNavigator">${pill(kind, shown)}</a>`;
+    const pills = $('snav-pills');
+    if (pills) pills.innerHTML = `${link('Estado de datos', dataKind, dataText, dataText)}${link('Estado del motor', engineP.kind, `Motor: ${engineP.text}`, engineP.text)}`;
+    const fc = state.fc || {}, fixed = fc.settings && fc.settings.referenceDate;
+    const d0 = new Date(), todayIso = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`;
+    const refShown = fixed || (fc.run && fc.run.referenceDate) || todayIso;
+    const last = fc.lastActualDate;
     const top = $('topbar-status');
     if (top) top.innerHTML = `
       <select id="topbar-year" class="hstatus__year" data-action="set-year" aria-label="Año seleccionado">${years.map((y) =>
         `<option value="${y}" ${y === state.year ? 'selected' : ''}>${y}</option>`).join('')}</select>
-      ${link('Estado de datos', dataKind, dataText, dataText)}
-      ${link('Estado del motor', engineP.kind, `Motor: ${engineP.text}`, engineP.text)}`;
+      <span class="hdate" role="group" aria-label="Fecha de los datos del reporte">
+        <label class="hdate__l" for="topbar-date">Datos al</label>
+        <input type="date" id="topbar-date" class="hdate__in" value="${esc(refShown)}" data-action="set-ref-date" aria-describedby="topbar-date-h">
+        ${last && last !== refShown ? `<button type="button" class="hdate__b hdate__b--last" data-action="fc-ref-last" title="Ir al último día con venta real (${esc(last)})" aria-label="Ir al último día con venta real, ${esc(last)}">Último real</button>` : ''}
+        ${fixed ? `<button type="button" class="hdate__b" data-action="fc-ref-today" title="Quitar la fecha fija y usar hoy" aria-label="Volver a hoy">Hoy</button>` : ''}
+        <span class="visually-hidden" id="topbar-date-h">${fixed ? 'Fecha fija: todo el reporte se calcula como si fuera ese día.' : 'Sin fecha fija: el reporte usa el día de hoy.'}</span>
+      </span>`;
     const bar = $('status-bar');   // la ficha completa solo existe en Configuración de RevNavigator
     if (bar) bar.innerHTML = `
       <div class="status-item"><dt><label for="year-select">Año seleccionado</label></dt>

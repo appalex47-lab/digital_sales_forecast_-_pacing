@@ -679,6 +679,17 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
 .hstatus__year { height: 26px; padding: 0 22px 0 12px; border-radius: var(--ds-r-pill); border: 1px solid rgba(255, 255, 255, .28); background-color: rgba(255, 255, 255, .12);
   color: var(--ds-on-nav); font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; color-scheme: dark; }
 .hstatus__year option { color: var(--ds-text); background: var(--ds-surface); }
+.hdate { display: inline-flex; align-items: center; gap: 6px; }
+.hdate__l { font-size: var(--ds-fs-caption); font-weight: 600; color: var(--ds-on-nav); opacity: .9; white-space: nowrap; }
+.hdate__in { height: 26px; padding: 0 8px; border-radius: var(--ds-r-pill); border: 1px solid rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .12); color: var(--ds-on-nav);
+  font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; color-scheme: dark; min-width: 0; }
+.hdate__b { height: 26px; padding: 0 10px; border-radius: var(--ds-r-pill); border: 1px solid rgba(255, 255, 255, .28); background: transparent; color: var(--ds-on-nav);
+  font: inherit; font-size: var(--ds-fs-caption); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hdate__b:hover { background: rgba(255, 255, 255, .16); }
+.hdate__in:focus-visible, .hdate__b:focus-visible { outline: 2px solid var(--ds-on-nav); outline-offset: 2px; }
+.snav__pills { display: flex; flex-wrap: wrap; gap: 6px; padding: var(--ds-s2) var(--ds-s3); }
+@media (max-width: 480px) { .hdate__l { display: none; } .hdate__b { padding: 0 7px; } .hdate__b--last { display: none; } }   /* «Último real» sigue en Pacing */
+@media (pointer: coarse) { .hdate__in, .hdate__b { height: 44px; } }
 @media (max-width: 1024px) { .topbar__search { display: none; } .topbar { grid-template-columns: auto 1fr auto; } }
 /* Con el menú en cajón (≤ 860 px) las píldoras pasan a una segunda fila del encabezado; --ds-header-h crece para que el cajón siga empezando bajo el encabezado */
 @media (max-width: 860px) {
@@ -840,7 +851,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 @media (max-width: 860px) { :root { --ds-header-h: 90px; } }
 @media (max-width: 760px), (max-width: 860px) and (pointer: coarse) { :root { --ds-header-h: 108px; } }
 /* ≤ 340 px: las tres píldoras pasan a dos filas de 44 px + 4 px entre ellas: 56 + 92 + 8 = 156 */
-@media (max-width: 340px) { :root { --ds-header-h: 156px; } }
+@media (max-width: 340px) { :root { --ds-header-h: 108px; } }
 
 
 /* =========================================================
