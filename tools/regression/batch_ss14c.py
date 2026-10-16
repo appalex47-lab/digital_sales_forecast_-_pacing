@@ -21,7 +21,7 @@ async def main():
         chk('V1 el subtítulo de Meta anual es corto (≤120 caracteres) y el resto va en un desplegable', 0 < d <= 120 and await q.evaluate("!!document.getElementById('targets-more')"), d)
         chk('V2 sin datos: guía de 3+ pasos «Cómo llenarlo si no tienes datos» dentro de Supuestos', await q.evaluate("(()=>{const e=document.querySelector('#startup-assumptions #ss-howto');return !!e&&e.querySelectorAll('li').length>=4})()"))
         t = await q.evaluate("document.getElementById('ss-cr').innerText + document.querySelector('#startup-assumptions').innerText")
-        chk('V3 define el tráfico: WhatsApp = mensajes recibidos, Llamadas = llamadas contestadas', 'mensajes recibidos' in t and 'llamadas contestadas' in t, t[-300:])
+        chk('V3 define el tráfico: WhatsApp = conversaciones iniciadas, Llamadas = llamadas entrantes', 'conversaciones iniciadas' in t and 'llamadas entrantes' in t, t[-300:])
         chk('V4 hay entrada de Ayuda «Supuestos de arranque» con botón ?', await q.evaluate("!!FP.help.entry('supuestosArranque') && !!document.querySelector('#ss-howto .help-dot')"))
         # plan desactualizado
         await q.evaluate("FP.app.actions['plan-preview']()"); await q.wait_for_timeout(600)

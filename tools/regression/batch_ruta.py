@@ -90,7 +90,7 @@ async def main():
         await q.click('#nbs button.btn--primary'); await q.wait_for_timeout(1500)
         await q.click('[data-action="route-back"]'); await q.wait_for_timeout(1500)
         W = await q.evaluate("""()=>{const n=document.getElementById('nbs');return {step:n.dataset.step,txt:n.innerText,steps:[...n.querySelectorAll('.nbs__st')].map(e=>e.dataset.step+':'+e.dataset.state)}}""")
-        chk('R19 WhatsApp: tras revisar la brecha, el paso es de juicio, habla de «mensajes» y NO pide segmentos de GA4', W['step'].startswith('investigate_') and 'mensajes' in W['txt'] and 'GA4' not in W['txt'], W)
+        chk('R19 WhatsApp: tras revisar la brecha, el paso es de juicio, habla de «conversaciones» y NO pide segmentos de GA4', W['step'].startswith('investigate_') and 'conversaciones' in W['txt'] and 'GA4' not in W['txt'], W)
         await q.click('#nbs button.btn--primary'); await q.wait_for_timeout(1500)
         T = await q.evaluate("""()=>{const o=document.querySelector('.route-origin');return {hash:location.hash,txt:o?o.innerText:'',btn:!!document.querySelector('.route-origin [data-action="route-reviewed"]'),done:o&&o.dataset.done,ch:FP.app.state.ux.ctx.channel}}""")
         chk('R20 el paso de juicio NO se completa solo: la barra pide «Ya lo revisé» (con hipótesis opcional) y conserva el canal', T['btn'] and T['done'] == '0' and 'Ya lo revisé' in T['txt'] and T['ch'] == 'whatsapp', T)

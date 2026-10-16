@@ -199,7 +199,7 @@
       caveats: 'Una venta menor no dice por sí sola si faltó volumen, conversión o ticket: para eso está el diagnóstico.', glossary: true }),
     e('orders', 'Pedidos', 'Número de órdenes.', { formula: 'Pedidos = Volumen × CR', glossary: true,
       caveats: 'En el plan y en escenarios los pedidos se derivan; no se capturan a mano.' }),
-    e('trafficVolume', 'Volumen', 'Sesiones (Ecommerce, App), mensajes o contactos (WhatsApp) o llamadas (Llamadas).',
+    e('trafficVolume', 'Volumen', 'Sesiones (Ecommerce, App), conversaciones iniciadas (WhatsApp) o llamadas entrantes (Llamadas).',
       { formula: 'Dato cargado; en escenarios: Volumen × (1 + Δ%)', glossary: true,
         interpretation: 'Más volumen con la misma conversión y ticket produce más venta, en proporción.',
         caveats: 'El volumen de cada canal mide cosas distintas: no se comparan entre canales.' }),

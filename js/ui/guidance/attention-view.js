@@ -199,9 +199,18 @@
   }
 
   /** Barra «Vienes de Inicio» sobre el módulo destino: hallazgo, contexto, avance, regreso y siguiente paso. */
+  /** Recovery y Medir: lo que anotaste al revisar (solo lectura; viene del progreso personal de la ruta). */
+  function notesHtml(o) {
+    const { esc } = H(), prog = progressFor(o.key), STEPS = FP.attentionEngine.STEPS;
+    const rows = Object.keys(prog).filter((id) => prog[id] && prog[id].reviewed && prog[id].reviewed.note).map((id) => `<li data-note-step="${esc(id)}"><strong>${esc((STEPS[id] || {}).title || id)}:</strong> «${esc(prog[id].reviewed.note)}»</li>`);
+    if (!rows.length) return '';
+    return `<div class="ux-wrap"><div class="route-origin route-origin--notes" data-notes="1"><p class="route-origin__t"><strong>Lo que anotaste al revisar</strong> <span class="chip">${esc(o.ctxLabel)}</span><span class="chip">${esc(o.periodLabel)}</span></p>
+      <ul class="route-origin__notes">${rows.join('')}</ul><p class="field__hint">Son tus hipótesis por validar, no resultados. Las guardaste en este navegador.</p></div></div>`;
+  }
   function originHtml(state, status) {
     loadOrigin(state);
     const o = state.ux.origin;
+    if (o && o.view !== state.view && (state.view === 'recovery' || state.view === 'medir')) return notesHtml(o);
     if (!o || o.view !== state.view) return '';
     const { esc } = H();
     const STEPS = FP.attentionEngine.STEPS;
