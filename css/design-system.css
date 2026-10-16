@@ -1691,3 +1691,5 @@ tr.is-evidence { outline-offset: -3px; }
 /* Fase 2 · marcas de la ruta activa en el menú */
 .app-nav .snav__hint { margin-left: auto; flex: none; font-size: 11px; font-weight: 650; line-height: 1; padding: 3px 7px; border-radius: 999px; background: var(--ds-accent-soft); color: var(--ds-accent); white-space: nowrap; }
 .app-nav .snav__toggle[data-route-hint]:not([aria-expanded="true"])::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ds-accent); flex: none; margin-left: 6px; }
+.route-origin__notes { margin: 6px 0 0; padding-left: 18px; }
+.route-origin__notes li { margin: 2px 0; }

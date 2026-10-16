@@ -29,6 +29,15 @@ async def run():
         chk('N-menu las marcas siguen mientras la ruta está activa, aunque estés en otra vista, y sin desborde', mh2['n']>=1 and not mh2['ov'], mh2)
         await q.evaluate("FP.attentionView.clearOrigin(FP.app.state); FP.app.render&&FP.app.render()"); await q.wait_for_timeout(500)
         chk('N-menu sin ruta activa no hay marcas', await q.evaluate("document.querySelectorAll('.app-nav .snav__hint').length")==0)
+        # Notas de revisión visibles en Recovery y Medir (solo lectura)
+        await q.goto(U+'#inicio'); await q.wait_for_timeout(900); await q.evaluate(NOTOUR); await scale(q); await q.evaluate("FP.app.render&&FP.app.render()")
+        key=await q.evaluate("document.querySelector('#nbs [data-key]').dataset.key")
+        await q.evaluate("([k])=>{const b=document.createElement('button');b.dataset.action='route-go';b.dataset.route='investigate_cr';b.dataset.step='investigate_cr';b.dataset.view='diagnostico';b.dataset.key=k;document.body.appendChild(b);b.click();b.remove()}",[key]); await q.wait_for_timeout(900)
+        await q.evaluate("([k])=>{FP.attentionView.markReviewed(k,'investigate_cr','bajó la conversión desde la campaña X')}",[key])
+        for v in ['recovery','medir']:
+            await q.goto(U+'#'+v); await q.wait_for_timeout(900)
+            nt=await q.evaluate("(()=>{const n=document.querySelector('[data-notes]');return n?n.innerText:null})()")
+            chk(f'N-notas en #{v} se ven las notas de revisión (solo lectura)', bool(nt) and 'campaña X' in nt and 'Lo que anotaste' in nt, nt)
         # Fase 6: fecha fuera de la venta real → aviso y regreso
         await q.goto(U+'#inicio'); await q.wait_for_timeout(900)
         await q.click('#topbar-ref'); await q.fill('#topbar-date','2025-06-01'); await q.dispatch_event('#topbar-date','change'); await q.wait_for_timeout(900); await q.keyboard.press('Escape')
