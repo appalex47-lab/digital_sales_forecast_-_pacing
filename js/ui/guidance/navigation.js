@@ -183,6 +183,22 @@
     document.body.dataset.view = cur;
   }
 
+  /** Fase 2 · el menú conoce la ruta activa: marca la vista del paso actual («Paso N de M») y la del siguiente («Sigue: paso N+1»). Solo añade marcas; no rehace el menú. */
+  function markRoute(state) {
+    const nav = $('app-nav'); if (!nav) return;
+    nav.querySelectorAll('.snav__hint').forEach((e) => e.remove());
+    nav.querySelectorAll('[data-route-hint]').forEach((e) => e.removeAttribute('data-route-hint'));
+    const o = state.ux && state.ux.origin; if (!o || !o.chain || !o.chain.length) return;
+    const i = o.chain.findIndex((c) => c.id === o.step); if (i < 0) return;
+    const put = (view, text) => {
+      const a = nav.querySelector(`.snav__item[data-nav="${view}"]`); if (!a || a.querySelector('.snav__hint')) return;
+      a.insertAdjacentHTML('beforeend', `<span class="snav__hint">${text}</span>`);
+      const grp = a.closest('.snav__group'), t = grp && grp.querySelector('.snav__toggle'); if (t) t.setAttribute('data-route-hint', '1');
+    };
+    put(o.view, `Paso ${i + 1} de ${o.chain.length}`);
+    const nx = o.chain[i + 1]; if (nx && nx.view !== o.view && nx.view !== 'inicio') put(nx.view, `Sigue: paso ${i + 2}`);
+  }
+
   /* ---------- Encabezado homologado de cada pantalla ----------
      Mismo orden en las 21 vistas: ceja (grupo · pregunta) → título (nombre del menú) + frase de estado → «Qué hay aquí» → «Qué hago aquí» →
      «Detalle» (el título y la descripción propios de la pantalla, sin perder texto) → contexto → aviso de calidad. El siguiente paso va al final de la página. */
@@ -335,5 +351,5 @@
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
   }
 
-  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, toggleGroup, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
+  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, markRoute, toggleGroup, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
 })(typeof window !== 'undefined' ? window : globalThis);

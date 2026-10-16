@@ -973,6 +973,7 @@
     const status = FP.contextEngine.collectStatus(state);
     FP.navigation.renderContextBar(state, status);
     if (FP.attentionView) FP.attentionView.renderOrigin(state, status);
+    if (FP.navigation && FP.navigation.markRoute) FP.navigation.markRoute(state);
     const exp = document.getElementById(`ux-exp-${state.view}`);
     if (exp) exp.innerHTML = FP.help.explainer(state.view, u.mode);
     if (FP.whyHub) FP.whyHub.render(state.view);
