@@ -190,7 +190,7 @@
               ${cs.type === 'benchmark' && !String(cs.ref || '').trim() && a.conversionRate ? '<span class="field__hint neg">Falta fuente y año.</span>' : ''}</td></tr>`;
         }).join('')}
       </tbody></table></div>
-      <p class="field__hint">El CR es pedidos ÷ tráfico, y el tráfico se cuenta distinto en cada canal: <strong>Ecommerce y App = sesiones, WhatsApp = mensajes recibidos, Llamadas = llamadas contestadas</strong>. Por eso el CR se captura por canal. La app no trae benchmarks: si usas uno, captura su fuente y año.</p></div>`;
+      <p class="field__hint">El CR es pedidos ÷ tráfico, y el tráfico se cuenta distinto en cada canal: <strong>Ecommerce y App = sesiones, WhatsApp = conversaciones iniciadas, Llamadas = llamadas entrantes</strong>. Por eso el CR se captura por canal. La app no trae benchmarks: si usas uno, captura su fuente y año.</p></div>`;
 
     return `<details class="ds-accordion ds-accordion--plain" id="startup-assumptions" ${open ? 'open' : ''}>
       <summary><span>Supuestos de arranque${data ? '' : ' · guía para llenar lo que aún no tienes'}</span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>

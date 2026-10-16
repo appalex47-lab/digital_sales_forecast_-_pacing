@@ -100,8 +100,8 @@
     return out;
   }
 
-  /** Canales de contacto (WhatsApp, Llamadas): su «volumen» son mensajes o llamadas, no sesiones; GA4 (fuente, dispositivo) no aplica. */
-  const CONTACT = { whatsapp: 'mensajes', llamadas: 'llamadas' };
+  /** Canales de contacto (WhatsApp, Llamadas): su «volumen» son conversaciones iniciadas o llamadas entrantes, no sesiones; GA4 (fuente, dispositivo) no aplica. */
+  const CONTACT = { whatsapp: 'conversaciones', llamadas: 'llamadas' };
   const contactNoun = (ch) => CONTACT[ch] || null;
   /** ¿Hay segmentos de GA4 para este canal? Con «total» basta que algún canal los tenga (cubren Ecommerce y App, no el resto). */
   function hasSegFor(input) {
@@ -272,7 +272,7 @@
   STEPS.complete_data.decision = DECISION.complete_data;
   Object.keys(STEPS).forEach((k) => { STEPS[k].decision = DECISION[k]; STEPS[k].cta = CTA[k]; });
 
-  /** Definición del paso adaptada al canal: WhatsApp y Llamadas se miden en mensajes o llamadas y no tienen GA4 (fuente, dispositivo). */
+  /** Definición del paso adaptada al canal: WhatsApp y Llamadas se miden en conversaciones iniciadas o llamadas entrantes y no tienen GA4 (fuente, dispositivo). */
   function stepDef(id, input) {
     const d = STEPS[id], noun = contactNoun(input && input.channel);
     if (!noun) return d;
