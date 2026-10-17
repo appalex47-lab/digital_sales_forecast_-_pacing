@@ -55,7 +55,7 @@
       <thead><tr><th>Canal</th><th class="num">Meta anual ${state.year}</th><th>Origen</th></tr></thead>
       <tbody>${rows}<tr class="row-total"><td><strong>Total digital</strong></td><td class="num">${t.annual.revenue === null ? 'Sin meta' : money(t.annual.revenue)}</td><td>${t.annual.revenue === null ? '—' : 'Meta del usuario'}</td></tr></tbody></table></div>
       <div class="btn-row">
-        <button type="button" class="btn btn--primary" data-action="plan-preview" ${hasAny ? '' : 'disabled'}>Generar vista previa</button>
+        <button type="button" class="btn btn--primary" data-action="plan-preview" ${hasAny ? '' : 'disabled title="Primero captura metas o ventas para distribuir"'}>Generar vista previa</button>
         ${hasAny ? '' : '<button type="button" class="btn" data-action="sample-targets">Usar metas de ejemplo</button>'}
         <a class="btn" href="#resumen">Editar metas en Resumen</a>
       </div>

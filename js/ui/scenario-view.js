@@ -114,7 +114,7 @@
           <select id="rc-type" data-action="rc-draft" data-key="type">${Object.entries(C().recovery.scenarioTypes).map(([k, l]) =>
             `<option value="${k}" ${d.type === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
         <div class="field"><span class="field__hint">&nbsp;</span><div class="btn-row">
-          <button type="button" class="btn btn--primary" data-action="rc-save-scenario" ${r && r.valid ? '' : 'disabled'}>${d.supersedes ? `Guardar como nueva versión de ${esc(d.supersedes)}` : 'Guardar escenario'}</button>
+          <button type="button" class="btn btn--primary" data-action="rc-save-scenario" ${r && r.valid ? '' : 'disabled title="Primero corrige lo que marca el escenario como no válido"'}>${d.supersedes ? `Guardar como nueva versión de ${esc(d.supersedes)}` : 'Guardar escenario'}</button>
           <button type="button" class="btn btn--ghost" data-action="rc-draft-reset">Limpiar</button></div></div>
       </div>`;
   }

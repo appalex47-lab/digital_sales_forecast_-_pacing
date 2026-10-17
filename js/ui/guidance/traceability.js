@@ -33,10 +33,14 @@
       node('hypothesis', 'Hipótesis', null, action.hypothesisId || '—', null, action.hypothesis || '', 'Requiere investigación'),
       node('scenario', 'Escenario', 'scenario', sc ? `${sc.scenarioId} · ${sc.name}` : '—', null, sc ? JSON.stringify(sc.inputs) : '', sc ? `Simulación del ${sc.createdAt.slice(0, 10)}` : ''),
       node('action', 'Acción', null, `${action.actionId} · ${action.title}`, null, `${action.status}${action.owner ? ` · ${action.owner}` : ''}`, 'Plan de acción'),
+      node('decision', 'Decisión', null, action.decision ? action.decision.decision : 'Sin decisión registrada', null,
+        action.decision ? `Objetivo: ${action.decision.objective} · ${action.decision.decidedBy}, ${action.decision.decidedAt}${action.decision.successIndicator ? ` · Éxito: ${action.decision.successIndicator}` : ''}` : '', 'Registro de decisión'),
       node('impact', 'Impacto simulado', 'scenario', 'Venta incremental simulada', action.expectedImpact ? action.expectedImpact.incrementalValue : null,
         action.expectedImpact && fin(action.expectedImpact.recoveryPercent) ? `${(action.expectedImpact.recoveryPercent * 100).toFixed(1)} % del gap` : '', 'Escenario (cálculo determinístico)'),
       node('observed', 'Resultado observado', 'observed', last ? last.statement : 'Sin medición', last ? last.observedImpact.value : null,
-        last ? `${last.observedDays} de ${last.windowDays} días con real` : '', last ? `Medición del ${last.measurementDate}` : '')
+        last ? `${last.observedDays} de ${last.windowDays} días con real` : '', last ? `Medición del ${last.measurementDate}` : ''),
+      node('conclusion', 'Conclusión', null, action.conclusion ? ({ keep: 'Mantener', adjust: 'Ajustar', stop: 'Detener' }[action.conclusion.outcome] || action.conclusion.outcome) : 'Sin conclusión documentada', null,
+        action.conclusion ? `${action.conclusion.justification} (${action.conclusion.decidedBy}, ${action.conclusion.decidedAt})` : '', 'Conclusión de la persona responsable')
     ];
     return nodes.map((n, i) => ({ ...n, linkedTo: nodes[i + 1] ? nodes[i + 1].id : null }));
   }

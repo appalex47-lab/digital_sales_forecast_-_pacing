@@ -13,8 +13,8 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
-Qs = {'Planear': '¿Qué quiero alcanzar?', 'Monitorear': '¿Cómo voy?', 'Diagnosticar': '¿Por qué?', 'Recuperar': '¿Qué hago?', 'Medir y aprender': '¿Funcionó?'}
-VIEWS = {'planear': ['carga', 'calidad', 'resumen', 'plan', 'estacionalidad', 'datos', 'configuracion', 'proyeccion'], 'monitorear': ['pacing', 'cambios'], 'diagnosticar': ['diagnostico', 'producto', 'segmentos', 'analisis', 'clientes'], 'recuperar': ['reforecast', 'recovery'], 'medir': ['medir', 'narrativa', 'paquete']}
+Qs = {'Datos': '¿Con qué datos cuento?', 'Planear': '¿Qué quiero alcanzar?', 'Monitorear': '¿Cómo voy?', 'Diagnosticar': '¿Por qué?', 'Recuperar': '¿Qué hago?', 'Medir y aprender': '¿Funcionó?'}
+VIEWS = {'datosgrp': ['carga', 'calidad', 'datos'], 'planear': ['resumen', 'plan', 'estacionalidad', 'configuracion', 'proyeccion'], 'monitorear': ['pacing', 'cambios'], 'diagnosticar': ['diagnostico', 'producto', 'segmentos', 'analisis', 'clientes'], 'recuperar': ['reforecast', 'recovery'], 'medir': ['medir', 'narrativa', 'paquete']}
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
@@ -30,7 +30,7 @@ async def main():
         crumb = await q.evaluate("document.querySelector('.breadcrumbs').textContent.replace(/\\s+/g,' ').trim()")
         chk('M3 la ruta de Pacing dice «Inicio › Monitorear · ¿Cómo voy? › Pacing & Forecast»', '¿Cómo voy?' in crumb and 'Monitorear' in crumb, crumb)
         await q.goto(u + '#carga'); await q.wait_for_timeout(400)
-        chk('M3 y en Carga dice la pregunta de Planear', '¿Qué quiero alcanzar?' in await q.evaluate("document.querySelector('.breadcrumbs').textContent"))
+        chk('M3 y en Carga dice la pregunta de Datos', '¿Con qué datos cuento?' in await q.evaluate("document.querySelector('.breadcrumbs').textContent"))
         bad = []
         for w in (390, 360, 320):
             await q.set_viewport_size({'width': w, 'height': 800}); await q.evaluate("document.body.classList.add('nav-open')"); await q.wait_for_timeout(250)

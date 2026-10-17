@@ -15,29 +15,92 @@
   const SEV_LABEL = { blocking: 'Bloquea el análisis', attention: 'Requiere atención', warning: 'Aviso', info: 'Para saber', waiting: 'En espera' };
   const SEV_BADGE = { blocking: 'hyp', attention: 'forecast', warning: 'forecast', info: '', waiting: '' };
 
-  /* ---------- Progreso personal (por periodo y canal) ---------- */
+  /* ---------- Progreso personal (por periodo y canal, y por la versión de los datos que lo originaron) ----------
+   * Dónde vive: localStorage de ESTE navegador (clave fp.route.v1). No se sincroniza con la nube ni con el equipo.
+   * Cada revisión («Ya lo revisé») guarda la huella (`sig`) de los datos relevantes de su contexto: venta real y plan del periodo y canal
+   * (valores, no nombres de archivo). Si esa huella cambia, la revisión deja de figurar como vigente (se conserva en `staleReview` y,
+   * al volver a revisar, pasa a `past`). Reemplazar un archivo con los MISMOS valores no invalida nada. Registros anteriores sin huella:
+   * no se puede saber si siguen vigentes, así que se piden de nuevo y se dice así. */
+  const MAX_CTX = 150;                      // contextos guardados (se descarta el MENOS reciente, nunca el que se acaba de usar)
   const ctxKey = (state, h, S) => `${state.year}|${(S && S.period ? S.period.type + ':' + S.period.key : h.periodType + ':' + (h.periodKey || ''))}|${(S && S.channel) || h.channel || 'total'}`;
-  function readAll() { try { return JSON.parse(root.localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } }
-  function progressFor(key) { return readAll()[key] || {}; }
-  function markStarted(key, stepId, origin) {
-    if (!key || !stepId) return;
-    try {
-      const all = readAll(); const cur = all[key] || {};
-      if (!cur[stepId]) cur[stepId] = { at: new Date().toISOString(), from: origin || null };
-      all[key] = cur;
-      const keys = Object.keys(all); if (keys.length > 60) delete all[keys[0]];   // acota el tamaño
-      root.localStorage.setItem(KEY, JSON.stringify(all));
-    } catch (e) { /* sin almacenamiento: la ruta se calcula igual, solo no recuerda qué paso se abrió */ }
+  let mem = null, lastError = null;         // copia en memoria cuando el guardado falla (para no perder lo hecho y poder reintentar)
+  function readAll() {
+    if (mem) return mem;
+    try { return JSON.parse(root.localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  const touchedAt = (ctx) => Object.values(ctx || {}).reduce((m, e) => Math.max(m, Date.parse((e && e.reviewed && e.reviewed.at) || (e && e.at) || 0) || 0), 0);
+  /** Escribe todo el progreso. Devuelve true solo si el almacenamiento confirmó; si falla, queda en memoria y se puede reintentar. */
+  function writeAll(all) {
+    const keys = Object.keys(all);
+    if (keys.length > MAX_CTX) keys.sort((a, b) => touchedAt(all[a]) - touchedAt(all[b])).slice(0, keys.length - MAX_CTX).forEach((k) => { delete all[k]; });
+    try { root.localStorage.setItem(KEY, JSON.stringify(all)); mem = null; lastError = null; return true; }
+    catch (e) { mem = all; lastError = (e && e.message) || 'sin espacio o sin permiso de almacenamiento'; return false; }
+  }
+  const saveStatus = () => ({ unsaved: Boolean(mem), error: lastError });
+  let lastToast = 0;
+  function warnSaveFailed() {
+    const now = Date.now(); if (now - lastToast < 20000) return; lastToast = now;
+    if (FP.ui && FP.ui.toast) FP.ui.toast(`No se pudo guardar tu avance en este navegador (${lastError}). Sigue aquí mientras no cierres la pestaña; libera espacio o permite el almacenamiento y usa «Reintentar guardado».`);
+  }
+  function retrySave() {
+    if (!mem) return { ok: true, already: true };
+    const ok = writeAll(mem);
+    if (!ok) warnSaveFailed();
+    return { ok };
   }
 
-  /** Confirmación personal de un paso de juicio (elegir una hipótesis): solo tú puedes saber que ya lo revisaste. Se guarda en este navegador. */
-  function markReviewed(key, stepId, note) {
-    if (!key || !stepId) return;
+  /** Huella determinista de los datos relevantes de un contexto (año|tipo:periodo|canal): venta real y plan vigentes del periodo y canal. null = no se puede determinar. */
+  function parseKey(key) { const [year, pp = '', channel = 'total'] = String(key).split('|'); const i = pp.indexOf(':'); return { year, ptype: pp.slice(0, i), pkey: pp.slice(i + 1), channel }; }
+  function fnv(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }
+  function dataSig(state, key) {
     try {
-      const all = readAll(); const cur = all[key] || {}; const e = cur[stepId] || { at: new Date().toISOString() };
-      e.reviewed = { at: new Date().toISOString(), note: String(note || '').slice(0, 280) }; cur[stepId] = e; all[key] = cur;
-      root.localStorage.setItem(KEY, JSON.stringify(all));
-    } catch (e) { /* sin almacenamiento: el paso se queda como en curso */ }
+      const DS = FP.dataStore, st = state && state.store; if (!DS || !st || !st.actual || !st.plan) return null;
+      const k = parseKey(key), prefix = (k.ptype === 'month' || k.ptype === 'year') && k.pkey ? k.pkey : k.year;
+      const lines = [];
+      ['actual', 'plan'].forEach((t) => {
+        DS.resolveLatest(st, t).forEach((r) => {
+          if (!r.date || !String(r.date).startsWith(prefix)) return;
+          if (k.channel !== 'total' && r.channel !== k.channel) return;
+          lines.push(`${t}|${r.key}|${DS.valuesSig(r)}`);
+        });
+      });
+      lines.sort();
+      const sig = `${lines.length}:${fnv(lines.join('\n'))}`;
+      return sig;
+    } catch (e) { return null; }
+  }
+
+  /** Progreso de un contexto. Con `state`, las revisiones cuyos datos cambiaron (o no se pueden comprobar) salen como `staleReview`, no como `reviewed`. */
+  function progressFor(key, state) {
+    const raw = readAll()[key] || {};
+    if (!state) return raw;
+    const cur = dataSig(state, key), out = {};
+    Object.keys(raw).forEach((id) => {
+      const e = raw[id];
+      if (!e || !e.reviewed) { out[id] = e; return; }
+      if (cur !== null && e.reviewed.sig === cur) { out[id] = e; return; }
+      const { reviewed, ...rest } = e;
+      out[id] = { ...rest, staleReview: { ...reviewed, why: cur === null ? 'undetermined' : (reviewed.sig ? 'changed' : 'unknown') } };
+    });
+    return out;
+  }
+  function markStarted(key, stepId, origin, state) {
+    if (!key || !stepId) return;
+    const all = readAll(); const cur = all[key] || {};
+    if (!cur[stepId]) cur[stepId] = { at: new Date().toISOString(), from: origin || null };
+    all[key] = cur;
+    if (!writeAll(all)) warnSaveFailed();
+  }
+
+  /** Confirmación personal de un paso de juicio (elegir una hipótesis): solo tú puedes saber que ya lo revisaste. Guarda la huella de los datos vigentes. */
+  function markReviewed(key, stepId, note, state) {
+    if (!key || !stepId) return { ok: false };
+    const all = readAll(); const cur = all[key] || {}; const e = cur[stepId] || { at: new Date().toISOString() };
+    if (e.reviewed) { e.past = [...(e.past || []), e.reviewed].slice(-10); }   // la revisión anterior se conserva como historial
+    e.reviewed = { at: new Date().toISOString(), note: String(note || '').slice(0, 280), sig: state ? dataSig(state, key) : null };
+    cur[stepId] = e; all[key] = cur;
+    const ok = writeAll(all); if (!ok) warnSaveFailed();
+    return { ok };
   }
 
   /* ---------- Entrada del motor a partir de lo que ya calculó la app ---------- */
@@ -64,7 +127,7 @@
     const st = { ...status, forecast };
     const pm = FP.productStore && FP.productStore.available && FP.productStore.available() ? FP.productStore.meta : null;
     return { referenceDate: run.referenceDate, year: state.year, channel: S.channel, segmentChannels: segmentChannels(state), status: st, readiness: ready, summary: S, thresholds: run.settings && run.settings.pacingThresholds,
-      actions: plan.actions || [], measuredActionIds: (plan.measurements || []).map((m) => m.actionId), hasProducts: Boolean(pm && pm.batches), progress: progressFor(ctxKey(state, h, S)) };
+      actions: plan.actions || [], measuredActionIds: (plan.measurements || []).map((m) => m.actionId), hasProducts: Boolean(pm && pm.batches), progress: progressFor(ctxKey(state, h, S), state) };
   }
 
   /* ---------- Piezas de HTML ---------- */
@@ -200,24 +263,29 @@
 
   /** Barra «Vienes de Inicio» sobre el módulo destino: hallazgo, contexto, avance, regreso y siguiente paso. */
   /** Recovery y Medir: lo que anotaste al revisar (solo lectura; viene del progreso personal de la ruta). */
-  function notesHtml(o) {
-    const { esc } = H(), prog = progressFor(o.key), STEPS = FP.attentionEngine.STEPS;
-    const rows = Object.keys(prog).filter((id) => prog[id] && prog[id].reviewed && prog[id].reviewed.note).map((id) => `<li data-note-step="${esc(id)}"><strong>${esc((STEPS[id] || {}).title || id)}:</strong> «${esc(prog[id].reviewed.note)}»</li>`);
+  const dayLbl = (iso) => String(iso || '').slice(0, 10);
+  function notesHtml(o, state) {
+    const { esc } = H(), prog = progressFor(o.key, state), STEPS = FP.attentionEngine.STEPS;
+    const rows = Object.keys(prog).filter((id) => prog[id] && ((prog[id].reviewed && prog[id].reviewed.note) || (prog[id].staleReview && prog[id].staleReview.note))).map((id) => {
+      const stale = !prog[id].reviewed && prog[id].staleReview, r = prog[id].reviewed || stale;
+      return `<li data-note-step="${esc(id)}"${stale ? ' data-stale="1"' : ''}><strong>${esc((STEPS[id] || {}).title || id)}:</strong> «${esc(r.note)}»${stale ? ` <em>(desactualizada: ${r.why === 'changed' ? 'los datos de este periodo cambiaron después de revisarla' : 'no puedo comprobar si sigue vigente'})</em>` : ''}</li>`;
+    });
     if (!rows.length) return '';
     return `<div class="ux-wrap"><div class="route-origin route-origin--notes" data-notes="1"><p class="route-origin__t"><strong>Lo que anotaste al revisar</strong> <span class="chip">${esc(o.ctxLabel)}</span><span class="chip">${esc(o.periodLabel)}</span></p>
-      <ul class="route-origin__notes">${rows.join('')}</ul><p class="field__hint">Son tus hipótesis por validar, no resultados. Las guardaste en este navegador.</p></div></div>`;
+      <ul class="route-origin__notes">${rows.join('')}</ul><p class="field__hint">Son tus hipótesis por validar, no resultados. Se guardan solo en este navegador (no se comparten con tu equipo).</p></div></div>`;
   }
   function originHtml(state, status) {
     loadOrigin(state);
     const o = state.ux.origin;
-    if (o && o.view !== state.view && (state.view === 'recovery' || state.view === 'medir')) return notesHtml(o);
+    if (o && o.view !== state.view && (state.view === 'recovery' || state.view === 'medir')) return notesHtml(o, state);
     if (!o || o.view !== state.view) return '';
     const { esc } = H();
     const STEPS = FP.attentionEngine.STEPS;
     const idx = Math.max(0, o.chain.findIndex((c) => c.id === o.step));
     let done = false;
-    const prog = progressFor(o.key);
-    const def0 = STEPS[o.step] || {}, manual = Boolean(def0.manual), rev = prog[o.step] && prog[o.step].reviewed;
+    const prog = progressFor(o.key, state);
+    const def0 = STEPS[o.step] || {}, manual = Boolean(def0.manual), rev = prog[o.step] && prog[o.step].reviewed, stale = prog[o.step] && prog[o.step].staleReview;
+    const sv = saveStatus();
     try { done = manual ? Boolean(rev) : Boolean(def0.done && o.step !== 'complete_data' && def0.done({ status, readiness: { allBlockingDone: false }, summary: {}, staleDays: false })); } catch (e) { done = false; }
     const next = o.chain.slice(idx + 1).find((c) => c.state !== 'done');
     const segs = o.chain.map((c, i) => `<i class="${i < idx || (i === idx && done) || c.state === 'done' ? 'd' : i === idx ? 'c' : ''}"></i>`).join('');
@@ -231,7 +299,9 @@
         ${changed ? '<p class="route-origin__warn" role="status">Cambiaron la fecha, el año o el canal desde que abriste este hallazgo. Vuelve a Inicio para reevaluar la ruta.</p>' : ''}</div>
       <div class="route-origin__r"><button type="button" class="btn btn--ghost" data-action="route-back">← Volver al hallazgo en Inicio</button>
         <button type="button" class="route-origin__x" data-action="route-dismiss" aria-label="Cerrar la ruta de trabajo">×</button></div>
-      ${manual && !done ? `<div class="route-origin__todo"><label for="route-note"><strong>Cuando termines de revisar:</strong> escribe la hipótesis que vas a validar (opcional) y confírmalo. La app no puede saber por sí sola que ya lo revisaste.</label>
+      ${stale && !rev ? `<p class="route-origin__warn" role="status" data-stale-review="${stale.why}">${stale.why === 'changed' ? `Tu revisión del ${esc(dayLbl(stale.at))}${stale.note ? ` («${esc(stale.note)}»)` : ''} se hizo con otros datos: la venta real o el plan de este periodo cambiaron después. Ya no figura como vigente; vuelve a revisarla y confírmala.` : `Tu revisión del ${esc(dayLbl(stale.at))} no tiene registrada la versión de los datos con la que se hizo, y no puedo comprobar si sigue vigente. Confírmala de nuevo para dejarla vigente.`}</p>` : ''}
+      ${sv.unsaved ? `<p class="route-origin__warn" role="alert" data-save-error="1">Tu avance NO se guardó en este navegador (${esc(sv.error || 'error de almacenamiento')}). Se conserva mientras no cierres la pestaña. <button type="button" class="btn btn--small" data-action="route-retry-save">Reintentar guardado</button></p>` : ''}
+      ${manual && !done ? `<div class="route-origin__todo"><label for="route-note"><strong>Cuando termines de revisar:</strong> escribe la hipótesis que vas a validar (opcional) y confírmalo. La app no puede saber por sí sola que ya lo revisaste. Se guarda solo en este navegador.</label>
         <div class="route-origin__form"><input id="route-note" type="text" maxlength="280" placeholder="Ej.: bajó el volumen desde la semana de la campaña X"><button type="button" class="btn btn--primary" data-action="route-reviewed" data-key="${esc(o.key)}" data-step="${esc(o.step)}">Ya lo revisé</button></div></div>` : ''}
       ${done ? `<p class="route-origin__done" role="status"><span>✓ <strong>${manual ? 'Revisado por ti' : 'Paso completado'}</strong>${manual && rev && rev.note ? `: «${esc(rev.note)}»` : manual ? '' : `: ${esc((STEPS[o.step] || {}).exit || '')}`}${next ? ` Siguiente: <strong>${esc(next.title)}</strong>.` : ' Ya no quedan pasos en esta ruta.'}</span>${next && next.view !== state.view ? `<button type="button" class="btn btn--primary" ${nextAttrs}>Ir al paso ${idx + 2} →</button>` : ''}</p>` : ''}
     </div></div>`;
@@ -253,5 +323,5 @@
     return { att, key, html: attentionHtml(att, S, key), nextHtml: nextStepHtml(att, S, key), banner: bannerHtml(att), next };
   }
 
-  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml, markReviewed };
+  FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml, markReviewed, dataSig, saveStatus, retrySave };
 })(typeof window !== 'undefined' ? window : globalThis);
