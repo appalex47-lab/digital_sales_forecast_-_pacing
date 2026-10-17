@@ -14,7 +14,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
 VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda']
-GROUP = {'carga':'planear','calidad':'planear','datos':'planear','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','producto':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','paquete':'medir'}
+GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','producto':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','paquete':'medir'}
 async def openref(q):
     """Abre el panel único de fecha/año del encabezado si está cerrado."""
     if not await q.is_visible('#topbar-date'):
@@ -58,10 +58,10 @@ async def main():
         chk('R-4 al cambiar de vista vuelve a estar cerrada', o3 is False, o3)
 
         # ---------- R-5 · menú por secciones: una sola abierta; elegir otra abre su primera página ----------
-        FIRST = {'planear': 'carga', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'medir': 'medir'}
+        FIRST = {'datosgrp': 'carga', 'planear': 'resumen', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'medir': 'medir'}
         await q.goto(u + '#inicio'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
-        chk('R-5 5 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
+        chk('R-5 6 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Datos', 'Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
         chk('R-5 en Inicio todas las secciones están cerradas y su contenido no ocupa espacio', all(x['exp'] == 'false' and x['hidden'] and not x['vis'] for x in n), n)
         ini = await q.evaluate("[...document.querySelectorAll('.app-nav > .snav__group:not(.snav__group--foldable) .snav__item')].map(a=>[a.innerText.trim(),a.getBoundingClientRect().height>0])")
         chk('R-5 «Inicio» queda suelto y visible', ini and ini[0][0] == 'Inicio' and ini[0][1], ini)
@@ -69,7 +69,7 @@ async def main():
         n = await q.evaluate(NAV)
         chk('R-5 en una página solo está abierta la sección de esa página (Monitorear)', [x['g'] for x in n if x['exp'] == 'true'] == ['monitorear'], n)
         bad = []
-        for g in ('diagnosticar', 'planear', 'recuperar', 'medir', 'monitorear'):
+        for g in ('diagnosticar', 'datosgrp', 'planear', 'recuperar', 'medir', 'monitorear'):
             await q.click(f'.snav__toggle[data-value="{g}"]'); await q.wait_for_timeout(450)
             hsh = await q.evaluate("location.hash.replace('#','')"); n = await q.evaluate(NAV)
             opened = [x['g'] for x in n if x['exp'] == 'true']; vis = [x['g'] for x in n if x['vis']]
@@ -106,7 +106,7 @@ async def main():
         await m.click('[data-action="nav-toggle"]'); await m.wait_for_timeout(300)
         await m.click('.snav__toggle[data-value="planear"]'); await m.wait_for_timeout(500)
         mv = await m.evaluate("(()=>{const nav=document.getElementById('app-nav');const b=document.querySelector('.snav__toggle[data-value=\"planear\"]').getBoundingClientRect();return {hash:location.hash,open:document.body.classList.contains('nav-open'),h:Math.round(b.height),exp:document.querySelector('.snav__toggle[data-value=\"planear\"]').getAttribute('aria-expanded'),scroll:nav.scrollHeight>nav.clientHeight}})()")
-        chk('R-5 móvil: elegir una sección abre su primera página, el panel se queda abierto mostrando sus opciones, objetivo táctil ≥ 44 px y el panel se desplaza por dentro', mv['hash'] == '#carga' and mv['open'] and mv['exp'] == 'true' and mv['h'] >= 44 and mv['scroll'], mv)
+        chk('R-5 móvil: elegir una sección abre su primera página, el panel se queda abierto mostrando sus opciones, objetivo táctil ≥ 44 px y el panel se desplaza por dentro', mv['hash'] == '#resumen' and mv['open'] and mv['exp'] == 'true' and mv['h'] >= 44 and mv['scroll'], mv)
         await m.click('a[data-nav="plan"]'); await m.wait_for_timeout(400)
         mc = await m.evaluate("document.body.classList.contains('nav-open')")
         chk('R-5 móvil: al elegir una página el panel se cierra como siempre', mc is False, mc)
@@ -138,7 +138,9 @@ async def main():
         al = await q.evaluate("[location.hash, FP.app.state.view, !document.getElementById('view-ajustes').hidden, document.activeElement && document.activeElement.id]")
         chk('R-3 el enlace #negocio abre Configuración, ajusta la dirección a #ajustes y lleva a la sección Negocio', al[0] == '#ajustes' and al[1] == 'ajustes' and al[2] is True and al[3] == 'st-negocio', al)
         pl = await q.evaluate("[[...document.querySelectorAll('#snav-g-planear .snav__item')].map(a=>a.innerText.trim()), !!document.querySelector('#snav-g-planear a[data-nav=\"configuracion\"]')]")
-        chk('R-9 orden de Planear: Carga de datos, Calidad de datos, Metas y motor, Plan, Estacionalidad, Datos normalizados, Configuración de planeación y, al final, Proyección del próximo año (8 páginas; Negocio ya no está)', pl[0] == ['Carga de datos', 'Calidad de datos', 'Metas y motor', 'Plan', 'Estacionalidad', 'Datos normalizados', 'Configuración de planeación', 'Proyección del próximo año'] and pl[1], pl)
+        chk('R-9 orden de Planear: Metas y motor, Plan, Estacionalidad, Configuración de planeación y, al final, Proyección del próximo año (5 páginas)', pl[0] == ['Metas y motor', 'Plan', 'Estacionalidad', 'Configuración de planeación', 'Proyección del próximo año'] and pl[1], pl)
+        dg = await q.evaluate("[...document.querySelectorAll('#snav-g-datosgrp .snav__item')].map(a=>a.innerText.trim())")
+        chk('R-9 sección Datos: Carga de datos, Calidad de datos, Datos normalizados', dg == ['Carga de datos', 'Calidad de datos', 'Datos normalizados'], dg)
         # Negocio funciona igual: proponer, guardar y que persista tras recargar
         await q.click('#st-negocio [data-action="bc-seed"]'); await q.wait_for_timeout(400)
         await q.fill('#bc-form [data-path="business.name"]', 'Negocio de prueba'); await q.press('#bc-form [data-path="business.name"]', 'Tab'); await q.wait_for_timeout(400)

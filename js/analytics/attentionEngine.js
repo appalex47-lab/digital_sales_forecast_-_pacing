@@ -298,7 +298,7 @@
     else if (started) state = 'in_progress';
     else if (origin && origin.severity === 'blocking') state = 'attention';
     else state = 'available';
-    return { id, title: def.title, view: def.view, manual: Boolean(def.manual), reviewed: Boolean(input.progress && input.progress[id] && input.progress[id].reviewed), state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
+    return { id, title: def.title, view: def.view, manual: Boolean(def.manual), reviewed: Boolean(input.progress && input.progress[id] && input.progress[id].reviewed), staleReview: (input.progress && input.progress[id] && input.progress[id].staleReview) || null, state, deps: def.deps, blockedBy, expected: def.expected, needs: def.needs, exit: def.exit,
       startedAt: started ? started.at : null, origin: origin ? origin.id : null, waitingUntil: origin && origin.waitingUntil || null };
   }
 

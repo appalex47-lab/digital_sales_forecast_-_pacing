@@ -683,10 +683,10 @@
       const sc = SE.saveScenario(store, { ctx: early, result: SE.simulate(early, { changes: { crMode: 'pp', crValue: 0.001 } }), links: { hypothesisId: 'h1', driver: 'conversionRate' } });
       const plan = AP.createPlan(2026);
       const a = AP.createAction(plan, { title: 'A', scenarioId: sc.scenarioId, hypothesisId: 'h1', driver: 'conversionRate', channel: 'ecommerce', startDate: '2026-09-16', endDate: '2026-09-22' });
-      AP.updateAction(plan, a.actionId, { status: 'measuring' });
+      ['approved', 'in_progress', 'completed', 'measuring'].forEach((st) => AP.updateAction(plan, a.actionId, { status: st }));   // Fase 1: se recorre el ciclo, no se salta
       const m = ATK.recordMeasurement(plan, { actionId: a.actionId, scenarios: store.scenarios, store: st6, run: run6 }).measurement;
       return m.observedDays === 7 && m.baseline && m.scenario && m.actual && m.consistency === 'not_consistent' &&
-        !/caus/i.test(m.statement) && a.history.length === 2 && plan.measurements.length === 1 && !AP.updateAction(plan, a.actionId, { status: 'ganadora' }).ok;
+        !/caus/i.test(m.statement) && a.history.length === 5 && a.status === 'measuring' && plan.measurements.length === 1 && !AP.updateAction(plan, a.actionId, { status: 'ganadora' }).ok;
     });
 
     /* ---------------- Fase 7: guía, navegación y contexto (presentación) ---------------- */
@@ -766,9 +766,9 @@
       const ms = [{ actionId: 'ACT_001', statement: 'El resultado observado es consistente con el escenario.', observedImpact: { value: 4 }, observedDays: 7, windowDays: 7, measurementDate: '2026-10-01' }];
       const snap = JSON.stringify([sc, act, ms]);
       const nodes = FP.traceability.chain(act, { scenarios: [sc], measurements: ms, signals: [{ id: 's1', evidence: 'e' }] });
-      const order = ['plan', 'forecast', 'gap', 'driver', 'signal', 'hypothesis', 'scenario', 'action', 'impact', 'observed'];
+      const order = ['plan', 'forecast', 'gap', 'driver', 'signal', 'hypothesis', 'scenario', 'action', 'decision', 'impact', 'observed', 'conclusion'];
       return nodes.map((n) => n.id).join() === order.join() && nodes.every((n, i) => n.linkedTo === (order[i + 1] || null)) &&
-        nodes[0].value === 100 && nodes[9].value === 4 && JSON.stringify([sc, act, ms]) === snap;
+        nodes[0].value === 100 && nodes[10].value === 4 && JSON.stringify([sc, act, ms]) === snap;
     });
 
     test('Fase 7: inicio', 'Recorrido: visitar una vista sin datos no la marca como hecha', () => {

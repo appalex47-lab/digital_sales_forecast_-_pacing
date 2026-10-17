@@ -453,7 +453,7 @@
   FP.dataStore = { canSkipUnchanged, unchangedPredicate, signature, cached, latestList, segmentIndex, cloneRecord, commitRemote, newBatchId: () => batchId(),
     createStore, emptyCollection, records, batches, allBatches,
     commitBatch, removeBatch, clearCollection,
-    findDuplicates, resolveLatest, observedValues, consolidate, years, isEmpty,
+    findDuplicates, resolveLatest, observedValues, consolidate, years, isEmpty, valuesSig,
     packCollection, packRecords, hydrateCollection, hydrateChunked, isChunkedManifest, chunkKey, chunkKeyOf, markSaved, reusableChunks, CHUNK_SIZE, CHUNK_THRESHOLD, datasetToRows
   };
 })(typeof window !== 'undefined' ? window : globalThis);

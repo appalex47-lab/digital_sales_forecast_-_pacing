@@ -268,6 +268,14 @@
     return ok;
   }
 
+  /** Fase 4: un guardado que falla se avisa (sin repetir cada pocos segundos). Los datos siguen en la sesión; no se afirma que se guardaron. */
+  let lastSaveWarn = 0;
+  function saveOk(ok, what) {
+    if (ok) return true;
+    const now = Date.now();
+    if (now - lastSaveWarn > 20000) { lastSaveWarn = now; FP.ui.toast(`No se pudo guardar ${what} en este navegador (${storage.lastError || 'sin espacio o sin permiso'}). Tus cambios siguen en esta sesión, pero se perderán si cierras la pestaña: exporta un respaldo o libera espacio y vuelve a intentar.`); }
+    return false;
+  }
   function saveSettings() { storage.save(K.settings, state.settings); }
 
   /** Equivalencias de nombres (homologación): se guardan aparte y las consultan los normalizadores al importar. */
@@ -364,7 +372,7 @@
   }
   function saveReforecastSettings() { storage.save(K.reforecastSettings, state.rf.settings); }
   function saveReforecastRegistry() {
-    if (state.rf.registry) storage.save(yk(K.reforecasts, state.year), state.rf.registry);
+    if (state.rf.registry) saveOk(storage.save(yk(K.reforecasts, state.year), state.rf.registry), 'el repronóstico');
   }
 
   function loadDiagnosticSettings() {
@@ -543,8 +551,8 @@
     if (!state.rc.draft) state.rc.draft = emptyDraft();
   }
   function saveRecoverySettings() { storage.save(K.recoverySettings, { settings: state.rc.settings, constraints: state.rc.constraints }); }
-  function saveScenarios() { storage.save(yk(K.scenarios, state.year), state.rc.scenarioStore); }
-  function saveActionPlan() { storage.save(yk(K.actionPlan, state.year), state.rc.plan); }
+  function saveScenarios() { return saveOk(storage.save(yk(K.scenarios, state.year), state.rc.scenarioStore), 'los escenarios'); }
+  function saveActionPlan() { return saveOk(storage.save(yk(K.actionPlan, state.year), state.rc.plan), 'el plan de acción'); }
 
   /** Cambios del borrador en unidades del motor (fracciones). */
   function draftChanges(d) {
@@ -595,7 +603,7 @@
 
   function saveForecastSettings() { storage.save(K.forecastSettings, state.fc.settings); }
   function saveForecastRegistry() {
-    if (state.fc.registry) storage.save(yk(K.forecasts, state.year), state.fc.registry);
+    if (state.fc.registry) saveOk(storage.save(yk(K.forecasts, state.year), state.fc.registry), 'el pronóstico');
   }
 
   function savePlanningSettings() { storage.save(K.planningSettings, state.planning.settings); }
@@ -2470,7 +2478,7 @@
     'scroll-to'(el) { const t = document.getElementById(el.dataset.target); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
     'route-go'(el) {
       const d = el.dataset;
-      if (FP.attentionView) { FP.attentionView.markStarted(d.key, d.step, d.finding); if (d.view !== 'inicio') FP.attentionView.setOrigin(state, d); }
+      if (FP.attentionView) { FP.attentionView.markStarted(d.key, d.step, d.finding, state); if (d.view !== 'inicio') FP.attentionView.setOrigin(state, d); }
       if (d.channel) state.ux.routeCtx = { channel: d.channel };
       actions.go({ dataset: { view: d.view } });
     },
@@ -2481,8 +2489,13 @@
     },
     'route-reviewed'(el) {
       const note = (document.getElementById('route-note') || {}).value || '';
-      if (FP.attentionView) FP.attentionView.markReviewed(el.dataset.key, el.dataset.step, note);
+      if (FP.attentionView) FP.attentionView.markReviewed(el.dataset.key, el.dataset.step, note, state);
       render();
+    },
+    'route-retry-save'() {
+      const r = FP.attentionView && FP.attentionView.retrySave();
+      render();
+      if (r && r.ok) FP.ui.toast('Listo: tu avance se guardó en este navegador.');
     },
     'route-dismiss'() { if (FP.attentionView) FP.attentionView.clearOrigin(state); render(); },
     go(el) {
@@ -2536,6 +2549,20 @@
       else { h.periodType = 'month'; h.periodKey = el.value; state.ux.ctx.periodType = 'month'; state.ux.ctx.periodKey = el.value; }
       state.ux.ctxNote = null;
       render();
+    },
+    'ac-decision-save'(el) {
+      const g = (id) => ((document.getElementById(id) || {}).value || '').trim();
+      const r = FP.actionPlan.recordDecision(state.rc.plan, el.dataset.id, { decision: g('dc-decision'), objective: g('dc-objective'), decidedBy: g('dc-by'), successIndicator: g('dc-success'), hypothesisToTest: g('dc-hyp') }, 'Desde Medir y aprender');
+      if (!r.ok) { FP.ui.toast(r.error); return; }
+      if (!saveActionPlan()) { render(); return; }
+      render(); FP.ui.toast(r.unchanged ? 'La decisión ya estaba registrada igual.' : 'Decisión registrada. Quedó en el historial de la acción.');
+    },
+    'ac-conclusion-save'(el) {
+      const g = (id) => ((document.getElementById(id) || {}).value || '').trim();
+      const r = FP.actionPlan.recordConclusion(state.rc.plan, el.dataset.id, { outcome: g('cc-outcome'), justification: g('cc-just'), decidedBy: g('cc-by'), nextAction: g('cc-next') }, 'Desde Medir y aprender');
+      if (!r.ok) { FP.ui.toast(r.error); return; }
+      if (!saveActionPlan()) { render(); return; }
+      render(); FP.ui.toast(r.unchanged ? 'La conclusión ya estaba registrada igual.' : 'Conclusión registrada. Es tu juicio con la evidencia medida; no prueba causalidad.');
     },
     'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); },
     'tour-start'() { if (!state.ux.tour.path) { offerTour(true); return; } tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
@@ -2936,7 +2963,7 @@
     'nav-group'(el) { FP.navigation.toggleGroup(el.dataset.value); },
     'rc-action-field'(el) {
       const r = FP.actionPlan.updateAction(state.rc.plan, el.dataset.id, { [el.dataset.key]: el.value || null });
-      if (!r.ok) { FP.ui.toast(r.error); return; }
+      if (!r.ok) { render(); FP.ui.toast(r.error); return; }   // render: el selector vuelve al estado real (no se queda mostrando el rechazado)
       saveActionPlan(); render();
     },
     'rc-measure'(el) {

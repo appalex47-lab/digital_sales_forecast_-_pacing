@@ -50,7 +50,7 @@
           <td>${esc(DRIVER[a.driver])}${a.signalMatch ? '<span class="cell-sub">hay señales de este driver</span>' : ''}</td><td>${esc(a.ownerArea)}</td>
           <td>${esc(C().metrics[a.measurementMetric] ? C().metrics[a.measurementMetric].label : a.measurementMetric)}${a.defaultWindowDays ? `<span class="cell-sub">${a.defaultWindowDays} días</span>` : ''}</td>
           <td>${a.dataAvailable ? H().pill('ok', 'Disponibles') : H().pill('warning', 'Faltan') + `<span class="cell-sub">${esc(a.missingData.join(', '))}</span>`}</td>
-          <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : 'disabled'}>Agregar al plan</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+          <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : `disabled title="${selSc ? 'Falta el dato que esta acción necesita' : 'Primero guarda y elige un escenario'}"`}>Agregar al plan</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
       <details class="disclosure"><summary>Agregar una acción propia al catálogo</summary><div class="panel__body">
         <div class="settings-grid">
           <div class="field"><label for="rc-cu-name" class="field__hint">Nombre</label><input id="rc-cu-name" data-draft type="text"></div>
@@ -63,7 +63,7 @@
         <button type="button" class="btn" data-action="rc-add-custom">Agregar al catálogo</button></div></details>
       <div class="ai-box">
         <div class="subhead"><h4>Líneas de acción con Cohere (opcional)</h4>
-          <button type="button" class="btn btn--small" data-action="rc-ai" ${selSc && ai.status !== 'busy' ? '' : 'disabled'}>${ai.status === 'busy' ? 'Consultando…' : 'Proponer con Cohere'}</button></div>
+          <button type="button" class="btn btn--small" data-action="rc-ai" ${selSc && ai.status !== 'busy' ? '' : `disabled title="${selSc ? 'Consultando…' : 'Primero guarda y elige un escenario'}"`}>${ai.status === 'busy' ? 'Consultando…' : 'Proponer con Cohere'}</button></div>
         <p class="field__hint">Cohere recibe la hipótesis, el driver, las señales y el escenario ya calculados. No calcula impacto ni cifras y sus propuestas requieren validación. Usa la API key de Configuración de RevNavigator.</p>
         ${ai.status === 'unavailable' || ai.status === 'invalid' ? `<p class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc(ai.errors.join(' '))}</p>` : ''}
         ${ai.actions.length ? `<ul class="alert-list">${ai.actions.map((a, i) => `<li>${H().pill('na', 'IA · propuesta')} <span><strong>${esc(a.action)}</strong> (${esc(DRIVER[a.relatedDriver])})
@@ -91,8 +91,9 @@
             <td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}<span class="cell-sub">${esc(a.description || '')}${a.source === 'cohere' ? ' · propuesta por IA' : ''}</span></td>
             <td class="wrap"><span class="cell-sub">Driver ${esc(DRIVER[a.driver] || a.driver || '—')} · ${esc(a.hypothesisId || '—')} · ${esc(a.scenarioId || '—')}</span></td>
             <td><input type="text" value="${esc(a.owner)}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="owner" aria-label="Responsable" class="input--compact"></td>
-            <td><select data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="status" aria-label="Estado">${Object.entries(statuses).map(([k, l]) =>
-              `<option value="${k}" ${a.status === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></td>
+            <td><select data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="status" aria-label="Estado">${FP.actionPlan.nextStates(state.rc.plan, a).map((o) =>
+              `<option value="${o.status}" ${o.current ? 'selected' : ''} ${o.allowed ? '' : 'disabled'} ${o.reason ? `title="${esc(o.reason)}"` : ''}>${esc(statuses[o.status])}${o.allowed ? '' : ' (aún no)'}</option>`).join('')}</select>
+              ${FP.actionPlan.integrityIssue(state.rc.plan, a) ? `<span class="cell-sub" data-action-integrity="1">${esc(FP.actionPlan.integrityIssue(state.rc.plan, a))}</span>` : ''}</td>
             <td><input type="date" value="${esc(a.startDate || '')}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="startDate" aria-label="Inicio" class="input--compact">
               <input type="date" value="${esc(a.endDate || '')}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="endDate" aria-label="Fin" class="input--compact"></td>
             <td class="num">${esc(signedMoney(a.expectedImpact ? a.expectedImpact.incrementalValue : null))}<span class="cell-sub"><span class="ds-badge ds-badge--scenario">simulado</span></span></td>
