@@ -10,7 +10,7 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-PROD = 'fecha,canal,sku,producto,categoria,venta,pedidos,unidades\n2026-09-01,ecommerce,A1,Paracetamol,Analgésicos,120,2,3\n2026-09-01,app,B2,Insulina,Diabetes,900,1,1\n'
+PROD = 'fecha,canal,sku,producto,categoria,venta,pedidos,unidades,id_pedido,id_cliente\n2026-09-01,ecommerce,A1,Paracetamol,Analgésicos,120,2,3,P1,C1\n2026-09-01,app,B2,Insulina,Diabetes,900,1,1,P2,C2\n'
 SALES = 'fecha,canal,venta,pedidos,traffic_volume\n2026-09-01,ecommerce,1000,10,500\n2026-09-01,app,800,8,400\n'
 async def pick(q, u, dtype, name, text):
     await q.goto(u + '#carga'); await q.wait_for_selector(f'input[data-action="pick-files"][data-type="{dtype}"]', state='attached')

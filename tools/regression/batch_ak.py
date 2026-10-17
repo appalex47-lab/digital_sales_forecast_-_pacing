@@ -27,10 +27,10 @@ def real(last_day=29, bad_every=3):
 GA4H = 'Fecha,Plataforma,Categoría de dispositivo,Fuente/medio de la sesión,Campaña de la sesión,Página de destino y cadena de consulta,Nuevo/Recurrente,Sesiones,Compras en comercio electrónico,Ingresos derivados de las compras\n'
 GA4 = GA4H + '\n'.join(f'202609{d:02d},web,mobile,google / cpc,c1,/p,new,{100 + d},{3},{3000}' for d in range(1, 21)) + '\n'
 def prods():
-    rows = ['fecha,canal,sku,producto,categoria,venta,pedidos,unidades']
+    rows = ['fecha,canal,sku,producto,categoria,venta,pedidos,unidades,id_pedido,id_cliente']
     for i in range(60):
         v = '-250' if i in (7, 19, 33) else str(500 + i); u = 'abc' if i in (23, 41) else str(3 + i % 4)
-        rows.append(f'2026-09-{1 + i % 20:02d},{["ecommerce", "app"][i % 2]},SKU{i:03d},Producto {i},Cat {i % 4},{v},{2 + i % 3},{u}')
+        rows.append(f'2026-09-{1 + i % 20:02d},{["ecommerce", "app"][i % 2]},SKU{i:03d},Producto {i},Cat {i % 4},{v},{2 + i % 3},{u},P{i},C{i % 9}')
     return '\n'.join(rows) + '\n'
 async def up(q, dtype, name, text):
     await q.goto(q.url.split('#')[0] + '#carga'); await q.wait_for_selector(f'input[data-action="pick-files"][data-type="{dtype}"]', state='attached')
@@ -98,7 +98,7 @@ async def main():
         chk('AK-3 filtrar por archivo «real.csv» deja solo las líneas de Venta real (25 en la primera página, todas de real.csv)', len(lf) == min(25, nneg) and all(r[0] == 'real.csv' for r in lf), len(lf))
         # ---------- salud ----------
         sh = {r[0]: r for r in await q.evaluate(TBL('Resumen de salud por tipo de dato'))}
-        chk('AK-4 la Salud trae arriba un resumen por tipo de dato (Venta real, Segmentos, Productos · venta) con su puntaje y lo que más bajó', all(k in sh for k in ('Venta real / Actual', 'Segmentos (opcional)', 'Productos · venta')) and '/100' in sh['Venta real / Actual'][1] and 'cuarentena' in sh['Productos · venta'][2].lower(), sh)
+        chk('AK-4 la Salud trae arriba un resumen por tipo de dato (Venta real, Segmentos, Productos · venta) con su puntaje y lo que más bajó', all(k in sh for k in ('Venta real / Actual', 'Segmentos (opcional)', 'Productos · venta')) and '/100' in sh['Venta real / Actual'][1] and ('cuarentena' in sh['Productos · venta'][2].lower() or 'columnas' in sh['Productos · venta'][2].lower()), sh)
         order = await q.evaluate("(()=>{const h=document.getElementById('quality-health');const t=[...h.querySelectorAll('h3.qsub')].map(x=>x.innerText);return t})()")
         chk('AK-4 el orden es «Resumen por tipo de dato» y después «Detalle por componente» (con sus tarjetas)', order == ['Resumen por tipo de dato', 'Detalle por componente'] and await q.evaluate("document.querySelectorAll('#quality-health .dhealth__card').length") >= 3, order)
         q_order = await q.evaluate("[...document.querySelectorAll('#quality-quarantine h3.qsub')].map(x=>x.innerText)")

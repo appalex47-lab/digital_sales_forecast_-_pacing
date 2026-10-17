@@ -287,7 +287,7 @@
       kind, headers, mapping, idx, mappedMetrics: metrics.filter((m) => idx[m] !== undefined),
       hasExtra: kind === 'sales' && idx.extraDimension !== undefined,
       parts: new Map(), catalog: new Map(), issues: newIssues(), conflicts: [],
-      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0 },
+      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0, colFilled: {} },
       sumSameKey: kind === 'sales' && Boolean(sumSameKey),
       /** Clientes (opcional): solo con ID de pedido E ID de cliente mapeados. Una entrada por pedido; no toca los bloques de producto. */
       ledger: kind === 'sales' && idx.orderId !== undefined && idx.customerId !== undefined && FP.customerEngine ? FP.customerEngine.draftLedger(C().products.customers.placeholders) : null,
@@ -297,8 +297,12 @@
     };
     const get = (cells, key) => (idx[key] === undefined ? '' : (cells[idx[key]] === undefined ? '' : String(cells[idx[key]]).trim()));
 
+    // Llenado por columna (solo archivo de venta): cuántas filas leídas traen valor en cada columna mapeada
+    const tiers = C().products.columnTiers, tierCols = kind === 'sales' ? [...tiers.required, ...tiers.important, ...tiers.optional].filter((k) => idx[k] !== undefined) : [];
+    tierCols.forEach((k) => { d.summary.colFilled[k] = 0; });
     d.addRow = function addRow(line, cells) {
       d.summary.rows++;
+      for (let t = 0; t < tierCols.length; t++) { const k = tierCols[t], v = cells[idx[k]]; if (v !== undefined && v !== null && String(v).trim() !== '') d.summary.colFilled[k]++; }
       let reject = false, warn = false;
       const rawDate = get(cells, 'date');
       let dr = dateCache.get(rawDate);

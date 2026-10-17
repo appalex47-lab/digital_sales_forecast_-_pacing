@@ -209,7 +209,7 @@
           <div class="table-wrap"><table class="table ds-table" aria-label="Componentes de salud de ${esc(c.label)}">
             <thead><tr><th scope="col">Componente</th><th scope="col" class="num">Puntaje</th><th scope="col">Detalle</th></tr></thead>
             <tbody>${c.components.map((x) => `<tr><th scope="row">${esc(x.label)}</th><td class="num">${x.score === null ? '—' : x.score}</td><td class="wrap">${esc(x.detail)}</td></tr>`).join('')}</tbody></table></div>
-        </details></section>`;
+        </details>${c.columns && FP.productView && FP.productView.columnsTable ? FP.productView.columnsTable(c.columns, c.label) : ''}</section>`;
     };
     // Resumen arriba (una línea por tipo de dato con lo que más bajó su puntaje) y el detalle por componente abajo
     const worst = (c) => { const l = c.components.filter((x) => x.score !== null && x.score < 100).sort((a, b) => a.score - b.score)[0]; return l ? `${l.label} ${l.score}: ${l.detail}` : null; };
