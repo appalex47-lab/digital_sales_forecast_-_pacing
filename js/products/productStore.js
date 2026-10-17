@@ -287,7 +287,7 @@
       kind, headers, mapping, idx, mappedMetrics: metrics.filter((m) => idx[m] !== undefined),
       hasExtra: kind === 'sales' && idx.extraDimension !== undefined,
       parts: new Map(), catalog: new Map(), issues: newIssues(), conflicts: [],
-      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0, colFilled: {} },
+      summary: { rows: 0, accepted: 0, rejected: 0, exactDuplicates: 0, conflicts: 0, multiplicity: 0, warningRows: 0, summedRows: 0, summedKeys: 0, colFilled: {}, dayRev: {} },
       sumSameKey: kind === 'sales' && Boolean(sumSameKey),
       /** Clientes (opcional): solo con ID de pedido E ID de cliente mapeados. Una entrada por pedido; no toca los bloques de producto. */
       ledger: kind === 'sales' && idx.orderId !== undefined && idx.customerId !== undefined && FP.customerEngine ? FP.customerEngine.draftLedger(C().products.customers.placeholders) : null,
@@ -355,6 +355,7 @@
       });
       const date = dr.value, channel = cr.value;
       d.dates.add(date); d.channels.add(channel);
+      if (kind === 'sales') { const rj = metrics.indexOf('revenue'); if (rj >= 0 && sts[rj] === ST.observed && isFinite(vals[rj])) d.summary.dayRev[date] = (d.summary.dayRev[date] || 0) + vals[rj]; }   // venta por día: para comparar versiones al reemplazar un archivo
       if (d.ledger) {
         const ri = metrics.indexOf('revenue');
         d.ledger.add({ order: get(cells, 'orderId'), customer: get(cells, 'customerId'), day: FP.customerEngine.dayNum(date), channel, revenue: ri >= 0 && sts[ri] === ST.observed ? vals[ri] : NaN });

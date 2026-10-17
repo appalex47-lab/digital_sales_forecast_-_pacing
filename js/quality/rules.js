@@ -122,7 +122,8 @@
     const q = Object.values(byType).filter((t) => isProductCell(t.type));
     return { id: b.id, kind: b.kind || 'sales', fileName: b.fileName, importedAt: b.importedAt, mappedCount: Object.values(b.mapping || {}).filter(Boolean).length,
       summary: { rows: (b.summary || {}).rows || 0, accepted: (b.summary || {}).accepted || 0, rejected: (b.summary || {}).rejected || 0, exactDuplicates: (b.summary || {}).exactDuplicates || 0,
-        conflicts: (b.summary || {}).conflicts || 0, warningRows: (b.summary || {}).warningRows || 0, colFilled: (b.summary || {}).colFilled || null },
+        conflicts: (b.summary || {}).conflicts || 0, warningRows: (b.summary || {}).warningRows || 0, colFilled: (b.summary || {}).colFilled || null,
+        dateMin: (b.summary || {}).dateMin || null, dateMax: (b.summary || {}).dateMax || null, dayRev: (b.summary || {}).dayRev || null },
       mappedKeys: Object.values(b.mapping || {}).filter(Boolean),
       quarantineByRule: Object.fromEntries(q.map((t) => [t.type, t.count])), quarantined: q.reduce((a, t) => a + t.count, 0),
       malformed: (byType.MALFORMED_ROW || {}).count || 0,

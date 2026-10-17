@@ -117,10 +117,11 @@
           <li><h4>Validación del archivo completo</h4>${body}${kind === 'sales' && r && r.summary && r.summary.colFilled && FP.dataHealth ? (() => { const cq = FP.dataHealth.columnQuality([{ summary: r.summary, mappedKeys: Object.values(s.mapping).filter(Boolean) }]); return cq ? `<p class="field__hint" data-columns-score="${cq.score}">Calidad de columnas: <strong>${cq.score}/100</strong>. ${esc(cq.detail)}</p>${columnsTable(cq.columns)}` : ''; })() : ''}</li>
         </ol>
         <div class="staging__foot">
+          ${FP.replaceView.block(state, item)}
           <p>${r && r.canImport ? `Se guardarán <strong>${F().integer(r.summary.accepted)}</strong> renglones válidos de ${F().integer(r.summary.rows)} filas.` : 'Corrige el mapeo para poder importar.'}</p>
           <div class="btn-row">
             <button type="button" class="btn" data-action="discard-staged">Descartar archivo</button>
-            <button type="button" class="btn btn--primary" data-action="commit-staged" ${r && r.canImport && item.status !== 'processing' && item.status !== 'saving' ? '' : 'disabled'}>${item.status === 'saving' ? `Guardando… ${Math.round((item.progress || 0) * 100)} %` : kind === 'sales' ? 'Importar venta de productos' : 'Importar funnel de productos'}</button>
+            <button type="button" class="btn btn--primary" data-action="commit-staged" ${r && r.canImport && item.status !== 'processing' && item.status !== 'saving' && !FP.replaceView.blocked(state, item) ? '' : 'disabled'}>${item.status === 'saving' ? `Guardando… ${Math.round((item.progress || 0) * 100)} %` : kind === 'sales' ? 'Importar venta de productos' : 'Importar funnel de productos'}</button>
           </div></div>
       </div>`;
   }

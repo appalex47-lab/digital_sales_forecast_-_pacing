@@ -26,6 +26,7 @@
 
   const state = {
     productQuality: [],
+    replace: { undo: null },   // reemplazo de archivos: instantánea para deshacer el último reemplazo
     cx: { mode: 'ayer', sync: null, key: null },
     cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
@@ -165,6 +166,7 @@
     return {
       ...IMP.defaultSettings(),
       includeErrorRows: false,
+      replaceRowsDropPct: 20, replaceRevenuePct: 5,   // reemplazo de archivos: umbrales (%) de la confirmación extra
       sumSameKey: true,   // archivo de productos transaccional: filas con la misma llave completa se suman
       enableAI: C.import.enableAI !== false,
       customAIPrompt: C.import.customAIPrompt || ''
@@ -290,6 +292,8 @@
     // Actualizar desde Sheets: por omisión solo entran las filas nuevas o cambiadas (la hoja publicada siempre baja completa)
     const stagedItem = state.staging.items.find((i) => i.staged.fileName === file.name);
     if (stagedItem && ST.canSkipUnchanged(type)) stagedItem.skipUnchanged = true;
+    // «Actualizar» una hoja ligada reemplaza lo que vino de esa misma hoja (y sólo eso); si es la primera vez, se agrega como siempre
+    if (stagedItem) stagedItem.replace = { batchId: FP.replaceView.defaultFor(state, stagedItem), confirmed: false };
     const rows = Math.max(0, r.rows - 1);
     const id = link.id || `sh${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     // Enlace para abrir la hoja: el que pegó la persona; si usó un enlace compartido (/d/<id>/), se deriva solo; si no, conserva el anterior
@@ -1157,7 +1161,14 @@
   async function commitProduct(item) {
     if (!item.result || !item.result.canImport) return;
     item.status = 'saving'; item.progress = 0; render();
+    let replaced = null;
     try {
+      const oldId = item.replace && item.replace.batchId;
+      if (oldId) {   // reemplazo: primero se quita lo del archivo anterior (en productos no hay «deshacer»)
+        const ob = (state.productQuality || []).find((b) => b.id === oldId);
+        replaced = await FP.productStore.removeBatch(oldId);
+        if (ob) replaced.fileName = ob.fileName;
+      }
       const batch = await FP.productStore.commit(item.result.draft, { fileName: item.staged.fileName, policy: item.policy,
         onProgress: (d, t) => { item.progress = d / t; progressRender(); } });
       state.staging.items = state.staging.items.filter((i) => i !== item);
@@ -1166,10 +1177,10 @@
       await refreshProductQuality();
       render();
       const m = batch.storedMerge;
-      FP.ui.toast(`Productos guardados: ${batch.summary.accepted.toLocaleString('es-MX')} SKU-días de ${batch.fileName}${m.conflicts ? `; ${m.conflicts} conflictos con lo guardado (${batch.policy === 'replace' ? 'reemplazados' : 'se conservó lo guardado y se marcaron'})` : ''}.`);
+      FP.ui.toast(`${replaced ? `Reemplacé ${replaced.fileName || 'el archivo anterior'} por ${batch.fileName}. ` : ''}Productos guardados: ${batch.summary.accepted.toLocaleString('es-MX')} SKU-días de ${batch.fileName}${m.conflicts ? `; ${m.conflicts} conflictos con lo guardado (${batch.policy === 'replace' ? 'reemplazados' : 'se conservó lo guardado y se marcaron'})` : ''}.`);
     } catch (e) {
       item.status = 'ready'; render();
-      FP.ui.toast(`No se pudieron guardar los productos (${e.message}). Los datos anteriores no se modificaron; revisa el espacio disponible del navegador y vuelve a intentar, o exporta tus datos como respaldo.`);
+      FP.ui.toast(`No se pudieron guardar los productos (${e.message}). ${replaced ? `OJO: el archivo anterior (${replaced.fileName || 'reemplazado'}) ya se había quitado; vuelve a cargarlo desde tu copia. ` : ''}Los demás datos no se modificaron; revisa el espacio disponible del navegador y vuelve a intentar, o exporta tus datos como respaldo.`);
     }
   }
 
@@ -1837,6 +1848,20 @@
   }
 
   /** Lo que sigue a confirmar un archivo (de la página o del Worker): quitarlo de la revisión, guardar, recalcular y avisar. */
+  /** Reemplazo (almacén de venta real / plan / histórico / segmentos): copia el estado actual de la colección y quita el archivo anterior. */
+  function takeReplaceSnapshot(item) {
+    const id = item.replace && item.replace.batchId; if (!id) return null;
+    const t = item.staged.dataType, col = state.store[t];
+    const old = col.batches.find((b) => b.id === id); if (!old) return null;
+    const snap = { dataType: t, batches: col.batches.slice(), records: col.records.slice(), oldName: old.fileName, oldId: id };
+    ST.removeBatch(state.store, id);
+    return snap;
+  }
+  function finishReplace(snap, batch) {
+    if (!snap || !batch || batch.empty) return;
+    state.replace.undo = { ...snap, newBatchId: batch.id, newName: batch.fileName, afterLen: state.store[snap.dataType].records.length };
+  }
+
   function finishCommit(item, batch) {
     if (batch && batch.empty) {   // todo lo del archivo ya estaba cargado sin cambios: no se guarda un lote vacío
       state.staging.items = state.staging.items.filter((i) => i !== item);
@@ -1871,7 +1896,9 @@
       try { done = await FP.importWorker.commit({ jobId: item.remote.jobId, batchId: id, includeErrorRows: Boolean(state.settings.includeErrorRows) }, { onProgress: onWorkProgress(item.staged.fileName) }); }
       catch (e) { item.busy = false; state.staging.working = null; render(); FP.ui.toast(`No se pudo importar ${item.staged.fileName}: ${e.message}`); return; }
       state.staging.working = null;
-      const batch = ST.commitRemote(state.store, item.staged, done, done.records, { id, skipUnchanged: Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+      const snap = takeReplaceSnapshot(item);
+      const batch = ST.commitRemote(state.store, item.staged, done, done.records, { id, skipUnchanged: snap ? false : Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+      finishReplace(snap, batch);
       finishCommit(item, batch);
     } finally { item.committing = false; }
   }
@@ -2269,6 +2296,10 @@
         const v = FP.normalize.normalizeNumber(el.value).value;
         if (v === null || v < 0 || v > 50) { FP.ui.toast('La tolerancia debe estar entre 0 % y 50 %.'); render(); return; }
         state.settings.tolerance = v / 100;
+      } else if (key === 'replaceRowsDropPct' || key === 'replaceRevenuePct') {
+        const v = FP.normalize.normalizeNumber(el.value).value;
+        if (v === null || v < 0 || v > 100) { FP.ui.toast('El umbral debe estar entre 0 % y 100 %.'); render(); return; }
+        state.settings[key] = v;
       } else if (key === 'includeErrorRows' || key === 'enableAI' || key === 'sumSameKey') state.settings[key] = el.checked;
       else state.settings[key] = el.value;
       saveSettings();
@@ -2340,6 +2371,24 @@
       item.skipUnchanged = el.checked; render();
     },
 
+    'replace-pick'(el) {
+      const item = activeItem(); if (!item) return;
+      item.replace = { batchId: el.value || null, confirmed: false }; item._rp = null; render();
+    },
+    'replace-confirm'(el) {
+      const item = activeItem(); if (!item || !item.replace) return;
+      item.replace.confirmed = el.checked; render();
+    },
+    'replace-undo'() {
+      const u = state.replace.undo; if (!u) return;
+      const col = state.store[u.dataType];
+      if (col.records.length !== u.afterLen || !col.batches.some((b) => b.id === u.newBatchId)) { state.replace.undo = null; render(); FP.ui.toast('Ya no se puede deshacer: después del reemplazo se cargó o quitó otro archivo de ese tipo.'); return; }
+      state.store[u.dataType] = { ...col, batches: u.batches, records: u.records };
+      state.replace.undo = null;
+      reprocessAll(); saveStore([u.dataType]); invalidatePlanning(); refresh(); render();
+      FP.ui.toast(`Listo: volvió ${u.oldName} y se quitó ${u.newName}.`);
+    },
+
     'discard-staged'() {
       const item = activeItem();
       if (item && item.remote) FP.importWorker.drop(item.remote.jobId);   // el Worker libera las filas de ese archivo
@@ -2350,14 +2399,20 @@
 
     'commit-staged'() {
       const item = activeItem();
+      if (item && FP.replaceView.blocked(state, item)) { render(); FP.ui.toast('Confirma el cambio antes de reemplazar el archivo anterior.'); return; }
       if (item && item.staged.dataType === 'products') { commitProduct(item); return; }
       if (item && item.remote) { commitRemote(item); return; }
       // Revalida contra lo guardado en este momento SOLO si algo cambió desde la revisión. Con archivos grandes (cientos de miles de
       // filas) rehacer toda la validación duplicaba la memoria y tardaba decenas de segundos.
       if (!item.result || item.result.sig !== stagedSig(item.staged)) item.result = processStaged(item.staged);
       if (!item.result.canImport) { render(); FP.ui.toast('Corrige el mapeo antes de importar.'); return; }
-      const batch = ST.commitBatch(state.store, item.staged, item.result,
-        { skipUnchanged: Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+      const snap = takeReplaceSnapshot(item);   // reemplazo: quita lo del archivo anterior (guarda copia para deshacer)
+      let batch;
+      try {
+        batch = ST.commitBatch(state.store, item.staged, item.result,
+          { skipUnchanged: snap ? false : Boolean(item.skipUnchanged), includeErrorRows: state.settings.includeErrorRows, settings: state.settings, source: item.staged.sourceType, durationMs: item.staged.durationMs });
+      } catch (e) { if (snap) state.store[snap.dataType] = { ...state.store[snap.dataType], batches: snap.batches, records: snap.records }; throw e; }
+      finishReplace(snap, batch);
       finishCommit(item, batch);
     },
 
