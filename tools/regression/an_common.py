@@ -47,7 +47,7 @@ def build():
     return rows
 ROWS = build()
 def csv_text():
-    return 'fecha,canal,sku,producto,categoria,subcategoria,venta,pedidos,unidades\n' + '\n'.join(','.join(str(x) for x in r) for r in ROWS) + '\n'
+    return 'fecha,canal,sku,producto,categoria,subcategoria,venta,pedidos,unidades,id_pedido,id_cliente\n' + '\n'.join(','.join(str(x) for x in r) + f',P{i},C{i % 50}' for i, r in enumerate(ROWS)) + '\n'
 def truth(frm, to, ch=None, key=None):
     """Venta por entidad (key: sku|product|category|channel|total) en [frm,to] y canal ch (None = Σ canales)."""
     out = {}

@@ -39,6 +39,7 @@ async def main():
                 await q.click('#sheets-saved-historical [data-action="sheets-refresh"]')
             await q.wait_for_timeout(2500)
             if uncheck:
+                await q.select_option('#rep-pick', ''); await q.wait_for_timeout(300)   # comportamiento anterior: agregar en vez de reemplazar
                 await q.evaluate("(()=>{const i=document.querySelector('[data-action=staging-skip-unchanged]'); i.checked=false; i.dispatchEvent(new Event('change',{bubbles:true}))})()"); await q.wait_for_timeout(300)
             await q.click('[data-action="commit-staged"]'); await q.wait_for_timeout(2500)
         await fetch_and_commit(PART, first=True)
@@ -47,9 +48,9 @@ async def main():
         # refresco con la hoja completa: solo entran las nuevas
         body['v'] = FULL
         await q.click('#sheets-saved-historical [data-action="sheets-refresh"]'); await q.wait_for_timeout(2500)
-        st = await q.evaluate("(()=>{const i=FP.app.state.staging.items[0];const cb=document.querySelector('[data-action=staging-skip-unchanged]');return {skip:i&&i.skipUnchanged, cb:cb?cb.checked:null, hint:(cb&&cb.closest('.field')||{innerText:''}).innerText, btn:document.querySelector('[data-action=commit-staged]').innerText}})()")
-        chk('N2 al actualizar desde Sheets la casilla «solo filas nuevas o cambiadas» viene marcada', st['skip'] is True and st['cb'] is True, st)
-        chk('N3 la revisión informa cuántas ya están cargadas y cuántas son nuevas', ('400' in st['hint'] and str(total - 400) in st['hint'].replace(',', '')) or 'grandes' in st['hint'], st)
+        st = await q.evaluate("(()=>{const i=FP.app.state.staging.items[0];const sel=document.querySelector('#rep-pick');return {rep:i&&i.replace&&i.replace.batchId,pick:sel?sel.value:null,cb:document.querySelector('[data-action=staging-skip-unchanged]'),diff:(document.querySelector('[data-replace-diff]')||{innerText:''}).innerText,btn:document.querySelector('[data-action=commit-staged]').innerText}})()")
+        chk('N2 al actualizar desde Sheets queda elegido reemplazar el archivo anterior de esa hoja (y no la casilla de «solo nuevas»)', bool(st['rep']) and st['pick'] == st['rep'] and st['cb'] is None, st)
+        chk('N3 la revisión informa cuántas filas son nuevas, modificadas y quitadas', f'{total - 400:,} filas nuevas' in st['diff'] and '0 filas que ya no vienen' in st['diff'] and '400 iguales' in st['diff'], st)
         await q.click('[data-action="commit-staged"]'); await q.wait_for_timeout(2500)
         c2 = await count()
         chk('N4 tras actualizar solo se agregaron las filas nuevas (no se duplicó el histórico)', c2 == total, (c1, c2, total))
@@ -58,20 +59,20 @@ async def main():
         # actualizar de nuevo sin cambios: no hay nada que importar
         body['v'] = FULL
         await q.click('#sheets-saved-historical [data-action="sheets-refresh"]'); await q.wait_for_timeout(2500)
-        z = await q.evaluate("(()=>({dis:document.querySelector('[data-action=commit-staged]').disabled, btn:document.querySelector('[data-action=commit-staged]').innerText, hint:document.querySelector('[data-action=staging-skip-unchanged]').closest('.field').innerText}))()")
-        chk('N6 actualizar sin cambios: «Importar 0 filas», botón apagado y se dice que no hay nada nuevo', z['dis'] is True and 'Importar 0 filas' in z['btn'] and 'nada nuevo' in z['hint'], z)
+        z = await q.evaluate("(()=>({dis:document.querySelector('[data-action=commit-staged]').disabled, btn:document.querySelector('[data-action=commit-staged]').innerText, same:!!document.querySelector('[data-replace-same]')}))()")
+        chk('N6 actualizar sin cambios: «Importar 0 filas», botón apagado y se dice que es idéntica', z['dis'] is True and 'Importar 0 filas' in z['btn'] and z['same'] is True, z)
         await q.click('[data-action="discard-staged"]'); await q.wait_for_timeout(400)
         chk('N6b no se guardó nada (ni filas ni lotes)', await count() == total and await batches() == b2, [await count(), await batches(), b2])
         # una fila cambia
         mod = data[:]; f = mod[10].split(','); f[2] = '999999.99'; mod[10] = ','.join(f)
         await fetch_and_commit('\n'.join([head] + mod) + '\n')
-        chk('N7 una fila con valores cambiados entra (y solo esa)', await count() == total + 1, await count())
+        chk('N7 una fila con valores cambiados: la hoja reemplaza a la anterior (mismas filas, sin acumular)', await count() == total, await count())
         key = f"{data[10].split(',')[0]}|{data[10].split(',')[1]}|historical"
         latest = await q.evaluate("(k)=>FP.dataStore.resolveLatest(FP.app.state.store,'historical').get(k).metrics.revenue.value", key)
         chk('N8 el valor vigente de esa fila es el nuevo', abs(latest - 999999.99) < 0.01, latest)
         # sin la casilla: se comporta como antes (agrega todo)
         await fetch_and_commit('\n'.join([head] + mod) + '\n', uncheck=True)
-        chk('N9 sin la casilla se importa todo el archivo (comportamiento anterior)', await count() == total + 1 + total, await count())
+        chk('N9 eligiendo «No reemplazar» y sin la casilla se importa todo el archivo (comportamiento anterior)', await count() == total + total, await count())
         # archivo manual: la casilla existe pero no viene marcada
         # archivo grande (se revisa en un Worker): el filtro se aplica al importar
         mb = await q.evaluate("FP.importWorker.minBytes()")
@@ -88,11 +89,15 @@ async def main():
         body['v'] = BIG
         await q.click('#sheets-saved-historical [data-action="sheets-refresh"]'); await q.wait_for_timeout(15000)
         rem = await q.evaluate("(()=>{const i=FP.app.state.staging.items[0];return {remote:!!(i&&i.remote), skip:i&&i.skipUnchanged}})()")
+        fl = await q.evaluate("({t:(document.querySelector('[data-replace-flags]')||{innerText:''}).innerText,dis:document.querySelector('[data-action=commit-staged]').disabled})")
+        chk('N14 archivo grande con reemplazo elegido: avisa que no se puede comparar y pide confirmar antes', 'muy grande' in fl['t'] and fl['dis'] is True, fl)
+        await q.select_option('#rep-pick', ''); await q.wait_for_timeout(400)
         await q.click('[data-action="commit-staged"]'); await q.wait_for_timeout(20000)
         h1 = await count()
         chk('N12 archivo grande: primera importación agrega solo lo que no estaba (las 124,000 filas nuevas)', h1 == h0 + 124000, (h0, h1, rem))
         body['v'] = BIG
         await q.click('#sheets-saved-historical [data-action="sheets-refresh"]'); await q.wait_for_timeout(15000)
+        await q.select_option('#rep-pick', ''); await q.wait_for_timeout(400)
         await q.click('[data-action="commit-staged"]'); await q.wait_for_timeout(8000)
         chk('N13 archivo grande repetido: no se agrega nada y se avisa «Sin filas nuevas»', await count() == h1 and 'Sin filas nuevas' in await q.evaluate("document.getElementById('toast').textContent"), [await count(), h1, rem])
         chk('N10 los errores de página son cero', not errs, errs)

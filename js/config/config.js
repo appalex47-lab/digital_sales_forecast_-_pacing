@@ -549,8 +549,8 @@
         id: 'products', label: 'Productos · venta',
         description: 'Venta diaria por SKU con estado, sucursal y tipo de entrega (sistema de ventas). Se guarda en IndexedDB.',
         /** Fase 8.4: estado, sucursal y entrega dejan de ser obligatorios (un producto sin geografía se conserva como "No disponible"). */
-        required: ['date', 'channel', 'sku'],
-        recommended: ['state', 'branch', 'delivery'],
+        required: ['date', 'channel', 'sku', 'product', 'orderId', 'customerId', 'units', 'revenue'],
+        recommended: ['category', 'brand', 'state'],
         template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades', 'id_pedido', 'id_cliente']
       },
       funnelType: {
@@ -583,6 +583,25 @@
         { key: 'orders', label: 'Pedidos', kind: 'number', metric: true, synonyms: ['pedidos', 'orders', 'ordenes', 'transacciones', 'transactions'] },
         { key: 'units', label: 'Unidades', kind: 'number', metric: true, synonyms: ['unidades', 'units', 'piezas', 'cantidad', 'quantity'] }
       ],
+      /**
+       * Calidad por columna (archivo de venta): tres niveles. «required» bloquea la carga; «important» avisa y baja el puntaje;
+       * «optional» solo informa qué se pierde si falta. `impact` = lo que no se puede hacer sin esa columna.
+       */
+      columnTiers: {
+        required: ['date', 'channel', 'sku', 'product', 'orderId', 'customerId', 'units', 'revenue'],
+        important: ['category', 'brand', 'state'],
+        optional: ['productCode', 'subcategory', 'presentation', 'region', 'city', 'branch', 'branchName', 'delivery', 'orders'],
+        weights: { required: 3, important: 2, optional: 1 },
+        impact: {
+          date: 'sin fecha no hay serie diaria ni periodo', channel: 'sin canal no se puede separar Ecommerce, App, WhatsApp y Llamadas', sku: 'sin SKU no se identifica el producto',
+          product: 'sin nombre del producto las tablas muestran solo el código', orderId: 'sin ID de pedido no se cuentan pedidos reales ni se arma Clientes',
+          customerId: 'sin ID de cliente no hay clientes nuevos, recurrentes ni valor de vida', units: 'sin unidades no hay unidades por pedido ni precio por unidad', revenue: 'sin venta no hay nada que analizar',
+          category: 'sin categoría no hay análisis Categoría → Producto', brand: 'sin marca no se puede ver el peso de cada marca o laboratorio', state: 'sin estado no hay análisis geográfico',
+          productCode: 'sin código de producto no se cruza con catálogos externos', subcategory: 'sin subcategoría el análisis queda a nivel categoría', presentation: 'sin presentación no se separan formatos del mismo producto',
+          region: 'sin región no se agrupan estados por zona comercial', city: 'sin ciudad no hay análisis por ciudad', branch: 'sin sucursal no hay análisis de recolección', branchName: 'sin nombre de sucursal se muestra solo el código',
+          delivery: 'sin tipo de entrega no se separa domicilio de recolección', orders: 'sin la columna de pedidos se cuentan por ID de pedido'
+        }
+      },
       funnelFields: [
         { key: 'date', label: 'Fecha', kind: 'date', synonyms: ['fecha', 'date', 'dia', 'day'] },
         { key: 'channel', label: 'Canal', kind: 'channel', synonyms: ['canal', 'channel'] },

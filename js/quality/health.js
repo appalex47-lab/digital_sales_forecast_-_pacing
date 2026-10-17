@@ -65,6 +65,25 @@
    * Salud de Productos por tipo (venta / embudo), con los mismos nombres de componente. Se calcula con lo que ya guarda cada lote
    * (filas leídas, aceptadas, rechazadas, duplicados, conflictos, filas con advertencia y celdas en cuarentena): no recorre las filas.
    */
+  /** Calidad por columna del archivo de venta de Productos: llenado, nivel (obligatoria / importante / opcional) y qué se pierde si falta. Devuelve null si algún lote no trae la medición. */
+  function columnQuality(bs) {
+    if (!bs || !bs.length || !bs.every((b) => b.summary && b.summary.colFilled)) return null;
+    const T = C().products.columnTiers, W = T.weights, rows = bs.reduce((a, b) => a + (b.summary.rows || 0), 0);
+    const columns = [];
+    [['required', 'Obligatoria'], ['important', 'Importante'], ['optional', 'Opcional']].forEach(([tier, tl]) => T[tier].forEach((k) => {
+      const mapped = bs.some((b) => (b.mappedKeys || []).includes(k) || b.summary.colFilled[k] !== undefined);
+      const filled = bs.reduce((a, b) => a + (b.summary.colFilled[k] || 0), 0);
+      columns.push({ key: k, label: (C().products.fields.find((f) => f.key === k) || { label: k }).label, tier, tierLabel: tl, mapped, filled, rows, pct: mapped && rows ? Math.round((filled / rows) * 100) : 0, impact: T.impact[k] || '' });
+    }));
+    const scored = columns.filter((c) => c.tier !== 'optional' || c.mapped);
+    const wsum = scored.reduce((a, c) => a + W[c.tier], 0);
+    const score = wsum ? Math.round(scored.reduce((a, c) => a + c.pct * W[c.tier], 0) / wsum) : null;
+    const gaps = scored.filter((c) => c.pct < 100).sort((a, b) => (b.tier === a.tier ? a.pct - b.pct : W[b.tier] - W[a.tier]));
+    const worst = gaps[0];
+    const detail = worst ? `Columnas con vacíos o sin cargar: ${gaps.length} de ${scored.length}. La que más pesa: ${worst.label} (${worst.mapped ? `${worst.pct} % llena` : 'sin cargar'}; ${worst.impact}).` : 'Todas las columnas del archivo vienen completas.';
+    return { columns, score, detail };
+  }
+
   function products(slim) {
     const R = FP.qualityRules; const out = [];
     ['sales', 'funnel'].forEach((kind) => {
@@ -79,10 +98,16 @@
         { key: 'duplicates', label: 'Duplicados', score: pct(dups, rows), detail: `${dups} ${plural(dups, 'registro repetido o en conflicto', 'registros repetidos o en conflicto')} (misma fecha, canal y SKU), de ${rows}.` },
         { key: 'valid', label: 'Registros válidos', score: pct(rejected + warn, rows), detail: `${rejected + warn} filas rechazadas o con alguna advertencia, de ${rows} leídas.` }
       ];
+      // Calidad por columna (solo venta; con lotes guardados antes de esta medición no hay datos de llenado y no se calcula)
+      let columns = null;
+      if (kind === 'sales') {
+        const cq = columnQuality(bs);
+        if (cq) { columns = cq.columns; comps.push({ key: 'columns', label: 'Columnas', score: cq.score, detail: cq.detail }); }
+      }
       const used = comps.filter((c) => c.score !== null);
       let score = used.length ? Math.round(used.reduce((a, c) => a + c.score, 0) / used.length) : null;
       if (score === 100 && used.some((c) => c.score < 100)) score = 99;   // 100 solo si no hay ninguna incidencia
-      out.push({ dataType: `products-${kind}`, label: R.PRODUCT_KIND[kind], empty: false, score, components: comps, quarantinedCells: q, files: bs.length });
+      out.push({ dataType: `products-${kind}`, label: R.PRODUCT_KIND[kind], empty: false, score, components: comps, quarantinedCells: q, files: bs.length, columns });
     });
     return out;
   }
@@ -93,5 +118,5 @@
     return { score: capScore(scored.map((x) => x.score)), collections: list };
   }
 
-  FP.dataHealth = { collection, overview, products };
+  FP.dataHealth = { collection, overview, products, columnQuality };
 })(typeof window !== 'undefined' ? window : globalThis);

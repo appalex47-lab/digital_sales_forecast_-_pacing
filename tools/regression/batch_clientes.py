@@ -82,11 +82,11 @@ async def main():
         info3 = await q.evaluate("FP.customerStore.info()")
         chk('K16 quitar los archivos vacía el libro de clientes', info3 is None, info3)
         # solo una de las dos columnas: se carga como siempre y se avisa
-        r1 = await q.evaluate("""(async()=>{const csv='fecha,canal,sku,venta,pedidos,unidades,id_cliente\\n2026-09-01,ecommerce,S1,100,1,1,C1\\n';
+        r1 = await q.evaluate("""(async()=>{const csv='fecha,canal,sku,producto,venta,pedidos,unidades,id_cliente\\n2026-09-01,ecommerce,S1,Uno,100,1,1,C1\\n';
           const st=FP.productImport.stage(csv,{fileName:'x.csv',kind:'sales'});const r=await FP.productImport.process(st,{settings:{}});
-          return {ledger:!!r.draft.ledger,issues:Object.keys(r.summary.issuesByType),canImport:r.canImport}})()""")
-        chk('K18 con solo id_cliente no arma clientes, avisa y el archivo se puede cargar', r1['ledger'] is False and 'CUSTOMER_COLUMNS_INCOMPLETE' in r1['issues'] and r1['canImport'], r1)
-        r2 = await q.evaluate("""(async()=>{const csv=['fecha,canal,sku,venta,pedidos,unidades,id_pedido,id_cliente','2026-09-01,ecommerce,S1,100,1,1,P1,C1','2026-09-01,ecommerce,S2,50,1,1,P1,C1','2026-09-01,ecommerce,S3,70,1,1,P2,0','2026-09-01,app,S4,20,1,1,,C9','2026-09-02,app,S5,20,1,1,P3,invitado','2026-09-02,app,S6,40,1,1,P4,C2'].join('\\n');
+          return {canImport:r.canImport,missing:r.mappingIssues.filter(i=>i.type==='MISSING_REQUIRED_COLUMN').map(i=>i.field)}})()""")
+        chk('K18 sin id_pedido (obligatoria) el archivo de venta no se puede cargar y se dice qué columna falta', r1['canImport'] is False and 'orderId' in r1['missing'], r1)
+        r2 = await q.evaluate("""(async()=>{const csv=['fecha,canal,sku,producto,venta,pedidos,unidades,id_pedido,id_cliente','2026-09-01,ecommerce,S1,Uno,100,1,1,P1,C1','2026-09-01,ecommerce,S2,Dos,50,1,1,P1,C1','2026-09-01,ecommerce,S3,Tres,70,1,1,P2,0','2026-09-01,app,S4,Cuatro,20,1,1,,C9','2026-09-02,app,S5,Cinco,20,1,1,P3,invitado','2026-09-02,app,S6,Seis,40,1,1,P4,C2'].join('\\n');
           const st=FP.productImport.stage(csv,{fileName:'y.csv',kind:'sales'});const r=await FP.productImport.process(st,{settings:{}});
           return {c:r.summary.customers,issues:Object.keys(r.summary.issuesByType),orders:r.draft.ledger.orders.size,canImport:r.canImport}})()""")
         chk('K19 compras sin cliente o sin pedido no entran a clientes, pero sí a productos, y se avisa', r2['orders'] == 2 and r2['c']['withoutCustomer'] == 2 and r2['c']['withoutOrder'] == 1 and 'LINES_WITHOUT_CUSTOMER' in r2['issues'] and 'LINES_WITHOUT_ORDER' in r2['issues'] and r2['canImport'], r2)

@@ -1315,3 +1315,8 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .home-key__goal[data-goal="projected"] strong { color: var(--c-ink, #14213d); }
 .chart-goalnote { margin: var(--sp-2, 8px) 0 0; }
 .home-key__excl { margin: var(--sp-2, 8px) 0 0; }
+
+/* Reemplazo de archivos ya cargados (comparación y confirmación) */
+.replace-block { display: grid; gap: var(--ds-s3, 12px); margin-bottom: var(--ds-s3, 12px); }
+.replace-diff { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.replace-block label { overflow-wrap: anywhere; }

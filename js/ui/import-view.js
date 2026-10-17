@@ -44,6 +44,12 @@
         <div class="field"><label for="set-tol">Tolerancia CR y AOV (%)</label>
           <input id="set-tol" type="number" min="0" max="50" step="0.1" value="${esc(+(s.tolerance * 100).toFixed(4))}" data-action="set-setting" data-key="tolerance">
           <span class="field__hint">Diferencia aceptada entre el valor cargado y el calculado.</span></div>
+        <div class="field"><label for="set-rep-rows">Reemplazo de archivos: pedir confirmación si la versión nueva trae menos filas (%)</label>
+          <input id="set-rep-rows" type="number" min="0" max="100" step="1" value="${esc(s.replaceRowsDropPct)}" data-action="set-setting" data-key="replaceRowsDropPct">
+          <span class="field__hint">Al reemplazar un archivo ya cargado, si la versión nueva trae más de este porcentaje menos de filas, o acorta el periodo, se pide confirmar.</span></div>
+        <div class="field"><label for="set-rep-rev">Reemplazo de archivos: pedir confirmación si la venta de los días en común cambia más de (%)</label>
+          <input id="set-rep-rev" type="number" min="0" max="100" step="0.5" value="${esc(s.replaceRevenuePct)}" data-action="set-setting" data-key="replaceRevenuePct">
+          <span class="field__hint">Compara sólo los días que están en las dos versiones.</span></div>
         <div class="field field--check">
           <label><input type="checkbox" data-action="set-setting" data-key="includeErrorRows" ${s.includeErrorRows ? 'checked' : ''}>
             Importar también filas con errores en métricas</label>
@@ -216,7 +222,8 @@
     const box = $('staging');
     const items = state.staging.items;
     const w = state.staging.working;
-    const workingHtml = w ? `<div class="stgwork" role="status" aria-live="polite"><p><strong>${esc(w.fileName)}</strong> · ${esc(w.phase)}${w.pct ? ` · ${w.pct} %` : ''}</p><progress max="100" value="${w.pct || 0}" aria-label="Avance"></progress><p class="field__hint">Se procesa en segundo plano: RevNavigator sigue respondiendo y puedes seguir usándolo.</p></div>` : '';
+    const workingHtml0 = w ? `<div class="stgwork" role="status" aria-live="polite"><p><strong>${esc(w.fileName)}</strong> · ${esc(w.phase)}${w.pct ? ` · ${w.pct} %` : ''}</p><progress max="100" value="${w.pct || 0}" aria-label="Avance"></progress><p class="field__hint">Se procesa en segundo plano: RevNavigator sigue respondiendo y puedes seguir usándolo.</p></div>` : '';
+    const workingHtml = FP.replaceView.undoBar(state) + workingHtml0;
     if (!items.length) {
       box.innerHTML = workingHtml + `<div class="empty"><strong>No hay archivos en revisión</strong>Selecciona un CSV o XLSX en cualquiera de las tres cargas. Nada se guarda hasta que confirmes la importación.</div>`;
       return;
@@ -242,7 +249,9 @@
       const unchanged = sel.filter((r) => same(r.record)).length;
       counts = { unchanged, fresh: sel.length - unchanged };
     }
-    const willImportNow = active.skipUnchanged && counts ? counts.fresh : willImport;
+    const rpl = active.replace && active.replace.batchId ? FP.replaceView.planFor(state, active) : null;
+    const replaceSame = Boolean(rpl && rpl.cmp && rpl.cmp.added === 0 && rpl.cmp.changed === 0 && rpl.cmp.removed === 0);   // la versión nueva es idéntica a la cargada
+    const willImportNow = rpl ? (replaceSame ? 0 : willImport) : active.skipUnchanged && counts ? counts.fresh : willImport;
     const skipBlock = canSkip ? `<div class="field field--check"><label><input type="checkbox" data-action="staging-skip-unchanged" ${active.skipUnchanged ? 'checked' : ''}> Importar solo filas nuevas o cambiadas (omitir las que ya están cargadas con los mismos valores)</label>
         <span class="field__hint">${counts ? (counts.unchanged ? `Ya están cargadas sin cambios: ${F().integer(counts.unchanged)}. Nuevas o con cambios: ${F().integer(counts.fresh)}.${counts.fresh === 0 && active.skipUnchanged ? ' No hay nada nuevo que importar: puedes descartar el archivo.' : ''}` : 'Ninguna de estas filas está cargada todavía.') : 'Con archivos grandes, el conteo se informa al importar.'}</span></div>` : '';
 
@@ -378,14 +387,15 @@
         </ol>
 
         <div class="staging__foot">
-          ${skipBlock}
+          ${FP.replaceView.block(state, active)}
+          ${active.replace && active.replace.batchId ? '' : skipBlock}
           <p>${result.canImport
             ? `Se importarán <strong>${F().integer(willImportNow)}</strong> de ${F().integer(sum.rows)} filas como ${esc(C().dataTypes[staged.dataType].label)}.${sum.rows - willImport ? ` ${F().integer(sum.rows - willImport)} quedan fuera y sus errores se guardan en el registro del archivo.` : ''}`
             : 'Corrige el mapeo para poder importar.'}</p>
           ${result.canImport && sum.rows - willImport > 0 ? rejectionNote(result, sum.rows - willImport, willImport, esc, F()) : ''}
           <div class="btn-row">
             <button type="button" class="btn" data-action="discard-staged">Descartar archivo</button>
-            <button type="button" class="btn btn--primary" data-action="commit-staged" ${result.canImport && willImportNow && !active.busy ? '' : 'disabled'}>${active.busy ? 'Procesando… ' : ''}Importar ${F().integer(willImportNow)} filas${active.skipUnchanged && counts ? ' nuevas o cambiadas' : ''}</button>
+            <button type="button" class="btn btn--primary" data-action="commit-staged" ${result.canImport && willImportNow && !active.busy && !FP.replaceView.blocked(state, active) ? '' : 'disabled'}>${active.busy ? 'Procesando… ' : ''}Importar ${F().integer(willImportNow)} filas${rpl && willImportNow ? ' (reemplaza al archivo anterior)' : active.skipUnchanged && counts ? ' nuevas o cambiadas' : ''}</button>
           </div>
         </div>
       </div>`;

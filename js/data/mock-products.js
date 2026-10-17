@@ -48,7 +48,8 @@
   function generate({ from = '2026-08-01', to = '2026-09-22', skus = 600, channels = ['ecommerce', 'app', 'whatsapp', 'llamadas'], seed = 9 } = {}) {
     const cat = catalog(skus), br = branches();
     const r = rng(seed);
-    const sales = ['fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades'];
+    const sales = ['fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente'];
+    let seq = 0;
     const funnel = ['fecha,canal,sku,vistas_ficha,agregados_carrito,inicio_checkout,compras_ga4'];
     const chW = { ecommerce: 1, app: 0.8, whatsapp: 0.35, llamadas: 0.25 };
     for (let d = from; d <= to; d = FP.calendar.addDays(d, 1)) {
@@ -77,13 +78,17 @@
           x.o += o; x.u += units; x.rev += units * c.price * (0.95 + r() * 0.1);
           rows.set(k, x);
         }
-        rows.forEach((x) => sales.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${x.b.region},${x.b.state},${x.b.city},${x.b.id},${x.b.name},${x.dom ? 'domicilio' : 'recoleccion'},${Math.round(x.rev * 100) / 100},${x.o},${x.u}`));
+        rows.forEach((x) => sales.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${x.b.region},${x.b.state},${x.b.city},${x.b.id},${x.b.name},${x.dom ? 'domicilio' : 'recoleccion'},${Math.round(x.rev * 100) / 100},${x.o},${x.u},PED-${d.replace(/-/g, '')}-${++seq},CLI-${String((seq * 7919) % 400).padStart(3, '0')}`));
       }));
     }
     return { sales: sales.join('\n'), funnel: funnel.join('\n') };
   }
 
   /** Caso de calidad de venta: duplicado exacto, conflicto, estado y entrega inválidos, sin sucursal, faltantes, negativos. */
+  /** Agrega las columnas obligatorias id_pedido e id_cliente a un caso de prueba (la primera línea es el encabezado). Solo ID: no cambia ninguna cifra. */
+  let idN = 0;
+  function withIds(line, i) { if (i === 0) { idN = 0; return `${line},id_pedido,id_cliente`; } idN++; return `${line},PQ-${idN},CQ-${idN}`; }
+
   function qualityCase() {
     const h = 'fecha,canal,sku,producto,categoria,subcategoria,estado,sucursal,tipo_entrega,venta,pedidos,unidades';
     return [h,
@@ -99,7 +104,7 @@
       '2026-09-20,app,SKU7,Zinc F,Vitaminas,Minerales,Puebla,,domicilio,100,1,1',
       '2026-09-20,app,SKU8,Zinc G,Vitaminas,Minerales,Puebla,SUC-032,dron,100,1,1',
       '2026-09-20,marketplace,SKU9,Zinc H,Vitaminas,Minerales,Puebla,SUC-032,domicilio,100,1,1'
-    ].join('\n');
+    ].map(withIds).join('\n');
   }
 
   /** Caso de geografía (Fase 8.4): completa, parcial, sin geografía, huérfanos e inconsistencias padre/hijo. */
@@ -115,7 +120,7 @@
       '2026-09-20,app,G6,Prod G6,Vitaminas,Norte,Narnia,Ciudad X,028,Sucursal Narnia,recoleccion,100,1,1',
       '2026-09-20,app,G7,Prod G7,Vitaminas,Norte,Nuevo León,Monterrey,029,Sucursal Norte,recoleccion,100,1,1',
       '2026-09-20,app,G7,Prod G7,Vitaminas,Norte,Coahuila,Saltillo,029,Sucursal Norte,recoleccion,50,1,1'
-    ].join('\n');
+    ].map(withIds).join('\n');
   }
 
 

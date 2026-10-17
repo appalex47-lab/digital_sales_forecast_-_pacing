@@ -16,7 +16,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:300] if d and not ok else ''))
     if not ok: fails.append(n)
 def products():
-    rows = ['fecha,canal,sku,producto,categoria,venta,pedidos,unidades']
+    rows = ['fecha,canal,sku,producto,categoria,venta,pedidos,unidades,id_pedido,id_cliente']
     exp = []   # (fila del archivo, campo, valor original, regla)
     for i in range(60):
         line = i + 2; d = f'2026-09-{1 + i % 20:02d}'; ch = ['ecommerce', 'app'][i % 2]; sku = f'SKU{i:03d}'
@@ -25,8 +25,8 @@ def products():
         if i == 19: venta = '-10'; exp.append((line, 'revenue', '-10', 'NEGATIVE_REVENUE'))
         if i == 23: uni = 'abc'; exp.append((line, 'units', 'abc', 'INVALID_UNITS'))
         if i == 41: ped = '-3'; exp.append((line, 'orders', '-3', 'NEGATIVE_ORDERS'))
-        rows.append(f'{d},{ch},{sku},Producto {i},Cat {i % 4},{venta},{ped},{uni}')
-    rows.append('2026-13-45,ecommerce,SKUBAD,Malo,Cat 1,100,1,1')   # fecha inválida → fila rechazada
+        rows.append(f'{d},{ch},{sku},Producto {i},Cat {i % 4},{venta},{ped},{uni},P{i},C{i % 9}')
+    rows.append('2026-13-45,ecommerce,SKUBAD,Malo,Cat 1,100,1,1,PX,CX')   # fecha inválida → fila rechazada
     return '\n'.join(rows) + '\n', exp
 async def main():
     async with async_playwright() as p:
