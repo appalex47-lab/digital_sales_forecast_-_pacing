@@ -1752,12 +1752,6 @@ tr.is-evidence { outline-offset: -3px; }
 .import-settings[open] > summary { margin-bottom: var(--ds-s3); }
 .import-settings[open] .import-settings__sum { display: none; }
 
-/* Encabezado móvil compacto: la fila de vigencia se esconde al bajar (js/ui/ui.js · initHeaderCollapse) y reaparece al subir */
-@media (max-width: 860px) {
-  .app-header { transition: top .18s ease; }
-  .app-header.is-compact .topbar__status { visibility: hidden; }
-}
-@media (prefers-reduced-motion: reduce) { .app-header { transition: none; } }
 
 /* Diagnóstico: panel «Filtros» plegable con chips de los filtros vigentes */
 .dx-filters > summary { padding: var(--ds-s2) 0; display: block; }
@@ -1790,3 +1784,27 @@ tr.is-evidence { outline-offset: -3px; }
 }
 .home-key__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 700px) { .home-key__grid { grid-template-columns: minmax(0, 1fr); } }
+
+
+/* Encabezado móvil de una sola fila (56 px): marca · fecha (ícono de calendario) · ayuda · cuenta. El chip de fecha se compacta a un
+   botón de calendario que abre el mismo panel de fecha y año; su nombre accesible conserva la fecha y el año completos. */
+@media (max-width: 860px) {
+  :root { --ds-header-h: 56px; }
+  .topbar { height: var(--ds-header-h); grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: auto; row-gap: 0; }
+  .topbar__brand { grid-row: 1; grid-column: 1; }
+  .topbar__status { grid-row: 1; grid-column: 2; grid-row-start: 1; justify-self: end; padding-bottom: 0; margin: 0; }
+  .topbar__actions { grid-row: 1; grid-column: 3; }
+  .hdate__txt, .hdate__yr, .hdate__btn > svg:last-of-type { display: none; }
+  .hdate__btn { width: 44px; height: 44px; padding: 0; justify-content: center; position: relative; }
+  .hdate__btn > svg:first-of-type { width: 20px; height: 20px; }
+  .hdate__btn[data-fixed="1"]::after { content: ""; position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: #F5B301; border: 1px solid var(--ds-nav, #14213d); }
+  .hdate__panel { position: fixed; top: calc(var(--ds-header-h) + 6px); left: 16px; right: 16px; width: auto; max-width: 360px; margin-left: auto; }
+}
+@media (max-width: 860px) {
+  .topbar { gap: 6px; }
+  .topbar__brand { overflow: hidden; gap: 6px; }
+  .topbar .app-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 1.05rem; }
+  .topbar__actions { gap: 6px; }
+  .hdate__btn { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+}
+@media (max-width: 400px) { .topbar__logo { display: none; } }

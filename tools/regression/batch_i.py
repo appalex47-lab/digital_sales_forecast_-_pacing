@@ -242,7 +242,7 @@ async def main():
             mr = await m2.evaluate("""()=>{const r=e=>e.getBoundingClientRect();const st=r(document.getElementById('topbar-status')),brand=r(document.querySelector('.topbar__brand')),h=r(document.querySelector('.app-header')),nav=r(document.getElementById('app-nav'));
               const it=[...document.getElementById('topbar-status').children].map(e=>{const b=r(e);return b.right<=innerWidth+0.5&&b.left>=0&&b.height>=24});
               return {sw:document.documentElement.scrollWidth-innerWidth,below:st.top>=brand.bottom-1,hdrBottom:Math.round(h.bottom),navTop:Math.round(nav.top),allInside:it.every(Boolean),n:it.length}}""")
-            chk(f'R-8 {w}px: el año y «Datos al» van en una fila bajo la marca, caben en pantalla (sin desborde), son tocables y el cajón del menú empieza justo bajo el encabezado', mr['sw'] <= 0 and mr['below'] and mr['allInside'] and mr['n'] == 1 and abs(mr['hdrBottom'] - mr['navTop']) <= 1, mr)
+            chk(f'R-8 {w}px: el año y «Datos al» van en el mismo renglón que la marca (botón de calendario, sin fila aparte), caben en pantalla (sin desborde), son tocables y el cajón del menú empieza justo bajo el encabezado', mr['sw'] <= 0 and not mr['below'] and mr['allInside'] and mr['n'] == 1 and abs(mr['hdrBottom'] - mr['navTop']) <= 1, mr)
             await m2.close()
         wide = []
         for w in (1920, 1440, 1280, 1100, 1025, 900):
