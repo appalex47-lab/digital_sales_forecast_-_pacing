@@ -28,7 +28,11 @@
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
     else if (view === 'reforecast') { c.channel = state.rf.channel; if (state.rf.month && state.rf.period !== 'months') { c.periodType = 'month'; c.periodKey = state.rf.month; } }
-    else if (view === 'inicio') Object.assign(c, { channel: state.ux.home.channel, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || c.periodKey });
+    else if (view === 'inicio') {
+      // Con el periodo siguiendo a la fecha (sin fijar) Inicio no lo comparte con las demás vistas: cada una conserva su propio mes por defecto.
+      if (state.ux.home.follow === false) Object.assign(c, { channel: state.ux.home.channel, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || c.periodKey });
+      else { c.channel = state.ux.home.channel; c.periodType = 'month'; c.periodKey = null; }
+    }
     return c;
   }
 
@@ -351,7 +355,8 @@
     const detail = ownDesc && !norm(what).includes(norm(ownDesc).slice(0, 60)) ? `${ownTitle && norm(ownTitle) !== norm(v.title) ? `${ownTitle}. ` : ''}${ownDesc}` : '';
     const showQuality = (q === 'invalid' || q === 'warnings') && !NO_QUALITY.includes(view);
     const showNext = next.view !== view && !NO_NEXT.includes(view);
-    const inlineCtx = view === 'inicio' && CTX_VIEWS.includes(view);   // Inicio: el contexto va junto al título (chip corto); el párrafo solo queda si hay nota
+    const inlineCtx = view === 'inicio' && CTX_VIEWS.includes(view);
+    const chipCtx = inlineCtx ? { ...state.ux.ctx, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || state.ux.ctx.periodKey } : state.ux.ctx;   // Inicio: el contexto va junto al título (chip corto); el párrafo solo queda si hay nota
     const ctxHtml = CTX_VIEWS.includes(view) ? (inlineCtx ? (state.ux.ctxNote ? `<p class="ux-head__ctx"><span class="ux-context__note">${esc(state.ux.ctxNote)}</span></p>` : '') : `<p class="ux-head__ctx">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
             ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>`) : '';
     renderHelpMenu(state); renderAccountMenu(state);
@@ -363,7 +368,7 @@
           const qn = g && g.question ? `<span class="crumb-q"> · ${esc(g.question)}</span>` : '';
           return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
         }).join('')}</ol></nav>`}
-        <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${inlineCtx ? `<span class="ux-head__ctxchip" title="${esc(contextLabel(state.ux.ctx))}" aria-label="${esc('Contexto: ' + contextLabel(state.ux.ctx))}">${esc(contextLabelShort(state.ux.ctx))}</span><span class="ux-head__break" aria-hidden="true"></span>` : ''}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
+        <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${inlineCtx ? `<span class="ux-head__ctxchip" title="${esc(contextLabel(chipCtx))}" aria-label="${esc('Contexto: ' + contextLabel(chipCtx))}">${esc(contextLabelShort(chipCtx))}</span><span class="ux-head__break" aria-hidden="true"></span>` : ''}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
         <button type="button" class="ux-head__morebtn" data-action="ux-more" aria-expanded="${uxMoreOpen}" aria-controls="ux-more">Qué hay aquí y qué hago</button>
         <div class="ux-head__more" id="ux-more" data-open="${uxMoreOpen}">
         ${what ? `<p class="ux-head__line ux-context__purpose"><b>Qué hay aquí</b> ${esc(what)}</p>` : ''}

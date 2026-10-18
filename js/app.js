@@ -966,13 +966,13 @@
     if (renderAgain) { renderAgain = false; render(); }
   }
 
-  /** Inicio sigue a la fecha del encabezado (mes de esa fecha) mientras no se fije el periodo a mano. */
+  /** Inicio sigue a la fecha del encabezado (mes de esa fecha; si el último día con real es de un mes anterior, ese mes, igual que Diagnóstico) mientras no se fije el periodo a mano. */
   function syncHomeToDate() {
     const h = state.ux.home;
     if (!h || h.follow === false) return;
     const ref = (state.fc.settings && state.fc.settings.referenceDate) || Cal.toISODate(new Date());
     const run = state.fc.run;
-    const m = ref.startsWith(`${state.year}-`) ? ref.slice(0, 7) : (run && run.cutoff && run.cutoff.startsWith(`${state.year}-`) ? run.cutoff.slice(0, 7) : null);
+    const m = ref.startsWith(`${state.year}-`) ? defaultMonth(ref) : (run && run.cutoff && run.cutoff.startsWith(`${state.year}-`) ? run.cutoff.slice(0, 7) : null);
     if (m) { h.periodType = 'month'; h.periodKey = m; } else { h.periodType = 'year'; h.periodKey = String(state.year); }
   }
 

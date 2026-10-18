@@ -27,7 +27,7 @@ async def main():
         for w, h in ((375, 740), (320, 640)):
             c, q, errs = await setup(b, {'width': w, 'height': h}, True); g = await q.evaluate(GEO)
             chk(f'I-1 [{w}] el chip de contexto va en la misma línea que el título', g['chip'] and abs(g['chip']['t'] - g['title']['t']) <= 12 and g['chip']['b'] <= g['title']['t'] + 40, g)
-            chk(f'I-2 [{w}] el chip de contexto está abreviado y su título completo conserva el texto', g['chip'] and 'Oct 2026' in g['chip']['txt'] and 'vs Plan' in g['chip']['txt'] and 'Actual vs Plan' in (await q.get_attribute('.ux-head__ctxchip', 'title')), g['chip'])
+            chk(f'I-2 [{w}] el chip de contexto está abreviado y su título completo conserva el texto', g['chip'] and 'Sep 2026' in g['chip']['txt'] and 'vs Plan' in g['chip']['txt'] and 'Actual vs Plan' in (await q.get_attribute('.ux-head__ctxchip', 'title')), g['chip'])
             chk(f'I-3 [{w}] el chip de venta acumulada va debajo del título y «Qué hay aquí y qué hago» debajo del chip', g['state']['t'] >= g['title']['t'] + 20 and g['more']['t'] >= g['state']['b'], g)
             chk(f'I-4 [{w}] «Qué hay aquí y qué hago» sigue funcionando', await q.evaluate("(()=>{const b=document.querySelector('.ux-head__morebtn');b.click();return getComputedStyle(document.getElementById('ux-more')).display!=='none'})()"))
             await q.evaluate("document.querySelector('.ux-head__morebtn').click()")
@@ -46,13 +46,13 @@ async def main():
         # ---- periodo que sigue a la fecha (escritorio basta; la lógica no depende del ancho) ----
         c, q, errs = await setup(b, {'width': 1280, 'height': 800}, False)
         st = "(()=>{const h=FP.app.state.ux.home;return {t:h.periodType,k:h.periodKey,f:h.follow,sel:document.getElementById('home-per').value,pin:!!document.querySelector('.home__pin'),follow:!!document.querySelector('.home__follow')}})()"
-        s0 = await q.evaluate(st); chk('F-1 por defecto Inicio muestra el mes de la fecha y no muestra etiqueta de «fijado»', s0['t'] == 'month' and s0['k'] == '2026-10' and s0['f'] is True and s0['sel'] == '2026-10' and not s0['follow'] and not s0['pin'], s0)
-        await q.evaluate("FP.app.actions['set-ref-date']({value:'2026-09-10'})"); await q.wait_for_timeout(700)
-        s1 = await q.evaluate(st); chk('F-2 al mover la fecha a septiembre Inicio pasa a septiembre', s1['k'] == '2026-09' and s1['sel'] == '2026-09' and s1['f'] is True, s1)
-        await q.select_option('#home-per', '2026-08'); await q.wait_for_timeout(500)
-        s2 = await q.evaluate(st); chk('F-3 elegir un mes a mano lo fija y aparece «fijado · seguir la fecha»', s2['k'] == '2026-08' and s2['f'] is False and s2['pin'], s2)
+        s0 = await q.evaluate(st); chk('F-1 por defecto Inicio muestra el mes de la fecha (o el último mes con real si la fecha cae en un mes aún sin venta) y no muestra etiqueta de «fijado»', s0['t'] == 'month' and s0['k'] == '2026-09' and s0['f'] is True and s0['sel'] == '2026-09' and not s0['follow'] and not s0['pin'], s0)
+        await q.evaluate("FP.app.actions['set-ref-date']({value:'2026-08-15'})"); await q.wait_for_timeout(700)
+        s1 = await q.evaluate(st); chk('F-2 al mover la fecha a agosto Inicio pasa a agosto', s1['k'] == '2026-08' and s1['sel'] == '2026-08' and s1['f'] is True, s1)
+        await q.select_option('#home-per', '2026-07'); await q.wait_for_timeout(500)
+        s2 = await q.evaluate(st); chk('F-3 elegir un mes a mano lo fija y aparece «fijado · seguir la fecha»', s2['k'] == '2026-07' and s2['f'] is False and s2['pin'], s2)
         await q.evaluate("FP.app.actions['set-ref-date']({value:'2026-09-20'})"); await q.wait_for_timeout(700)
-        s3 = await q.evaluate(st); chk('F-4 con el periodo fijado, mover la fecha NO lo cambia', s3['k'] == '2026-08' and s3['f'] is False, s3)
+        s3 = await q.evaluate(st); chk('F-4 con el periodo fijado, mover la fecha NO lo cambia', s3['k'] == '2026-07' and s3['f'] is False, s3)
         await q.click('.home__pin'); await q.wait_for_timeout(500)
         s4 = await q.evaluate(st); chk('F-5 «seguir la fecha» vuelve al mes de la fecha', s4['k'] == '2026-09' and s4['f'] is True and not s4['pin'], s4)
         await q.select_option('#home-per', 'year'); await q.wait_for_timeout(500)
