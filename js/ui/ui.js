@@ -421,6 +421,7 @@
   function toast(message) {
     const el = $('toast');
     el.textContent = message;
+    if (!el.dataset.tap) { el.dataset.tap = '1'; el.addEventListener('click', () => { clearTimeout(toastTimer); el.classList.remove('is-visible'); }); }   // tocar el aviso lo cierra (en móvil)
     el.classList.add('is-visible');
     clearTimeout(toastTimer);
     // tiempo según el largo del mensaje: los avisos largos (conversión de GA4, archivos omitidos) se alcanzan a leer

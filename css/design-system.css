@@ -1706,3 +1706,18 @@ tr.is-evidence { outline-offset: -3px; }
 .app-nav .snav__toggle[data-route-hint]:not([aria-expanded="true"])::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ds-accent); flex: none; margin-left: 6px; }
 .route-origin__notes { margin: 6px 0 0; padding-left: 18px; }
 .route-origin__notes li { margin: 2px 0; }
+
+/* Móvil · tablas anchas: sombra en el borde que indica que hay más columnas, letra mínima (la primera columna no se fija: tapaba botones al desplazarse) de 12 px en etiquetas */
+@media (max-width: 860px) {
+  .table-wrap { background:
+    linear-gradient(to right, var(--ds-surface) 30%, rgba(255,255,255,0)) left center / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--ds-surface) 30%, rgba(255,255,255,0)) right center / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(20,33,61,.18), rgba(20,33,61,0)) left center / 10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(20,33,61,.18), rgba(20,33,61,0)) right center / 10px 100% no-repeat scroll; }
+  body .pill, body .hstatus__link .pill, body .nbs__sts { font-size: 12px; }
+  /* el aviso no tapa el panel de menú abierto */
+  body.nav-open .toast { display: none; }
+  /* el aviso sale arriba, bajo el encabezado, para no tapar lo que se lee; se cierra al tocarlo */
+  .toast { top: calc(var(--ds-header-h) + var(--ds-s2)); bottom: auto; transform: translateY(-6px); }
+  .toast.is-visible { transform: none; pointer-events: auto; cursor: pointer; }
+}
