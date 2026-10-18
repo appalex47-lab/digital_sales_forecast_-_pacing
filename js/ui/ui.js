@@ -65,7 +65,7 @@
     if (top) top.innerHTML = `
       <span class="hdate">
         <button type="button" id="topbar-ref" class="hdate__btn" data-action="ref-toggle" aria-haspopup="dialog" aria-expanded="${open}" aria-controls="topbar-ref-panel"
-          title="Fecha y año del reporte de ventas">
+          title="Fecha y año del reporte de ventas" aria-label="${esc(`Datos al ${fmtD(refShown)}${fixed ? ' (fecha fija)' : ' · hoy'}, año ${state.year}. Cambiar fecha y año`)}"${fixed ? ' data-fixed="1"' : ''}>
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M4 1.5v2M12 1.5v2M2 6h12M3 3h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           <span class="hdate__txt">Datos al ${esc(fmtD(refShown))}${fixed ? '' : ' · hoy'}</span>
           <span class="hdate__yr">${esc(String(state.year))}</span>
@@ -439,40 +439,8 @@
   }
 
   /** Utilidades compartidas con las vistas de Fase 1. */
-  /**
-   * Encabezado móvil compacto: al bajar por la página la fila de fecha/vigencia se esconde y queda solo la barra
-   * de marca; al subir, al llegar arriba, al abrir el menú o al enfocar algo dentro del encabezado, reaparece completo.
-   * El desplazamiento se mide con la altura real de la fila (no hay cifra fija). En escritorio no hace nada.
-   */
-  let headerCollapseOn = false;
-  function initHeaderCollapse() {
-    if (headerCollapseOn || typeof document === 'undefined' || !root.matchMedia) return;
-    const hdr = document.querySelector('.app-header'), st = document.getElementById('topbar-status');
-    if (!hdr || !st) return;
-    headerCollapseOn = true;
-    const mq = root.matchMedia('(max-width: 860px)');
-    let last = root.scrollY || 0, collapsed = false;
-    const apply = () => {
-      const hide = st.offsetHeight, y = root.scrollY || 0;
-      const nav = document.body.classList.contains('nav-open');
-      const on = mq.matches && collapsed && !nav && y > hdr.offsetHeight && hide > 0;
-      hdr.style.top = on ? `-${hide}px` : '0px';
-      hdr.classList.toggle('is-compact', on);
-    };
-    root.addEventListener('scroll', () => {
-      const y = root.scrollY || 0;
-      if (y > last + 6) { collapsed = true; last = y; } else if (y < last - 6 || y <= 0) { collapsed = false; last = y; }
-      apply();
-    }, { passive: true });
-    hdr.addEventListener('focusin', () => { collapsed = false; apply(); });
-    root.addEventListener('resize', apply);
-    if (root.MutationObserver) new MutationObserver(apply).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    if (root.ResizeObserver) new ResizeObserver(apply).observe(st);
-    apply();
-  }
-
   const helpers = { esc, pill, segmented };
 
   FP.ui = { helpers, renderAppMeta, renderStatus, renderSaveFailure, renderFacts, renderTargets, markTargetsDraft, updateTargetHints, renderFilters, renderValidation,
-    renderEdgeCases, renderEngine, renderExport, renderAll, toast, initHeaderCollapse };
+    renderEdgeCases, renderEngine, renderExport, renderAll, toast };
 })(typeof window !== 'undefined' ? window : globalThis);
