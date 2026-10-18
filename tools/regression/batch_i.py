@@ -106,7 +106,7 @@ async def main():
         await m.click('[data-action="nav-toggle"]'); await m.wait_for_timeout(300)
         await m.click('.snav__toggle[data-value="planear"]'); await m.wait_for_timeout(500)
         mv = await m.evaluate("(()=>{const nav=document.getElementById('app-nav');const b=document.querySelector('.snav__toggle[data-value=\"planear\"]').getBoundingClientRect();return {hash:location.hash,open:document.body.classList.contains('nav-open'),h:Math.round(b.height),exp:document.querySelector('.snav__toggle[data-value=\"planear\"]').getAttribute('aria-expanded'),scroll:nav.scrollHeight>nav.clientHeight}})()")
-        chk('R-5 móvil: elegir una sección abre su primera página, el panel se queda abierto mostrando sus opciones, objetivo táctil ≥ 44 px y el panel se desplaza por dentro', mv['hash'] == '#resumen' and mv['open'] and mv['exp'] == 'true' and mv['h'] >= 44 and mv['scroll'], mv)
+        chk('R-5 móvil: elegir una sección solo la despliega (no cambia de página), el panel se queda abierto mostrando sus opciones, objetivo táctil ≥ 44 px y el panel se desplaza por dentro', mv['hash'] == '#pacing' and mv['open'] and mv['exp'] == 'true' and mv['h'] >= 44 and mv['scroll'], mv)
         await m.click('a[data-nav="plan"]'); await m.wait_for_timeout(400)
         mc = await m.evaluate("document.body.classList.contains('nav-open')")
         chk('R-5 móvil: al elegir una página el panel se cierra como siempre', mc is False, mc)

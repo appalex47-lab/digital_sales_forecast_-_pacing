@@ -19,7 +19,7 @@
     <div class="app-header__inner">
       <div class="topbar">
         <div class="topbar__brand">
-          <button type="button" class="icon-btn menu-toggle" data-action="nav-toggle" aria-label="Abrir menú" aria-controls="app-nav">
+          <button type="button" class="icon-btn menu-toggle" data-action="nav-toggle" aria-label="Abrir menú" aria-controls="app-nav" aria-expanded="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           </button>
           <span class="topbar__logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#1F5FE0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-6 4 3 7-8"/></svg></span>
@@ -54,6 +54,7 @@
 
 
   <nav class="app-nav" id="app-nav" aria-label="Secciones"></nav>
+  <button type="button" class="nav-backdrop" data-action="nav-close" tabindex="-1" aria-hidden="true"></button>
 
   <section class="ux-context" id="ux-context" aria-label="Dónde estoy y qué sigue"></section>
   <section class="route-origin-host" id="route-origin" aria-label="Ruta de trabajo activa"></section>
