@@ -439,8 +439,34 @@
   }
 
   /** Utilidades compartidas con las vistas de Fase 1. */
+  /** Botón «Volver arriba» (celular): aparece tras desplazar al menos el 35 % de la altura de pantalla; se oculta con el menú abierto. */
+  let backTopReady = false;
+  function initBackToTop() {
+    if (backTopReady || typeof document === 'undefined') return;
+    backTopReady = true;
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'back-top'; b.className = 'back-top'; b.hidden = true;
+    b.setAttribute('aria-label', 'Volver arriba'); b.title = 'Volver arriba';
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+    document.body.appendChild(b);
+    const update = () => {
+      const y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      b.hidden = !(y >= 0.35 * window.innerHeight) || document.body.classList.contains('nav-open');
+    };
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    b.addEventListener('click', () => {
+      const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+      const h = document.querySelector('main:not([hidden]) h1, main:not([hidden]) h2');
+      if (h) { if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }
+    });
+    update();
+  }
+
   const helpers = { esc, pill, segmented };
 
   FP.ui = { helpers, renderAppMeta, renderStatus, renderSaveFailure, renderFacts, renderTargets, markTargetsDraft, updateTargetHints, renderFilters, renderValidation,
-    renderEdgeCases, renderEngine, renderExport, renderAll, toast };
+    renderEdgeCases, renderEngine, renderExport, renderAll, toast, initBackToTop };
 })(typeof window !== 'undefined' ? window : globalThis);

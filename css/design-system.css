@@ -1840,3 +1840,19 @@ tr.is-evidence { outline-offset: -3px; }
   .ux-wrap { padding-top: 8px; padding-bottom: 2px; }
   #view-inicio .home__head, #home .home__head { margin-top: -6px; }
 }
+
+/* Menú lateral (celular): las píldoras de estado quedan juntas. El área táctil sigue en 44 px (se solapa en el espacio vacío). */
+@media (max-width: 860px) {
+  .snav__pills { gap: 2px; padding-top: 0; padding-bottom: 0; }
+  .snav__pills .hstatus__link { margin-block: -6px; }
+  .snav__foot { gap: var(--ds-s1); }
+}
+/* Botón «Volver arriba» (celular) */
+.back-top { display: none; }
+@media (max-width: 860px) {
+  .back-top { display: grid; place-items: center; position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 35; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35); background: var(--ds-nav, #14213d); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); cursor: pointer; padding: 0; }
+  .back-top[hidden] { display: none; }
+  .back-top svg { width: 20px; height: 20px; }
+  .back-top:focus-visible { outline: 3px solid #F5B301; outline-offset: 2px; }
+  body.nav-open .back-top, body:has(.tour-bar:not([hidden])) .back-top, body:has(dialog[open]) .back-top { display: none; }
+}
