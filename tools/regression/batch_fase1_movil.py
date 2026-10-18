@@ -137,6 +137,12 @@ async def main():
             ov = await q.evaluate("document.documentElement.scrollWidth<=document.documentElement.clientWidth")
             chk(f'F-7 [{tag}] sin scroll horizontal de página en Diagnóstico', ov)
             await c.close()
+        # R17: los chips de filtros no desbordan la página a 320 px
+        c = await b.new_context(viewport={'width': 320, 'height': 740}, has_touch=True, is_mobile=True); q = await c.new_page()
+        await mock(q, http, '#diagnostico')
+        o = await q.evaluate("[document.documentElement.scrollWidth-document.documentElement.clientWidth, Math.max(...[...document.querySelectorAll('#dx-filters .dx-filters__chips .ds-badge')].map(e=>e.getBoundingClientRect().right))]")
+        chk('F-8 [320] los chips de filtros no desbordan la página', o[0] <= 0 and o[1] <= 320, o)
+        await c.close()
         chk('E-1 sin errores JavaScript en toda la batería', not errs, errs[:3])
         await b.close()
     print('\nFALLAS:', len(fails)); sys.exit(1 if fails else 0)

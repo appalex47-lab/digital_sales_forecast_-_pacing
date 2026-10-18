@@ -82,12 +82,13 @@
       const fc = ch === 'total' ? m.forecast : m.annual && m.annual.forecast;
       const g = ch === 'total' ? m.forecastGap && m.forecastGap[k] : m.annual && m.annual.forecastGap[k];
       const assumptions = ch === 'total' ? 'Suma de los canales, cada uno con sus índices.' : assumptionsText(m.assumptions);
+      const mReason = !Number.isFinite(plan[k]) ? ['no-calculable', 'falta el plan o la meta para comparar'] : ['no-calculable', 'el método no tiene datos suficientes para proyectar'];
       return `<tr class="${id === run.method.id ? 'row-current' : ''}">
         <td><strong>${id} · ${esc(run.settings.methods[id].label)}</strong>${id === run.method.id ? ' <span class="chip">en uso</span>' : ''}
           <span class="cell-sub">${esc(run.settings.methods[id].description)}</span>${methodGuide(id)}</td>
         <td class="wrap"><span class="cell-sub">${esc(assumptions)}</span>${m.fallbackDays ? `<span class="cell-sub">${m.fallbackDays} días con índice sin datos (usan plan)</span>` : ''}</td>
-        <td class="num">${esc(F().metric(k, fc && fc[k]))}</td>
-        <td class="num">${esc(PV().signed(k, g && g.gap))}<span class="cell-sub">${esc(F().signedPercent(g && g.gapPct, 1))}</span></td>
+        <td class="num">${PV().cellVal(k, fc && fc[k], mReason)}</td>
+        <td class="num">${PV().cellSigned(k, g && g.gap, mReason)}<span class="cell-sub">${esc(F().signedPercent(g && g.gapPct, 1))}</span></td>
         <td>${histPill(m.historyAdequacy)}</td></tr>`;
     }).join('');
     $('fc-methods').innerHTML = `

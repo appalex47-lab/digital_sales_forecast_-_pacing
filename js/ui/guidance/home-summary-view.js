@@ -147,21 +147,52 @@
       <div class="ds-accordion__body">${html}</div></details>`;
   }
 
+  /**
+   * «Lo esencial»: resumen ejecutivo permanente en tres niveles compactos (solo presentación; todas las cifras salen de Pacing/Forecast y del Nivel 1 del Diagnóstico):
+   *  A · Resultado comercial (venta acumulada, meta acumulada, brecha $ y %, cumplimiento) · B · Motores de la venta (volumen, CR, AOV) · C · Resumen ejecutivo.
+   * «Qué hago hoy / siguiente paso» ya no se repite aquí: es el bloque «Tu siguiente mejor paso», que sigue justo debajo.
+   */
+  function execSummary(S, f, t, pace) {
+    const { esc } = H(), wp = S.whyPlan, p = f.p, cur = p.actualToDate && p.actualToDate.revenue, plan = p.planToDate && p.planToDate.revenue;
+    const DN = { trafficVolume: 'el volumen', conversionRate: 'la conversión', aov: 'el ticket' };
+    const money = (v) => esc(F().currency(Math.abs(v), 0));
+    const lines = [];
+    if (p.status === 'future') {
+      lines.push('El periodo todavía no empieza: no hay venta real que comparar con la meta.');
+    } else if (fin(t.gap) && fin(cur) && fin(plan)) {
+      const under = t.gap < 0, zero = t.gap === 0;
+      lines.push(`${esc(f.label)}: ${zero ? 'la venta está justo en la meta acumulada' : `la venta va <b>${money(t.gap)} ${under ? 'por debajo' : 'por encima'}</b> de la meta acumulada${fin(t.gapPct) ? ` (${esc(F().signedPercent(t.gapPct, 1))})` : ''}`}${pace ? ` · ${esc(pace)}` : ''}.`);
+      if (wp && wp.status === 'ok' && wp.drivers.length) {
+        const neg = wp.drivers.filter((d) => d.contribution < 0).sort((a, b) => a.contribution - b.contribution);
+        const top = (under ? neg : wp.drivers.filter((d) => d.contribution > 0).sort((a, b) => b.contribution - a.contribution))[0];
+        if (!zero && top && wp.drivers.length === 3) lines.push(`Mayor aporte a la brecha: ${DN[top.id] || esc(top.label)} (${esc(sMoney(top.contribution))}). Es un cálculo, no una causa demostrada: confírmalo en <a href="#diagnostico" data-nav="diagnostico">Diagnóstico</a>.`);
+        else if (!zero) lines.push('No se puede determinar qué motor explica la diferencia con estos datos: revisa <a href="#diagnostico" data-nav="diagnostico">Diagnóstico</a>.');
+      } else if (!zero) lines.push('Este canal no separa la venta en volumen, conversión y ticket con los datos cargados, así que no se puede decir qué motor explica la diferencia.');
+    } else {
+      lines.push('Todavía no hay plan y venta real suficientes para medir la brecha contra la meta; las cifras que sí existen se muestran arriba y los faltantes llevan su motivo.');
+    }
+    const Wh = S.where, pick = Wh.status === 'ok' && Wh.picks[0];
+    const look = [];
+    if (pick) look.push(`<li>Dónde mirar: <b>${esc(pick.dimensionLabel)} · ${esc(pick.segment)}</b> <span class="field__hint">(${esc(sMoney(pick.delta))})</span></li>`);
+    if (Wh.status === 'ok' && Wh.quality.length) look.push(`<li class="home-key__alert">Revisa el tráfico de «${esc(Wh.quality[0].label)}»</li>`);
+    return `<div class="home-key__col home-key__col--summary" data-key="summary"><h4>Resumen ejecutivo</h4>${lines.map((l) => `<p>${l}</p>`).join('')}${look.length ? `<ul class="home-key__list home-key__look">${look.join('')}</ul>` : ''}</div>`;
+  }
+
   function keyBlock(S, f, next) {
     const { esc } = H(), p = f.p, t = p.toDate.revenue, fg = p.forecastGap.revenue, future = p.status === 'future';
     const th = f.run.settings.pacingThresholds, pace = !future && fin(t.compliance) ? FP.pacingView.paceLabel(FP.gap.pacingStatus(t.compliance, th)) : '';
-    const how = `<div class="home-key__col" data-key="how"><h4>¿Cómo voy?</h4><div class="home-key__big num">${future ? '—' : esc(F().percent(t.compliance, 1))}</div>
-        <div class="ds-card__sub">cumplimiento del plan${pace ? ` · ${esc(pace)}` : ''}</div>
-        <ul class="home-key__list"><li>Venta real <b data-key-real>${future ? '—' : esc(F().currency(p.actualToDate && p.actualToDate.revenue, 0))}</b><span class="field__hint home-key__sub">Plan a la fecha: ${future ? '—' : esc(F().currency(p.planToDate && p.planToDate.revenue, 0))}</span></li><li>Gap <b>${future ? '—' : esc(FP.pacingView.signed('revenue', t.gap))}</b></li><li>Forecast de cierre <b>${esc(F().currency(p.forecast && p.forecast.revenue, 0))}</b></li><li>Forecast vs meta <b>${esc(fin(fg.gapPct) ? F().signedPercent(fg.gapPct, 1) : '—')}</b></li></ul>${S.excluded ? `<p class="field__hint home-key__excl" data-excluded="${S.excluded.days}" data-excluded-revenue="${Math.round(S.excluded.revenue)}">Sin contar ${S.excluded.days} día${S.excluded.days === 1 ? '' : 's'} en que falta algún canal (${esc(F().currency(S.excluded.revenue, 0))} de los demás canales). Con ellos, la venta del archivo sería ${esc(F().currency((p.actualToDate && p.actualToDate.revenue || 0) + S.excluded.revenue, 0))}.</p>` : ''}${S.goal && S.goal.label ? `<p class="home-key__goal" data-goal="${esc(S.goal.status)}" data-goal-date="${esc(S.goal.date || '')}"><strong>${esc(S.goal.label)}.</strong></p>` : ''}</div>`;
+    const R = (v, txt) => (future || !fin(v) ? '—' : txt);
+    const how = `<div class="home-key__col" data-key="how"><h4 class="home-key__lh"><span class="home-key__lvl">A</span> Resultado comercial <span class="field__hint">· ¿Cómo voy?</span></h4><div class="home-key__big num">${future ? '—' : esc(F().percent(t.compliance, 1))}</div>
+        <div class="ds-card__sub">cumplimiento de la meta${pace ? ` · ${esc(pace)}` : ''}</div>
+        <ul class="home-key__list"><li>Venta acumulada <b data-key-real>${future ? '—' : esc(F().currency(p.actualToDate && p.actualToDate.revenue, 0))}</b></li><li>Meta acumulada <b data-key-plan>${future ? '—' : esc(F().currency(p.planToDate && p.planToDate.revenue, 0))}</b></li><li>Gap (brecha) <b data-key-gap>${future ? '—' : esc(FP.pacingView.signed('revenue', t.gap))}</b><span class="field__hint home-key__sub">${future || !fin(t.gapPct) ? '—' : `${esc(F().signedPercent(t.gapPct, 1))} de la meta acumulada`}</span></li><li>Forecast de cierre <b>${esc(F().currency(p.forecast && p.forecast.revenue, 0))}</b><span class="field__hint home-key__sub">vs meta del año: ${esc(fin(fg.gapPct) ? F().signedPercent(fg.gapPct, 1) : '—')}</span></li></ul>${S.excluded ? `<p class="field__hint home-key__excl" data-excluded="${S.excluded.days}" data-excluded-revenue="${Math.round(S.excluded.revenue)}">Sin contar ${S.excluded.days} día${S.excluded.days === 1 ? '' : 's'} en que falta algún canal (${esc(F().currency(S.excluded.revenue, 0))} de los demás canales). Con ellos, la venta del archivo sería ${esc(F().currency((p.actualToDate && p.actualToDate.revenue || 0) + S.excluded.revenue, 0))}.</p>` : ''}${S.goal && S.goal.label ? `<p class="home-key__goal" data-goal="${esc(S.goal.status)}" data-goal-date="${esc(S.goal.date || '')}"><strong>${esc(S.goal.label)}.</strong></p>` : ''}</div>`;
     const w = S.why, wp = S.whyPlan, pw = periodWord(S.period);
     const cls = (v) => (v < -0.5 ? 'is-neg' : v > 0.5 ? 'is-pos' : '');
     const DNAME = { trafficVolume: 'Tráfico', conversionRate: 'Conversión', aov: 'Ticket' };
     // Bloque principal: contra el PLAN (la misma base que «¿Cómo voy?» y que Diagnóstico → Nivel 1)
     let planHtml = '';
     if (wp && wp.status === 'ok') {
-      const under = wp.gap < 0;
       const metK = { trafficVolume: 'sessions', conversionRate: 'cr', aov: 'aov' };
-      planHtml = `<p data-why-basis="plan"><strong>Contra el plan, la venta va ${esc(F().currency(Math.abs(wp.gap), 0))} ${under ? 'por debajo' : 'por encima'}</strong>${fin(wp.gapPct) ? ` (${esc(F().signedPercent(wp.gapPct, 1))})` : ''}.</p>
+      planHtml = `<p data-why-basis="plan" data-gap="${Math.round(wp.gap)}" class="home-key__lead">Contra el plan, aporte de cada motor a la brecha (suman el gap de arriba):</p>
         ${wp.drivers.length ? `<ul class="home-key__list">${wp.drivers.map((d) => `<li>${esc(DNAME[d.id] || d.label)} <b class="${cls(d.contribution)}">${esc(sMoney(d.contribution))}</b><span class="field__hint home-key__sub" data-cmp="${esc(d.id)}">Plan ${esc(fmtMet(metK[d.id], d.baseline))} → Real ${esc(fmtMet(metK[d.id], d.current))}${fin(d.deltaPct) ? ` (${esc(F().signedPercent(d.deltaPct, 1))})` : ''}</span></li>`).join('')}</ul>` : ''}`;
     }
     let whyHtml;
@@ -173,16 +204,14 @@
     } else if (w.status === 'ok') {
       whyHtml = `<p><strong>La venta ${w.delta >= 0 ? 'subió' : 'bajó'} ${esc(F().currency(Math.abs(w.delta), 0))}</strong> contra ${esc(pw.base)}.</p><p class="field__hint">No se separa en tráfico, conversión y ticket: ${S.channel === 'total' ? 'un canal no trae sesiones. Elige Ecommerce o App.' : 'este canal no trae sesiones.'}</p>`;
     } else whyHtml = '<p class="field__hint">Sin plan ni periodo anterior con venta real para comparar. Elige un mes o carga más historia.</p>';
-    const why = `<div class="home-key__col" data-key="why"><h4>¿Por qué?</h4>${whyHtml}</div>`;
-    const Wh = S.where, pick = Wh.status === 'ok' && Wh.picks[0];
-    const nextTxt = next && next.view !== 'inicio' ? `<p><span class="field__hint">Siguiente paso</span><br><strong>${esc(next.label)}</strong><br><button type="button" class="link-btn" data-action="scroll-to" data-target="nbs">Ver el paso y cómo sigue ↓</button></p>` : '<p><span class="field__hint">Siguiente paso</span><br><strong>Estás al día</strong></p>';
-    const todo = `<div class="home-key__col" data-key="todo"><h4>¿Qué hago hoy?</h4>${nextTxt}${pick ? `<p><span class="field__hint">Dónde mirar</span><br><strong>${esc(pick.dimensionLabel)} · ${esc(pick.segment)}</strong> <span class="field__hint">(${esc(sMoney(pick.delta))})</span></p>` : ''}${Wh.status === 'ok' && Wh.quality.length ? `<p class="home-key__alert">Revisa el tráfico de «${esc(Wh.quality[0].label)}»</p>` : ''}</div>`;
+    const why = `<div class="home-key__col" data-key="why"><h4 class="home-key__lh"><span class="home-key__lvl">B</span> Motores de la venta <span class="field__hint">· Venta = volumen × CR × ticket</span></h4>${whyHtml}</div>`;
+    const summary = execSummary(S, f, t, pace);
     const chips = S.channels.status === 'ok' ? S.channels.rows.map((r) => `<span class="ds-badge" data-chip="${esc(r.id)}">${esc(r.label)} · ${r.state === 'ok' ? esc(FP.pacingView.paceLabel(r.pacing)) : r.state === 'no_plan' ? 'Sin plan' : 'Sin venta real'}</span>`).join(' ') : '';
     const T = S.trust, cov = T.coverage;
     return `<section class="ds-card home-key" aria-labelledby="hk-t" data-block="key">
       <div class="home__row"><h3 class="ds-section-title" id="hk-t">Lo esencial</h3></div>
-      <p class="ds-card__sub">${esc(FP.navigation.contextLabel({ channel: f.ch }))} · ${esc(f.label)}</p>
-      <div class="home-key__grid">${how}${why}${todo}</div>
+      <p class="ds-card__sub">${esc(FP.navigation.contextLabel({ channel: f.ch }))} · ${esc(f.label)}${T.lastActual ? ` · venta real hasta ${esc(T.lastActual)}` : ''}</p>
+      <div class="home-key__grid">${how}${why}${summary}</div>
       ${chips ? `<div class="home-key__chips" aria-label="Estado por canal">${chips}</div>` : ''}
       <p class="field__hint home-key__trust">Respaldo: venta real hasta <b>${esc(T.lastActual || '—')}</b> · <b>${cov ? `${cov.paired} de ${cov.expected}` : '—'}</b> días comparados · calidad: <b>${esc(T.quality ? (T.quality.text || T.quality.status) : '—')}</b>. Todo el detalle está abajo, en «Ver más».${T.quality && ['warnings', 'invalid'].includes(T.quality.status) ? ' <a href="#calidad">Revisar calidad de datos</a>' : ''}</p></section>`;
   }

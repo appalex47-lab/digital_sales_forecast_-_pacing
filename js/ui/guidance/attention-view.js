@@ -134,7 +134,7 @@
   const attrs = (st, S, key) => `data-action="route-go" data-route="${H().esc(st.id)}" data-view="${H().esc(st.view)}" data-step="${H().esc(st.id)}" data-finding="${H().esc(st.findingId || '')}" data-key="${H().esc(key)}"${st.channel ? ` data-channel="${H().esc(st.channel)}"` : ''}`;
   const money = (v) => (fin(v) ? F().currency(Math.abs(v), 0) : '—');
 
-  function findingHtml(fd, key) {
+  function findingHtml(fd, key, primaryStep) {
     const { esc } = H();
     const sup = fd.support ? `<p class="att__sup" data-support="${esc(fd.support.level)}"><strong>Respaldo de la evidencia: ${esc(fd.support.level)}.</strong> ${esc(fd.support.why)}</p>` : '';
     const detail = [
@@ -149,18 +149,19 @@
       <p class="att__what">${esc(fd.what)}</p>
       <p class="att__why"><strong>Por qué importa:</strong> ${esc(fd.why)}</p>
       <details class="att__more"><summary>Evidencia y qué sigue</summary>${sup}<dl>${detail.map(([t, xs]) => `<dt>${esc(t)}</dt>${xs.map((x) => `<dd>${esc(x)}</dd>`).join('')}`).join('')}</dl></details>
-      <p class="att__go"><button type="button" class="btn btn--ghost" data-action="route-go" data-route="${esc(fd.step)}" data-view="${esc(fd.next.view)}" data-step="${esc(fd.step)}" data-finding="${esc(fd.id)}" data-key="${esc(key)}"${fd.next.channel ? ` data-channel="${esc(fd.next.channel)}"` : ''}>${esc(fd.next.label)}</button></p></li>`;
+      ${primaryStep && fd.step === primaryStep ? `<p class="att__go att__go--dup" data-is-next-step="1"><span class="field__hint">Este hallazgo es tu siguiente mejor paso: «${esc(fd.next.label)}».</span> <button type="button" class="link-btn" data-action="scroll-to" data-target="nbs">Ver el paso ↑</button></p></li>` : `<p class="att__go"><button type="button" class="btn btn--ghost" data-action="route-go" data-route="${esc(fd.step)}" data-view="${esc(fd.next.view)}" data-step="${esc(fd.step)}" data-finding="${esc(fd.id)}" data-key="${esc(key)}"${fd.next.channel ? ` data-channel="${esc(fd.next.channel)}"` : ''}>${esc(fd.next.label)}</button></p></li>`}`;
   }
 
   function attentionHtml(att, S, key) {
     const { esc } = H();
     const n = att.findings.length;
+    const pid = att.route && att.route.primary ? att.route.primary.id : null;   // paso que ya muestra «Tu siguiente mejor paso»
     const ctx = `${esc(FP.navigation.contextLabel({ channel: S.channel }))} · ${esc(S.period.type === 'month' ? S.period.key : `Año ${S.period.key}`)}`;
     const body = att.state === 'stable'
-      ? `<p class="att__stable" data-stable="1"><strong>Estado estable.</strong> ${esc(att.stableNote)}</p>${n ? `<ol class="att__list">${att.visible.map((x) => findingHtml(x, key)).join('')}</ol>` : ''}`
-      : `<ol class="att__list">${att.visible.map((x) => findingHtml(x, key)).join('')}</ol>`;
+      ? `<p class="att__stable" data-stable="1"><strong>Estado estable.</strong> ${esc(att.stableNote)}</p>${n ? `<ol class="att__list">${att.visible.map((x) => findingHtml(x, key, pid)).join('')}</ol>` : ''}`
+      : `<ol class="att__list">${att.visible.map((x) => findingHtml(x, key, pid)).join('')}</ol>`;
     const rest = att.rest.length ? `<details class="ds-accordion att__rest"><summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h4 class="ds-accordion__t">Ver los demás hallazgos (${att.rest.length})</h4></span></summary>
-      <div class="ds-accordion__body"><ol class="att__list">${att.rest.map((x) => findingHtml(x, key)).join('')}</ol></div></details>` : '';
+      <div class="ds-accordion__body"><ol class="att__list">${att.rest.map((x) => findingHtml(x, key, pid)).join('')}</ol></div></details>` : '';
     const R = att.rules;
     const how = `<details class="ds-accordion home-sum__how"><summary><span class="ds-accordion__n" aria-hidden="true">?</span><span><h4 class="ds-accordion__t">Cómo se decide</h4></span></summary>
       <div class="ds-accordion__body"><ul>
