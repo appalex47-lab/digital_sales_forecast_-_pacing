@@ -3829,6 +3829,7 @@
     FP.navigation.markAnalystBlocks();
     bind();
     FP.ui.renderEdgeCases();
+    if (FP.ui.initBackToTop) FP.ui.initBackToTop();
     maybePromptLogin();   // el acceso se decide antes que la bienvenida (la bienvenida de render() espera si hay acceso abierto)
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
