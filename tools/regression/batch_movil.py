@@ -59,6 +59,15 @@ async def main():
         await q.goto(u + '#carga'); await q.wait_for_timeout(500)
         ov = await q.evaluate("document.documentElement.scrollWidth-innerWidth")
         chk('M-13 sin desborde horizontal en 375 px', ov <= 0, ov)
+        # tablas, letra mínima y avisos
+        await q.goto(u + '#pacing'); await q.wait_for_timeout(500)
+        tb = await q.evaluate("(()=>{const w=document.querySelector('#view-pacing .table-wrap');const th=w.querySelector('.ds-table th:first-child');const cs=getComputedStyle(th);return {pos:cs.position,bg:getComputedStyle(w).backgroundImage.includes('gradient'),pill:[...document.querySelectorAll('.pill')].filter(e=>e.offsetWidth>0).every(e=>parseFloat(getComputedStyle(e).fontSize)>=12)}})()")
+        chk('M-17 tablas anchas: primera columna fija e indicador de que hay más columnas al costado', tb['pos'] == 'sticky' and tb['bg'], tb)
+        chk('M-18 las etiquetas (pill) miden al menos 12 px en móvil', tb['pill'], tb)
+        await q.evaluate("FP.ui.toast('Aviso de prueba')"); await q.wait_for_timeout(200); await q.click('.menu-toggle'); await q.wait_for_timeout(300)
+        tdisp = await q.evaluate("[...document.querySelectorAll('.toast')].map(t=>getComputedStyle(t).display)")
+        chk('M-19 con el menú abierto el aviso no se encima', all(x == 'none' for x in tdisp), tdisp)
+        await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
         # escritorio: nada cambia
         d = await (await b.new_context(viewport={'width': 1280, 'height': 900})).new_page(); d.on('pageerror', lambda e: errs.append(str(e)[:150]))
         await prep(d, u)
