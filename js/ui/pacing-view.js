@@ -28,6 +28,41 @@
   const pct = (v) => F().percent(v, 1);
   const spct = (v) => F().signedPercent(v, 1);
 
+  /* ---------- Celdas sin valor: «—» con su motivo (solo presentación; no cambia ningún cálculo) ----------
+     Un cero válido se muestra como cero (val/pct/signed ya lo formatean); solo lo ausente o no calculable lleva «—». */
+  const isNum = (v) => v !== null && v !== undefined && Number.isFinite(v);
+  const NA_LABEL = { 'sin-datos': 'Sin datos', 'no-calculable': 'No calculable', 'no-aplica': 'No aplica' };
+  /** «—» accesible: foco con teclado, título al pasar el cursor, texto para lector de pantalla y toque en móvil (ver bindNaTap). */
+  function na(kind, why) {
+    const text = `${NA_LABEL[kind]}: ${why}`, e = H().esc(text);
+    return `<span class="na" data-na="${kind}" data-why="${e}" tabindex="0" role="note" title="${e}" aria-label="${e}">${F().DASH}</span>`;
+  }
+  const cellVal = (k, v, r) => (isNum(v) ? H().esc(val(k, v)) : na(r[0], r[1]));
+  const cellSigned = (k, v, r) => (isNum(v) ? H().esc(signed(k, v)) : na(r[0], r[1]));
+  const cellPct = (v, r) => (isNum(v) ? H().esc(pct(v)) : na(r[0], r[1]));
+  const FUT = ['no-aplica', 'periodo futuro, aún sin venta real'];
+  /** Motivo de cada cálculo de un periodo/serie `s` para la métrica `k`, según qué insumo falta realmente. */
+  function reasons(s, k) {
+    const future = s.status === 'future';
+    const planV = s.plan && s.plan[k], planTd = s.planToDate && s.planToDate[k], act = s.actualToDate && s.actualToDate[k];
+    const sinPlan = ['sin-datos', 'no hay plan ni meta cargados para este periodo'];
+    const actual = future ? FUT : ['sin-datos', 'no hay venta real cargada en este periodo'];
+    const ratio = future ? FUT : !isNum(act) ? ['no-calculable', 'no hay días con real cargados para compararlo con el plan'] : !isNum(planTd) ? ['no-calculable', 'falta el plan a la fecha']
+      : planTd === 0 ? ['no-calculable', 'el plan a la fecha es cero y no se puede dividir'] : ['no-calculable', 'falta un dato de origen'];
+    const forecast = !isNum(planV) ? ['no-calculable', 'falta el plan para proyectar'] : ['no-calculable', 'el método no tiene datos suficientes para proyectar'];
+    const fgap = !isNum(s.forecast && s.forecast[k]) ? ['no-calculable', 'falta el forecast'] : !isNum(planV) ? ['no-calculable', 'falta la meta del periodo'] : ['no-calculable', 'falta un dato de origen'];
+    return { plan: sinPlan, planTd: sinPlan, actual, ratio, forecast, fgap };
+  }
+  /** En móvil no existe «pasar el cursor»: un toque (o Enter/Espacio) muestra el motivo en el aviso emergente. */
+  let naBound = false;
+  function bindNaTap() {
+    if (naBound || typeof document === 'undefined') return; naBound = true;
+    const show = (el) => { const w = el && el.closest && el.closest('.na'); if (w && w.dataset.why && FP.ui && FP.ui.toast) FP.ui.toast(w.dataset.why); };
+    document.addEventListener('click', (e) => show(e.target));
+    document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('na')) { e.preventDefault(); show(e.target); } });
+  }
+  bindNaTap();
+
   function paceLabel(status) {
     const L = C().pacingStatusLabels;
     if (L[status]) return L[status];
@@ -97,6 +132,7 @@
     const k = state.fc.metric;
     const a = run.total.annual;
     const td = a.toDate[k];
+    const R = reasons(a, k);
     const fg = a.forecastGap[k];
     const additive = !['conversionRate', 'aov'].includes(k);
     $('fc-kpis').innerHTML = `
@@ -104,28 +140,28 @@
         <span class="btn-row">${pacePill(a.pacingStatus && k === 'revenue' ? a.pacingStatus : FP.gap.pacingStatus(td.compliance, run.settings.pacingThresholds))}
           <button type="button" class="btn btn--small" data-action="dx-from-forecast">Diagnosticar gap</button></span></div>
       <div class="metric-grid metric-grid--3">
-        ${card(additive ? 'Meta del año' : 'Plan del año', esc(val(k, a.plan[k])), '', 'plan')}
-        ${card('Actual a la fecha', esc(val(k, a.actualToDate && a.actualToDate[k])), `vs plan a la fecha ${esc(val(k, a.planToDate && a.planToDate[k]))} ${k === 'revenue' ? why('identity', k) : ''}`, 'actual')}
-        ${card('Cumplimiento', esc(pct(td.compliance)), `${a.countedDays} días con real ${why('compliance', k)}`)}
-        ${card('Gap a la fecha', esc(signed(k, td.gap)), `${esc(spct(td.gapPct))} ${why('gap', k)}`)}
-        ${card('Forecast de cierre', esc(val(k, a.forecast && a.forecast[k])), `Método ${esc(run.method.id)} ${why('forecast', k)}`, 'forecast')}
-        ${card('Gap forecast', esc(signed(k, fg.gap)), `${esc(spct(fg.gapPct))} vs meta ${why('forecastGap', k)}`, 'forecast')}
+        ${card(additive ? 'Meta del año' : 'Plan del año', cellVal(k, a.plan[k], R.plan), '', 'plan')}
+        ${card('Actual a la fecha', cellVal(k, a.actualToDate && a.actualToDate[k], R.actual), `vs plan a la fecha ${cellVal(k, a.planToDate && a.planToDate[k], R.planTd)} ${k === 'revenue' ? why('identity', k) : ''}`, 'actual')}
+        ${card('Cumplimiento', cellPct(td.compliance, R.ratio), `${a.countedDays} días con real ${why('compliance', k)}`)}
+        ${card('Gap a la fecha', cellSigned(k, td.gap, R.ratio), `${esc(spct(td.gapPct))} ${why('gap', k)}`)}
+        ${card('Forecast de cierre', cellVal(k, a.forecast && a.forecast[k], R.forecast), `Método ${esc(run.method.id)} ${why('forecast', k)}`, 'forecast')}
+        ${card('Gap forecast', cellSigned(k, fg.gap, R.fgap), `${esc(spct(fg.gapPct))} vs meta ${why('forecastGap', k)}`, 'forecast')}
       </div>
       <p class="field__hint">Gap a la fecha = actual − plan de los mismos días (plan diario ponderado). Gap forecast = forecast de cierre − meta del año. Son dos cosas distintas.
         ${a.missingActualDays ? ` <strong>${a.missingActualDays} días cerrados no tienen real</strong> y no entran al pacing.` : ''}</p>`;
 
     const rows = [...C().channelIds, 'total'].map((ch) => {
       const s = seriesOf(run, ch).annual;
-      const t = s.toDate[k], g = s.forecastGap[k];
+      const t = s.toDate[k], g = s.forecastGap[k], R = reasons(s, k);
       return `<tr class="${ch === 'total' ? 'row-total' : ''}">
         <td>${chCell(ch)}</td>
-        <td class="num">${esc(val(k, s.plan[k]))}</td>
-        <td class="num">${esc(val(k, s.planToDate && s.planToDate[k]))}</td>
-        <td class="num">${esc(val(k, s.actualToDate && s.actualToDate[k]))}</td>
-        <td class="num">${esc(pct(t.compliance))}</td>
-        <td class="num">${esc(signed(k, t.gap))}</td>
-        <td class="num">${esc(val(k, s.forecast && s.forecast[k]))}</td>
-        <td class="num">${esc(signed(k, g.gap))}<span class="cell-sub">${esc(spct(g.gapPct))}</span></td>
+        <td class="num">${cellVal(k, s.plan[k], R.plan)}</td>
+        <td class="num">${cellVal(k, s.planToDate && s.planToDate[k], R.planTd)}</td>
+        <td class="num">${cellVal(k, s.actualToDate && s.actualToDate[k], R.actual)}</td>
+        <td class="num">${cellPct(t.compliance, R.ratio)}</td>
+        <td class="num">${cellSigned(k, t.gap, R.ratio)}</td>
+        <td class="num">${cellVal(k, s.forecast && s.forecast[k], R.forecast)}</td>
+        <td class="num">${cellSigned(k, g.gap, R.fgap)}<span class="cell-sub">${esc(spct(g.gapPct))}</span></td>
         <td>${pacePill(FP.gap.pacingStatus(t.compliance, run.settings.pacingThresholds))}</td>
       </tr>`;
     }).join('');
@@ -201,15 +237,16 @@
     const esc = H().esc;
     const t = p.toDate[k];
     const future = p.status === 'future';
+    const R = reasons(p, k);
     return `<tr>
       <td>${label}${extra}</td>
       <td>${esc(PERIOD_LABEL[p.status] || p.status)}${p.status === 'current' ? `<span class="cell-sub">${p.countedDays} de ${p.days} días con real</span>` : ''}</td>
-      <td class="num">${esc(val(k, p.plan[k]))}${p.status === 'current' ? `<span class="cell-sub">a la fecha ${esc(val(k, p.planToDate && p.planToDate[k]))}</span>` : ''}</td>
-      <td class="num">${future ? F().DASH : esc(val(k, p.actualToDate && p.actualToDate[k]))}</td>
-      <td class="num">${future ? F().DASH : esc(signed(k, t.gap))}</td>
-      <td class="num">${future ? F().DASH : esc(pct(t.compliance))}</td>
-      <td class="num">${esc(val(k, p.forecast && p.forecast[k]))}${p.status === 'closed' ? '<span class="cell-sub">= actual</span>' : ''}</td>
-      <td class="num">${esc(signed(k, p.forecastGap[k].gap))}<span class="cell-sub">${esc(spct(p.forecastGap[k].gapPct))}</span></td>
+      <td class="num">${cellVal(k, p.plan[k], R.plan)}${p.status === 'current' ? `<span class="cell-sub">a la fecha ${cellVal(k, p.planToDate && p.planToDate[k], R.planTd)}</span>` : ''}</td>
+      <td class="num">${future ? na(FUT[0], FUT[1]) : cellVal(k, p.actualToDate && p.actualToDate[k], R.actual)}</td>
+      <td class="num">${future ? na(FUT[0], FUT[1]) : cellSigned(k, t.gap, R.ratio)}</td>
+      <td class="num">${future ? na(FUT[0], FUT[1]) : cellPct(t.compliance, R.ratio)}</td>
+      <td class="num">${cellVal(k, p.forecast && p.forecast[k], R.forecast)}${p.status === 'closed' ? '<span class="cell-sub">= actual</span>' : ''}</td>
+      <td class="num">${cellSigned(k, p.forecastGap[k].gap, R.fgap)}<span class="cell-sub">${esc(spct(p.forecastGap[k].gapPct))}</span></td>
       <td>${future ? pacePill('future') : pacePill(FP.gap.pacingStatus(t.compliance, thresholds || undefined))}</td>
     </tr>`;
   }
@@ -246,7 +283,7 @@
         if (!additive) return '';
         const g = FE.periodGoal(s, period, { cutoff: run.cutoff, metric: k });
         const t = g.status === 'reached' || g.status === 'projected' ? longDayShort(g.date) + (g.status === 'projected' ? ' <span class="cell-sub">estimado</span>' : ' <span class="cell-sub">cumplida</span>')
-          : g.status === 'missed' ? '<span class="cell-sub">No se cumplió</span>' : g.status === 'not_reached' ? `<span class="cell-sub">No llega (${esc((g.attainment * 100).toFixed(0))} %)</span>` : '<span class="cell-sub">—</span>';
+          : g.status === 'missed' ? '<span class="cell-sub">No se cumplió</span>' : g.status === 'not_reached' ? `<span class="cell-sub">No llega (${esc((g.attainment * 100).toFixed(0))} %)</span>` : (g.status === 'no_goal' ? na('sin-datos', 'no hay meta definida para este periodo') : na('no-calculable', 'faltan datos para estimar cuándo se alcanza'));
         return `<td data-goal="${esc(g.status)}" data-goal-date="${esc(g.date || '')}">${t}</td>`;
       };
       const inner = (html) => html.replace(/^<tr>|<\/tr>\s*$/g, '');   // contenido de las celdas, sin <tr>
@@ -282,13 +319,13 @@
         rows.push(`<tr class="${d.temporal === 'today' ? 'row-today' : ''}">
           <td class="num">${esc(d.date)}${d.temporal === 'today' ? '<span class="cell-sub">referencia</span>' : ''}${tag ? `<span class="cell-sub">${esc(tag)}</span>` : ''}</td>
           ${channels.length > 1 ? `<td>${chCell(ch)}</td>` : ''}
-          <td class="num">${esc(val(k, d.plan && d.plan[k]))}</td>
-          <td class="num">${d.actual ? esc(val(k, d.actual[k])) : d.partialActual ? `${esc(val(k, d.partialActual[k]))}<span class="cell-sub">parcial, no cuenta</span>` : F().DASH}</td>
-          <td class="num">${p ? esc(signed(k, p.gap)) : F().DASH}</td>
-          <td class="num">${p ? esc(pct(p.compliance)) : F().DASH}</td>
-          <td class="num">${esc(val(k, d.forecast && d.forecast[k]))}${d.forecastSource === 'actual' ? '<span class="cell-sub">= actual</span>' : d.fallback ? '<span class="cell-sub">índice sin datos: plan</span>' : ''}</td>
+          <td class="num">${cellVal(k, d.plan && d.plan[k], ['sin-datos', 'no hay plan diario para este día'])}</td>
+          <td class="num">${d.actual ? esc(val(k, d.actual[k])) : d.partialActual ? `${esc(val(k, d.partialActual[k]))}<span class="cell-sub">parcial, no cuenta</span>` : (d.temporal === 'future' ? na('no-aplica', 'día futuro, aún sin venta real') : na('sin-datos', 'no hay venta real cargada este día'))}</td>
+          <td class="num">${p ? cellSigned(k, p.gap, ['no-calculable', 'falta el plan o el real de este día']) : (d.temporal === 'future' ? na('no-aplica', 'día futuro, aún sin venta real') : na('no-calculable', 'falta el real de este día para compararlo con el plan'))}</td>
+          <td class="num">${p ? cellPct(p.compliance, ['no-calculable', 'el plan del día es cero o falta']) : (d.temporal === 'future' ? na('no-aplica', 'día futuro, aún sin venta real') : na('no-calculable', 'falta el real de este día para compararlo con el plan'))}</td>
+          <td class="num">${cellVal(k, d.forecast && d.forecast[k], ['no-calculable', 'el método no tiene datos suficientes para este día'])}${d.forecastSource === 'actual' ? '<span class="cell-sub">= actual</span>' : d.fallback ? '<span class="cell-sub">índice sin datos: plan</span>' : ''}</td>
           <td>${pacePill(d.status)}</td>
-          <td class="num">${cum ? esc(signed(k, cum.gap)) : F().DASH}${cum ? `<span class="cell-sub">${esc(pct(cum.compliance))} acum.</span>` : ''}</td>
+          <td class="num">${cum ? cellSigned(k, cum.gap, ['no-calculable', 'falta el acumulado: no hay real o plan']) : na('no-calculable', 'falta el acumulado: no hay real o plan')}${cum ? `<span class="cell-sub">${esc(pct(cum.compliance))} acum.</span>` : ''}</td>
         </tr>`);
       });
     });
@@ -313,13 +350,13 @@
       <tbody>${run.events.map((e) => {
         const s = ch === 'total' ? e.total : e.byChannel[ch];
         if (!s) return '';
-        const t = s.toDate[k];
+        const t = s.toDate[k], R = reasons(s, k);
         return `<tr><td><strong>${esc(e.name)}</strong><span class="cell-sub">${e.type === 'holiday' ? 'Festivo' : e.type === 'season' ? 'Temporada' : 'Evento'}</span></td>
           <td class="num">${esc(e.start)}${e.end !== e.start ? ` a ${esc(e.end)}` : ''}<span class="cell-sub">${esc(PERIOD_LABEL[s.status] || s.status)}</span></td>
-          <td class="num">${esc(val(k, s.plan[k]))}</td>
-          <td class="num">${s.status === 'future' ? F().DASH : esc(val(k, s.actualToDate && s.actualToDate[k]))}</td>
-          <td class="num">${s.status === 'future' ? F().DASH : `${esc(signed(k, t.gap))}<span class="cell-sub">${esc(spct(t.gapPct))}</span>`}</td>
-          <td class="num">${esc(val(k, s.forecast && s.forecast[k]))}</td>
+          <td class="num">${cellVal(k, s.plan[k], R.plan)}</td>
+          <td class="num">${s.status === 'future' ? na(FUT[0], FUT[1]) : cellVal(k, s.actualToDate && s.actualToDate[k], R.actual)}</td>
+          <td class="num">${s.status === 'future' ? na(FUT[0], FUT[1]) : `${cellSigned(k, t.gap, R.ratio)}<span class="cell-sub">${esc(spct(t.gapPct))}</span>`}</td>
+          <td class="num">${cellVal(k, s.forecast && s.forecast[k], R.forecast)}</td>
           <td class="wrap"><span class="cell-sub">${esc(ch === 'total' && k === 'revenue' ? e.observation : s.countedDays ? `Durante el periodo se observó un gap de ${spct(t.gapPct)} en ${s.countedDays} días con real.` : 'Sin días con real todavía.')}</span></td></tr>`;
       }).join('')}</tbody></table></div>
       <p class="field__hint">Descriptivo: muestra lo que pasó durante el periodo del evento, no su causa. Canal según el selector del gráfico.</p>`;
@@ -347,5 +384,5 @@
     return true;
   }
 
-  FP.pacingView = { render, signed, paceLabel, pacePill, seriesOf, chLabel, chCell, card };
+  FP.pacingView = { render, signed, paceLabel, pacePill, seriesOf, chLabel, chCell, card, na, cellVal, cellSigned };
 })(typeof window !== 'undefined' ? window : globalThis);

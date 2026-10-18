@@ -37,23 +37,43 @@
     return weeks;
   }
 
+  /** Panel «Filtros»: abierto en escritorio y plegado en móvil por defecto; si la persona lo cambia, se respeta durante la sesión. */
+  let filtersOpen = null;
+  function filtersAreOpen() {
+    if (filtersOpen !== null) return filtersOpen;
+    return !(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 860px)').matches);
+  }
+
   function renderControls(state) {
     const esc = H().esc;
     const d = state.dx.settings;
     const cfg = C().diagnostics;
     const sel = (id, key, opts, cur, label) => `<div class="field"><label for="${id}" class="field__hint">${esc(label)}</label>
       <select id="${id}" data-action="dx-setting" data-key="${key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+    const cmpOpts = Object.entries(cfg.comparisons).map(([k, c]) => [k, c.label]);
+    const keyOpts = periodOptions(state);
+    const chOpts = [['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])];
+    const metOpts = [['revenue', 'Venta (volumen × CR × AOV)'], ['orders', 'Pedidos (volumen × CR)']];
+    const methOpts = Object.entries(cfg.attributionMethods);
+    // Chips de filtros activos: se leen de los mismos valores y listas que los selectores (no hay otra fuente)
+    const lab = (opts, cur) => { const o = opts.find(([v]) => String(v) === String(cur)); return o ? o[1] : String(cur); };
+    const chips = [['Comparación', lab(cmpOpts, d.comparison)], ['Periodo', `${lab([['month', 'Mes'], ['week', 'Semana'], ['year', 'Año']], d.periodType)} · ${lab(keyOpts, d.periodKey)}`],
+      ['Canal', lab(chOpts, d.channel)], ['Métrica', lab(metOpts, d.metric)], ['Método', lab(methOpts, d.method)]];
     $('dx-controls').innerHTML = `
+      <details class="disclosure dx-filters" id="dx-filters"${filtersAreOpen() ? ' open' : ''}>
+        <summary><span>Filtros</span><span class="dx-filters__chips" aria-label="Filtros activos">${chips.map(([k, v]) => `<span class="ds-badge" data-chip="${esc(k)}"><span class="dx-filters__k">${esc(k)}:</span> ${esc(v)}</span>`).join('')}</span></summary>
       <div class="filters">
-        ${sel('dx-cmp', 'comparison', Object.entries(cfg.comparisons).map(([k, c]) => [k, c.label]), d.comparison, 'Comparación')}
+        ${sel('dx-cmp', 'comparison', cmpOpts, d.comparison, 'Comparación')}
         <div class="field"><span class="field__hint">Periodo</span>${H().segmented('dx-period-type', [['month', 'Mes'], ['week', 'Semana'], ['year', 'Año']], d.periodType)}</div>
-        ${sel('dx-key', 'periodKey', periodOptions(state), d.periodKey, 'Cuál')}
-        ${sel('dx-ch', 'channel', [['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])], d.channel, 'Canal')}
-        ${sel('dx-metric', 'metric', [['revenue', 'Venta (volumen × CR × AOV)'], ['orders', 'Pedidos (volumen × CR)']], d.metric, 'Métrica')}
-        ${sel('dx-method', 'method', Object.entries(cfg.attributionMethods), d.method, 'Método de atribución')}
-      </div>
+        ${sel('dx-key', 'periodKey', keyOpts, d.periodKey, 'Cuál')}
+        ${sel('dx-ch', 'channel', chOpts, d.channel, 'Canal')}
+        ${sel('dx-metric', 'metric', metOpts, d.metric, 'Métrica')}
+        ${sel('dx-method', 'method', methOpts, d.method, 'Método de atribución')}
+      </div></details>
       <p class="field__hint">La app no mezcla comparaciones: cada una usa su propia referencia. ${esc(state.dx.run && state.dx.run.assumptions ? state.dx.run.assumptions.pairing : '')}</p>
       <ol class="chain">${['Hecho', 'Driver', 'Señal', 'Hipótesis'].map((s, i) => `<li><strong>${stage(s)}</strong><span>${['Qué pasó y cuánto', 'Qué variable lo explica matemáticamente', 'Dónde ocurre y merece investigarse', 'Explicación posible que requiere validación'][i]}</span></li>`).join('')}</ol>`;
+    const dtl = $('dx-filters');
+    if (dtl) dtl.addEventListener('toggle', () => { filtersOpen = dtl.open; });
   }
 
   /* ---------- Hecho ---------- */

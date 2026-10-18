@@ -25,11 +25,27 @@
     return `<td class="num">${esc(txt)}${cell.source === 'calculated' ? '<span class="src src--calc">calc.</span>' : ''}</td>`;
   }
 
+  /** Estado de plegado del panel de opciones (solo de la sesión; los valores viven siempre en state.settings). */
+  let settingsOpen = false;
+  /** Resumen de una línea con los valores vigentes (se lee de state.settings: no es una segunda fuente de verdad). */
+  function settingsSummary(state) {
+    const s = state.settings, imp = C().import;
+    const nf = imp.numberFormats[s.numberFormat];
+    const bits = [
+      `Fecha: ${imp.dateFormats[s.dateFormat] || s.dateFormat}`,
+      `Número: ${nf ? nf.label : s.numberFormat}`,
+      `Tolerancia: ${+(s.tolerance * 100).toFixed(2)} %`,
+      `IA: ${s.enableAI !== false ? 'sí' : 'no'}`
+    ];
+    return bits.join(' · ');
+  }
+
   function renderSettings(state) {
     const esc = H().esc;
     const s = state.settings;
     const imp = C().import;
-    $('import-settings').innerHTML = `
+    $('import-settings').innerHTML = `<details class="disclosure import-settings" id="import-settings-details"${settingsOpen ? ' open' : ''}>
+      <summary><span>Ver y cambiar opciones de lectura</span><span class="import-settings__sum" id="import-settings-sum">${esc(settingsSummary(state))}</span></summary>
       <div class="settings-grid">
         <div class="field"><label for="set-date">Formato de fecha</label>
           <select id="set-date" data-action="set-setting" data-key="dateFormat">
@@ -70,7 +86,9 @@
             placeholder="Ej.: las fechas vienen en formato europeo DD/MM/YYYY">
           <span class="field__hint">Se usa únicamente para resolver el nombre de las columnas; no modifica los valores.</span>
         </div>
-      </div>`;
+      </div></details>`;
+    const dt = $('import-settings-details');
+    if (dt) dt.addEventListener('toggle', () => { settingsOpen = dt.open; });
   }
 
   /**
