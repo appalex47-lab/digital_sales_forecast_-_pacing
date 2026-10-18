@@ -28,7 +28,11 @@
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
     else if (view === 'reforecast') { c.channel = state.rf.channel; if (state.rf.month && state.rf.period !== 'months') { c.periodType = 'month'; c.periodKey = state.rf.month; } }
-    else if (view === 'inicio') Object.assign(c, { channel: state.ux.home.channel, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || c.periodKey });
+    else if (view === 'inicio') {
+      // Con el periodo siguiendo a la fecha (sin fijar) Inicio no lo comparte con las demás vistas: cada una conserva su propio mes por defecto.
+      if (state.ux.home.follow === false) Object.assign(c, { channel: state.ux.home.channel, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || c.periodKey });
+      else { c.channel = state.ux.home.channel; c.periodType = 'month'; c.periodKey = null; }
+    }
     return c;
   }
 
@@ -70,8 +74,12 @@
       if (c.periodType === 'range' || c.periodType === 'week' || c.periodType === 'year') notes.push('Categoría → Producto usa un rango de fechas: se toma el mes del periodo elegido o el último mes con datos.');
     } else if (view === 'inicio') {
       state.ux.home.channel = c.channel || 'total';
-      if (c.periodType === 'year' || c.periodType === 'month') { state.ux.home.periodType = c.periodType; state.ux.home.periodKey = c.periodKey; }
-      else if (monthKey) { state.ux.home.periodType = 'month'; state.ux.home.periodKey = monthKey; notes.push('Inicio resume por año o mes: se muestra el mes del periodo elegido.'); }
+      if ((c.periodType === 'year' || c.periodType === 'month') && c.periodKey) {
+        // solo se fija el periodo si el contexto trae uno explícito y distinto del que Inicio ya sigue con la fecha
+        if (state.ux.home.follow === false || c.periodType === 'year' || c.periodKey !== state.ux.home.periodKey) state.ux.home.follow = false;
+        state.ux.home.periodType = c.periodType; state.ux.home.periodKey = c.periodKey;
+      } else if (c.periodType === 'year' || c.periodType === 'month') { /* sin periodo explícito: Inicio conserva el suyo */ }
+      else if (monthKey) { state.ux.home.periodType = 'month'; state.ux.home.periodKey = monthKey; state.ux.home.follow = false; notes.push('Inicio resume por año o mes: se muestra el mes del periodo elegido.'); }
     }
     return notes.join(' ');
   }
@@ -83,6 +91,18 @@
     else if (c.periodType === 'month' && c.periodKey) per = `${MONTHS[+c.periodKey.slice(5, 7) - 1]} ${c.periodKey.slice(0, 4)}`;
     else if (c.periodKey) per = c.periodKey;
     const cmp = c.comparison && FP.config.diagnostics.comparisons[c.comparison] ? FP.config.diagnostics.comparisons[c.comparison].label : null;
+    return [ch, per, cmp].filter(Boolean).join(' · ');
+  }
+
+  /** Versión corta del contexto para el chip junto al título (meses de 3 letras, «vs Plan»); el texto completo va en title/aria-label. */
+  function contextLabelShort(c) {
+    const ch = c.channel && c.channel !== 'total' ? FP.dataModel.getChannel(c.channel).label : 'Total digital';
+    let per = '';
+    if (c.periodType === 'year') per = `Año ${c.periodKey || ''}`;
+    else if (c.periodType === 'month' && c.periodKey) per = `${MONTHS[+c.periodKey.slice(5, 7) - 1].slice(0, 3)} ${c.periodKey.slice(0, 4)}`;
+    else if (c.periodKey) per = c.periodKey;
+    const full = c.comparison && FP.config.diagnostics.comparisons[c.comparison] ? FP.config.diagnostics.comparisons[c.comparison].label : null;
+    const cmp = full ? full.replace(/^Actual vs /, 'vs ').replace(/^Forecast vs /, 'Forecast vs ') : null;
     return [ch, per, cmp].filter(Boolean).join(' · ');
   }
 
@@ -335,8 +355,10 @@
     const detail = ownDesc && !norm(what).includes(norm(ownDesc).slice(0, 60)) ? `${ownTitle && norm(ownTitle) !== norm(v.title) ? `${ownTitle}. ` : ''}${ownDesc}` : '';
     const showQuality = (q === 'invalid' || q === 'warnings') && !NO_QUALITY.includes(view);
     const showNext = next.view !== view && !NO_NEXT.includes(view);
-    const ctxHtml = CTX_VIEWS.includes(view) ? `<p class="ux-head__ctx">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
-            ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>` : '';
+    const inlineCtx = view === 'inicio' && CTX_VIEWS.includes(view);
+    const chipCtx = inlineCtx ? { ...state.ux.ctx, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || state.ux.ctx.periodKey } : state.ux.ctx;   // Inicio: el contexto va junto al título (chip corto); el párrafo solo queda si hay nota
+    const ctxHtml = CTX_VIEWS.includes(view) ? (inlineCtx ? (state.ux.ctxNote ? `<p class="ux-head__ctx"><span class="ux-context__note">${esc(state.ux.ctxNote)}</span></p>` : '') : `<p class="ux-head__ctx">Contexto: <span class="chip">${esc(contextLabel(state.ux.ctx))}</span>
+            ${state.ux.ctxNote ? `<span class="ux-context__note">${esc(state.ux.ctxNote)}</span>` : ''}</p>`) : '';
     renderHelpMenu(state); renderAccountMenu(state);
     $('ux-context').innerHTML = `<div class="ux-wrap">
       <div class="ux-head" data-tone="${tone}">
@@ -346,7 +368,7 @@
           const qn = g && g.question ? `<span class="crumb-q"> · ${esc(g.question)}</span>` : '';
           return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
         }).join('')}</ol></nav>`}
-        <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
+        <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${inlineCtx ? `<span class="ux-head__ctxchip" title="${esc(contextLabel(chipCtx))}" aria-label="${esc('Contexto: ' + contextLabel(chipCtx))}">${esc(contextLabelShort(chipCtx))}</span><span class="ux-head__break" aria-hidden="true"></span>` : ''}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
         <button type="button" class="ux-head__morebtn" data-action="ux-more" aria-expanded="${uxMoreOpen}" aria-controls="ux-more">Qué hay aquí y qué hago</button>
         <div class="ux-head__more" id="ux-more" data-open="${uxMoreOpen}">
         ${what ? `<p class="ux-head__line ux-context__purpose"><b>Qué hay aquí</b> ${esc(what)}</p>` : ''}
@@ -379,5 +401,5 @@
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
   }
 
-  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, markRoute, toggleGroup, setDrawer, toggleMore, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
+  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, contextLabelShort, renderNav, markRoute, toggleGroup, setDrawer, toggleMore, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
 })(typeof window !== 'undefined' ? window : globalThis);

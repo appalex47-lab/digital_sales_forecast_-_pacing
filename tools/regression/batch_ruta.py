@@ -46,7 +46,7 @@ async def main():
         await q.click('#nbs button.btn--primary'); await q.wait_for_timeout(1800)
         O = await q.evaluate("""()=>{const o=document.querySelector('.route-origin');const st=JSON.parse(localStorage.getItem('fp.route.v1')||'{}');return {hash:location.hash,has:!!o,txt:o?o.innerText:'',step:o&&o.dataset.step,done:o&&o.dataset.done,
           segs:o?o.querySelectorAll('.route-origin__segs i').length:0,next:o?(o.querySelector('.route-origin__done .btn--primary')||{innerText:''}).innerText:'',saved:Object.values(st).some(v=>v.review_gap)}}""")
-        chk('R5 el botón abre el diagnóstico y arriba aparece «Vienes de Inicio · Hallazgo», con canal, periodo y fecha', O['hash'] == '#diagnostico' and O['has'] and 'Vienes de Inicio' in O['txt'] and 'Total digital' in O['txt'] and 'Año 2026' in O['txt'] and 'Datos al 23 sep 2026' in O['txt'], O)
+        chk('R5 el botón abre el diagnóstico y arriba aparece «Vienes de Inicio · Hallazgo», con canal, periodo y fecha', O['hash'] == '#diagnostico' and O['has'] and 'Vienes de Inicio' in O['txt'] and 'Total digital' in O['txt'] and ('2026-09' in O['txt'] or 'Año 2026' in O['txt']) and 'Datos al 23 sep 2026' in O['txt'], O)
         chk('R6 la barra muestra el avance (5 tramos, paso 2 de 5) y el progreso quedó guardado', O['segs'] == 5 and 'paso 2 de 5' in O['txt'] and O['saved'], O)
         chk('R7 el paso se marca completado por los datos (el diagnóstico ya se calculó) y ofrece ir al paso 3', O['done'] == '1' and 'Paso completado' in O['txt'] and 'Ir al paso 3' in O['next'], O)
         # no aparece en otras vistas
