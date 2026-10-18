@@ -1718,4 +1718,7 @@ tr.is-evidence { outline-offset: -3px; }
   body .pill, body .hstatus__link .pill, body .nbs__sts { font-size: 12px; }
   /* el aviso no tapa el panel de menú abierto */
   body.nav-open .toast { display: none; }
+  /* el aviso sale arriba, bajo el encabezado, para no tapar lo que se lee; se cierra al tocarlo */
+  .toast { top: calc(var(--ds-header-h) + var(--ds-s2)); bottom: auto; transform: translateY(-6px); }
+  .toast.is-visible { transform: none; pointer-events: auto; cursor: pointer; }
 }
