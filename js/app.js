@@ -2526,7 +2526,9 @@
     'tour-up-dismiss'(el) { state.ux.tour.upDismissed = el.dataset.key || ''; render(); },
     'tour-compact-off'() { const t = state.ux.tour; t.compact = false; t.went = false; render(); },
     'tour-offer-no'() { closeTourOffer(); },
-    'nav-toggle'() { document.body.classList.toggle('nav-open'); },
+    'nav-toggle'() { FP.navigation.setDrawer(!document.body.classList.contains('nav-open')); },
+    'nav-close'() { FP.navigation.setDrawer(false); },
+    'ux-more'() { FP.navigation.toggleMore(); },
     'lesson-dismiss'() { state.ux.lesson = null; render(); },
     /** "¿Por qué este número?": explica la cifra con la corrida real del motor, en el panel de ayuda de Fase 7. */
     'why'(el) {
@@ -3706,6 +3708,7 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (document.body.classList.contains('nav-open')) FP.navigation.setDrawer(false);
       FP.help.close();
       if (state.ux.refOpen) { state.ux.refOpen = false; render(); const b = document.getElementById('topbar-ref'); if (b) b.focus(); }
     });

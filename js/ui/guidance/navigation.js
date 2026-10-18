@@ -125,13 +125,38 @@
    */
   const navOpen = {};       // estado efectivo de cada grupo (abierto/cerrado)
   let navLastView = null;
+  let uxMoreOpen = false;      // móvil: el bloque «Qué hay aquí / Qué hago» llega plegado para ver primero los datos
+  const toggleMore = () => { uxMoreOpen = !uxMoreOpen; const m = document.getElementById('ux-more'), b = document.querySelector('.ux-head__morebtn'); if (m) m.dataset.open = String(uxMoreOpen); if (b) b.setAttribute('aria-expanded', String(uxMoreOpen)); };
   let navKeepDrawer = false;   // en móvil, al elegir una sección el panel se queda abierto para ver sus opciones
   const CHEV = '<svg class="snav__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
   /** Primera página de una sección: la primera vista de su lista (la que se abre al elegir la sección). */
   const firstView = (id) => { const g = G().GROUPS.find((x) => x.id === id); return g ? g.views[0] : null; };
 
+  const isMobileNav = () => !!(root.matchMedia && root.matchMedia('(max-width: 860px)').matches);
+
+  /** Abre o cierra el panel lateral (solo móvil) manteniendo botón, foco y lectores de pantalla sincronizados. */
+  function setDrawer(open, { focus = true } = {}) {
+    document.body.classList.toggle('nav-open', !!open);
+    const t = document.querySelector('.menu-toggle');
+    if (t) { t.setAttribute('aria-expanded', String(!!open)); t.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú'); }
+    if (!focus) return;
+    if (open) { const a = document.querySelector('#app-nav [aria-current="page"]') || document.querySelector('#app-nav .snav__toggle, #app-nav .snav__item'); if (a) a.focus({ preventScroll: true }); }
+    else if (t) t.focus({ preventScroll: true });
+  }
+
   function toggleGroup(id) {
+    if (isMobileNav()) {
+      // móvil: la sección solo se despliega (una a la vez); la página cambia y el panel se cierra al elegir una página
+      const btn = document.querySelector(`.snav__toggle[data-value="${id}"]`); if (!btn) return;
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      document.querySelectorAll('.snav__toggle').forEach((b) => {
+        const on = b === btn && open; navOpen[b.dataset.value] = on;
+        b.setAttribute('aria-expanded', String(on));
+        const box = document.getElementById(b.getAttribute('aria-controls')); if (box) box.hidden = !on;
+      });
+      return;
+    }
     const curGroup = groupOf(document.body.dataset.view);
     if (id !== curGroup) {
       const first = firstView(id);
@@ -178,7 +203,7 @@
         <a href="#ajustes" data-nav="ajustes" class="snav__item" ${cur === 'ajustes' ? 'aria-current="page"' : ''}>${ICONS.ajustes}<span>Configuración de RevNavigator</span></a>
         <a href="#ayuda" data-nav="ayuda" class="snav__item snav__help" ${cur === 'ayuda' ? 'aria-current="page"' : ''}>${ICONS.ayuda}<span>¿Cómo funciona?</span></a>
       </div>`;
-    if (!navKeepDrawer) document.body.classList.remove('nav-open');
+    if (!navKeepDrawer) setDrawer(false, { focus: false });
     navKeepDrawer = false;
     document.body.dataset.view = cur;
   }
@@ -322,9 +347,12 @@
           return `<li>${target && i < arr.length - 1 ? `<a href="#${target}">${esc(c)}</a>` : `<span ${i === arr.length - 1 ? 'aria-current="location"' : ''}>${esc(c)}</span>`}${qn}</li>`;
         }).join('')}</ol></nav>`}
         <h2 class="ux-head__title" id="ux-title">${esc(v.title || view)}${headline ? `<span class="ux-head__state ux-head__state--${tone}">${esc(headline)}</span>` : ''}</h2>
+        <button type="button" class="ux-head__morebtn" data-action="ux-more" aria-expanded="${uxMoreOpen}" aria-controls="ux-more">Qué hay aquí y qué hago</button>
+        <div class="ux-head__more" id="ux-more" data-open="${uxMoreOpen}">
         ${what ? `<p class="ux-head__line ux-context__purpose"><b>Qué hay aquí</b> ${esc(what)}</p>` : ''}
         ${d.whatToDo ? `<p class="ux-head__line ux-context__action"><b>Qué hago aquí</b> ${esc(term(d.whatToDo))}</p>` : ''}
         ${detail ? `<p class="ux-head__line ux-head__line--detail"><b>Detalle</b> ${esc(detail)}</p>` : ''}
+        </div>
         ${ctxHtml}
         ${showQuality ? `<p class="ux-context__warn ux-head__warn" data-quality="${q}" role="status">
           Algunos cálculos pueden estar incompletos. <a href="#calidad">Revisar calidad de datos</a></p>` : ''}
@@ -351,5 +379,5 @@
     document.querySelectorAll('.mode-note').forEach((n) => n.remove());
   }
 
-  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, markRoute, toggleGroup, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
+  FP.navigation = { groupOf, extractContext, applyContext, contextLabel, renderNav, markRoute, toggleGroup, setDrawer, toggleMore, renderContextBar, toggleHelpMenu, toggleAcctMenu, markAnalystBlocks, applyMode };
 })(typeof window !== 'undefined' ? window : globalThis);
