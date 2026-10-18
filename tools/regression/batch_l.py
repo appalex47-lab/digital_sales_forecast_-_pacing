@@ -60,6 +60,7 @@ async def main():
         for a in ('plan-preview', 'plan-save'):
             await q.click(f'[data-action="{a}"]'); await q.wait_for_timeout(900)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
+        await q.select_option('#home-per', 'year'); await q.wait_for_timeout(700)   # Inicio abre en el mes de la fecha; estas comprobaciones son del año
         C = await home_state(q)
         labels = [c['label'] for c in C['cards']]
         chk('R-15 con plan pero sin venta real, Inicio ya muestra algo: 5 tarjetas del plan (meta del periodo, pedidos, volumen, CR, AOV) con etiqueta «Plan»', not C['empty'] and labels == ['Meta del periodo', 'Pedidos del plan', 'Volumen del plan', 'CR del plan', 'AOV del plan'] and all(c['tag'] == 'Plan' for c in C['cards']), (labels, [c['tag'] for c in C['cards']]))
