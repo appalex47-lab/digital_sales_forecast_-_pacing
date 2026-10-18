@@ -233,7 +233,7 @@
     const d = att.findings.find((f) => f.kind === 'data' && (f.severity === 'blocking' || f.severity === 'warning'));
     if (!d) return '';
     const { esc } = H();
-    return `<div class="att__banner att__banner--${esc(d.severity)}" role="status" data-banner="${esc(d.id)}"><strong>Antes de leer las cifras:</strong> ${esc(d.title)}. ${esc(d.what)} <button type="button" class="link-btn" data-action="scroll-to" data-target="att">Ver detalle</button></div>`;
+    return `<div class="att__banner att__banner--compact att__banner--${esc(d.severity)}" role="status" data-banner="${esc(d.id)}"><button type="button" class="att__banner-line" data-action="banner-toggle" aria-expanded="false"><span class="att__banner-ico" aria-hidden="true">⚠</span><span class="att__banner-txt"><strong class="att__banner-pre">Antes de leer las cifras: </strong>${esc(d.title)}.</span></button><span class="att__banner-what"> ${esc(d.what)}</span> <button type="button" class="link-btn att__banner-go" data-action="scroll-to" data-target="att">Ver detalle</button></div>`;
   }
 
   /* ---------- Origen de la navegación: de qué hallazgo y paso vengo, y cómo volver ---------- */

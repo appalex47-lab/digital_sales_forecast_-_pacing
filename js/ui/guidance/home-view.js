@@ -62,7 +62,7 @@
       <div class="field"><label for="home-ch" class="field__hint">Canal</label>
         <select id="home-ch" data-action="home-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
           `<option value="${v}" ${h.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-      <div class="field"><label for="home-per" class="field__hint">Periodo</label>
+      <div class="field"><div class="home__perhead"><label for="home-per" class="field__hint">Periodo</label>${h.follow === false ? '<button type="button" class="link-btn home__pin" data-action="home-follow" title="Volver a mostrar el mes de la fecha del encabezado">fijado · seguir la fecha</button>' : '<span class="field__hint home__follow">sigue la fecha</span>'}</div>
         <select id="home-per" data-action="home-setting" data-key="period">
           <option value="year" ${h.periodType !== 'month' ? 'selected' : ''}>Año ${year}</option>
           ${MONTHS.map((m, i) => { const k = `${year}-${String(i + 1).padStart(2, '0')}`; return `<option value="${k}" ${h.periodType === 'month' && h.periodKey === k ? 'selected' : ''}>${m} ${year}</option>`; }).join('')}

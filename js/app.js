@@ -77,7 +77,7 @@
       lastByGroup: {},
       tour: { active: false, step: 0, collapsed: false, went: false, flash: '', skipped: {}, ended: null, micro: {}, lastMicro: '', lastMicroTitle: '', path: null, compact: false, upDismissed: '' },
       tourOffered: false,
-      home: { channel: 'total', periodType: 'year', periodKey: null },
+      home: { channel: 'total', periodType: 'year', periodKey: null, follow: true },
       measureAction: null,
       crumbExtra: {}
     },
@@ -966,7 +966,18 @@
     if (renderAgain) { renderAgain = false; render(); }
   }
 
+  /** Inicio sigue a la fecha del encabezado (mes de esa fecha) mientras no se fije el periodo a mano. */
+  function syncHomeToDate() {
+    const h = state.ux.home;
+    if (!h || h.follow === false) return;
+    const ref = (state.fc.settings && state.fc.settings.referenceDate) || Cal.toISODate(new Date());
+    const run = state.fc.run;
+    const m = ref.startsWith(`${state.year}-`) ? ref.slice(0, 7) : (run && run.cutoff && run.cutoff.startsWith(`${state.year}-`) ? run.cutoff.slice(0, 7) : null);
+    if (m) { h.periodType = 'month'; h.periodKey = m; } else { h.periodType = 'year'; h.periodKey = String(state.year); }
+  }
+
   function renderNow() {
+    syncHomeToDate();
     const u = state.ux;
     u.visited[state.view] = true;
     const g = FP.navigation.groupOf(state.view);
@@ -2078,7 +2089,7 @@
     'set-state'(el) { state.filters.state = el.dataset.value; render(); },
     'set-granularity'(el) { state.filters.granularity = el.dataset.value; resetPeriod(); render(); },
     'set-period'(el) { state.filters.periodKey = el.value; render(); },
-    'set-year'(el) { loadYearScoped(Number(el.value)); refresh(); resetPeriod(); render(); },
+    'set-year'(el) { loadYearScoped(Number(el.value)); refresh(); resetPeriod(); state.ux.home.follow = true; render(); },
 
     'an-period-type'(el) { const pt = el.value || 'month'; const pc = pt === 'day' ? 30 : pt === 'year' ? 3 : 12; resetAnalysis({ periodType: pt, periodCount: pc, months: pc, focusKey: null }); render(); },
     'an-metric'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ metric: FP.analysisContext.normMetric(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
@@ -2544,8 +2555,11 @@
       if (h.periodType === 'month' && h.periodKey) { c.periodType = 'month'; c.periodKey = h.periodKey; } else { c.periodType = 'year'; c.periodKey = String(state.year); }
       root.location.hash = '#segmentos';
     },
+    'home-follow'() { state.ux.home.follow = true; state.ux.ctxNote = null; render(); },
+    'banner-toggle'(el) { const b = el.closest('.att__banner'); if (!b) return; const o = b.dataset.open !== '1'; b.dataset.open = o ? '1' : '0'; el.setAttribute('aria-expanded', String(o)); },
     'home-setting'(el) {
       const h = state.ux.home;
+      if (el.dataset.key === 'period') h.follow = false;
       if (el.dataset.key === 'channel') { h.channel = el.value; state.ux.ctx.channel = el.value; }
       else if (el.value === 'year') { h.periodType = 'year'; h.periodKey = String(state.year); state.ux.ctx.periodType = 'year'; state.ux.ctx.periodKey = String(state.year); }
       else { h.periodType = 'month'; h.periodKey = el.value; state.ux.ctx.periodType = 'month'; state.ux.ctx.periodKey = el.value; }
@@ -3172,7 +3186,7 @@
       if (!Cal.isValidISODate(v)) { FP.ui.toast('Fecha inválida.'); render(); return; }
       const y = Number(v.slice(0, 4));
       if (y < 2000 || y > 2100) return;   // al teclear el año dígito por dígito el navegador pasa por 0002, 0020, 0202…: se ignora sin redibujar
-      if (y !== state.year) { loadYearScoped(y); refresh(); resetPeriod(); }
+      if (y !== state.year) { loadYearScoped(y); refresh(); resetPeriod(); state.ux.home.follow = true; }
       state.fc.settings.referenceDate = v;
       saveForecastSettings(); state.fc.run = null; state.rf.run = null;
       render();
