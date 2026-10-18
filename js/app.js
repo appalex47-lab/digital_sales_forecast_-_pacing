@@ -3527,7 +3527,9 @@
 
   /** Recorrido guiado: activa el paso y navega a su vista. */
   /** Ventana de inicio de sesión (correo y contraseña). Sin registro: las cuentas las crea la persona administradora. */
-  function closeLogin() { const d = document.getElementById('login-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
+  function closeLogin() { const d = document.getElementById('login-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); afterLoginClosed(); } }
+  /** Al cerrarse el acceso (Entrar, «Ahora no» o Esc) se retoma la bienvenida que quedó en espera; no repite si ya se ofreció. */
+  function afterLoginClosed() { try { maybeOfferTourFirstTime(FP.contextEngine.collectStatus(state)); } catch (e) { /* sin estado todavía */ } }
   function openLogin() {
     closeLogin();
     const d = document.createElement('dialog'); d.id = 'login-dialog'; d.className = 'tour-offer login-dialog'; d.setAttribute('aria-labelledby', 'login-t');
@@ -3537,7 +3539,7 @@
       <div class="field"><label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password"></div>
       <p class="note" id="login-msg" role="status" hidden></p>
       <div class="tour-offer__btns"><button type="submit" class="btn btn--primary" data-action="login-submit">Entrar</button><button type="button" class="btn" data-action="login-cancel">Ahora no</button></div></form>`;
-    d.addEventListener('close', () => d.remove());
+    d.addEventListener('close', () => { d.remove(); afterLoginClosed(); });
     d.querySelector('#login-form').addEventListener('submit', (e) => { e.preventDefault(); actions['login-submit'](); });
     document.body.appendChild(d);
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
@@ -3577,6 +3579,7 @@
   /** Primera visita sin datos: se ofrece el recorrido una sola vez (ventana que no bloquea la pantalla). */
   function maybeOfferTourFirstTime(status) {
     if (state.ux.tourOffered || state.ux.tour.active) return;
+    if (document.getElementById('login-dialog')) return;   // secuencia de arranque: primero el acceso; la bienvenida espera a que se cierre
     if (status.data.historical || status.data.actual || status.targets.defined) { state.ux.tourOffered = true; saveUx(); return; }
     state.ux.tourOffered = true; saveUx();
     offerTour(false);
@@ -3812,9 +3815,10 @@
     FP.navigation.markAnalystBlocks();
     bind();
     FP.ui.renderEdgeCases();
+    if (FP.ui.initHeaderCollapse) FP.ui.initHeaderCollapse();
+    maybePromptLogin();   // el acceso se decide antes que la bienvenida (la bienvenida de render() espera si hay acceso abierto)
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
-    maybePromptLogin();
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).

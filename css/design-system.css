@@ -1744,3 +1744,25 @@ tr.is-evidence { outline-offset: -3px; }
 @media (max-width: 860px) {
   .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* Opciones de lectura (Carga): panel plegado con resumen de los valores vigentes */
+.import-settings > summary { padding: var(--ds-s3) 0; display: block; }
+.import-settings > summary > span:first-child { display: inline; }
+.import-settings__sum { display: block; margin: 2px 0 0 1.25em; font-weight: 400; font-size: 13px; color: var(--ds-muted, var(--c-muted)); overflow-wrap: anywhere; }
+.import-settings[open] > summary { margin-bottom: var(--ds-s3); }
+.import-settings[open] .import-settings__sum { display: none; }
+
+/* Encabezado móvil compacto: la fila de vigencia se esconde al bajar (js/ui/ui.js · initHeaderCollapse) y reaparece al subir */
+@media (max-width: 860px) {
+  .app-header { transition: top .18s ease; }
+  .app-header.is-compact .topbar__status { visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) { .app-header { transition: none; } }
+
+/* Diagnóstico: panel «Filtros» plegable con chips de los filtros vigentes */
+.dx-filters > summary { padding: var(--ds-s2) 0; display: block; }
+.dx-filters > summary > span:first-child { display: inline; }
+.dx-filters__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0 1.25em; font-weight: 400; }
+.dx-filters[open] .dx-filters__chips { display: none; }
+.dx-filters[open] > summary { margin-bottom: var(--ds-s3); }
+.dx-filters__k { color: var(--ds-muted, var(--c-muted)); }
