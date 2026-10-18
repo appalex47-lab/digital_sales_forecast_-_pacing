@@ -46,7 +46,7 @@ async def main():
         # ---- periodo que sigue a la fecha (escritorio basta; la lógica no depende del ancho) ----
         c, q, errs = await setup(b, {'width': 1280, 'height': 800}, False)
         st = "(()=>{const h=FP.app.state.ux.home;return {t:h.periodType,k:h.periodKey,f:h.follow,sel:document.getElementById('home-per').value,pin:!!document.querySelector('.home__pin'),follow:!!document.querySelector('.home__follow')}})()"
-        s0 = await q.evaluate(st); chk('F-1 por defecto Inicio muestra el mes de la fecha y dice «sigue la fecha»', s0['t'] == 'month' and s0['k'] == '2026-10' and s0['f'] is True and s0['sel'] == '2026-10' and s0['follow'] and not s0['pin'], s0)
+        s0 = await q.evaluate(st); chk('F-1 por defecto Inicio muestra el mes de la fecha y no muestra etiqueta de «fijado»', s0['t'] == 'month' and s0['k'] == '2026-10' and s0['f'] is True and s0['sel'] == '2026-10' and not s0['follow'] and not s0['pin'], s0)
         await q.evaluate("FP.app.actions['set-ref-date']({value:'2026-09-10'})"); await q.wait_for_timeout(700)
         s1 = await q.evaluate(st); chk('F-2 al mover la fecha a septiembre Inicio pasa a septiembre', s1['k'] == '2026-09' and s1['sel'] == '2026-09' and s1['f'] is True, s1)
         await q.select_option('#home-per', '2026-08'); await q.wait_for_timeout(500)
