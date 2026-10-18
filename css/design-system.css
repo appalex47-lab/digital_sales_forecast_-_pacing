@@ -1739,3 +1739,8 @@ tr.is-evidence { outline-offset: -3px; }
   .table--cards td > input, .table--cards td > select { max-width: 55%; }
   .table-wrap:has(> .table--cards) { overflow-x: visible; background: none; }
 }
+
+/* Móvil · los botones con texto largo y sin espacios (p. ej. «Exportar category_product_analysis_export.json») se parten en vez de salirse de la pantalla */
+@media (max-width: 860px) {
+  .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

@@ -83,6 +83,11 @@ async def main():
         await q.reload(); await q.wait_for_timeout(700)
         cv2 = await q.evaluate("document.getElementById('ux-more').dataset.open")
         chk('M-23 al recargar la página vuelve a llegar plegado', cv2 == 'false', cv2)
+        # Producto a 320 px: el botón de exportar no se sale de la pantalla
+        await q.set_viewport_size({'width': 320, 'height': 740}); await q.goto(u + '#producto'); await q.wait_for_timeout(600)
+        ov320 = await q.evaluate("document.documentElement.scrollWidth-innerWidth")
+        chk('M-24 Producto a 320 px sin desborde horizontal (botón con nombre de archivo largo)', ov320 <= 0, ov320)
+        await q.set_viewport_size({'width': 375, 'height': 740})
         # escritorio: nada cambia
         d = await (await b.new_context(viewport={'width': 1280, 'height': 900})).new_page(); d.on('pageerror', lambda e: errs.append(str(e)[:150]))
         await prep(d, u)
