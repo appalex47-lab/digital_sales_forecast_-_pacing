@@ -180,13 +180,25 @@
     }
     // Canal más rezagado (solo cuando se mira el total digital)
     if (input.channel === 'total' && S && S.channels && S.channels.status === 'ok') {
-      const lag = S.channels.rows.filter((r) => r.state === 'ok' && r.pacing === 'below' && fin(r.compliance)).sort((a, b) => a.compliance - b.compliance)[0];
-      if (lag) out.push({ id: `channel_${lag.id}`, kind: 'channel', severity: 'attention', priority: 4, amount: null,
-        title: `Revisa el canal ${lag.label}`, what: `${lag.label} va al ${pct(lag.compliance)} de su plan a la fecha.`,
-        why: 'Muestra dónde está la desviación; no repite el diagnóstico global.',
-        evidence: [`Venta acumulada de ${lag.label}: ${money(lag.actual)}.`, fin(lag.forecastGapPct) ? `Forecast contra meta del canal: ${lag.forecastGapPct >= 0 ? '+' : '−'}${pct(lag.forecastGapPct)}.` : null].filter(Boolean),
-        support: sup, missing: [], next: { view: 'pacing', label: 'Ver el canal', channel: lag.id }, step: 'review_channel',
-        nextCheck: 'Abrir Pacing con ese canal y ver si el rezago es de todo el periodo o reciente.' });
+      // Un canal está en problema si va por debajo del plan a la fecha O si su forecast de cierre queda corto de la meta.
+      const onPlan = th ? th.onPlanFrom : 0.99;
+      const troubled = S.channels.rows.filter((r) => r.state === 'ok').map((r) => {
+        const behind = r.pacing === 'below' && fin(r.compliance);
+        const short = fin(r.forecastGapPct) && 1 + r.forecastGapPct < onPlan;
+        return (behind || short) ? { ...r, behind, short } : null;
+      }).filter(Boolean).sort((a, b) => (a.behind === b.behind ? ((fin(a.compliance) ? a.compliance : 9) - (fin(b.compliance) ? b.compliance : 9)) : (a.behind ? -1 : 1)));
+      if (troubled.length) {
+        const lag = troubled[0], n = troubled.length;
+        const line = (r) => `${r.label}: ${fin(r.compliance) ? `${pct(r.compliance)} del plan a la fecha` : 'sin cumplimiento calculable'}${fin(r.forecastGapPct) ? `; cierre proyectado ${r.forecastGapPct >= 0 ? '+' : '−'}${pct(Math.abs(r.forecastGapPct))} contra su meta` : ''}`;
+        out.push({ id: `channel_${lag.id}`, kind: 'channel', severity: 'attention', priority: 4, amount: null,
+          channels: troubled.map((r) => ({ id: r.id, label: r.label, compliance: fin(r.compliance) ? r.compliance : null, forecastGapPct: fin(r.forecastGapPct) ? r.forecastGapPct : null, behind: r.behind, short: r.short })),
+          title: n === 1 ? `Revisa el canal ${lag.label}` : `Revisa los ${n} canales en problema`,
+          what: n === 1 ? `${lag.label} va al ${pct(lag.compliance)} de su plan a la fecha.` : `${troubled.map((r) => r.label).join(', ')} están por debajo del plan a la fecha o con un cierre proyectado corto.`,
+          why: 'Muestra dónde está la desviación; no repite el diagnóstico global.',
+          evidence: troubled.map(line),
+          support: sup, missing: [], next: { view: 'pacing', label: n === 1 ? 'Ver el canal' : `Ver ${lag.label}`, channel: lag.id }, step: 'review_channel',
+          nextCheck: 'Abrir Pacing con cada canal y ver si el rezago es de todo el periodo o reciente.' });
+      }
     }
     return out;
   }
@@ -248,7 +260,7 @@
       needs: ['Productos de venta'], exit: 'Revisas el detalle y eliges una hipótesis a validar; lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).', done: (i) => reviewedBy(i, 'investigate_aov'), manual: true },
     investigate_traffic: { title: 'Investiga el menor volumen de sesiones', view: 'segmentos', deps: ['review_gap'], expected: 'Ver qué fuente o dispositivo mueve el tráfico.',
       needs: ['Segmentos de GA4'], exit: 'Revisas el detalle y eliges una hipótesis a validar; lo confirmas tú con «Ya lo revisé» (la app no puede saberlo sola).', done: (i) => reviewedBy(i, 'investigate_traffic'), manual: true },
-    review_channel: { title: 'Revisa el canal rezagado', view: 'pacing', deps: ['complete_data'], expected: 'Saber si el rezago es de todo el periodo o reciente.',
+    review_channel: { title: 'Revisa los canales en problema', view: 'pacing', deps: ['complete_data'], expected: 'Saber si el rezago es de todo el periodo o reciente.',
       needs: ['Venta real del canal'], exit: 'Revisas si el rezago es de todo el periodo o reciente y lo confirmas tú con «Ya lo revisé».', done: (i) => reviewedBy(i, 'review_channel'), manual: true },
     evaluate_levers: { title: 'Evalúa las palancas para cerrar la brecha', view: 'reforecast', deps: ['complete_data'], expected: 'Cuánto hay que vender por día y qué escenarios cierran la brecha.',
       needs: ['Forecast y plan del periodo'], exit: 'El reforecast calculado para este canal y periodo.', done: (i) => Boolean(i.status.visited.reforecast) && i.status.reforecast.available },
@@ -341,7 +353,7 @@
       const st = buildStep(id, input, f);
       // el destino puede ser más específico que el del catálogo (canal, mix, segmentos)
       st.view = f.next.view || st.view; st.cta = f.next.label; st.channel = f.next.channel || null; st.title = f.title || st.title; st.why = f.why; st.findingId = f.id;
-      st.what = f.what; st.support = f.support; st.nextCheck = f.nextCheck || null;
+      st.channels = f.channels || null; st.what = f.what; st.support = f.support; st.nextCheck = f.nextCheck || null;
       st.soft = f.severity === 'warning' || f.severity === 'info';     // un aviso suave nunca es el paso principal
       steps.push(st); return st;
     };

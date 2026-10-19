@@ -1978,3 +1978,8 @@ tr.is-evidence { outline-offset: -3px; }
 .rc-manual { margin-top: .75rem; border-top: 1px dashed var(--ds-border, #d8dde5); padding-top: .5rem; }
 .rc-manual > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
 @media (max-width: 860px) { .rcr-grid { grid-template-columns: 1fr; } }
+
+/* Inicio: canales en problema dentro de «Tu siguiente mejor paso» */
+.nbs__chans{list-style:none;margin:var(--space-3,12px) 0;padding:0;display:grid;gap:8px}
+.nbs__chans li{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--border,#d9dee7);border-radius:10px}
+@media (max-width:860px){.nbs__chans li{flex-direction:column;align-items:stretch}.nbs__chans .btn{width:100%}}
