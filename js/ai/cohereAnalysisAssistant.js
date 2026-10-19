@@ -24,7 +24,11 @@
     'Si la evidencia no permite responder, dilo explícitamente y explica qué dato falta.',
     'Devuelve únicamente JSON con: answer, evidence, nextQuestion, limitations.',
     'answer debe ser una respuesta directa y breve. evidence debe contener de 0 a 5 elementos con entity, reason y source.',
-    'No uses lenguaje causal como “la causa es”, “esto demuestra” o “se debe a”.'
+    'No uses lenguaje causal como “la causa es”, “esto demuestra” o “se debe a”.',
+    'Si el contexto trae "panorama", contiene un resumen por nivel (categoría, subcategoría, producto, estado, ciudad, sucursal, tipo de entrega) con el mismo período y comparación. Úsalo para preguntas por nivel o de panorama general.',
+    'Para un panorama general recorre los niveles disponibles en este orden: total, categoría y subcategoría, producto, geografía (estado y ciudad), sucursal y entrega. Máximo 6 puntos breves, cada uno con sus cifras tal cual vienen en el contexto.',
+    'Si un nivel trae available=false, dilo en limitations (no hay datos en ese nivel) y no lo analices. Si currentPartial es true, aclara que el período actual está incompleto y que la comparación es descriptiva.',
+    'top3ShareOfDecline describe concentración de la caída entre entidades; no es causa ni explicación.'
   ].join('\n');
 
   const RESPONSE_SCHEMA = {
@@ -123,7 +127,8 @@
     while ((m = re.exec(text))) {
       const raw = m[2].replace(/,/g, ''), v = Number(raw); if (!Number.isFinite(v)) continue;
       const scale = (!m[3] && m[4]) ? UNIT_SCALE[m[4]] : 1, dec = (raw.split('.')[1] || '').length;
-      out.push({ value: (m[1] ? -1 : 1) * v * scale, signed: Boolean(m[1]), tol: scale > 1 ? 0.5 * Math.pow(10, -dec) * scale : 0.05, at: m.index });
+      const count = !m[1] && !m[3] && scale === 1 && !/\$/.test(m[0]) && /^\d{1,2}$/.test(raw) && v <= 10;   // conteo suelto («3 categorías»): no es una cifra de dinero ni de porcentaje
+      out.push({ count, value: (m[1] ? -1 : 1) * v * scale, signed: Boolean(m[1]), tol: scale > 1 ? 0.5 * Math.pow(10, -dec) * scale : 0.05, at: m.index });
     }
     return out;
   }
@@ -155,17 +160,18 @@
     const text = `${parsed.answer}\n${(parsed.evidence || []).map(e => `${e.entity} ${e.reason} ${e.source}`).join('\n')}`;
     if (/la causa es|esto demuestra|se debe a|caus[oó]\s/i.test(text)) return { ok: false, errors: ['La respuesta usa lenguaje causal no permitido.'] };
     const allowed = contextNumbers(ctx).map(Number).filter(Number.isFinite);
-    const toks = numberTokens(text), invalid = toks.filter((tok) => !matchedValues(tok, allowed).length).map((tok) => (tok.signed ? '-' : '') + String(Math.abs(tok.value)));
+    const toks = numberTokens(text), invalid = toks.filter((tok) => !tok.count && !matchedValues(tok, allowed).length).map((tok) => (tok.signed ? '-' : '') + String(Math.abs(tok.value)));
     const conflict = toks.filter((tok) => directionConflict(tok, matchedValues(tok, allowed), text)).map((tok) => Math.abs(tok.value));
     if (!invalid.length && conflict.length) return { ok: false, errors: [`Cohere describe como subida una cifra que en los datos es una caída: ${conflict.slice(0, 3).join(', ')}.`] };
     if (invalid.length) return { ok: false, errors: [`Cohere introdujo cifras no presentes en el contexto: ${invalid.slice(0, 5).join(', ')}.`] };
     return { ok: true, errors: [] };
   }
 
-  async function ask(question, state, { apiKey, model, fetchImpl } = {}) {
+  async function ask(question, state, { apiKey, model, fetchImpl, panorama = null } = {}) {
     const q = String(question || '').trim();
     if (!q) return { ok: false, status: 'invalid', result: null, errors: ['Escribe una pregunta.'] };
     const context = buildContext(state);
+    if (panorama) context.panorama = panorama;
     const user = JSON.stringify({ question: q, context }, null, 2);
     const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Asistente conversacional de Análisis' }, system: SYSTEM_RULES, user, schema: RESPONSE_SCHEMA, apiKey, model, fetchImpl });
     if (!r.ok) return { ok: false, status: r.status, result: null, errors: r.errors || ['No se pudo consultar Cohere.'] };

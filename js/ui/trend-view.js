@@ -298,6 +298,13 @@
   function analysisAssistant(a) {
     const as = a.assistant || { open:false, status:'idle', result:null, errors:[] };
     const configured = FP.cohereConnection?.isConfigured ? FP.cohereConnection.isConfigured() : false;
+    const PANORAMA_MAIN = 'Dame un panorama completo: qué está pasando en categorías, productos, geografía y sucursales.';
+    const PANORAMA_GROUPS = [
+      { title: 'Categorías y subcategorías', questions: ['¿Qué categorías o subcategorías explican la caída?', '¿Hay alguna subcategoría que crece mientras su categoría cae?'] },
+      { title: 'Estados y ciudades', questions: ['¿Qué estados o ciudades concentran la caída?', '¿Hay ciudades que crecen mientras su estado cae?'] },
+      { title: 'Sucursales y entrega', questions: ['¿Qué sucursales concentran la caída?', '¿Cambió el peso de los tipos de entrega?'] },
+      { title: 'Concentración y datos', questions: ['¿Cuánto depende la caída de pocos productos o categorías?', '¿Qué niveles no tienen datos para concluir?'] }
+    ];
     const suggestions = [
       '¿Qué se está dejando de vender?',
       '¿Desde cuándo están cayendo y por cuánto tiempo?',
@@ -315,6 +322,10 @@
       ${as.open ? `<section class="analysis-assistant__panel" id="an-assistant-panel">
         <div class="analysis-assistant__head"><div><span class="analysis-layer-label">COHERE</span><h3>Pregúntale a tus datos</h3><p>Responde usando resultados ya calculados por Análisis. No inventa cifras ni sustituye la evidencia.</p></div><button type="button" class="analysis-assistant__close" data-action="an-assistant-toggle" aria-label="Cerrar asistente" title="Cerrar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>
         <div class="analysis-assistant__suggestions" aria-label="Preguntas sugeridas">${suggestions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+        <div class="analysis-assistant__panorama" aria-label="Panorama por nivel">
+          <button type="button" class="analysis-assistant__suggestion analysis-assistant__suggestion--primary" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(PANORAMA_MAIN)}">✦ Panorama completo</button>
+          ${PANORAMA_GROUPS.map(g => `<details class="analysis-assistant__group"><summary>${esc(g.title)}</summary><div>${g.questions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div></details>`).join('')}
+        </div>
         <div class="analysis-assistant__input"><label for="an-assistant-input">Tu pregunta</label><textarea id="an-assistant-input" rows="2" placeholder="Ej. ¿Qué productos llevan más tiempo cayendo?" data-action="an-assistant-question">${esc(as.question || '')}</textarea><div class="btn-row"><button type="button" class="btn btn--primary" data-action="an-assistant-ask" ${as.status === 'busy' || !configured ? 'disabled' : ''}>${as.status === 'busy' ? 'Consultando…' : 'Preguntar'}</button>${!configured ? '<span class="field__hint">Configura Cohere en Ajustes para usar el asistente.</span>' : '<span class="field__hint">La conexión es la misma que usa Diagnóstico y Narrativa.</span>'}</div></div>
         ${as.status === 'busy' ? '<p class="ds-loading" role="status">Consultando la evidencia calculada…</p>' : ''}${error}${resultBlock}${history ? `<details class="analysis-assistant__history"><summary>Preguntas anteriores</summary>${history}</details>` : ''}
       </section>` : ''}

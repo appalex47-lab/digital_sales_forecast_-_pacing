@@ -2138,10 +2138,13 @@
       if (!q || !FP.cohereAnalysisAssistant) return;
       state.an.assistant = { ...a, open: true, status: 'busy', result: null, errors: [] };
       if (state.view === 'analisis') FP.trendView.render(state);
-      FP.cohereAnalysisAssistant.ask(q, state, { apiKey: state.dx.apiKey, model: state.dx.model })
+      const wantsPanorama = a.panorama || PANORAMA_RE.test(q);
+      (wantsPanorama ? buildPanorama() : Promise.resolve({ ok: true, panorama: null }))
+        .then((pr) => (pr.ok ? FP.cohereAnalysisAssistant.ask(q, state, { apiKey: state.dx.apiKey, model: state.dx.model, panorama: pr.panorama })
+          : { ok: false, status: 'unavailable', result: null, errors: [pr.error] }))
         .then(r => {
           const history = [...(state.an.assistant.history || []), { question: q, result: r.result, errors: r.errors || [], ok: r.ok }].slice(-5);
-          state.an.assistant = { ...state.an.assistant, status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [], history, question: '' };
+          state.an.assistant = { ...state.an.assistant, status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [], history, question: '', panorama: false };
           if (state.view === 'analisis') FP.trendView.render(state);
         })
         .catch(e => {
@@ -2151,7 +2154,7 @@
     },
     'an-assistant-suggest'(el) {
       const q = el.dataset.question || '';
-      state.an.assistant = { ...state.an.assistant, open: true, question: q };
+      state.an.assistant = { ...state.an.assistant, open: true, question: q, panorama: el.dataset.panorama === '1' };
       if (state.view === 'analisis') FP.trendView.render(state);
       const input = document.getElementById('an-assistant-input');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
@@ -2973,12 +2976,12 @@
         defaultWindowDays: null, signalIds: a.relatedSignals }, 'cohere');
     },
     /* ----- «Ampliar con IA»: plan de trabajo de una acción del catálogo (borrador editable; solo se guarda al agregarlo al plan) ----- */
-    'rc-expand'(el) { return runExpand(el.dataset.id, state.rc.expandStyle || 'summary'); },
+    'rc-expand'(el) { return runExpand(el.dataset.id, state.rc.expandStyle || savedExpandStyle()); },
     'rc-expand-regen'() { const x = state.rc.expand; if (x) return runExpand(x.actionId, x.style); },
     'rc-expand-style'(el) {
       const x = state.rc.expand; if (!x || x.style === el.dataset.style) return;
       if (x.status === 'ready' && expandDirty() && !root.confirm('Cambiar el estilo vuelve a generar el borrador y se pierden tus ediciones. ¿Continuar?')) return;
-      state.rc.expandStyle = el.dataset.style; return runExpand(x.actionId, el.dataset.style);
+      state.rc.expandStyle = el.dataset.style; try { localStorage.setItem('fp.v1:expandStyle', el.dataset.style); } catch (e) { /* solo conveniencia */ } return runExpand(x.actionId, el.dataset.style);
     },
     'rc-expand-discard'() { state.rc.expand = null; render(); },
     'rc-expand-step-add'() { const x = state.rc.expand; if (!x || !x.draft) return; x.draft = collectExpand(); x.draft.steps.push({ text: '', owner: '', when: '' }); render(); },
@@ -3020,7 +3023,10 @@
     },
     'nav-group'(el) { FP.navigation.toggleGroup(el.dataset.value); },
     'rc-action-field'(el) {
-      const r = FP.actionPlan.updateAction(state.rc.plan, el.dataset.id, { [el.dataset.key]: el.value || null });
+      const isGoal = el.dataset.key === 'goalTarget';
+      const r = isGoal ? FP.actionPlan.setGoalTarget(state.rc.plan, el.dataset.id, (el.dataset.pct ? Number(String(el.value).replace(/[\s,]/g, '')) / 100 : String(el.value).replace(/[\s,]/g, '')))
+        : FP.actionPlan.updateAction(state.rc.plan, el.dataset.id, { [el.dataset.key]: el.value || null });
+      if (r.ok && (el.dataset.key === 'startDate' || el.dataset.key === 'endDate')) FP.actionPlan.refreshGoal(state.rc.plan, el.dataset.id, state.rc.scenarioStore.scenarios);
       if (!r.ok) { render(); FP.ui.toast(r.error); return; }   // render: el selector vuelve al estado real (no se queda mostrando el rechazado)
       saveActionPlan(); render();
     },
@@ -3819,6 +3825,8 @@
     fallback();
     function fallback() { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); let done = false; try { done = document.execCommand('copy'); } catch (e) { done = false; } t.remove(); if (done) ok(); else FP.ui.toast('No pude copiar. Selecciona el texto y cópialo a mano.'); }
   }
+  /** Estilo por defecto: Detallado; se recuerda el último elegido (solo conveniencia del navegador). */
+  function savedExpandStyle() { try { const v = localStorage.getItem('fp.v1:expandStyle'); return v === 'summary' ? 'summary' : 'detailed'; } catch (e) { return 'detailed'; } }
   let expandToken = 0;
   async function runExpand(actionId, style) {
     const rc = state.rc;
@@ -3830,7 +3838,9 @@
     rc.expand = { actionId, style, status: 'busy', draft: null, original: null, errors: [] }; render();
     const hyp = rc.analysis.hypotheses.find((h) => h.id === sc.links.hypothesisId) || { id: sc.links.hypothesisId, hypothesis: sc.links.hypothesis, driver: sc.links.driver };
     const res = await FP.cohereActions.expandAction({ item, hypothesis: hyp, signals: rc.analysis.signals.filter((z) => (sc.links.signalIds || []).includes(z.id)), scenario: sc,
-      availableDimensions: rc.analysis.dataQuality.availableTargets, constraints: rc.constraints, style }, { apiKey: state.dx.apiKey, model: state.dx.model });
+      availableDimensions: rc.analysis.dataQuality.availableTargets, constraints: rc.constraints, style,
+      goal: FP.actionPlan.operativeGoalFrom(sc, (() => { const w = actionWindow(item); return { start: w.start, end: w.end }; })()) || FP.actionPlan.operativeGoalFrom(sc),
+      channelLabel: FP.navigation && FP.navigation.contextLabel ? FP.navigation.contextLabel({ channel: rc.ctx.channel }) : '' }, { apiKey: state.dx.apiKey, model: state.dx.model });
     if (token !== expandToken || !rc.expand) return;   // se canceló o se pidió otro: se descarta esta respuesta
     rc.expand = res.ok ? { actionId, style, status: 'ready', draft: res.detail, original: JSON.parse(JSON.stringify(res.detail)), errors: [] }
       : { actionId, style, status: 'error', draft: null, original: null, errors: res.errors };
@@ -3838,6 +3848,44 @@
     if (res.ok) { const t = byId('rcx'); if (t && t.scrollIntoView) { t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
   }
 
+
+  /* ---------- Panorama del asistente de Análisis: resumen por nivel (categoría, subcategoría, producto, estado, ciudad, sucursal, entrega) ----------
+   * Mismo período y comparación del Análisis. Solo agregados ya calculados por el almacén (nada se recalcula en la IA); cada nivel trae
+   * los principales que caen y crecen, y cuánto de la caída concentran los 3 primeros. Si un nivel no tiene datos cargados, se dice. */
+  const PANORAMA_LEVELS = [['category', 'Categoría'], ['subcategory', 'Subcategoría'], ['product', 'Producto'], ['state', 'Estado'], ['city', 'Ciudad'], ['branch', 'Sucursal'], ['delivery', 'Tipo de entrega']];
+  async function buildPanorama() {
+    const an = state.an, ctx = an.context, cc = ctx && ctx.comparison;
+    if (!FP.productStore || !FP.productStore.available() || !ctx || !cc || !cc.available || !cc.baseline || !cc.current) return { ok: false, error: 'El Análisis todavía no tiene un período comparable.' };
+    const key = JSON.stringify([an.channel, an.metric, cc.current.from, cc.current.to, cc.baseline.from, cc.baseline.to, FP.productStore.meta && FP.productStore.meta.dateMax]);
+    if (an._panorama && an._panorama.key === key) return { ok: true, panorama: an._panorama.value };
+    const metric = an.metric, ch = an.channel, round = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null), missing = (e) => /^\(?\s*(sin|n\/?a|null|undefined|vac)/i.test(String(e)) || e === '';
+    const levels = {};
+    for (const [lv, label] of PANORAMA_LEVELS) {
+      try {
+        const [cur, base] = await Promise.all([FP.productStore.aggregate({ from: cc.current.from, to: cc.current.to, channel: ch, groupBy: lv }), FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: lv })]);
+        const c = sumMap(cur, metric), b = sumMap(base, metric), names = new Set([...c.values.keys(), ...b.values.keys()].filter((e) => !missing(e)));
+        if (names.size < 2) { levels[lv] = { label, available: false, note: names.size ? 'Solo hay un valor en este nivel; no hay con qué comparar.' : 'No hay datos cargados para este nivel.' }; continue; }
+        const rows = [...names].map((e) => { const cv = c.values.get(e), bv = b.values.get(e); const current = Number.isFinite(cv) ? cv : 0, previous = Number.isFinite(bv) ? bv : 0; return { entity: String(e), current: round(current), previous: round(previous), delta: round(current - previous) }; });
+        const down = rows.filter((r) => r.delta < 0).sort((x, y) => x.delta - y.delta), up = rows.filter((r) => r.delta > 0).sort((x, y) => y.delta - x.delta);
+        const downSum = down.reduce((t, r) => t + r.delta, 0), top3 = down.slice(0, 3).reduce((t, r) => t + r.delta, 0);
+        levels[lv] = { label, available: true, entities: names.size, totalCurrent: round(c.total), totalPrevious: round(b.total), totalDelta: round(c.total - b.total),
+          topDecliners: down.slice(0, 5), topGrowers: up.slice(0, 3), decliningCount: down.length, growingCount: up.length,
+          top3ShareOfDecline: downSum < 0 ? Math.round((top3 / downSum) * 1000) / 10 : null };
+      } catch (e) { levels[lv] = { label, available: false, note: 'No se pudo calcular este nivel.' }; }
+    }
+    const value = { metric, channel: ch, current: cc.current.label, baseline: cc.baseline.label, currentPartial: Boolean(ctx.focus && ctx.focus.partial), levels,
+      note: 'Resumen por nivel con el mismo período y comparación del Análisis. top3ShareOfDecline es el % de la caída (suma de entidades que cayeron) que concentran las 3 mayores.' };
+    an._panorama = { key, value };
+    return { ok: true, panorama: value };
+  }
+  const PANORAMA_RE = /panorama|categor|subcategor|estado|ciudad|sucursal|entrega|concentr|dependen|nivel/i;
+
+  /** Ventana por defecto de una acción del catálogo (la misma que usa addActionFrom). */
+  function actionWindow(item) {
+    const rc = state.rc, today = Cal.toISODate(new Date()), win = item.defaultWindowDays || null;
+    const start = rc.ctx.cutoff ? Cal.addDays(rc.ctx.cutoff, 1) : today;
+    return { start, end: win ? Cal.addDays(start, win - 1) : rc.ctx.period.end, win, today };
+  }
   function addActionFrom(item, source) {
     const rc = state.rc;
     const sc = rc.scenarioStore.scenarios.find((s) => s.scenarioId === rc.actionScenario);
@@ -3852,6 +3900,7 @@
       driver: item.driver, channel: rc.ctx.channel, period: { start: rc.ctx.period.start, end: rc.ctx.period.end, label: rc.ctx.period.label },
       expectedImpact: sc.expectedImpact, measurementMetric: item.measurementMetric || item.driver, windowDays: win,
       startDate: start, endDate: win ? Cal.addDays(start, win - 1) : rc.ctx.period.end, detail: item.detail || null,
+      operativeGoal: FP.actionPlan.operativeGoalFrom(sc, { start, end: win ? Cal.addDays(start, win - 1) : rc.ctx.period.end }) || FP.actionPlan.operativeGoalFrom(sc) || (item.detail && item.detail.operativeGoal) || null,
       priority: FP.actionPlan.priorityFactors({ scenario: sc, hypothesis: hyp, periodEnd: rc.ctx.period.end, today: rc.ctx.referenceDate || today,
         constraintsExceeded: (sc.warnings || []).some((w) => /restricción/.test(w)) })
     });

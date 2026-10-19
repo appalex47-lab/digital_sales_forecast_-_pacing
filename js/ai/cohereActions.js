@@ -93,7 +93,9 @@
     '6. measure describe cómo se mide con la métrica y la ventana de la acción.',
     '7. dataToReview: datos a revisar antes de ejecutar; indica cuáles faltan según missingData y cuáles ya están disponibles.',
     '8. risks y dontDo: solo si el estilo es detallado; en el estilo resumido devuelve listas vacías.',
-    '9. Estilo resumido: de 3 a 4 pasos. Estilo detallado: de 5 a 7 pasos.'
+    '9. Estilo resumido: de 3 a 4 pasos. Estilo detallado: de 5 a 7 pasos.',
+    '10. El payload trae "known" (lo que la herramienta ya sabe de los datos: canal, señales, evidencia) y "operativeGoal" (objetivo operativo ya calculado). NO generes pasos para revisar, auditar o identificar volumen, fuentes, canales o segmentos que "known" ya cubre. Genera solo pasos de EJECUCIÓN: comunicar hallazgos, probar variantes, medir contra el objetivo operativo, ajustar y documentar aprendizajes.',
+    '11. measure debe usar la métrica del objetivo operativo (volumen, conversión o ticket) además del impacto simulado, sin inventar cifras.'
   ].join('\n');
 
   const EXPAND_SCHEMA = {
@@ -106,12 +108,23 @@
     }
   };
 
-  function expandPayload({ item, hypothesis, signals = [], scenario = null, availableDimensions = [], constraints = {}, style = 'summary' }) {
+  /** «Ya sabemos»: lo que los datos ya muestran (determinista, sin IA). Se muestra en solo lectura y se guarda con el plan. */
+  function knownFacts({ hypothesis, signals = [], goal = null, channelLabel = '' }) {
+    const out = [];
+    if (channelLabel) out.push(`Canal: ${channelLabel}`);
+    signals.slice(0, 4).forEach((s) => { const t = [s.dimensionLabel, s.label].filter(Boolean).join(' · '); out.push(`${t ? t + ': ' : ''}${s.evidence || ''}`.trim()); });
+    if (hypothesis && Array.isArray(hypothesis.evidence)) hypothesis.evidence.slice(0, 2).forEach((e) => { if (e && !out.includes(e)) out.push(e); });
+    if (goal) { const f = (v) => (FP.format && FP.format.metric ? FP.format.metric(goal.metric, v) : String(v)); out.push(`Objetivo operativo: ${goal.label}${goal.metric === 'trafficVolume' ? ` (${goal.unit})` : ''} ${f(goal.base)} → ${f(goal.target)}`); }
+    return out.filter(Boolean).slice(0, 7);
+  }
+
+  function expandPayload({ item, hypothesis, signals = [], scenario = null, availableDimensions = [], constraints = {}, style = 'summary', goal = null, channelLabel = '' }) {
     const base = buildPayload({ hypothesis, signals, scenario, availableDimensions, constraints, catalog: [] });
     delete base.catalog;
     return { style: style === 'detailed' ? 'detailed' : 'summary',
       action: { actionId: item.actionId, name: item.name, description: item.description || '', driver: item.driver, ownerArea: item.ownerArea || '', measurementMetric: item.measurementMetric || item.driver,
         windowDays: item.defaultWindowDays || null, signalMatch: Boolean(item.signalMatch), dataAvailable: item.dataAvailable !== false, missingData: item.missingData || [] },
+      known: knownFacts({ hypothesis, signals, goal, channelLabel }), operativeGoal: goal ? { metric: goal.metric, label: goal.label, unit: goal.unit, base: goal.base, target: goal.target } : null,
       ...base };
   }
 
@@ -155,8 +168,8 @@
     if (!r.ok) return { ok: false, status: r.status, detail: null, errors: r.errors, model };
     const v = parseExpand(r.text, payload);
     if (!v.ok) return { ok: false, status: 'invalid', detail: null, errors: v.errors, model };
-    return { ok: true, status: 'ok', detail: { ...v.detail, style: payload.style, source: 'cohere', model, generatedAt: new Date().toISOString(), edited: false }, errors: [], model };
+    return { ok: true, status: 'ok', detail: { ...v.detail, style: payload.style, source: 'cohere', model, generatedAt: new Date().toISOString(), edited: false, known: payload.known, operativeGoal: payload.operativeGoal }, errors: [], model };
   }
 
-  FP.cohereActions = { SYSTEM_RULES, RESPONSE_SCHEMA, buildPayload, parseAndValidate, suggestActions, EXPAND_RULES, EXPAND_SCHEMA, expandPayload, parseExpand, expandAction };
+  FP.cohereActions = { SYSTEM_RULES, RESPONSE_SCHEMA, buildPayload, parseAndValidate, suggestActions, EXPAND_RULES, EXPAND_SCHEMA, knownFacts, expandPayload, parseExpand, expandAction };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -56,5 +56,11 @@ assert(!A.validateResponse({answer:'GARDASIL 9 cambió -$1,500.',evidence:[]},b2
   const r = await A.ask('¿Qué está cayendo?', state, {apiKey:'test'});
   assert(r.ok);
   assert.equal(r.result.evidence[0].entity,'VIDAZA');
+  const pc = { panorama: { levels: { category: { topDecliners: [{ entity: 'X', delta: -12345.5 }], top3ShareOfDecline: 62.4 } } } };
+  assert(A.validateResponse({ answer: 'Las 3 categorías que más caen concentran 62.4 % y X cayó $12,345.5.', evidence: [] }, pc).ok, 'conteos sueltos y cifras del panorama pasan');
+  assert(!A.validateResponse({ answer: 'Cayeron $5.', evidence: [] }, pc).ok, '$5 no es un conteo');
+  assert(!A.validateResponse({ answer: 'Cae 7 %.', evidence: [] }, pc).ok, '7 % no es un conteo');
+  assert(!A.validateResponse({ answer: 'Son 5.5 categorías.', evidence: [] }, pc).ok, 'decimales no son conteo');
+  assert(!A.validateResponse({ answer: 'Cayó 30 mil.', evidence: [] }, pc).ok && !A.validateResponse({ answer: 'Hay 250 productos.', evidence: [] }, pc).ok, 'números grandes se validan');
   console.log('PASS FASE 27 — asistente conversacional: 7/7');
 })();
