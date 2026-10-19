@@ -27,7 +27,7 @@ async def run(b, w, h, tag):
     av = {k: v['available'] for k, v in pan['levels'].items()}
     chk(f'{tag}6 hay al menos un nivel con datos y los demás dicen por qué no', any(av.values()) and all(('note' in v) for v in pan['levels'].values() if not v['available']), av)
     ok_lv = [v for v in pan['levels'].values() if v['available']][0]
-    chk(f'{tag}7 cada nivel con datos trae caídas, crecimientos, total y concentración', all(k in ok_lv for k in ['topDecliners', 'topGrowers', 'totalDelta', 'top3ShareOfDecline', 'entities']), list(ok_lv))
+    chk(f'{tag}7 cada nivel con datos trae caídas, crecimientos, total y concentración', all(k in ok_lv for k in ['topDecliners', 'topGrowers', 'totalDelta', 'totalDeltaPct', 'top3ShareOfDecline', 'entities']) and all(k in ok_lv['topDecliners'][0] for k in ['deltaPct', 'sharePct']), list(ok_lv))
     chk(f'{tag}8 la respuesta con una cifra del panorama se acepta y se muestra', 'analysis-assistant__answer' in await q.evaluate("document.querySelector('.analysis-assistant__panel').innerHTML") and not await q.locator('.analysis-assistant .ds-alert--danger').count())
     # validación: cifra inventada contra el panorama
     v = await q.evaluate("""(()=>{const A=FP.cohereAnalysisAssistant,ctx=A.buildContext(FP.app.state);return FP.app._panoramaForTest?null:null})()""")

@@ -28,6 +28,7 @@
     'Si el contexto trae "panorama", contiene un resumen por nivel (categoría, subcategoría, producto, estado, ciudad, sucursal, tipo de entrega) con el mismo período y comparación. Úsalo para preguntas por nivel o de panorama general.',
     'Para un panorama general recorre los niveles disponibles en este orden: total, categoría y subcategoría, producto, geografía (estado y ciudad), sucursal y entrega. Máximo 6 puntos breves, cada uno con sus cifras tal cual vienen en el contexto.',
     'Si un nivel trae available=false, dilo en limitations (no hay datos en ese nivel) y no lo analices. Si currentPartial es true, aclara que el período actual está incompleto y que la comparación es descriptiva.',
+    'NUNCA calcules porcentajes, diferencias ni sumas: usa solo los campos ya calculados (delta, deltaPct, sharePct, totalDeltaPct, top3ShareOfDecline). Si no hay un campo para la cifra que quieres, descríbela sin número.',
     'top3ShareOfDecline describe concentración de la caída entre entidades; no es causa ni explicación.'
   ].join('\n');
 
@@ -173,11 +174,20 @@
     const context = buildContext(state);
     if (panorama) context.panorama = panorama;
     const user = JSON.stringify({ question: q, context }, null, 2);
-    const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Asistente conversacional de Análisis' }, system: SYSTEM_RULES, user, schema: RESPONSE_SCHEMA, apiKey, model, fetchImpl });
-    if (!r.ok) return { ok: false, status: r.status, result: null, errors: r.errors || ['No se pudo consultar Cohere.'] };
-    const parsed = FP.cohereClient.parseJson(r.text);
-    if (!parsed.ok) return { ok: false, status: 'invalid', result: null, errors: ['Cohere respondió en un formato no válido.'] };
-    const v = validateResponse(parsed.value, context);
+    const call = async (extra) => {
+      const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Asistente conversacional de Análisis' }, system: SYSTEM_RULES, user: extra ? `${user}\n\n${extra}` : user, schema: RESPONSE_SCHEMA, apiKey, model, fetchImpl });
+      if (!r.ok) return { fail: { ok: false, status: r.status, result: null, errors: r.errors || ['No se pudo consultar Cohere.'] } };
+      const parsed = FP.cohereClient.parseJson(r.text);
+      if (!parsed.ok) return { fail: { ok: false, status: 'invalid', result: null, errors: ['Cohere respondió en un formato no válido.'] } };
+      return { r, parsed, v: validateResponse(parsed.value, context) };
+    };
+    let t = await call(null); if (t.fail) return t.fail;
+    // Una sola repetición cuando Cohere cita cifras que no están en el contexto: se le dice cuáles y se vuelve a validar igual de estricto.
+    if (!t.v.ok && /cifras|subida/.test(t.v.errors[0] || '')) {
+      const t2 = await call(`Tu respuesta anterior fue rechazada: ${t.v.errors.join(' ')} Responde de nuevo usando ÚNICAMENTE cifras que aparezcan tal cual en el contexto (no calcules porcentajes ni diferencias). Si no hay una cifra para algo, descríbelo sin número.`);
+      if (t2.fail) return t2.fail; t = t2;
+    }
+    const { r, parsed, v } = t;
     if (!v.ok) return { ok: false, status: 'invalid', result: null, errors: v.errors };
     return { ok: true, status: 'ok', result: parsed.value, model: r.model, context };
   }

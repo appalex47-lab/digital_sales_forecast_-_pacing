@@ -86,7 +86,7 @@
     'Responde únicamente con JSON: {"objective","steps":[{"text","owner","when"}],"measure","dataToReview":[],"risks":[],"dontDo":[]}.',
     'Reglas obligatorias:',
     '1. Usa solo la acción, hipótesis, driver, señales y escenario del payload. No inventes datos, cifras, segmentos ni evidencia.',
-    '2. No calcules ni cambies cifras. Si citas una, cópiala tal cual del payload. No estimes impacto: el impacto lo calcula el motor de escenarios.',
+    '2. No calcules ni cambies cifras (ni porcentajes, ni diferencias, ni sumas). Si citas una, cópiala tal cual del payload; si no hay cifra para algo, escríbelo sin número. No estimes impacto: el impacto lo calcula el motor de escenarios.',
     '3. Cada paso es una actividad verificable (revisar, auditar, medir, probar, comunicar), no un resultado garantizado.',
     '4. No afirmes causalidad: la hipótesis requiere validación. Usa «podría» y «para validar».',
     '5. owner es un área o rol (usa ownerArea de la acción cuando aplique). when es relativo (p. ej. «Semana 1»), nunca una fecha inventada.',
@@ -163,10 +163,17 @@
   async function expandAction(input, { apiKey, model = C().diagnostics.cohere.model, fetchImpl } = {}) {
     if (!input || !input.item || !input.hypothesis) return { ok: false, status: 'unavailable', detail: null, errors: ['Elige una acción y un escenario ligado a una hipótesis.'], model };
     const payload = expandPayload(input);
-    const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Ampliar acción del plan' }, system: EXPAND_RULES, schema: EXPAND_SCHEMA, apiKey, model, fetchImpl,
-      user: `Desarrolla el plan de trabajo de esta acción (estilo ${payload.style === 'detailed' ? 'detallado' : 'resumido'}). Datos ya calculados:\n${JSON.stringify(payload)}` });
+    const userMsg = `Desarrolla el plan de trabajo de esta acción (estilo ${payload.style === 'detailed' ? 'detallado' : 'resumido'}). Datos ya calculados:\n${JSON.stringify(payload)}`;
+    const call = (extra) => FP.cohereClient.chatJson({ audit: { purpose: 'Ampliar acción del plan' }, system: EXPAND_RULES, schema: EXPAND_SCHEMA, apiKey, model, fetchImpl, user: extra ? `${userMsg}\n\n${extra}` : userMsg });
+    let r = await call(null);
     if (!r.ok) return { ok: false, status: r.status, detail: null, errors: r.errors, model };
-    const v = parseExpand(r.text, payload);
+    let v = parseExpand(r.text, payload);
+    // Una sola repetición si introdujo cifras que no están en los datos: se le indican y se vuelve a validar igual de estricto.
+    if (!v.ok && /cifras/.test(v.errors[0] || '')) {
+      const r2 = await call(`Tu respuesta anterior fue rechazada: ${v.errors.join(' ')} Vuelve a responder usando ÚNICAMENTE cifras que aparezcan tal cual en los datos; no calcules porcentajes ni diferencias. Si no hay cifra, escribe el paso sin número.`);
+      if (!r2.ok) return { ok: false, status: r2.status, detail: null, errors: r2.errors, model };
+      r = r2; v = parseExpand(r.text, payload);
+    }
     if (!v.ok) return { ok: false, status: 'invalid', detail: null, errors: v.errors, model };
     return { ok: true, status: 'ok', detail: { ...v.detail, style: payload.style, source: 'cohere', model, generatedAt: new Date().toISOString(), edited: false, known: payload.known, operativeGoal: payload.operativeGoal }, errors: [], model };
   }
