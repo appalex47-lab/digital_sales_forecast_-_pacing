@@ -73,6 +73,12 @@
     const ev = c ? c.evidence : null;
     const hist = a.history.filter((h) => h.field === 'decision' || h.field === 'conclusion');
     const field = (id, label, val, ph, type) => `<div class="field"><label for="${id}">${label}</label><${type === 'area' ? 'textarea rows="2"' : 'input type="text"'} id="${id}" placeholder="${esc(ph || '')}" ${type === 'area' ? `>${esc(val || '')}</textarea>` : `value="${esc(val || '')}">`}</div>`;
+    /* Sugeridos (solo si aún no hay decisión): salen de datos de la propia acción; no se guardan hasta pulsar «Guardar decisión» y nunca pisan lo escrito. Sin cifras. */
+    const win = a.startDate && a.endDate ? ` (${a.startDate} a ${a.endDate})` : '';
+    const sug = d ? {} : {
+      decision: a.title || '',
+      objective: a.detail && a.detail.objective ? a.detail.objective : (DRIVER[a.driver] ? `Mejorar ${DRIVER[a.driver]} en la ventana de evaluación${win}` : ''),
+      success: a.detail && a.detail.measure ? a.detail.measure : ((a.measurement && a.measurement.metric) || '') };
     const why = !valid.length ? (AP.conclusionProblem(plan, a, { outcome: 'keep', justification: 'x'.repeat(12), decidedBy: a.owner || 'x' })) : null;
     const blockedConclusion = !['measuring', 'validated', 'rejected'].includes(a.status) || !valid.length;
     return `<div class="subhead"><h3 class="panel__title">Decisión y conclusión · ${esc(a.actionId)}</h3>
@@ -82,10 +88,11 @@
           ${d ? `<p data-decision-saved="1"><strong>${esc(d.decision)}</strong><span class="cell-sub">Objetivo: ${esc(d.objective)} · ${esc(d.decidedBy)}, ${esc(d.decidedAt)}${d.successIndicator ? ` · Indicador de éxito: ${esc(d.successIndicator)}` : ''}</span>
             <span class="cell-sub">Hipótesis a validar (no demostrada): ${esc(d.hypothesisToTest || '—')}${d.expectedResult ? ` · Resultado esperado: ${esc(d.expectedResult)}` : ''}</span></p>` : '<p class="note">Todavía no se registró la decisión ni su objetivo.</p>'}
           <details ${d ? '' : 'open'}><summary>${d ? 'Revisar la decisión' : 'Registrar la decisión'}</summary>
-            ${field('dc-decision', 'Decisión adoptada', d && d.decision, 'Ej.: Corregir el checkout en app durante 2 semanas')}
-            ${field('dc-objective', 'Objetivo de la intervención', d && d.objective, 'Ej.: Recuperar 0.2 pp de conversión')}
+            ${d ? '' : '<p class="field__hint" data-suggested="1">Sugerido a partir de la acción y su plan: revísalo y ajústalo. No se guarda hasta pulsar «Guardar decisión».</p>'}
+            ${field('dc-decision', 'Decisión adoptada', (d && d.decision) || sug.decision, 'Ej.: Corregir el checkout en app durante 2 semanas')}
+            ${field('dc-objective', 'Objetivo de la intervención', (d && d.objective) || sug.objective, 'Ej.: Recuperar 0.2 pp de conversión')}
             ${field('dc-by', 'Responsable', (d && d.decidedBy) || a.owner, '')}
-            ${field('dc-success', 'Indicador de éxito (opcional)', d && d.successIndicator, 'Ej.: conversión de app vs línea base')}
+            ${field('dc-success', 'Indicador de éxito (opcional)', (d && d.successIndicator) || sug.success, 'Ej.: conversión de app vs línea base')}
             ${field('dc-hyp', 'Hipótesis que se desea comprobar (opcional)', (d && d.hypothesisToTest) || a.hypothesis, 'Es una hipótesis a validar, no una causa demostrada')}
             <p class="field__hint">Ventana de evaluación: ${esc(a.startDate || '¿inicio?')} a ${esc(a.endDate || '¿fin?')} (se cambia en el plan de acción). Aprobar la acción no requiere este registro, pero sin él la conclusión no tiene objetivo contra el cual compararse.</p>
             <button type="button" class="btn btn--small" data-action="ac-decision-save" data-id="${esc(a.actionId)}">Guardar decisión</button>
