@@ -193,7 +193,7 @@
         caveats: 'Un driver o una señal nunca se presentan como causa confirmada.', glossary: true }),
     e('trackingCoverage', 'Cobertura de tracking', 'Compras registradas en GA4 ÷ unidades realmente vendidas. Sirve para detectar pérdida de medición, no para medir venta.',
       { formula: 'compras GA4 ÷ unidades reales', caveats: 'Un valor bajo sugiere que GA4 no está registrando todas las compras, no que hubo menos venta.', glossary: true }),
-    e('estadoProducto', 'Estado (producto)', 'Estado de la República donde se fincó el pedido, definido en el checkout.', { glossary: true }),
+    e('estadoProducto', 'Estado (de la República)', 'Estado de la República donde se fincó el pedido, definido en el checkout. No es el estado (situación) de un dato, plan o acción.', { glossary: true }),
     e('sucursal', 'Sucursal', 'Sucursal donde se fincó el pedido, sea para recolección o como origen del envío a domicilio.', { glossary: true }),
     e('tipoEntrega', 'Tipo de entrega', 'Envío a domicilio o recolección en sucursal. Se define en el checkout, después de la vista de ficha.',
       { caveats: 'Por eso el CR y el funnel no están disponibles al ver por estado, sucursal o tipo de entrega.', glossary: true }),
@@ -421,7 +421,7 @@
     note: 'Qué tan completa está la información necesaria para que plan, pacing y forecast sean confiables. No mide el desempeño del negocio.'
   };
 
-  /** Palabras en etiquetas de la interfaz que activan un ícono de ayuda (en orden). */
+  /** Palabras en etiquetas de la interfaz que activan un ícono de ayuda (en orden). «Estado» NO es disparador: casi siempre es la situación de algo (Disponible, Listo, Abierta…); el de la República se marca a mano con data-help="estadoProducto". */
   const TRIGGERS = [
     [/^presi[oó]n/i, 'recoveryPressure'], [/gap forecast|forecast gap/i, 'forecastGap'], [/^reforecast/i, 'reforecast'],
     [/^forecast/i, 'forecast'], [/^gap/i, 'gap'], [/^cumplimiento/i, 'cumplimiento'], [/^cr\b/i, 'conversionRate'],
@@ -431,7 +431,7 @@
     [/^recuperación requerida/i, 'reforecast'], [/^performance index/i, 'performanceIndex'],
     [/^unidades/i, 'units'], [/^vistas de ficha/i, 'views'], [/^vista → carrito/i, 'cartRate'], [/^carrito → checkout/i, 'checkoutRate'],
     [/^checkout → compra/i, 'purchaseRate'], [/^cobertura de tracking/i, 'trackingCoverage'], [/^tipo de entrega/i, 'tipoEntrega'],
-    [/^sucursal/i, 'sucursal'], [/^estado$/i, 'estadoProducto'], [/^diagn[oó]stico/i, 'diagnostico'], [/^escenario/i, 'escenario'],
+    [/^sucursal/i, 'sucursal'], [/^diagn[oó]stico/i, 'diagnostico'], [/^escenario/i, 'escenario'],
     [/^pacing/i, 'pacing'], [/^narrativa/i, 'narrativa'], [/^certeza|^nivel(es)? de certeza/i, 'certeza']
   ];
 

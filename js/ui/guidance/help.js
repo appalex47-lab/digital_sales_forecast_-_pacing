@@ -104,7 +104,7 @@
     container.querySelectorAll('dt, th, h3.panel__title, h4').forEach((el) => {
       if (el.dataset.helped || el.closest('#help-drawer') || el.querySelector('.help-dot')) return;
       const text = (el.textContent || '').trim().slice(0, 60);
-      const hit = G().TRIGGERS.find(([re]) => re.test(text));
+      const hit = el.dataset.help ? [null, el.dataset.help] : G().TRIGGERS.find(([re]) => re.test(text));   // data-help: concepto marcado a mano (p. ej. «Estado» de la República)
       el.dataset.helped = '1';
       if (hit) el.insertAdjacentHTML('beforeend', ` ${helpButton(hit[1])}`);
     });

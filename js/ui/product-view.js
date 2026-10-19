@@ -265,8 +265,8 @@
     const shown = n ? rows.slice(0, n) : rows.slice((page - 1) * size, page * size);
     const dm = (row, k) => { const x = row.drivers[k]; return fin(x.deltaPct) ? F().signedPercent(x.deltaPct, 1) : '—'; };
     $('pa-table').innerHTML = `<div class="table-wrap"><table class="table ds-table table--dense">
-      <thead><tr><th>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
-        <th class="num">Contribución</th><th>Estado</th><th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
+      <thead><tr><th${r.level === 'state' ? ' data-help="estadoProducto"' : ''}>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
+        <th class="num">Contribución</th><th>${r.level === 'state' ? 'Situación' : 'Estado'}</th><th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
       <tbody>${shown.map((x) => `<tr>
         <td><strong>${esc(displayKey(r.level, x.key))}</strong>${x.geography && x.geography.path.length > 1 ? `<span class="cell-sub">${esc(x.geography.path.slice(0, -1).map((g) => g.name).join(' › '))}</span>` : ''}${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}</td>
         <td class="num">${esc(F().currency(x.revenue.current, 0))}</td><td class="num">${esc(F().currency(x.revenue.baseline, 0))}</td>
