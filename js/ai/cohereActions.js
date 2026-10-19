@@ -79,5 +79,84 @@
     return { ...v, status: v.ok ? 'ok' : 'invalid', model };
   }
 
-  FP.cohereActions = { SYSTEM_RULES, RESPONSE_SCHEMA, buildPayload, parseAndValidate, suggestActions };
+  /* ---------- Ampliar una acción del catálogo (plan más robusto) ---------- */
+
+  const EXPAND_RULES = [
+    'Eres un analista de operación ecommerce. Desarrollas un PLAN DE TRABAJO para una acción del catálogo, en español de México.',
+    'Responde únicamente con JSON: {"objective","steps":[{"text","owner","when"}],"measure","dataToReview":[],"risks":[],"dontDo":[]}.',
+    'Reglas obligatorias:',
+    '1. Usa solo la acción, hipótesis, driver, señales y escenario del payload. No inventes datos, cifras, segmentos ni evidencia.',
+    '2. No calcules ni cambies cifras. Si citas una, cópiala tal cual del payload. No estimes impacto: el impacto lo calcula el motor de escenarios.',
+    '3. Cada paso es una actividad verificable (revisar, auditar, medir, probar, comunicar), no un resultado garantizado.',
+    '4. No afirmes causalidad: la hipótesis requiere validación. Usa «podría» y «para validar».',
+    '5. owner es un área o rol (usa ownerArea de la acción cuando aplique). when es relativo (p. ej. «Semana 1»), nunca una fecha inventada.',
+    '6. measure describe cómo se mide con la métrica y la ventana de la acción.',
+    '7. dataToReview: datos a revisar antes de ejecutar; indica cuáles faltan según missingData y cuáles ya están disponibles.',
+    '8. risks y dontDo: solo si el estilo es detallado; en el estilo resumido devuelve listas vacías.',
+    '9. Estilo resumido: de 3 a 4 pasos. Estilo detallado: de 5 a 7 pasos.'
+  ].join('\n');
+
+  const EXPAND_SCHEMA = {
+    type: 'object', required: ['objective', 'steps', 'measure'],
+    properties: {
+      objective: { type: 'string' },
+      steps: { type: 'array', items: { type: 'object', required: ['text', 'owner', 'when'], properties: { text: { type: 'string' }, owner: { type: 'string' }, when: { type: 'string' } } } },
+      measure: { type: 'string' },
+      dataToReview: { type: 'array', items: { type: 'string' } }, risks: { type: 'array', items: { type: 'string' } }, dontDo: { type: 'array', items: { type: 'string' } }
+    }
+  };
+
+  function expandPayload({ item, hypothesis, signals = [], scenario = null, availableDimensions = [], constraints = {}, style = 'summary' }) {
+    const base = buildPayload({ hypothesis, signals, scenario, availableDimensions, constraints, catalog: [] });
+    delete base.catalog;
+    return { style: style === 'detailed' ? 'detailed' : 'summary',
+      action: { actionId: item.actionId, name: item.name, description: item.description || '', driver: item.driver, ownerArea: item.ownerArea || '', measurementMetric: item.measurementMetric || item.driver,
+        windowDays: item.defaultWindowDays || null, signalMatch: Boolean(item.signalMatch), dataAvailable: item.dataAvailable !== false, missingData: item.missingData || [] },
+      ...base };
+  }
+
+  /** Cifras «de negocio» del texto: con $ o %, o de 4 dígitos o más. Los enteros chicos («semana 2», «14 días») no cuentan como cifra. */
+  function bigNumbers(text) {
+    const out = [], re = /(\$\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?%|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d{4,}(?:\.\d+)?\b)/g; let m;
+    while ((m = re.exec(text))) { const n = Number(m[0].replace(/[^0-9.]/g, '')); if (Number.isFinite(n)) out.push(n); }
+    return out;
+  }
+  function payloadNumbers(v, out = new Set()) {
+    if (typeof v === 'number' && Number.isFinite(v)) { out.add(Math.abs(v)); out.add(Math.abs(v) * 100); }
+    else if (Array.isArray(v)) v.forEach((x) => payloadNumbers(x, out));
+    else if (v && typeof v === 'object') Object.values(v).forEach((x) => payloadNumbers(x, out));
+    else if (typeof v === 'string') (v.match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach((x) => { const n = Number(x.replace(/,/g, '')); if (Number.isFinite(n)) out.add(n); });
+    return out;
+  }
+
+  function parseExpand(text, payload) {
+    const p = FP.cohereClient.parseJson(text);
+    if (!p.ok || !p.value || typeof p.value !== 'object') return { ok: false, errors: ['La respuesta no es JSON válido.'] };
+    const v = p.value, str = (x) => (typeof x === 'string' ? x.trim() : '');
+    const list = (x, n) => (Array.isArray(x) ? x.map(str).filter(Boolean).slice(0, n) : []);
+    const steps = (Array.isArray(v.steps) ? v.steps : []).map((s) => ({ text: str(s && s.text), owner: str(s && s.owner), when: str(s && s.when) })).filter((s) => s.text).slice(0, 8);
+    const detail = { objective: str(v.objective), steps, measure: str(v.measure), dataToReview: list(v.dataToReview, 8),
+      risks: payload.style === 'detailed' ? list(v.risks, 6) : [], dontDo: payload.style === 'detailed' ? list(v.dontDo, 6) : [] };
+    if (!detail.objective || !steps.length) return { ok: false, errors: ['La respuesta no trae objetivo y pasos.'] };
+    const all = [detail.objective, detail.measure, ...steps.map((s) => `${s.text} ${s.owner} ${s.when}`), ...detail.dataToReview, ...detail.risks, ...detail.dontDo].join('\n');
+    if (/la causa es|esto demuestra|se debe a|caus[oó]\s/i.test(all)) return { ok: false, errors: ['La respuesta usa lenguaje causal no permitido.'] };
+    const allowed = [...payloadNumbers(payload)];
+    const bad = bigNumbers(all).filter((n) => !allowed.some((x) => Math.abs(x - n) < 0.05 || (x > 1 && Math.abs(x - n) / x < 0.005)));
+    if (bad.length) return { ok: false, errors: [`Cohere introdujo cifras que no están en tus datos: ${bad.slice(0, 4).join(', ')}.`] };
+    return { ok: true, detail, errors: [] };
+  }
+
+  /** @returns Promise<{ ok, status, detail, errors, model }> — nunca lanza. Solo redacta un plan de trabajo; no calcula nada. */
+  async function expandAction(input, { apiKey, model = C().diagnostics.cohere.model, fetchImpl } = {}) {
+    if (!input || !input.item || !input.hypothesis) return { ok: false, status: 'unavailable', detail: null, errors: ['Elige una acción y un escenario ligado a una hipótesis.'], model };
+    const payload = expandPayload(input);
+    const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Ampliar acción del plan' }, system: EXPAND_RULES, schema: EXPAND_SCHEMA, apiKey, model, fetchImpl,
+      user: `Desarrolla el plan de trabajo de esta acción (estilo ${payload.style === 'detailed' ? 'detallado' : 'resumido'}). Datos ya calculados:\n${JSON.stringify(payload)}` });
+    if (!r.ok) return { ok: false, status: r.status, detail: null, errors: r.errors, model };
+    const v = parseExpand(r.text, payload);
+    if (!v.ok) return { ok: false, status: 'invalid', detail: null, errors: v.errors, model };
+    return { ok: true, status: 'ok', detail: { ...v.detail, style: payload.style, source: 'cohere', model, generatedAt: new Date().toISOString(), edited: false }, errors: [], model };
+  }
+
+  FP.cohereActions = { SYSTEM_RULES, RESPONSE_SCHEMA, buildPayload, parseAndValidate, suggestActions, EXPAND_RULES, EXPAND_SCHEMA, expandPayload, parseExpand, expandAction };
 })(typeof window !== 'undefined' ? window : globalThis);
