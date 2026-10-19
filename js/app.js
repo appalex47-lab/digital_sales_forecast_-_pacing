@@ -1344,6 +1344,24 @@
    * Prioridades, Forecast, Cohortes, Narrativa) nace del MISMO contexto `FP.analysisContext.build(...)`:
    * canal seleccionado + período focal + período de comparación equivalente.
    */
+  /* Barra de avance y tiempo de la carga de Evolución: así una espera larga no parece un error. */
+  let anTick = null;
+  function anLoaderEl() { return document.getElementById('an-loader'); }
+  function paintAnLoader(an) {
+    const el = anLoaderEl(); if (!el || !an.progress) return;
+    const p = an.progress, sec = Math.max(0, Math.round((Date.now() - p.startedAt) / 1000)), pct = Math.min(99, Math.round(p.frac * 100));
+    const bar = el.querySelector('.an-loader__bar i'), t = el.querySelector('.an-loader__t'), l = el.querySelector('.an-loader__l');
+    if (bar) bar.style.width = pct + '%'; el.setAttribute('aria-valuenow', String(pct));
+    if (l) l.textContent = p.label || 'Preparando'; 
+    if (t) t.textContent = `${pct} % · ${sec} s` + (p.frac > 0.1 && sec >= 3 ? ` · faltan ~${Math.max(1, Math.round(sec * (1 - p.frac) / p.frac))} s` : '');
+  }
+  function startAnLoader(an, n) {
+    an.progress = { frac: 0, label: 'Leyendo datos de este navegador', startedAt: Date.now(), n };
+    if (anTick) clearInterval(anTick);
+    anTick = setInterval(() => { if (!an.loading) { stopAnLoader(an); return; } paintAnLoader(an); }, 250);
+  }
+  function anProgress(an, frac, label) { if (an.progress) { an.progress.frac = Math.max(an.progress.frac, frac); an.progress.label = label; } }
+  function stopAnLoader(an) { if (anTick) { clearInterval(anTick); anTick = null; } an.progress = null; }
   async function ensureTrendAnalysis() {
     const an = state.an;
     if (!FP.productStore || !FP.productStore.available()) return;
@@ -1374,6 +1392,9 @@
     const key = JSON.stringify([ch, metric, an.level, periodType, count, firstPeriod, ctx.focus.key, an.comparison, ctx.focus.to, m.dateMin, m.dateMax]);
     if (an.rows.length && an.key === key && !an.loading) return;
     an.loading = true; an.error = null; an.key = key;
+    const runId = an._run = (an._run || 0) + 1, STALE = { stale: true }, chk = () => { if (an._run !== runId) throw STALE; };
+    startAnLoader(an, periods.length);
+    if (state.view === 'analisis') FP.trendView.render(state);   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
     an.context = ctx;
     const aggTotal = async (range) => {
       if (!range || range.to < range.from) return null;
@@ -1387,12 +1408,14 @@
       const monthlyMaps = [];
       const entities = new Set();
       for (const period of periods) {
-        const map = await FP.productStore.aggregate({ from: period.from, to: period.to, channel: ch, groupBy: an.level });
+        const map = await FP.productStore.aggregate({ from: period.from, to: period.to, channel: ch, groupBy: an.level }); chk();
         const s = sumMap(map, metric);
         s.values.forEach((_, e) => entities.add(e));
         monthlyMaps.push({ period: period.key, partial: period.partial, values: s.values, parts: s.parts, total: s.total, size: s.size });
-        await new Promise((r) => setTimeout(r, 0));
+        anProgress(an, 0.7 * monthlyMaps.length / periods.length, `Leyendo ${period.key}`);
+        await new Promise((r) => setTimeout(r, 0)); chk();
       }
+      anProgress(an, 0.72, 'Calculando patrones');
       const closedMaps = monthlyMaps.filter(x => !x.partial);
       // Referencia de temporada (solo mensual): el mismo mes del año anterior al último cerrado, si queda fuera de la ventana cargada. No entra a patrones ni tendencias.
       let seasonRef = { total: {}, byEntity: new Map() };
@@ -1402,7 +1425,7 @@
           try {
             const rg = FP.temporalEngine.rangeForKey(lyK, 'month');
             if (rg && rg.from >= (m.dateMin || '0000') ) {
-              const map = await FP.productStore.aggregate({ from: rg.from, to: rg.to, channel: ch, groupBy: an.level });
+              const map = await FP.productStore.aggregate({ from: rg.from, to: rg.to, channel: ch, groupBy: an.level }); chk();
               const s2 = sumMap(map, metric);
               seasonRef = { total: { [lyK]: s2.total }, byEntity: new Map([...s2.values].map(([e, v]) => [e, { [lyK]: v }])) };
             }
@@ -1424,7 +1447,7 @@
       const cc = ctx.comparison;
       const focusMap = monthlyMaps.at(-1);
       let baseSum = null;
-      if (cc.available && cc.baseline) baseSum = sumMap(await FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: an.level }), metric);
+      if (cc.available && cc.baseline) baseSum = sumMap(await FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: an.level }), metric); chk();
       const comparable = Boolean(baseSum && baseSum.size > 0 && baseSum.total > 0 && focusMap && focusMap.size > 0);
       const cmpMessage = !cc.available ? cc.note
         : comparable ? null
@@ -1449,10 +1472,10 @@
 
       /* ---- 3. Capa temporal: todas las comparaciones válidas del foco, en el mismo canal ---- */
       const focusRange = { from: focus.from, to: focus.to, partial: focus.partial, key: focus.key };
-      const currentTotal = await aggTotal(focusRange);
+      const currentTotal = await aggTotal(focusRange); chk();
       const comparisons = [];
       for (const c of TE.comparisonRanges(focusRange, periodType, m.dateMax)) {
-        const value = await aggTotal(c.range);
+        const value = await aggTotal(c.range); chk();
         comparisons.push({ id: c.id, label: c.label, range: c.range, text: c.range ? (() => { const wy = c.range.from.slice(0, 4) !== focusRange.from.slice(0, 4); return `${AC.rangeLabel(focusRange.from, focusRange.to, wy)} vs ${AC.rangeLabel(c.range.from, c.range.to, wy)}`; })() : null,
           value, change: AC.pctChange(currentTotal, value), available: Number.isFinite(value) && value > 0 && Number.isFinite(currentTotal) });
       }
@@ -1462,7 +1485,7 @@
         const monthNo = Number(String(focus.key).slice(5, 7));
         const sameMonth = closed.filter(x => Number(String(x.key).slice(5, 7)) === monthNo && x.key !== focus.key);
         const vals = [];
-        for (const p0 of sameMonth) { const v = await aggTotal(p0); if (Number.isFinite(v)) vals.push(v); }
+        for (const p0 of sameMonth) { const v = await aggTotal(p0); chk(); if (Number.isFinite(v)) vals.push(v); }
         const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
         seasonality = { bucket: `Mes ${monthNo}`, comparablePeriods: vals.length, historicalAverage: avg, index: Number.isFinite(avg) && avg !== 0 && Number.isFinite(currentTotal) ? currentTotal / avg : null, status: vals.length >= 1 ? 'available' : 'insufficient_history' };
       }
@@ -1503,8 +1526,8 @@
         if (['product', 'sku', 'subcategory'].includes(an.level) && closed.length) {
           try {
             const rg = { from: closed[0].from, to: closed.at(-1).to };
-            const cats = [...(await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: 'category' })).keys()];
-            for (const cat of cats) { const mm = await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: an.level, filter: { category: cat } }); mm.forEach((_, e) => { if (!catOf.has(e)) catOf.set(e, cat); }); }
+            const cats = [...(await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: 'category' })).keys()]; chk();
+            for (const cat of cats) { const mm = await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: an.level, filter: { category: cat } }); mm.forEach((_, e) => { if (!catOf.has(e)) catOf.set(e, cat); }); chk(); }
             catOf.forEach((cat, e) => { const ser = series.get(e); if (!ser) return; if (!catSeries.has(cat)) catSeries.set(cat, ser.map((x) => ({ period: x.period, value: 0 })));
               const acc = catSeries.get(cat); ser.forEach((x, i) => { if (Number.isFinite(x.value)) acc[i].value += x.value; }); });
           } catch (e) { catOf.clear(); catSeries.clear(); }
@@ -1540,7 +1563,7 @@
         an.pvm = FP.pvmEngine ? { ...FP.pvmEngine.analyze(pvmRows), level: an.level, comparisonLabel: cc.text } : null;
         if (an.pvm && an.pvm.status === 'unavailable' && !pvmRows.some((x) => x.u0 > 0 || x.u1 > 0)) an.pvm.message = 'El archivo de productos no trae unidades válidas: no se puede separar volumen, precio y mezcla.';
         if (FP.planBridgeEngine) {
-          const planInfo = await planForRange(cc.current, ch);
+          const planInfo = await planForRange(cc.current, ch); chk();
           const mixR = [...ent].map((e) => ({ entity: e, current: focusMap.values.get(e), baseline: baseSum.values.get(e) }));
           an.bridge = { ...FP.planBridgeEngine.analyze({ rows: mixR, plan: planInfo, actual: focusMap.total, baselineTotal: baseSum.total }), level: an.level, comparisonLabel: cc.text, currentLabel: cc.current.label, planNote: planInfo.note || null, planMessage: planInfo.message || null };
           // Proyección de la tendencia del total contra la meta de los meses proyectados (solo mensual; la meta existe por canal, no por entidad)
@@ -1552,7 +1575,7 @@
                 const items = [];
                 for (const p of o.projection) {
                   if (!p.period) continue;
-                  const pl = await planForRange({ ...FP.temporalEngine.rangeForKey(p.period, 'month') }, ch);
+                  const pl = await planForRange({ ...FP.temporalEngine.rangeForKey(p.period, 'month') }, ch); chk();
                   if (pl && Number.isFinite(pl.total) && pl.total > 0 && !(pl.coverage < 1)) items.push({ period: p.period, projected: p.value, low: p.low, high: p.high, plan: pl.total, pct: p.value / pl.total - 1 });
                 }
                 an.bridge.outlookVsPlan = { items, direction: o.direction, confidence: o.confidence.level };
@@ -1567,7 +1590,7 @@
         an.priorities = comparable
           ? FP.actionPriorityEngine.analyze(an.rows, { baselinePeriod: cc.baseline.label, currentPeriod: cc.current.label, baselinePartial: false, currentPartial: Boolean(focus.partial) })
           : { status: 'comparison_unavailable', drag: [], compensate: [], watch: [], all: [], totals: { drag: 0, compensate: 0, balance: 0 }, comparison: { baselinePeriod: cc.baseline ? cc.baseline.label : null, currentPeriod: cc.current.label }, methodology: cmpMessage };
-        await enrichPriorityEvidence(an, ctx);
+        await enrichPriorityEvidence(an, ctx); chk();
         an.risks = { status: an.priorities.status, risks: an.priorities.drag, opportunities: an.priorities.compensate, watch: an.priorities.watch, all: an.priorities.all, methodology: an.priorities.methodology };
       } else { an.priorities = null; an.risks = null; }
       if (FP.trendForecastEngine) an.forecast = FP.trendForecastEngine.analyzeMany(an.rows, { horizon: an.forecastHorizon, method: an.forecastMethod, periodType: an.periodType });
@@ -1593,10 +1616,10 @@
       an.drill = null; an.periodsList = periods;
       if (an.reopen) { const ro = an.reopen; an.reopen = null; if (ro.scope === 'total' || an.rows.some((r) => r.entity === ro.entity)) { an.drill = { scope: ro.scope, entity: ro.scope === 'total' ? '__total__' : ro.entity, source: 'canal', path: [], loading: true, data: null, error: null }; if (ro.scope === 'entity') an.selected = an.rows.find((r) => r.entity === ro.entity); setTimeout(loadDrill, 0); } }
     } catch (e) {
+      if (e === STALE) return;   // una corrida más nueva (por ejemplo, otro «Analizar por») ya tomó el control
       an.rows = []; an.selected = null; an.error = e && e.message ? e.message : String(e);
     } finally {
-      an.loading = false;
-      if (state.view === 'analisis') FP.trendView.render(state);
+      if (an._run === runId) { an.loading = false; stopAnLoader(an); if (state.view === 'analisis') FP.trendView.render(state); }
     }
   }
   /* ========== Análisis · drill-down (KPI → variación → señal → entidad → canal → producto → período → registro fuente) ========== */
@@ -1684,13 +1707,13 @@
          Por eso solo aplica al total y al canal, y a períodos mensuales; en un producto o categoría se avisa en vez de inventar la cifra. */
       let customers = null;
       const wholeScope = Object.keys(filter).length === 0;   // total o un canal (sin producto/categoría/geografía)
-      if (!wholeScope) customers = { status: 'entity', note: 'El libro de clientes es por pedido, no por producto: aquí no se puede separar cuántos clientes de este producto son nuevos, recurrentes o reactivados. Se ve en el Detalle temporal del total o de un canal.' };
-      else if (ctx.periodType !== 'month') customers = { status: 'period', note: 'Los clientes nuevos, recurrentes y reactivados se calculan por mes. Cambia el período a «Mes» para verlos.' };
+      if (ctx.periodType !== 'month') customers = { status: 'period', note: 'Los clientes nuevos, recurrentes y reactivados se calculan por mes. Cambia el período a «Mes» para verlos.' };
       else if (!FP.customerStore) customers = { status: 'none', note: 'No hay libro de clientes cargado.' };
       else {
         try {
           const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan }); if (!mine()) return;
-          if (ca && ca.status === 'ok') customers = { status: 'ok', byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          // En un producto, categoría o geografía el libro (por pedido, sin producto) no se puede partir: se muestran los clientes del canal como contexto, rotulados así.
+          if (ca && ca.status === 'ok') customers = { status: 'ok', contextOnly: !wholeScope, byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
           else customers = { status: 'none', note: 'Para ver clientes nuevos, recurrentes y reactivados carga un archivo de ventas con id de cliente y de pedido.' };
         } catch (e) { customers = { status: 'none', note: 'No se pudo leer el libro de clientes.' }; }
       }
