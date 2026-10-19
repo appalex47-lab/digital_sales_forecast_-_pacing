@@ -114,7 +114,9 @@
     const ok = list.filter((x) => x.dec && x.dec.status === 'ok');
     if (ok.length < 2) return '';
     const rows = ok.map((x) => {
-      const t = x.dec.total, worst = x.dec.allItems.find((i) => i.delta < 0), best = [...x.dec.allItems].reverse().find((i) => i.delta > 0);
+      const t = x.dec.total, worst = x.dec.allItems.find((i) => i.delta < 0);
+      let best = null;
+      for (let i = x.dec.allItems.length - 1; i >= 0; i--) { if (x.dec.allItems[i].delta > 0) { best = x.dec.allItems[i]; break; } }
       return `<tr${x.active ? ' aria-current="true"' : ''}><th scope="row"><button type="button" class="link-btn" data-action="seg-dim" data-value="${esc(x.dim)}" aria-label="Ver ${esc(x.label)}">${esc(x.label)}</button>${x.active ? '<span class="cell-sub">la que ves ahora</span>' : ''}</th>
         <td class="num ${cls(t.traffic)}">${esc(fin2(t.traffic))}</td><td class="num ${cls(t.cr)}">${esc(fin2(t.cr))}</td><td class="num ${cls(t.aov)}">${esc(fin2(t.aov))}</td>
         <td>${worst ? `${esc(worst.label)}<span class="cell-sub num ${cls(worst.delta)}">${esc(fin2(worst.delta))}</span>` : '—'}</td><td>${best ? `${esc(best.label)}<span class="cell-sub num ${cls(best.delta)}">${esc(fin2(best.delta))}</span>` : '—'}</td></tr>`;
