@@ -45,6 +45,12 @@ assert(A.validateResponse({answer:'VIDAZA cayó -$207 mil.',evidence:[]},b2).ok,
 assert(A.validateResponse({answer:'VIDAZA vende $806.1 mil ahora y GARDASIL 9 $2 mil.',evidence:[]},b2).ok, 'abreviado en miles');
 assert(!A.validateResponse({answer:'VIDAZA cayó $300 mil.',evidence:[]},b2).ok, 'cifra inventada abreviada');
 assert(!A.validateResponse({answer:'VIDAZA subió $999,999.',evidence:[]},b2).ok, 'cifra inventada');
+assert(!A.validateResponse({answer:'VIDAZA subió $207,046.',evidence:[]},b2).ok, 'sube pero en los datos cae');
+assert(!A.validateResponse({answer:'VIDAZA creció $60.',evidence:[]},A.buildContext(state)).ok, 'creció pero cayó 60');
+assert(A.validateResponse({answer:'VIDAZA creció en participación pero cayó $207,046.',evidence:[]},b2).ok, 'frase mixta se acepta');
+assert(A.validateResponse({answer:'VIDAZA cayó a $806,081.',evidence:[]},b2).ok, 'cayó a un valor actual positivo');
+assert(A.validateResponse({answer:'GARDASIL 9 subió $1,500.',evidence:[]},b2).ok, 'sube y en los datos sube');
+assert(A.validateResponse({answer:'Todo cayó. VIDAZA cayó $207,046 y GARDASIL 9 subió $1,500.',evidence:[]},b2).ok, 'frases separadas');
 assert(!A.validateResponse({answer:'GARDASIL 9 cambió -$1,500.',evidence:[]},b2).ok, 'signo explícito contrario al del contexto');
 (async()=>{
   const r = await A.ask('¿Qué está cayendo?', state, {apiKey:'test'});

@@ -27,9 +27,11 @@ async def main():
           const natural=d.map(x=>x.entity+' cayó $'+fmt(x.delta)).join('; ')+'.';
           const miles=d.map(x=>x.entity+' cambió -$'+(Math.abs(x.delta)/1000).toFixed(0)+' mil').join('; ')+'.';
           const fake='Cayeron $'+fmt(d[0].delta*7.31+123)+' en total.';
-          return {n:d.length,natural:A.validateResponse({answer:natural,evidence:[]},ctx),miles:A.validateResponse({answer:miles,evidence:[]},ctx),fake:A.validateResponse({answer:fake,evidence:[]},ctx),txt:natural}})()""")
+          const up=d[0].entity+' subió $'+fmt(d[0].delta)+'.';
+          return {up:A.validateResponse({answer:up,evidence:[]},ctx),n:d.length,natural:A.validateResponse({answer:natural,evidence:[]},ctx),miles:A.validateResponse({answer:miles,evidence:[]},ctx),fake:A.validateResponse({answer:fake,evidence:[]},ctx),txt:natural}})()""")
         chk('M5 con datos reales de mes parcial, una respuesta con «cayó $X» (sin signo) y «-$X mil» pasa la validación', not v.get('none') and v['natural']['ok'] and v['miles']['ok'], v)
         chk('M6 una cifra inventada sigue rechazándose', not v.get('none') and not v['fake']['ok'], v)
+        chk('M7 con datos reales: «subió $X» sobre una caída se rechaza por dirección', not v.get('none') and not v['up']['ok'] and 'caída' in ' '.join(v['up']['errors']), v.get('up'))
         chk('Sin errores de página', not q._errs, q._errs[:3])
         await b.close()
     print('RESULTADO batch_an_asistente_movil:', 'OK' if not fails else 'FALLAS: ' + '; '.join(fails)); sys.exit(1 if fails else 0)

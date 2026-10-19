@@ -118,21 +118,36 @@
    */
   const UNIT_SCALE = { mil: 1e3, miles: 1e3, k: 1e3, K: 1e3, 'millón': 1e6, millon: 1e6, millones: 1e6, M: 1e6, MM: 1e6 };
   function numberTokens(text) {
-    const out = [], re = /([-\u2212])?\s?\$?\s?(\d[\d,]*(?:\.\d+)?)(\s?%)?(?:\s?(millones|millón|millon|miles|mil|MM|M|K|k)\b)?/g;
+    const out = [], re = /([-\u2212])?\s?\$?\s?(\d[\d,]*(?:\.\d+)?)(\s?%)?(?:\s?(millones|millón|millon|miles|mil|MM|M|K|k)(?![\wáéíóúñ]))?/g;
     let m;
     while ((m = re.exec(text))) {
       const raw = m[2].replace(/,/g, ''), v = Number(raw); if (!Number.isFinite(v)) continue;
       const scale = (!m[3] && m[4]) ? UNIT_SCALE[m[4]] : 1, dec = (raw.split('.')[1] || '').length;
-      out.push({ value: (m[1] ? -1 : 1) * v * scale, signed: Boolean(m[1]), tol: scale > 1 ? 0.5 * Math.pow(10, -dec) * scale : 0.05 });
+      out.push({ value: (m[1] ? -1 : 1) * v * scale, signed: Boolean(m[1]), tol: scale > 1 ? 0.5 * Math.pow(10, -dec) * scale : 0.05, at: m.index });
     }
     return out;
   }
-  function tokenAllowed(tok, allowed) {
-    return allowed.some((x) => {
+  function matchedValues(tok, allowed) {
+    return allowed.filter((x) => {
       if (tok.signed && !(x === 0 || Math.sign(x) === Math.sign(tok.value))) return false;
       const d = tok.signed ? Math.abs(x - tok.value) : Math.abs(Math.abs(x) - Math.abs(tok.value));
       return d < tok.tol || (Math.abs(x) > 1 && d / Math.abs(x) < 0.005);
     });
+  }
+  const UP_RE = /(?<![\wáéíóúñ])(subi[óo]|sube|suben|creci[óo]|crece|crecen|aument[óo]|aumenta|aumentan|gan[óo]|gana|ganan|mejor[óo]|mejora|increment[óo]|incrementa)(?![\wáéíóúñ])/i;
+  const DOWN_RE = /(?<![\wáéíóúñ])(cay[óo]|cae|caen|baj[óo]|baja|bajan|disminuy[óo]|disminuye|perdi[óo]|pierde|pierden|descendi[óo]|redujo|reduce|decreci[óo]|retrocedi[óo]|retrocede)(?![\wáéíóúñ])/i;
+  /** Frase (entre puntos, punto y coma o saltos de línea) donde está la cifra. */
+  function sentenceAt(text, i) {
+    const a = Math.max(text.lastIndexOf('.', i - 1), text.lastIndexOf(';', i - 1), text.lastIndexOf('\n', i - 1)), b = [text.indexOf('. ', i), text.indexOf(';', i), text.indexOf('\n', i)].filter((x) => x >= 0);
+    return text.slice(a + 1, b.length ? Math.min(...b) : text.length);
+  }
+  /**
+   * Cifra sin signo que en el contexto solo existe en negativo (una caída) y la frase dice que SUBIÓ (sin verbo de bajada): contradicción clara.
+   * No se revisa el lado contrario: «cayó a $806,081» es válido (el valor actual es positivo) y los montos actuales no tienen dirección.
+   */
+  function directionConflict(tok, matches, text) {
+    if (tok.signed || !matches.length || matches.some((x) => x > 0)) return false;
+    const sent = sentenceAt(text, tok.at); return UP_RE.test(sent) && !DOWN_RE.test(sent);
   }
 
   function validateResponse(parsed, ctx) {
@@ -140,7 +155,9 @@
     const text = `${parsed.answer}\n${(parsed.evidence || []).map(e => `${e.entity} ${e.reason} ${e.source}`).join('\n')}`;
     if (/la causa es|esto demuestra|se debe a|caus[oó]\s/i.test(text)) return { ok: false, errors: ['La respuesta usa lenguaje causal no permitido.'] };
     const allowed = contextNumbers(ctx).map(Number).filter(Number.isFinite);
-    const invalid = numberTokens(text).filter((tok) => !tokenAllowed(tok, allowed)).map((tok) => (tok.signed ? '-' : '') + String(Math.abs(tok.value)));
+    const toks = numberTokens(text), invalid = toks.filter((tok) => !matchedValues(tok, allowed).length).map((tok) => (tok.signed ? '-' : '') + String(Math.abs(tok.value)));
+    const conflict = toks.filter((tok) => directionConflict(tok, matchedValues(tok, allowed), text)).map((tok) => Math.abs(tok.value));
+    if (!invalid.length && conflict.length) return { ok: false, errors: [`Cohere describe como subida una cifra que en los datos es una caída: ${conflict.slice(0, 3).join(', ')}.`] };
     if (invalid.length) return { ok: false, errors: [`Cohere introdujo cifras no presentes en el contexto: ${invalid.slice(0, 5).join(', ')}.`] };
     return { ok: true, errors: [] };
   }
