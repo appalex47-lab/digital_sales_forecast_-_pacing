@@ -24,7 +24,10 @@ async def main():
         chk('DC-1 Medir muestra Decisión y Conclusión por separado y avisa que la conclusión aún no se puede registrar (la acción está Propuesta)', 'Decisión' in t and 'Conclusión' in t and 'Todavía no se registró la decisión' in t and 'En medición' in t, t[:300])
         # conclusión forzada por la capa de negocio sin estar en medición
         chk('DC-2 forzar una conclusión desde la capa de negocio con la acción en Propuesta se rechaza', await q.evaluate("FP.actionPlan.recordConclusion(FP.app.state.rc.plan,'ACT_001',{outcome:'keep',justification:'x'.repeat(20),decidedBy:'Ana'}).ok") is False)
+        pre = await q.evaluate("({d:document.getElementById('dc-decision').value,o:document.getElementById('dc-objective').value,s:document.getElementById('dc-success').value,h:!!document.querySelector('[data-suggested]'),saved:!!FP.app.state.rc.plan.actions[0].decision})")
+        chk('DC-2b la decisión, el objetivo y el indicador vienen sugeridos (con aviso) y nada se guarda hasta pulsar Guardar', bool(pre['d']) and bool(pre['o']) and pre['h'] and not pre['saved'], pre)
         # decisión con campo faltante
+        await q.fill('#dc-objective', '')
         await q.fill('#dc-decision', 'Corregir el checkout'); await q.click('[data-action="ac-decision-save"]'); await q.wait_for_timeout(400)
         toast = await q.evaluate("document.getElementById('toast').textContent")
         chk('DC-3 decisión sin objetivo se rechaza y dice qué falta', 'objetivo' in toast and await q.evaluate("!FP.app.state.rc.plan.actions[0].decision"), toast)
