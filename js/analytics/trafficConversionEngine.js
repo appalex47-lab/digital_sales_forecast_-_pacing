@@ -108,13 +108,26 @@
       mix = { cr0, cr1, delta: cr1 - cr0, within, mix: (cr1 - cr0) - within };
     }
 
-    // Peso de cada segmento en cada efecto (sobre la suma de los efectos del mismo signo del total)
-    const neg = (k) => sum(items.filter((x) => x[k] < 0), (x) => x[k]), pos = (k) => sum(items.filter((x) => x[k] > 0), (x) => x[k]);
+    // Peso de cada segmento en cada efecto (sobre la suma de los efectos del mismo signo del total).
+    // Pre-calculamos las sumas positivas y negativas en un pase O(N) para evitar O(N²) por re-filtrar items en cada iteración.
+    const negSum = { traffic: 0, cr: 0, aov: 0 }, posSum = { traffic: 0, cr: 0, aov: 0 };
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.traffic < 0) negSum.traffic += it.traffic; else if (it.traffic > 0) posSum.traffic += it.traffic;
+      if (it.cr < 0) negSum.cr += it.cr; else if (it.cr > 0) posSum.cr += it.cr;
+      if (it.aov < 0) negSum.aov += it.aov; else if (it.aov > 0) posSum.aov += it.aov;
+    }
     items.forEach((x) => {
       x.dominant = Math.abs(x.traffic) >= Math.abs(x.cr) && Math.abs(x.traffic) >= Math.abs(x.aov) ? 'traffic' : Math.abs(x.cr) >= Math.abs(x.aov) ? 'cr' : 'aov';
       if (!x.delta && !x.traffic && !x.cr && !x.aov) x.dominant = null;
-      x.share = {};
-      ['traffic', 'cr', 'aov'].forEach((k) => { const d = x[k] < 0 ? neg(k) : pos(k); x.share[k] = d ? x[k] / d : null; });
+      const dt = x.traffic < 0 ? negSum.traffic : posSum.traffic;
+      const dc = x.cr < 0 ? negSum.cr : posSum.cr;
+      const da = x.aov < 0 ? negSum.aov : posSum.aov;
+      x.share = {
+        traffic: dt ? x.traffic / dt : null,
+        cr: dc ? x.cr / dc : null,
+        aov: da ? x.aov / da : null
+      };
       x.crPpDelta = x.base && x.cur && x.base.t > 0 && x.cur.t > 0 ? (x.cur.o / x.cur.t - x.base.o / x.base.t) * 100 : null;
       x.trafficDeltaPct = x.base && x.cur && x.base.t > 0 ? x.cur.t / x.base.t - 1 : null;
     });

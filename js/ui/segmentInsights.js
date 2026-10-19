@@ -52,7 +52,7 @@
       return out;
     });
     const rel = rows.filter((r) => r.relevant && fin(r.current.cr));
-    const top = (arr, f, n = 5, asc = false) => [...arr].filter((r) => fin(f(r))).sort((a, b) => (asc ? f(a) - f(b) : f(b) - f(a))).slice(0, n);
+    const top = (arr, f, n = 5, asc = false) => arr.filter((r) => fin(f(r))).sort((a, b) => (asc ? f(a) - f(b) : f(b) - f(a))).slice(0, n);
     const rankings = {
       revenue: top(rows.filter((r) => r.current && r.current.has.revenue), (r) => r.current.revenue),
       bestCr: top(rel, (r) => r.current.cr),
