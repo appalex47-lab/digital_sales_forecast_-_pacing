@@ -3879,16 +3879,16 @@
         const [cur, base] = await Promise.all([FP.productStore.aggregate({ from: cc.current.from, to: cc.current.to, channel: ch, groupBy: lv }), FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: lv })]);
         const c = sumMap(cur, metric), b = sumMap(base, metric), names = new Set([...c.values.keys(), ...b.values.keys()].filter((e) => !missing(e)));
         if (names.size < 2) { levels[lv] = { label, available: false, note: names.size ? 'Solo hay un valor en este nivel; no hay con qué comparar.' : 'No hay datos cargados para este nivel.' }; continue; }
-        const rows = [...names].map((e) => { const cv = c.values.get(e), bv = b.values.get(e); const current = Number.isFinite(cv) ? cv : 0, previous = Number.isFinite(bv) ? bv : 0; return { entity: String(e), current: round(current), previous: round(previous), delta: round(current - previous) }; });
+        const rows = [...names].map((e) => { const cv = c.values.get(e), bv = b.values.get(e); const current = Number.isFinite(cv) ? cv : 0, previous = Number.isFinite(bv) ? bv : 0; return { entity: String(e), current: round(current), previous: round(previous), delta: round(current - previous), deltaPct: previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : null, sharePct: c.total > 0 ? Math.round((current / c.total) * 1000) / 10 : null }; });
         const down = rows.filter((r) => r.delta < 0).sort((x, y) => x.delta - y.delta), up = rows.filter((r) => r.delta > 0).sort((x, y) => y.delta - x.delta);
         const downSum = down.reduce((t, r) => t + r.delta, 0), top3 = down.slice(0, 3).reduce((t, r) => t + r.delta, 0);
-        levels[lv] = { label, available: true, entities: names.size, totalCurrent: round(c.total), totalPrevious: round(b.total), totalDelta: round(c.total - b.total),
+        levels[lv] = { label, available: true, entities: names.size, totalCurrent: round(c.total), totalPrevious: round(b.total), totalDelta: round(c.total - b.total), totalDeltaPct: b.total > 0 ? Math.round(((c.total - b.total) / b.total) * 1000) / 10 : null,
           topDecliners: down.slice(0, 5), topGrowers: up.slice(0, 3), decliningCount: down.length, growingCount: up.length,
           top3ShareOfDecline: downSum < 0 ? Math.round((top3 / downSum) * 1000) / 10 : null };
       } catch (e) { levels[lv] = { label, available: false, note: 'No se pudo calcular este nivel.' }; }
     }
     const value = { metric, channel: ch, current: cc.current.label, baseline: cc.baseline.label, currentPartial: Boolean(ctx.focus && ctx.focus.partial), levels,
-      note: 'Resumen por nivel con el mismo período y comparación del Análisis. top3ShareOfDecline es el % de la caída (suma de entidades que cayeron) que concentran las 3 mayores.' };
+      note: 'Resumen por nivel con el mismo período y comparación del Análisis. deltaPct y totalDeltaPct son % de cambio ya calculados; sharePct es el % del total del nivel. top3ShareOfDecline es el % de la caída (suma de entidades que cayeron) que concentran las 3 mayores.' };
     an._panorama = { key, value };
     return { ok: true, panorama: value };
   }
