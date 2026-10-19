@@ -111,17 +111,36 @@
     return [...out];
   }
 
+  /**
+   * Cifras que aparecen en el texto de Cohere, con su valor ya escalado si usa «mil», «millones», «K» o «M»
+   * (p. ej. «-$207 mil» = -207000). `signed` es true si el texto trae signo explícito: sin signo se compara el valor absoluto,
+   * porque en español la dirección va en la frase («cayó $207,046») y el contexto guarda -207046.
+   */
+  const UNIT_SCALE = { mil: 1e3, miles: 1e3, k: 1e3, K: 1e3, 'millón': 1e6, millon: 1e6, millones: 1e6, M: 1e6, MM: 1e6 };
+  function numberTokens(text) {
+    const out = [], re = /([-\u2212])?\s?\$?\s?(\d[\d,]*(?:\.\d+)?)(\s?%)?(?:\s?(millones|millón|millon|miles|mil|MM|M|K|k)\b)?/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const raw = m[2].replace(/,/g, ''), v = Number(raw); if (!Number.isFinite(v)) continue;
+      const scale = (!m[3] && m[4]) ? UNIT_SCALE[m[4]] : 1, dec = (raw.split('.')[1] || '').length;
+      out.push({ value: (m[1] ? -1 : 1) * v * scale, signed: Boolean(m[1]), tol: scale > 1 ? 0.5 * Math.pow(10, -dec) * scale : 0.05 });
+    }
+    return out;
+  }
+  function tokenAllowed(tok, allowed) {
+    return allowed.some((x) => {
+      if (tok.signed && !(x === 0 || Math.sign(x) === Math.sign(tok.value))) return false;
+      const d = tok.signed ? Math.abs(x - tok.value) : Math.abs(Math.abs(x) - Math.abs(tok.value));
+      return d < tok.tol || (Math.abs(x) > 1 && d / Math.abs(x) < 0.005);
+    });
+  }
+
   function validateResponse(parsed, ctx) {
     if (!parsed || typeof parsed.answer !== 'string' || !parsed.answer.trim()) return { ok: false, errors: ['La respuesta de Cohere no contiene una respuesta válida.'] };
     const text = `${parsed.answer}\n${(parsed.evidence || []).map(e => `${e.entity} ${e.reason} ${e.source}`).join('\n')}`;
     if (/la causa es|esto demuestra|se debe a|caus[oó]\s/i.test(text)) return { ok: false, errors: ['La respuesta usa lenguaje causal no permitido.'] };
-    const nums = FP.narrativeEngine?.numbersIn ? FP.narrativeEngine.numbersIn(text) : [];
     const allowed = contextNumbers(ctx).map(Number).filter(Number.isFinite);
-    const invalid = nums.filter(tok => {
-      const n = Number(String(tok).replace(/,/g, ''));
-      if (!Number.isFinite(n)) return false;
-      return !allowed.some(x => Math.abs(x - n) < 0.05 || (Math.abs(x) > 1 && Math.abs(x - n) / Math.abs(x) < 0.005));
-    });
+    const invalid = numberTokens(text).filter((tok) => !tokenAllowed(tok, allowed)).map((tok) => (tok.signed ? '-' : '') + String(Math.abs(tok.value)));
     if (invalid.length) return { ok: false, errors: [`Cohere introdujo cifras no presentes en el contexto: ${invalid.slice(0, 5).join(', ')}.`] };
     return { ok: true, errors: [] };
   }
