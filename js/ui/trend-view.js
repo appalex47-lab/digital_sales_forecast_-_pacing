@@ -301,15 +301,30 @@
     return 'Revisa la evidencia de los últimos períodos y decide si requiere seguimiento o puede continuar a la siguiente señal.';
   }
 
+  /** Panorama por nivel (determinista, con los mismos agregados que recibe Cohere): una mini‑tarjeta por nivel. */
+  function panoramaCards(pan) {
+    const pc = (v) => (Number.isFinite(v) ? `${v > 0 ? '+' : ''}${v.toFixed(1)} %` : '—');
+    const row = (r) => `<li><span>${esc(r.entity)}</span><b class="${r.delta < 0 ? 'is-down' : 'is-up'}">${esc(money(r.delta))}</b></li>`;
+    const order = ['category', 'subcategory', 'product', 'state', 'city', 'branch', 'delivery'];
+    const cards = order.filter((k) => pan.levels[k]).map((k) => { const l = pan.levels[k];
+      if (!l.available) return `<div class="pan-card pan-card--off"><b><span>${esc(l.label)}</span></b><small>${esc(l.note || 'Sin datos')}</small></div>`;
+      const down = l.topDecliners.slice(0, 3);
+      return `<details class="pan-card"><summary><b><span>${esc(l.label)}</span><span class="${l.totalDelta < 0 ? 'is-down' : 'is-up'}">${esc(pc(l.totalDeltaPct))}</span></b>
+        <small>${down.length ? esc(down.map((r) => `${r.entity} ${money(r.delta)}`).join(' · ')) : 'Nada cae en este nivel'}</small>
+        <small>${Number.isFinite(l.top3ShareOfDecline) ? `Los 3 que más caen = ${esc(l.top3ShareOfDecline.toFixed(0))} % de la caída` : 'Sin caída que concentrar'} · ${esc(String(l.entities))} ${esc(l.label.toLowerCase())}s</small></summary>
+        ${l.topDecliners.length ? `<p class="cell-sub">Caen</p><ul class="pan-list">${l.topDecliners.map(row).join('')}</ul>` : ''}${l.topGrowers.length ? `<p class="cell-sub">Crecen</p><ul class="pan-list">${l.topGrowers.map(row).join('')}</ul>` : ''}</details>`; }).join('');
+    return `<div class="pan-grid" aria-label="Panorama: ${esc(pan.current)} contra ${esc(pan.baseline)}">${cards}</div>
+      ${pan.currentPartial ? '<p class="warn-note">Período en curso (parcial): la comparación es descriptiva y cambia al cerrar el período.</p>' : ''}<p class="field__hint">${esc(pan.current)} vs ${esc(pan.baseline)}. Cifras calculadas con tus datos; toca un nivel para ver los 5 principales.</p>`;
+  }
   function analysisAssistant(a) {
     const as = a.assistant || { open:false, status:'idle', result:null, errors:[] };
     const configured = FP.cohereConnection?.isConfigured ? FP.cohereConnection.isConfigured() : false;
     const PANORAMA_MAIN = 'Dame un panorama completo: qué está pasando en categorías, productos, geografía y sucursales.';
     const PANORAMA_GROUPS = [
-      { title: 'Categorías y subcategorías', questions: ['¿Qué categorías o subcategorías explican la caída?', '¿Hay alguna subcategoría que crece mientras su categoría cae?'] },
-      { title: 'Estados y ciudades', questions: ['¿Qué estados o ciudades concentran la caída?', '¿Hay ciudades que crecen mientras su estado cae?'] },
-      { title: 'Sucursales y entrega', questions: ['¿Qué sucursales concentran la caída?', '¿Cambió el peso de los tipos de entrega?'] },
-      { title: 'Concentración y datos', questions: ['¿Cuánto depende la caída de pocos productos o categorías?', '¿Qué niveles no tienen datos para concluir?'] }
+      { title: 'Categorías y subcategorías', short: 'Categorías', questions: ['¿Qué categorías o subcategorías explican la caída?', '¿Hay alguna subcategoría que crece mientras su categoría cae?'] },
+      { title: 'Estados y ciudades', short: 'Geografía', questions: ['¿Qué estados o ciudades concentran la caída?', '¿Hay ciudades que crecen mientras su estado cae?'] },
+      { title: 'Sucursales y entrega', short: 'Sucursales', questions: ['¿Qué sucursales concentran la caída?', '¿Cambió el peso de los tipos de entrega?'] },
+      { title: 'Concentración y datos', short: 'Concentración', questions: ['¿Cuánto depende la caída de pocos productos o categorías?', '¿Qué niveles no tienen datos para concluir?'] }
     ];
     const suggestions = [
       '¿Qué se está dejando de vender?',
@@ -329,8 +344,12 @@
         <div class="analysis-assistant__head"><div><span class="analysis-layer-label">COHERE</span><h3>Pregúntale a tus datos</h3><p>Responde usando resultados ya calculados por Análisis. No inventa cifras ni sustituye la evidencia.</p></div><button type="button" class="analysis-assistant__close" data-action="an-assistant-toggle" aria-label="Cerrar asistente" title="Cerrar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>
         <div class="analysis-assistant__suggestions" aria-label="Preguntas sugeridas">${suggestions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div>
         <div class="analysis-assistant__panorama" aria-label="Panorama por nivel">
-          <button type="button" class="analysis-assistant__suggestion analysis-assistant__suggestion--primary" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(PANORAMA_MAIN)}">✦ Panorama completo</button>
-          ${PANORAMA_GROUPS.map(g => `<details class="analysis-assistant__group"><summary>${esc(g.title)}</summary><div>${g.questions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div></details>`).join('')}
+          <div class="analysis-assistant__chips" role="group" aria-label="Panorama y preguntas por nivel">
+            <button type="button" class="analysis-assistant__suggestion analysis-assistant__suggestion--primary" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(PANORAMA_MAIN)}">✦ Panorama completo</button>
+            ${PANORAMA_GROUPS.map((g, i) => `<button type="button" class="analysis-assistant__suggestion analysis-assistant__chip" data-action="an-assistant-group" data-group="${i}" aria-pressed="${String(as.group) === String(i)}">${esc(g.short)} ▾</button>`).join('')}
+          </div>
+          ${as.group !== undefined && as.group !== null && PANORAMA_GROUPS[as.group] ? `<div class="analysis-assistant__qs">${PANORAMA_GROUPS[as.group].questions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}
+          ${as.pan ? panoramaCards(as.pan) : (as.panBusy ? '<p class="ds-loading" role="status">Armando el panorama por nivel…</p>' : '')}
         </div>
         <div class="analysis-assistant__input"><label for="an-assistant-input">Tu pregunta</label><textarea id="an-assistant-input" rows="2" placeholder="Ej. ¿Qué productos llevan más tiempo cayendo?" data-action="an-assistant-question">${esc(as.question || '')}</textarea><div class="btn-row"><button type="button" class="btn btn--primary" data-action="an-assistant-ask" ${as.status === 'busy' || !configured ? 'disabled' : ''}>${as.status === 'busy' ? 'Consultando…' : 'Preguntar'}</button>${!configured ? '<span class="field__hint">Configura Cohere en Ajustes para usar el asistente.</span>' : '<span class="field__hint">La conexión es la misma que usa Diagnóstico y Narrativa.</span>'}</div></div>
         ${as.status === 'busy' ? '<p class="ds-loading" role="status">Consultando la evidencia calculada…</p>' : ''}${error}${resultBlock}${history ? `<details class="analysis-assistant__history"><summary>Preguntas anteriores</summary>${history}</details>` : ''}
