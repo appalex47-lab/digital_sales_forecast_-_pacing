@@ -107,6 +107,10 @@ const mc = under(mk()); mc.summary.channels = { status: 'ok', rows: [
   { id: 'app', label: 'App', state: 'ok', pacing: 'above', compliance: 1.05, actual: 3e5, forecastGapPct: 0.03 }] };
 r = AE.evaluate(mc); const mf = r.findings.find((x) => x.kind === 'channel');
 ok('Canales: lista TODOS los canales en problema (rezagado o cierre corto), no solo el peor', Boolean(mf) && mf.channels.length === 2 && mf.channels.map((x) => x.id).join() === 'whatsapp,ecommerce', mf && mf.channels);
+const mc2 = under(mk()); mc2.summary.channels = { status: 'ok', rows: [
+  { id: 'chico', label: 'Chico', state: 'ok', pacing: 'below', compliance: 0.8, actual: 5e4, forecastGapPct: -0.2 },
+  { id: 'grande', label: 'Grande', state: 'ok', pacing: 'below', compliance: 0.92, actual: 9e5, forecastGapPct: -0.1 }] };
+ok('Canales: se ordenan por monto de brecha (el grande al 92 % antes que el chico al 80 %)', AE.evaluate(mc2).findings.find((x) => x.kind === 'channel').channels.map((x) => x.id).join() === 'grande,chico');
 ok('Canales: un canal sano no aparece', !mf.channels.some((x) => x.id === 'app'));
 ok('Canales: el paso conserva la lista para la vista', (r.route.all.find((o) => o.id === 'review_channel') || {}).channels && r.route.all.find((o) => o.id === 'review_channel').channels.length === 2);
 // visibles

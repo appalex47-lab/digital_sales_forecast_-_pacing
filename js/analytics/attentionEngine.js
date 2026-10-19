@@ -185,13 +185,15 @@
       const troubled = S.channels.rows.filter((r) => r.state === 'ok').map((r) => {
         const behind = r.pacing === 'below' && fin(r.compliance);
         const short = fin(r.forecastGapPct) && 1 + r.forecastGapPct < onPlan;
-        return (behind || short) ? { ...r, behind, short } : null;
-      }).filter(Boolean).sort((a, b) => (a.behind === b.behind ? ((fin(a.compliance) ? a.compliance : 9) - (fin(b.compliance) ? b.compliance : 9)) : (a.behind ? -1 : 1)));
+        // Brecha a la fecha en pesos = venta real − plan a la fecha (el plan se deriva del cumplimiento del propio canal).
+        const gapMoney = fin(r.actual) && fin(r.compliance) && r.compliance > 0 ? r.actual - r.actual / r.compliance : null;
+        return (behind || short) ? { ...r, behind, short, gapMoney } : null;
+      }).filter(Boolean).sort((a, b) => (a.behind === b.behind ? ((fin(a.gapMoney) ? a.gapMoney : 0) - (fin(b.gapMoney) ? b.gapMoney : 0)) : (a.behind ? -1 : 1)));
       if (troubled.length) {
         const lag = troubled[0], n = troubled.length;
-        const line = (r) => `${r.label}: ${fin(r.compliance) ? `${pct(r.compliance)} del plan a la fecha` : 'sin cumplimiento calculable'}${fin(r.forecastGapPct) ? `; cierre proyectado ${r.forecastGapPct >= 0 ? '+' : '−'}${pct(Math.abs(r.forecastGapPct))} contra su meta` : ''}`;
+        const line = (r) => `${r.label}: ${fin(r.compliance) ? `${pct(r.compliance)} del plan a la fecha${fin(r.gapMoney) && r.gapMoney < 0 ? ` (${money(r.gapMoney)} por debajo)` : ''}` : 'sin cumplimiento calculable'}${fin(r.forecastGapPct) ? `; cierre proyectado ${r.forecastGapPct >= 0 ? '+' : '−'}${pct(Math.abs(r.forecastGapPct))} contra su meta` : ''}`;
         out.push({ id: `channel_${lag.id}`, kind: 'channel', severity: 'attention', priority: 4, amount: null,
-          channels: troubled.map((r) => ({ id: r.id, label: r.label, compliance: fin(r.compliance) ? r.compliance : null, forecastGapPct: fin(r.forecastGapPct) ? r.forecastGapPct : null, behind: r.behind, short: r.short })),
+          channels: troubled.map((r) => ({ id: r.id, label: r.label, compliance: fin(r.compliance) ? r.compliance : null, gapMoney: fin(r.gapMoney) ? r.gapMoney : null, forecastGapPct: fin(r.forecastGapPct) ? r.forecastGapPct : null, behind: r.behind, short: r.short })),
           title: n === 1 ? `Revisa el canal ${lag.label}` : `Revisa los ${n} canales en problema`,
           what: n === 1 ? `${lag.label} va al ${pct(lag.compliance)} de su plan a la fecha.` : `${troubled.map((r) => r.label).join(', ')} están por debajo del plan a la fecha o con un cierre proyectado corto.`,
           why: 'Muestra dónde está la desviación; no repite el diagnóstico global.',

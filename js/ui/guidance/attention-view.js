@@ -212,7 +212,7 @@
   function chanListHtml(p, S, key) {
     if (!p.channels || p.channels.length < 2) return '';
     const { esc } = H();
-    return `<ul class="nbs__chans" data-troubled="${p.channels.length}">${p.channels.map((c) => `<li data-chan="${esc(c.id)}"><span><strong>${esc(c.label)}</strong> · ${c.compliance != null ? `${Math.round(c.compliance * 100)} % del plan` : 'sin cumplimiento'}${c.forecastGapPct != null ? ` · cierre ${c.forecastGapPct >= 0 ? '+' : '−'}${Math.abs(Math.round(c.forecastGapPct * 1000) / 10)} % vs meta` : ''}</span> <button type="button" class="btn btn--ghost btn--sm" ${attrs({ ...p, channel: c.id }, S, key)}>Ver ${esc(c.label)}</button></li>`).join('')}</ul>`;
+    return `<ul class="nbs__chans" data-troubled="${p.channels.length}">${p.channels.map((c) => `<li data-chan="${esc(c.id)}"><span><strong>${esc(c.label)}</strong> · ${c.compliance != null ? `${Math.round(c.compliance * 100)} % del plan${c.gapMoney != null && c.gapMoney < 0 ? ` (${money(c.gapMoney)} abajo)` : ''}` : 'sin cumplimiento'}${c.forecastGapPct != null ? ` · cierre ${c.forecastGapPct >= 0 ? '+' : '−'}${Math.abs(Math.round(c.forecastGapPct * 1000) / 10)} % vs meta` : ''}</span> <button type="button" class="btn btn--ghost btn--sm" ${attrs({ ...p, channel: c.id }, S, key)}>Ver ${esc(c.label)}</button></li>`).join('')}</ul>`;
   }
 
   function nextStepHtml(att, S, key) {
