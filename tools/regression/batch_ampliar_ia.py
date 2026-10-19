@@ -38,6 +38,9 @@ async def flow(b, w, h, tag, errs):
     chk(f'{tag}-2 mientras genera se ve el estado de espera', True)
     await q.wait_for_selector('#rcx #rcx-objective', timeout=8000)
     chk(f'{tag}-3 aparece el borrador editable (objetivo, 2 pasos, medición)', await q.locator('#rcx [data-rcx-step]').count() == 2 and await q.input_value('#rcx-objective') == GOOD['objective'])
+    chk(f'{tag}-3b abre en «Detallado» por defecto', await q.evaluate("document.querySelector('[data-action=\"rc-expand-style\"][data-style=\"detailed\"]').getAttribute('aria-pressed')") == 'true' and await q.locator('#rcx-risks').count() == 1)
+    kn = await q.evaluate("(document.getElementById('rcx-known')||{}).innerText||''")
+    chk(f'{tag}-3c «Ya sabemos» (solo lectura) con canal y objetivo operativo', 'Ya sabemos' in kn and 'Canal:' in kn and 'Objetivo operativo' in kn and await q.locator('#rcx-known textarea, #rcx-known input').count() == 0, kn[:200])
     chk(f'{tag}-4 generar no guarda nada en el plan', await q.evaluate("FP.app.state.rc.plan.actions.length") == n0)
     ov = await q.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     chk(f'{tag}-5 sin desborde horizontal ({ov}px)', ov <= 1, ov)
@@ -61,6 +64,7 @@ async def flow(b, w, h, tag, errs):
     await q.click('[data-action="rc-expand-add"]'); await q.wait_for_timeout(700)
     st = await q.evaluate("(()=>{const a=FP.app.state.rc.plan.actions;const l=a[a.length-1];return {n:a.length,d:l.detail}})()")
     chk(f'{tag}-11 al agregar al plan se guarda el detalle editado', st['n'] == n0 + 1 and st['d'] and st['d']['objective'] == 'Objetivo editado a mano' and st['d']['edited'] is True and st['d']['source'] == 'cohere', st)
+    chk(f'{tag}-11b la acción guarda el objetivo operativo y el detalle trae «Ya sabemos»', await q.evaluate("(()=>{const a=FP.app.state.rc.plan.actions.slice(-1)[0];return !!a.operativeGoal&&a.operativeGoal.source==='scenario'&&a.detail.known.length>=2})()"))
     chk(f'{tag}-12 el panel se cierra', await q.locator('#rcx').count() == 0)
     chk(f'{tag}-13 el plan muestra la insignia «Ampliado con IA y editado»', 'Ampliado con IA y editado' in await q.evaluate("document.body.innerText"))
     # error: JSON inválido

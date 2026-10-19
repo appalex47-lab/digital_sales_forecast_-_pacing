@@ -26,5 +26,16 @@ const run = async (r, style) => { reply = r; return A.expandAction(input(style),
   r = await run({ ok: true, status: 'ok', text: JSON.stringify({ ...ok, steps: [{ text: 'Llamar a 3 clientes en 2 días', owner: '', when: '' }] }) }, 'summary'); assert(r.ok, 'números chicos no cuentan');
   r = await run({ ok: false, status: 'error', errors: ['Sin red'] }, 'summary'); assert(!r.ok && r.errors[0] === 'Sin red');
   r = await A.expandAction({}, { apiKey: 'k' }); assert(!r.ok && r.status === 'unavailable');
+  // «Ya sabemos» y objetivo operativo (deterministas; no vienen de la IA)
+  const goal = { metric: 'trafficVolume', label: 'Tráfico', unit: 'conversaciones iniciadas', base: 12800, target: 17000 };
+  const sig = [{ id: 's1', metric: 'trafficVolume', dimensionLabel: 'Canal', label: 'WhatsApp', evidence: 'Conversaciones −18 % vs período previo' }];
+  reply = { ok: true, status: 'ok', text: JSON.stringify({ ...ok, measure: 'Conversaciones de 12,800 a 17,000' }) };
+  r = await A.expandAction({ ...input('detailed'), signals: sig, goal, channelLabel: 'WhatsApp' }, { apiKey: 'k' });
+  assert(r.ok && r.detail.known.some((x) => /Canal: WhatsApp/.test(x)) && r.detail.known.some((x) => /−18 %/.test(x)) && r.detail.known.some((x) => /Objetivo operativo: Tráfico \(conversaciones iniciadas\)/.test(x)), JSON.stringify(r.detail && r.detail.known));
+  assert(r.detail.operativeGoal.target === 17000, 'el objetivo viaja con el detalle');
+  const p = A.expandPayload({ ...input('detailed'), signals: sig, goal, channelLabel: 'WhatsApp' });
+  assert(p.known.length >= 3 && p.operativeGoal.base === 12800, 'el payload lleva known y operativeGoal');
+  assert(/NO generes pasos para revisar/.test(A.EXPAND_RULES) && /objetivo operativo/.test(A.EXPAND_RULES), 'reglas de no repetir diagnóstico');
+  assert(A.knownFacts({ hypothesis: null, signals: [], goal: null, channelLabel: '' }).length === 0);
   console.log('test-expand-action: OK');
 })().catch((e) => { console.error(e); process.exit(1); });

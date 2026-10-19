@@ -193,6 +193,7 @@
         caveats: 'Un driver o una señal nunca se presentan como causa confirmada.', glossary: true }),
     e('trackingCoverage', 'Cobertura de tracking', 'Compras registradas en GA4 ÷ unidades realmente vendidas. Sirve para detectar pérdida de medición, no para medir venta.',
       { formula: 'compras GA4 ÷ unidades reales', caveats: 'Un valor bajo sugiere que GA4 no está registrando todas las compras, no que hubo menos venta.', glossary: true }),
+    e('cierreProyectado', 'Cierre proyectado', 'Proyección de la tendencia para el primer período que aún no está cerrado (con el mes en curso, su cierre estimado). Es una estimación con un rango, no un dato ni una meta; se actualiza al cargar más días.', { glossary: true }),
     e('estadoProducto', 'Estado (de la República)', 'Estado de la República donde se fincó el pedido, definido en el checkout. No es el estado (situación) de un dato, plan o acción.', { glossary: true }),
     e('sucursal', 'Sucursal', 'Sucursal donde se fincó el pedido, sea para recolección o como origen del envío a domicilio.', { glossary: true }),
     e('tipoEntrega', 'Tipo de entrega', 'Envío a domicilio o recolección en sucursal. Se define en el checkout, después de la vista de ficha.',

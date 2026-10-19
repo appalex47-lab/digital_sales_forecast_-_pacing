@@ -32,7 +32,7 @@
       <div class="subhead"><h3 class="panel__title">Acciones y seguimiento</h3>
         <span>${Object.keys(statuses).map((k) => [k, actions.filter((a) => a.status === k).length]).filter(([, n]) => n).map(([k, n]) => H().pill('na', `${statuses[k]}: ${n}`)).join(' ')}</span></div>
       <div class="table-wrap"><table class="table ds-table">
-        <thead><tr><th>Acción</th><th>Canal · periodo</th><th>Driver</th><th>Estado</th><th class="num" data-state="scenario">Impacto simulado</th><th>Última medición</th><th></th></tr></thead>
+        <thead><tr><th>Acción</th><th>Canal · periodo</th><th>Driver</th><th>Estado</th><th class="num" data-state="scenario">Impacto simulado</th><th>Última medición</th><th>Objetivo operativo</th><th></th></tr></thead>
         <tbody>${actions.map((a) => {
           const m = FP.actionTracking.latest(plan, a.actionId);
           return `<tr class="${a === sel ? 'row-current' : ''}"><td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}<span class="cell-sub">${esc(a.owner || 'Sin responsable')}</span></td>
@@ -40,6 +40,7 @@
             <td>${esc(DRIVER[a.driver] || a.driver || '—')}</td><td>${esc(statuses[a.status])}</td>
             <td class="num">${esc(money(a.expectedImpact ? a.expectedImpact.incrementalValue : null))}<span class="cell-sub"><span class="ds-badge ds-badge--scenario">simulado</span></span></td>
             <td>${m ? `${H().pill(CONS[m.consistency][0], CONS[m.consistency][1])}<span class="cell-sub">${esc(m.measurementDate)} · ${m.observedDays}/${m.windowDays} días</span>` : H().pill('na', 'Sin medir')}</td>
+            <td class="wrap">${a.operativeGoal ? FP.actionPlanView.goalHtml(a, false) : '<span class="cell-sub">—</span>'}${m ? `<span class="cell-sub">${FP.actionPlanView.goalProgressText(plan, m)}</span>` : ''}</td>
             <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-measure" data-id="${esc(a.actionId)}">Medir</button>
               <button type="button" class="btn btn--small btn--ghost" data-action="mx-select" data-id="${esc(a.actionId)}">Ver cadena</button></div></td></tr>`;
         }).join('')}</tbody></table></div>
@@ -61,7 +62,7 @@
       <div class="subhead"><h3 class="panel__title">Aprendizajes</h3><span class="field__hint">Descriptivo: qué fue consistente con lo simulado. No establece causalidad.</span></div>
       ${measured.length ? `<div class="grid-3">${groups.map(([k, list]) => `<section><h4>${H().pill(CONS[k][0], CONS[k][1])} (${list.length})</h4>
         <ul class="plain-list">${list.map((m) => { const a = actions.find((x) => x.actionId === m.actionId);
-          return `<li><strong>${esc(m.actionId)}</strong> ${esc(a ? a.title : '')} · ${esc(DRIVER[a && a.driver] || '')}<span class="cell-sub">Realización ${fin(m.realization) ? `${(m.realization * 100).toFixed(0)} %` : '—'} · ${esc(m.measurementDate)}</span></li>`; }).join('') || '<li class="cell-sub">—</li>'}</ul></section>`).join('')}</div>`
+          return `<li><strong>${esc(m.actionId)}</strong> ${esc(a ? a.title : '')} · ${esc(DRIVER[a && a.driver] || '')}<span class="cell-sub">Realización ${fin(m.realization) ? `${(m.realization * 100).toFixed(0)} %` : '—'} · ${esc(m.measurementDate)}</span>${a && a.operativeGoal ? `<span class="cell-sub">${esc(a.operativeGoal.label)}: ${FP.actionPlanView.goalProgressText(plan, m)}</span>` : ''}</li>`; }).join('') || '<li class="cell-sub">—</li>'}</ul></section>`).join('')}</div>`
         : '<p class="note">Todavía no hay mediciones con real en la ventana de las acciones.</p>'}`;
   }
 

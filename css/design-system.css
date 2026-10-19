@@ -1920,3 +1920,16 @@ tr.is-evidence { outline-offset: -3px; }
   .rcx-seg { display: flex; width: 100%; }
   .rcx-seg__b { flex: 1; }
 }
+
+/* Objetivo operativo */
+.rc-goal { display: block; margin-top: .5rem; padding-top: .4rem; border-top: 1px dashed var(--ds-border, #d8dde5); }
+.rc-goal__edit { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.rc-goal__edit input { max-width: 9rem; }
+.rcx__known { margin: .5rem 0; padding: .6rem .75rem; border-radius: .5rem; background: var(--ds-surface-2, rgba(127,127,127,.08)); }
+.rcx__known ul { margin: .25rem 0 .25rem 1.1rem; padding: 0; overflow-wrap: anywhere; }
+
+/* Asistente: panorama por nivel */
+.analysis-assistant__panorama { display: grid; gap: .4rem; margin: .5rem 0; }
+.analysis-assistant__suggestion--primary { border-color: var(--ds-accent, #2563eb); color: var(--ds-accent, #2563eb); font-weight: 600; }
+.analysis-assistant__group summary { cursor: pointer; padding: .45rem 0; min-height: 44px; display: flex; align-items: center; }
+.analysis-assistant__group > div { display: flex; flex-wrap: wrap; gap: .4rem; padding-bottom: .4rem; }

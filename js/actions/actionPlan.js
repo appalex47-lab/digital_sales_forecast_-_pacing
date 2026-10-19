@@ -15,7 +15,7 @@
   const C = () => FP.config;
 
   const STATUSES = () => Object.keys(C().recovery.actionStatuses);
-  const EDITABLE = ['title', 'description', 'owner', 'status', 'startDate', 'endDate', 'notes', 'measurement'];
+  const EDITABLE = ['title', 'description', 'owner', 'status', 'startDate', 'endDate', 'notes', 'measurement', 'operativeGoal'];
 
   function createPlan(year) { return { year, actions: [], measurements: [] }; }
 
@@ -61,6 +61,7 @@
       expectedImpact: a.expectedImpact || null,
       measurement: { metric: a.measurementMetric || a.driver || 'revenue', windowDays: a.windowDays || null },
       startDate: a.startDate || null, endDate: a.endDate || null, notes: a.notes || '',
+      operativeGoal: a.operativeGoal ? JSON.parse(JSON.stringify(a.operativeGoal)) : null,
       detail: a.detail ? JSON.parse(JSON.stringify(a.detail)) : null,   // plan de trabajo ampliado (opcional; p. ej. redactado con IA y editado por la persona)
       createdAt: now,
       history: [{ at: now, field: 'status', from: null, to: 'proposed', note: 'Creada' }]
@@ -142,6 +143,39 @@
   }
 
   /** Actualiza campos permitidos; cada cambio queda en history. Estados fuera de la lista o transiciones no permitidas se rechazan ANTES de guardar nada. */
+
+  /* ---------- Objetivo operativo (volumen / conversión / ticket a conseguir) ----------
+   * El impacto simulado está en dinero; el objetivo operativo dice QUÉ hay que mover para lograrlo (p. ej. +4,200 conversaciones).
+   * Sale del escenario guardado (mismos días y la misma agregación que usa la medición), no de la IA. Es opcional y editable. */
+  const GOAL_LABEL = { trafficVolume: 'Tráfico', conversionRate: 'Tasa de conversión', aov: 'Ticket promedio' };
+  function operativeGoalFrom(scenario, win = null) {
+    if (!scenario || !scenario.days) return null;
+    const metric = scenario.links && scenario.links.driver; if (!GOAL_LABEL[metric]) return null;
+    const t = { b: [0, 0, 0], s: [0, 0, 0] }; let days = 0; const chans = new Set();
+    Object.entries(scenario.days).forEach(([ch, list]) => list.forEach((d) => {
+      if (win && win.start && (d[0] < win.start || (win.end && d[0] > win.end))) return;
+      days++; chans.add(ch); [1, 2, 3].forEach((i) => { t.b[i - 1] += d[i] || 0; t.s[i - 1] += d[i + 3] || 0; });
+    }));
+    if (!days) return null;
+    const val = (x) => (metric === 'trafficVolume' ? x[2] : metric === 'conversionRate' ? (x[2] ? x[1] / x[2] : null) : (x[1] ? x[0] / x[1] : null));
+    const base = val(t.b), target = val(t.s); if (base === null || target === null) return null;
+    const list = (C().channels || []).filter((c) => chans.has(c.id));
+    const unit = metric === 'trafficVolume' ? (list.length === 1 ? String(list[0].trafficLabel || 'Tráfico').toLowerCase() : 'tráfico (suma de canales)') : metric === 'conversionRate' ? 'conversión' : 'ticket promedio';
+    return { metric, label: GOAL_LABEL[metric], unit, base, target, delta: target - base, scenarioDelta: target - base, days, source: 'scenario', edited: false };
+  }
+  /** Cambia el objetivo (valor a conseguir) a mano; queda marcado como editado y en el historial. */
+  function setGoalTarget(plan, actionId, target) {
+    const a = plan.actions.find((x) => x.actionId === actionId); if (!a || !a.operativeGoal) return { ok: false, error: 'La acción no tiene objetivo operativo.' };
+    const n = Number(target); if (!Number.isFinite(n) || n < 0) return { ok: false, error: 'El objetivo debe ser un número mayor o igual a 0.' };
+    return updateAction(plan, actionId, { operativeGoal: { ...a.operativeGoal, target: n, delta: n - a.operativeGoal.base, source: 'manual', edited: true } }, 'Objetivo operativo editado');
+  }
+  /** Si cambian las fechas de la acción y el objetivo viene del escenario (sin editar), se recalcula para esa ventana (también si aún no había). */
+  function refreshGoal(plan, actionId, scenarios) {
+    const a = plan.actions.find((x) => x.actionId === actionId); if (!a || (a.operativeGoal && a.operativeGoal.edited)) return;
+    const sc = scenarios.find((s) => s.scenarioId === a.scenarioId); const g = operativeGoalFrom(sc, { start: a.startDate, end: a.endDate });
+    if (g) updateAction(plan, actionId, { operativeGoal: g }, 'Recalculado por cambio de fechas');
+  }
+
   function updateAction(plan, actionId, patch, note = '') {
     const a = plan.actions.find((x) => x.actionId === actionId);
     if (!a) return { ok: false, error: 'Acción inexistente.' };
@@ -248,5 +282,5 @@
     return n;
   }
 
-  FP.actionPlan = { CONCLUSIONS, recordDecision, recordConclusion, conclusionProblem, TRANSITIONS, measurementProblem, validMeasurements, transitionProblem, nextStates, integrityIssue, deleteAction, actionsOfScenario, unlinkScenario, STATUSES, createPlan, hydratePlan, priorityFactors, createAction, updateAction };
+  FP.actionPlan = { GOAL_LABEL, operativeGoalFrom, setGoalTarget, refreshGoal, CONCLUSIONS, recordDecision, recordConclusion, conclusionProblem, TRANSITIONS, measurementProblem, validMeasurements, transitionProblem, nextStates, integrityIssue, deleteAction, actionsOfScenario, unlinkScenario, STATUSES, createPlan, hydratePlan, priorityFactors, createAction, updateAction };
 })(typeof window !== 'undefined' ? window : globalThis);

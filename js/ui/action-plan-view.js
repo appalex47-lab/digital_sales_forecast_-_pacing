@@ -23,7 +23,9 @@
   /** Texto plano del plan ampliado (para copiar a un correo o ticket). */
   function detailText(title, d) {
     if (!d) return '';
-    const L = [title, '', `Objetivo: ${d.objective}`, '', 'Pasos:'];
+    const L = [title, '', `Objetivo: ${d.objective}`];
+    if ((d.known || []).length) { L.push('', 'Ya sabemos (de los datos de RevNavigator):'); d.known.forEach((x) => L.push(`- ${x}`)); }
+    L.push('', 'Pasos:');
     (d.steps || []).forEach((x, i) => L.push(`${i + 1}. ${x.text}${x.owner ? ` — ${x.owner}` : ''}${x.when ? ` (${x.when})` : ''}`));
     if (d.measure) L.push('', `Cómo se mide: ${d.measure}`);
     if ((d.dataToReview || []).length) { L.push('', 'Datos a revisar antes de ejecutar:'); d.dataToReview.forEach((x) => L.push(`- ${x}`)); }
@@ -33,12 +35,23 @@
     return L.join('\n');
   }
   const lines = (a) => (a || []).join('\n');
+  /** Objetivo operativo de la acción (volumen/conversión/ticket a conseguir), con el valor a conseguir editable. */
+  function goalHtml(a, editable) {
+    const g = a.operativeGoal; if (!g) return '<span class="cell-sub">Sin objetivo operativo (acción anterior a esta función).</span>';
+    const esc = H().esc, k = g.metric, fmt = (v) => F().metric(k, v), pct = k === 'conversionRate';
+    const sign = FP.pacingView && FP.pacingView.signed ? FP.pacingView.signed(k, g.delta) : fmt(g.delta);
+    const raw = pct ? Math.round(g.target * 10000) / 100 : k === 'trafficVolume' ? Math.round(g.target) : Math.round(g.target * 100) / 100;
+    return `<span class="rc-goal"><span class="cell-sub"><strong>Objetivo operativo</strong> · ${esc(g.label)}${k === 'trafficVolume' ? ` (${esc(g.unit)})` : ''}</span>
+      <span class="cell-sub">${esc(fmt(g.base))} → ${esc(fmt(g.target))} (${esc(sign)})${g.edited ? ' · editado' : ''}</span>
+      ${editable ? `<label class="cell-sub rc-goal__edit">Objetivo${pct ? ' (%)' : ''} <input type="number" step="any" min="0" value="${esc(String(raw))}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="goalTarget" ${pct ? 'data-pct="1"' : ''} aria-label="Objetivo operativo de ${esc(a.actionId)}" class="input--compact"></label>` : ''}</span>`;
+  }
   /** Detalle de solo lectura dentro del plan de acción. */
   function detailHtml(a) {
     const esc = H().esc, d = a.detail; if (!d) return '';
     const ul = (arr) => (arr && arr.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
     return `<details class="disclosure rcx-detail"><summary><span class="ds-badge">✦ ${d.edited ? 'Ampliado con IA y editado' : 'Ampliado con IA'}</span> Ver el plan de trabajo</summary>
       <div class="rcx-detail__body"><p><strong>Objetivo.</strong> ${esc(d.objective)}</p>
+      ${(d.known || []).length ? `<p><strong>Ya sabemos (de los datos).</strong></p>${ul(d.known)}` : ''}
       <ol>${(d.steps || []).map((x) => `<li>${esc(x.text)}${x.owner || x.when ? `<span class="cell-sub">${esc([x.owner, x.when].filter(Boolean).join(' · '))}</span>` : ''}</li>`).join('')}</ol>
       ${d.measure ? `<p><strong>Cómo se mide.</strong> ${esc(d.measure)}</p>` : ''}
       ${(d.dataToReview || []).length ? `<p><strong>Datos a revisar.</strong></p>${ul(d.dataToReview)}` : ''}
@@ -59,6 +72,7 @@
     return `<section class="rcx" id="rcx" aria-labelledby="rcx-title">${head}${seg}
       <p class="field__hint">Cambiar el estilo vuelve a generar el borrador. Edita lo que quieras: solo se guarda al agregarlo al plan.</p>
       <div class="field"><label for="rcx-objective" class="field__hint">Objetivo</label><textarea id="rcx-objective" rows="2">${esc(d.objective)}</textarea></div>
+      ${(d.known || []).length ? `<div class="rcx__known" id="rcx-known"><strong>Ya sabemos (de tus datos, solo lectura)</strong><ul>${d.known.map((k) => `<li>${esc(k)}</li>`).join('')}</ul><span class="field__hint">Por eso la IA no propone pasos para revisar lo que ya viene en los datos.</span></div>` : ''}
       <h5 class="rcx__h">Pasos</h5>
       <div class="rcx__steps" role="list">${d.steps.map((st, i) => `<div class="rcx__step" role="listitem" data-rcx-step="${i}">
         <span class="rcx__n" aria-hidden="true">${i + 1}</span>
@@ -157,7 +171,7 @@
               ${FP.actionPlan.integrityIssue(state.rc.plan, a) ? `<span class="cell-sub" data-action-integrity="1">${esc(FP.actionPlan.integrityIssue(state.rc.plan, a))}</span>` : ''}</td>
             <td><input type="date" value="${esc(a.startDate || '')}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="startDate" aria-label="Inicio" class="input--compact">
               <input type="date" value="${esc(a.endDate || '')}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="endDate" aria-label="Fin" class="input--compact"></td>
-            <td class="num">${esc(signedMoney(a.expectedImpact ? a.expectedImpact.incrementalValue : null))}<span class="cell-sub"><span class="ds-badge ds-badge--scenario">simulado</span></span></td>
+            <td class="num">${esc(signedMoney(a.expectedImpact ? a.expectedImpact.incrementalValue : null))}<span class="cell-sub"><span class="ds-badge ds-badge--scenario">simulado</span></span>${goalHtml(a, true)}</td>
             <td><span class="cell-sub">Impacto simulado: ${esc(p.simulatedImpact || 'n/d')} · Exposición: ${esc(p.exposure || 'n/d')} · Urgencia: ${esc(p.urgency || 'n/d')} · Evidencia: ${esc(p.evidence || 'n/d')} · ${esc(p.constraints || '')}</span></td>
             <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-measure" data-id="${esc(a.actionId)}">Medir</button>
               <button type="button" class="btn btn--small btn--ghost" data-action="rc-tree-action" data-id="${esc(a.actionId)}">Ver cadena</button>
@@ -168,6 +182,16 @@
       <p class="field__hint">La prioridad es descriptiva (factores cuantitativos), no indica cuál acción es mejor. Los cambios quedan en el historial. Puedes borrar las acciones que tú agregaste (se pide confirmación); las del catálogo base y las propuestas no se borran.</p>`;
   }
 
+  /** Avance del objetivo operativo en una medición (mismo cálculo que la medición: observado − base ÷ escenario − base; descriptivo). */
+  function goalProgress(plan, m) {
+    const esc = H().esc, a = plan.actions.find((x) => x.actionId === m.actionId), g = a && a.operativeGoal;
+    const k = g ? g.metric : (a && a.driver); const c = m.byMetric && m.byMetric[k]; if (!c || !(k in C().metrics)) return '<span class="cell-sub">—</span>';
+    const sg = (v) => (FP.pacingView && FP.pacingView.signed ? FP.pacingView.signed(k, v) : String(v));
+    const sd = g && g.scenarioDelta;   // si la persona cambió el objetivo, se escala el esperado de los días con real en la misma proporción
+    const goalDelta = typeof c.expectedDelta === 'number' && g && g.edited && sd ? c.expectedDelta * (g.delta / sd) : c.expectedDelta;
+    const done = typeof c.deltaVsBaseline === 'number' && typeof goalDelta === 'number' && goalDelta !== 0 ? c.deltaVsBaseline / goalDelta : null;
+    return `<strong>${esc((g && g.label) || C().metrics[k].label)}</strong><span class="cell-sub">Logrado ${esc(sg(c.deltaVsBaseline))} de ${esc(sg(goalDelta))}${done === null ? '' : ` · ${(done * 100).toFixed(0)} %`}</span>`;
+  }
   function renderTracking(state) {
     const esc = H().esc;
     const rc = state.rc;
@@ -178,7 +202,7 @@
     $('rc-tracking').innerHTML = `<div class="subhead"><h3 class="panel__title">Seguimiento: baseline, escenario y observado</h3></div>
       <div class="table-wrap"><table class="table ds-table">
         <thead><tr><th>Acción</th><th>Medición</th><th>Métrica</th><th class="num" data-state="baseline">Baseline</th><th class="num" data-state="scenario">Escenario <span class="ds-badge ds-badge--scenario">Simulado</span></th>
-          <th class="num" data-state="observed">Observado <span class="ds-badge ds-badge--observed">Observado</span></th><th class="num">Δ vs baseline</th><th class="num">Δ vs escenario</th><th>Lectura</th></tr></thead>
+          <th class="num" data-state="observed">Observado <span class="ds-badge ds-badge--observed">Observado</span></th><th class="num">Δ vs baseline</th><th class="num">Δ vs escenario</th><th>Objetivo operativo</th><th>Lectura</th></tr></thead>
         <tbody>${ms.slice().reverse().map((m) => {
           const k = m.metric, d = m.delta;
           const [cls, lbl] = CONS[m.consistency];
@@ -187,6 +211,7 @@
             <td class="num">${esc(fmt(k, d.baseline))}</td><td class="num">${esc(fmt(k, d.scenario))}</td><td class="num">${esc(fmt(k, d.observed))}</td>
             <td class="num">${esc(k === 'conversionRate' ? FP.pacingView.signed(k, d.deltaVsBaseline) : FP.pacingView.signed(k, d.deltaVsBaseline))}</td>
             <td class="num">${esc(FP.pacingView.signed(k, d.deltaVsScenario))}</td>
+            <td class="wrap">${goalProgress(rc.plan, m)}</td>
             <td class="wrap">${H().pill(cls, lbl)}<span class="cell-sub">${esc(m.statement)}</span>
               <details><summary class="cell-sub">Factores que pueden afectar la comparación</summary><ul class="plain-list">${m.factors.map((f) => `<li class="cell-sub">${esc(f)}</li>`).join('')}</ul></details></td></tr>`;
         }).join('')}</tbody></table></div>
@@ -199,5 +224,5 @@
     renderTracking(state);
   }
 
-  FP.actionPlanView = { render, detailText };
+  FP.actionPlanView = { render, detailText, goalHtml, goalProgressText: (plan, m) => goalProgress(plan, m).replace(/<strong>.*?<\/strong>/, '').replace(/<\/?span[^>]*>/g, '') };
 })(typeof window !== 'undefined' ? window : globalThis);
