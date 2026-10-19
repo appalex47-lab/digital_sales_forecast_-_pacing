@@ -2801,7 +2801,7 @@
     /* ----- Acceso por equipo: correo y contraseña (cuentas creadas por la persona administradora) ----- */
     'login-open'() { openLoginFromMenu(); },
     'login-cancel'() { closeLogin(); },
-    'entry-guest'() { entryContinueGuest(); },
+    'entry-guest'() { entryContinueGuest(true); },
     'entry-login'() { openLogin(); },
     'entry-retry'() { entryCheckData({ announce: true }); },
     'entry-skip'() { entry.busy = false; entry.resolved = true; entry.noTour = true; closeEntry(); render(); },
@@ -3557,7 +3557,7 @@
      Nunca hay dos diálogos abiertos a la vez: cada paso cierra el anterior antes de abrir el siguiente.
      Preferencias (envoltorio estándar de storage, claves fp.v1:authChoice y fp.v1:onboardingDone):
        authChoice: 'guest' (continuó sin sesión) o 'team' (completó el acceso con éxito); onboardingDone: '1' al elegir tipo de uso. */
-  const entry = { busy: false, resolved: false, fromEntry: false, cloudHas: null, cloudError: null, noTour: false };
+  const entry = { step: '', busy: false, resolved: false, fromEntry: false, cloudHas: null, cloudError: null, noTour: false };
   const prefGet = (k) => { const e = storage.load(k); return e ? e.data : null; };
   const prefSet = (k, v) => storage.save(k, v);
   const localHasData = (st) => Boolean(st.data.historical || st.data.actual || st.targets.defined);
@@ -3569,26 +3569,29 @@
     closeEntry(); closeLoginQuiet();
     const d = document.createElement('dialog'); d.id = 'entry-dialog'; d.className = 'tour-offer login-dialog entry-dialog'; d.setAttribute('aria-labelledby', 'entry-t');
     d.innerHTML = html;
-    d.addEventListener('cancel', (e) => { if (entry.busy) e.preventDefault(); });
+    d.addEventListener('cancel', (e) => {   // Esc: equivale a la salida «neutra» de cada paso, sin dejar el flujo a medias
+      e.preventDefault(); if (entry.busy) return;
+      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entry.noTour = true; closeEntry(); render(); }
+    });
     document.body.appendChild(d);
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     const f = d.querySelector('[autofocus],button'); if (f) f.focus();
     return d;
   }
   function openWelcome() {
-    entry.fromEntry = true;
+    entry.fromEntry = true; entry.step = 'welcome';
     entryDialog(`<p class="tour-offer__eyebrow">RevNavigator</p><h2 id="entry-t">Bienvenido a RevNavigator</h2>
       <p>Inicia sesión para ver los datos de tu equipo, o continúa sin sesión y empieza desde cero.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-guest" autofocus>Continuar sin sesión</button><button type="button" class="btn" data-action="entry-login">Iniciar sesión con el equipo</button></div>`);
   }
-  function openLoading() { entry.busy = true; entryDialog('<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Cargando datos del equipo…</h2><p role="status" aria-live="polite">Estoy comprobando si tu equipo ya tiene datos. No cambio nada de lo que tienes aquí.</p>'); }
+  function openLoading() { entry.busy = true; entry.step = 'loading'; entryDialog('<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Cargando datos del equipo…</h2><p role="status" aria-live="polite">Estoy comprobando si tu equipo ya tiene datos. No cambio nada de lo que tienes aquí.</p>'); }
   function openEntryError(msg) {
-    entry.busy = false;
+    entry.busy = false; entry.step = 'error';
     entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">No pude comprobar los datos del equipo</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No digo que tu cuenta esté vacía porque no lo pude comprobar.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-retry" autofocus>Reintentar</button><button type="button" class="btn" data-action="entry-skip">Continuar sin comprobar</button></div>`);
   }
   function openCloudHasData() {
-    entry.busy = false;
+    entry.busy = false; entry.step = 'cloud';
     entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Tu equipo tiene datos en la nube</h2><p>Aquí en este navegador todavía no hay datos. Puedes traer la copia del equipo ahora o hacerlo después desde Configuración → Cuenta y nube. No se restaura nada sin tu confirmación.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Restaurar desde la nube</button><button type="button" class="btn" data-action="entry-skip">Más tarde</button></div>`);
   }
@@ -3607,14 +3610,15 @@
     const st = entryStatus();
     if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); } else render();
   }
-  function entryContinueGuest() {
-    prefSet('authChoice', 'guest'); entry.busy = false; entry.resolved = true; closeEntry();
+  function entryContinueGuest(persist = true) {
+    if (persist) prefSet('authChoice', 'guest'); entry.busy = false; entry.resolved = true; closeEntry();
     const st = entryStatus();
     if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); }
   }
   /** Arranque: decide qué entrada corresponde. Se llama antes del primer render. */
   function entryBoot() {
     const https = root.location && root.location.protocol === 'https:';
+    if (!https) { entry.resolved = true; return; }   // sin https (archivo local o pruebas) no hay acceso por equipo: queda la bienvenida clásica por datos
     if (state.cloud.session) {
       // sesión activa: con datos locales entra directo; sin ellos se consulta la nube antes de decidir el recorrido
       const st = entryStatus();
@@ -3622,7 +3626,6 @@
       entry.busy = true; setTimeout(() => entryCheckData({ announce: false }), 0); return;
     }
     entry.resolved = true;
-    if (!https) return;   // sin https (archivo local o pruebas): queda la bienvenida clásica por datos
     try {
       if (prefGet('authChoice') === 'guest') return;                     // ya eligió continuar sin sesión: no se le insiste
       if (root.sessionStorage.getItem('fp.loginAsked') === '1') return;  // una vez por visita

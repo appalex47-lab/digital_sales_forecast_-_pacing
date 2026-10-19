@@ -13,8 +13,8 @@ def chk(n, ok, d=''):
 U = f'http://127.0.0.1:{port}/index.html'
 async def boot(c, day, hash_='#cambios'):
     q = await c.new_page(); errs = []; q.on('pageerror', lambda e: errs.append(str(e)[:200]))
-    await q.clock.set_fixed_time(day); await q.goto(U + '#inicio'); await q.wait_for_timeout(700)
-    await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
+    await q.clock.set_fixed_time(day); await q.goto(U + '#inicio'); await q.wait_for_timeout(1500)
+    await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")   # incluye el aviso de «no pude comprobar los datos del equipo» (sin Supabase real)
     return q, errs
 async def main():
     async with async_playwright() as p:
