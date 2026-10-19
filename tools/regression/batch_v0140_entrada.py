@@ -116,7 +116,7 @@ async def main():
         chk('E4b «Cargando datos del equipo…» se mostró durante la comprobación', True if any(x == ['entry-dialog'] for x in seq) else False)
         chk('E4c authChoice quedó «team» y se consultó la nube en modo lectura (GET, sin escribir)', await q.evaluate("(FP.app.storage.load('authChoice')||{}).data") == 'team' and any('team_blobs' in x for x in M['calls']) and not any('POST' in x for x in M['calls'][-1:]))
         await q.click('[data-action="entry-skip"]'); mx, seq = await watch(q, 800)
-        chk('E4d «Más tarde» cierra todo y no abre el recorrido', mx == 0, seq)
+        chk('E4d «Más tarde» sin datos locales: se abre la pregunta de los cuatro escenarios (un solo diálogo)', mx == 1 and seq[-1] == ['tour-offer'], seq)
         await c.close()
         # ---- 5 login exitoso sin datos ----
         M = {'keys': [], 'loginOk': True, 'keysStatus': 200, 'calls': []}

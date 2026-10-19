@@ -2804,8 +2804,9 @@
     'entry-guest'() { entryContinueGuest(true); },
     'entry-login'() { openLogin(); },
     'entry-retry'() { entryCheckData({ announce: true }); },
-    'entry-skip'() { entry.busy = false; entry.resolved = true; entry.noTour = true; closeEntry(); render(); },
-    'entry-restore'() { entry.busy = false; closeEntry(); return actions['cloud-download'](); },
+    'entry-skip'() { entry.busy = false; entry.resolved = true; entryOfferTourIfEmpty(); },
+    'entry-restore'() { return runRestore(); },
+    'restore-cancel'() { if (restoreRun.ctl) restoreRun.ctl.abort(); },
     async 'login-submit'() {
       const email = ((document.getElementById('login-email') || {}).value || '').trim(), pw = (document.getElementById('login-password') || {}).value || '';
       const msg = document.getElementById('login-msg'), btn = document.querySelector('#login-dialog [data-action="login-submit"]');
@@ -3576,8 +3577,10 @@
     const d = document.createElement('dialog'); d.id = 'entry-dialog'; d.className = 'tour-offer login-dialog entry-dialog'; d.setAttribute('aria-labelledby', 'entry-t');
     d.innerHTML = html;
     d.addEventListener('cancel', (e) => {   // Esc: equivale a la salida «neutra» de cada paso, sin dejar el flujo a medias
-      e.preventDefault(); if (entry.busy) return;
-      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entry.noTour = true; closeEntry(); render(); }
+      e.preventDefault();
+      if (entry.step === 'restoring') { if (restoreRun.ctl) restoreRun.ctl.abort(); return; }   // solo se cancela mientras se descarga; al guardar no
+      if (entry.busy) return;
+      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entryOfferTourIfEmpty(); }
     });
     document.body.appendChild(d);
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
@@ -3601,6 +3604,70 @@
     entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Tu equipo tiene datos en la nube</h2><p>Aquí en este navegador todavía no hay datos. Puedes traer la copia del equipo ahora o hacerlo después desde Configuración → Cuenta y nube. No se restaura nada sin tu confirmación.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Restaurar desde la nube</button><button type="button" class="btn" data-action="entry-skip">Más tarde</button></div>`);
   }
+  /** Sin datos locales y sin restaurar (Más tarde, cancelar, continuar sin comprobar): se ofrece el recorrido; con datos, no. */
+  function entryOfferTourIfEmpty() {
+    closeEntry(); const st = entryStatus();
+    if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); } else render();
+  }
+  /* ----- Restaurar desde la nube con avance (barra real por bytes, tiempo estimado y cancelar solo mientras se descarga) ----- */
+  const restoreRun = { ctl: null };
+  const RESTORE_STAGES = ['Descargando de la nube', 'Guardando en este navegador', 'Preparando tus pantallas'];
+  function openRestoring() {
+    entry.busy = true; entry.step = 'restoring';
+    entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">Cargando tus datos…</h2>
+      <p class="mut">Espera un momento, esto puede tardar unos minutos según el tamaño de tu copia. No cierres esta ventana.</p>
+      <div class="rs__bar" id="rs-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Avance de la restauración"><i id="rs-fill"></i></div>
+      <div class="rs__row"><span id="rs-pct">0 %</span><span id="rs-eta">Calculando tiempo…</span></div>
+      <ol class="rs__stages" id="rs-stages">${RESTORE_STAGES.map((t) => `<li><span class="rs__ic">○</span>${t}</li>`).join('')}</ol>
+      <p class="visually-hidden" id="rs-live" role="status" aria-live="polite"></p>
+      <div class="tour-offer__btns"><button type="button" class="btn" id="rs-cancel" data-action="restore-cancel">Cancelar</button></div>`);
+  }
+  let rsLastSay = -1;
+  function paintRestore(pct, stage, eta) {
+    const $ = (id) => document.getElementById(id); if (!$('rs-fill')) return;
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    $('rs-fill').style.width = `${v}%`; $('rs-bar').setAttribute('aria-valuenow', String(v)); $('rs-pct').textContent = `${v} %`;
+    $('rs-eta').textContent = eta || (stage === 0 ? 'Calculando tiempo…' : stage === 1 ? 'Esto ya no se puede cancelar' : 'Casi listo');
+    [...$('rs-stages').children].forEach((li, i) => { li.className = i < stage ? 'done' : i === stage ? 'on' : ''; li.firstChild.textContent = i < stage ? '✓' : i === stage ? '●' : '○'; });
+    const c = $('rs-cancel'); if (c) { c.disabled = stage > 0; c.hidden = stage > 0; }
+    if (v >= rsLastSay + 25 || v === 100) { rsLastSay = v; $('rs-live').textContent = `${v} por ciento. ${RESTORE_STAGES[stage]}.`; }
+  }
+  const etaText = (ms) => { const s = Math.max(1, Math.round(ms / 1000)); return s < 90 ? `Faltan ~${s} s` : `Faltan ~${Math.round(s / 60)} min`; };
+  function openRestoreError(msg) {
+    entry.busy = false; entry.step = 'restore-error';
+    entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">No pude terminar la carga</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No se aplicó nada: tus datos locales siguen como estaban.</p>
+      <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Reintentar</button><button type="button" class="btn" data-action="entry-skip">Continuar sin restaurar</button></div>`);
+  }
+  async function runRestore() {
+    if (restoreRun.ctl) return;
+    openRestoring(); rsLastSay = -1; paintRestore(0, 0);
+    const ctl = new AbortController(); restoreRun.ctl = ctl; const t0 = Date.now();
+    let d;
+    try {
+      d = await FP.cloud.downloadProgress({ signal: ctl.signal, onProgress: (p) => {
+        const f = p.totalBytes ? p.doneBytes / p.totalBytes : 0, el = Date.now() - t0;
+        paintRestore(70 * f, 0, f > 0.05 && el > 1500 ? etaText(el / f * (1 - f)) : null);
+      } });
+    } catch (e) { d = { ok: false, error: String(e && e.message || e) }; }
+    restoreRun.ctl = null;
+    if (d.aborted) { entry.busy = false; entry.resolved = true; entryOfferTourIfEmpty(); return; }
+    if (!d.ok) return openRestoreError(d.error);
+    if (!d.items.length) return openRestoreError('La nube no tiene copia todavía.');
+    try {
+      paintRestore(72, 1);
+      await repo.flush();
+      const pr = await FP.productSync.restore(repo, d.items, { onProgress: (i, n) => paintRestore(72 + 22 * (i / Math.max(1, n)), 1) });   // productos primero: valida antes de tocar nada
+      if (!pr.ok) return openRestoreError(pr.error);
+      for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+      await repo.flush();
+      paintRestore(96, 2);
+    } catch (e) { return openRestoreError(`Falló el guardado: ${e && e.message || e}`); }
+    state.ux.tourOffered = true; saveUx(); prefSet('authChoice', 'team'); state.cu.status = 'idle';
+    paintRestore(100, 2);
+    const h = document.getElementById('entry-t'); if (h) h.textContent = '✓ Datos cargados';
+    setTimeout(() => root.location.reload(), 700);   // se recarga: config.js lee parte de los datos al arrancar. Con datos locales no sale la pregunta de los cuatro escenarios
+  }
+
   /** Comprueba (solo lectura) si el equipo tiene datos en la nube y decide el siguiente paso. */
   async function entryCheckData({ announce }) {
     const st0 = entryStatus();

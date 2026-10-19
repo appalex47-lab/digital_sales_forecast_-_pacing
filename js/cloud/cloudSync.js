@@ -175,11 +175,11 @@
   }
 
   /* ---------- REST ---------- */
-  async function rest(path, { method = 'GET', body, prefer, fetchImpl, session } = {}) {
+  async function rest(path, { method = 'GET', body, prefer, fetchImpl, session, signal } = {}) {
     const f = fetchImpl || root.fetch.bind(root);
     const headers = authHeaders({ Authorization: `Bearer ${session.access_token}` }); if (prefer) headers.Prefer = prefer;
-    let res; try { res = await f(`${cfg().url}/rest/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }); }
-    catch (e) { throw new Error('Sin conexión con Supabase.'); }
+    let res; try { res = await f(`${cfg().url}/rest/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal }); }
+    catch (e) { if (e && e.name === 'AbortError') { const a = new Error('Cancelado.'); a.aborted = true; throw a; } throw new Error('Sin conexión con Supabase.'); }
     if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(explain(res.status, j)); }
     const t = await res.text(); return t ? JSON.parse(t) : null;
   }
@@ -241,6 +241,42 @@
     return { ok: true, items, userId: session.user_id };
   }
 
+  /**
+   * Igual que download(), pero por trozos y con avance real (bytes). Se puede cancelar con `signal` (AbortController):
+   * no se guarda nada, solo se deja de leer. onProgress({ doneBytes, totalBytes, keyIndex, keys, key }).
+   * Devuelve { ok, items } | { ok:false, aborted:true } | { ok:false, error }.
+   */
+  async function downloadProgress({ fetchImpl, signal, onProgress, concurrency = 4 } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: false, error: 'Inicia sesión para leer la copia de tu equipo.' };
+    const session = se.session, table = cfg().table; let meta;
+    try { meta = await rest(`${table}?select=key,part,total,bytes&order=key.asc,part.asc`, { fetchImpl, session, signal }); }
+    catch (e) { return e.aborted ? { ok: false, aborted: true } : { ok: false, error: e.message }; }
+    const by = new Map(); (meta || []).forEach((r) => { if (!by.has(r.key)) by.set(r.key, []); by.get(r.key)[r.part] = r; });
+    const keys = [...by.keys()]; let totalBytes = 0, doneBytes = 0;
+    by.forEach((arr) => arr.forEach((r) => { totalBytes += Number(r && r.bytes) || 0; }));
+    const items = [];
+    try {
+      for (let ki = 0; ki < keys.length; ki++) {
+        const key = keys[ki], arr = by.get(key), total = arr[0] ? arr[0].total : 0;
+        if (!arr[0] || arr.length < total || Array.from({ length: total }, (_, i) => arr[i]).some((x) => !x)) return { ok: false, error: `La copia de «${key}» está incompleta en la nube. No se restauró nada.` };
+        const payloads = new Array(total);
+        for (let from = 0; from < total; from += concurrency) {
+          if (signal && signal.aborted) return { ok: false, aborted: true };
+          await Promise.all(Array.from({ length: Math.min(concurrency, total - from) }, async (_, j) => {
+            const n = from + j;
+            const rows = await rest(`${table}?select=part,payload&key=eq.${encodeURIComponent(key)}&part=eq.${n}`, { fetchImpl, session, signal });
+            if (!rows || !rows[0]) throw new Error(`La copia de «${key}» está incompleta en la nube. No se restauró nada.`);
+            payloads[n] = rows[0].payload; doneBytes += Number(arr[n].bytes) || String(rows[0].payload).length;
+            if (onProgress) onProgress({ doneBytes, totalBytes, keyIndex: ki + 1, keys: keys.length, key });
+          }));
+        }
+        const text = payloads.join('');
+        let envelope; try { envelope = JSON.parse(text); } catch (e) { return { ok: false, error: `La copia de «${key}» está dañada. No se restauró nada.` }; }
+        items.push({ key, envelope, bytes: text.length, digest: digest(text) });
+      }
+    } catch (e) { return e.aborted ? { ok: false, aborted: true } : { ok: false, error: e.message }; }
+    return { ok: true, items, userId: session.user_id, totalBytes };
+  }
 
   /** Solo lectura: nombres de las claves que existen en la copia del equipo (una fila por clave). No baja ni cambia datos. */
   async function listKeys({ fetchImpl } = {}) {
@@ -321,5 +357,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
+  FP.cloud = { listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, downloadProgress, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
