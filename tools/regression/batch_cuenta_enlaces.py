@@ -10,6 +10,15 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
+async def signout_flow(q, sel):
+    """v0.14.1: cerrar sesión ahora abre un diálogo (comprobación + casilla si hay algo sin respaldar) y recarga la página."""
+    await q.click(sel)
+    await q.wait_for_selector('#signout-dialog [data-action="signout-confirm"]', timeout=8000)
+    await q.wait_for_function("!document.querySelector('#signout-dialog').innerText.includes('Comprobando')", timeout=8000)
+    ack = q.locator('#signout-dialog input[data-action="signout-ack"]')
+    if await ack.count(): await ack.check()
+    await q.click('#signout-dialog [data-action="signout-confirm"]'); await q.wait_for_timeout(2500)
+    await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")   # tras recargar vuelve la bienvenida (es lo esperado)
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
@@ -47,7 +56,7 @@ async def main():
         t = await q.evaluate("document.getElementById('acct-menu').innerText")
         chk('A4 con sesión muestra correo, equipo y Cerrar sesión', 'appalex@hotmail.es' in t and 'Ecommerce' in t and 'Cerrar sesión' in t, t)
         chk('A5 las iniciales salen del correo', await q.evaluate("document.getElementById('acct-menu-btn').textContent.trim()==='A'"))
-        await q.click('#acct-menu [data-action="cloud-signout"]'); await q.wait_for_timeout(400)
+        await signout_flow(q, '#acct-menu [data-action="cloud-signout"]')
         chk('A6 cerrar sesión limpia la sesión y cierra el menú', await q.evaluate("!FP.app.state.cloud.session && document.getElementById('acct-menu').hidden"))
         # --- Narrativa: Cohere bajo el resumen
         await q.goto(u + '#narrativa'); await q.reload(); await q.wait_for_timeout(800)

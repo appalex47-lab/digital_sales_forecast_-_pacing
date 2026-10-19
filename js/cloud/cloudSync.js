@@ -246,9 +246,10 @@
   async function listKeys({ fetchImpl } = {}) {
     const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: false, error: 'Inicia sesión para consultar la copia de tu equipo.' };
     let rows;
-    try { rows = await rest(`${cfg().table}?select=key&part=eq.0`, { fetchImpl, session: se.session }); }
+    try { rows = await rest(`${cfg().table}?select=key,updated_at&part=eq.0`, { fetchImpl, session: se.session }); }
     catch (e) { return { ok: false, error: e.message }; }
-    return { ok: true, keys: [...new Set((rows || []).map((r) => r.key))] };
+    const at = {}; (rows || []).forEach((r) => { if (r.updated_at) at[r.key] = r.updated_at; });   // «at»: fecha de guardado del dato en la nube, por clave
+    return { ok: true, keys: [...new Set((rows || []).map((r) => r.key))], at };
   }
 
   /* ---------- S2: sincronización automática de lo liviano ---------- */

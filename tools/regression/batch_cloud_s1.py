@@ -17,6 +17,15 @@ USERS = {'ana@empresa.com': {'id': 'u1', 'pw': 'clave-ana-1', 'team': 'T-A'}, 'o
 TEAMS = {'T-A': 'Ecommerce', 'T-B': 'Otra empresa'}
 rows = []; tokens = {'AT7': 'u1'}; calls = []
 def by_id(i): return next((e, v) for e, v in USERS.items() if v['id'] == i)
+async def signout_flow(q, sel):
+    """v0.14.1: cerrar sesión ahora abre un diálogo (comprobación + casilla si hay algo sin respaldar) y recarga la página."""
+    await q.click(sel)
+    await q.wait_for_selector('#signout-dialog [data-action="signout-confirm"]', timeout=8000)
+    await q.wait_for_function("!document.querySelector('#signout-dialog').innerText.includes('Comprobando')", timeout=8000)
+    ack = q.locator('#signout-dialog input[data-action="signout-ack"]')
+    if await ack.count(): await ack.check()
+    await q.click('#signout-dialog [data-action="signout-confirm"]'); await q.wait_for_timeout(2500)
+    await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")   # tras recargar vuelve la bienvenida (es lo esperado)
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
@@ -70,6 +79,7 @@ async def main():
             await q.goto(u + h); await q.wait_for_timeout(1200)
             await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
         async def openNube():
+            await q.evaluate("document.querySelectorAll('dialog:not(#login-dialog):not(#signout-dialog)').forEach(d=>d.remove())")   # la entrada puede ofrecer restaurar/recorrido tras vaciar el navegador
             await q.evaluate("FP.app.state.stTab='cuenta'; FP.app.render()"); await q.wait_for_timeout(250)
         async def login(email, pw):
             await q.evaluate("FP.app.actions['login-open']()"); await q.wait_for_selector('#login-dialog[open]')
@@ -114,11 +124,12 @@ async def main():
         chk('L16 igual a la actual: se explica', 'distinta' in await q.inner_text('#cloud-msg'), await q.inner_text('#cloud-msg'))
         await q.fill('#cloud-pw-new', 'nueva-clave-1'); await q.fill('#cloud-pw-new2', 'nueva-clave-1'); await q.click('[data-action="cloud-password-change"]'); await q.wait_for_timeout(800)
         chk('L17 cambio correcto', 'Contraseña cambiada' in await q.inner_text('#cloud-msg'), await q.inner_text('#cloud-msg'))
-        await q.click('#view-ajustes [data-action="cloud-signout"]'); await q.wait_for_timeout(500)
+        await signout_flow(q, '#view-ajustes [data-action="cloud-signout"]')
         chk('L18 cerrar sesión: vuelve «Iniciar sesión» y borra la sesión local', await q.locator('#view-ajustes [data-action="login-open"]').count() == 1 and await q.evaluate("localStorage.getItem('fp.cloudSession')") is None)
         await login('ana@empresa.com', 'clave-ana-1')
         chk('L19 la contraseña vieja ya no entra', 'incorrectos' in await q.inner_text('#login-msg'))
         await q.fill('#login-password', 'nueva-clave-1'); await q.click('#login-dialog [data-action="login-submit"]'); await q.wait_for_timeout(1500)
+        await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")   # sin datos locales y con datos en la nube, la entrada propone restaurar: aquí no se usa
         await openNube(); chk('L20 la nueva sí entra', 'ana@empresa.com' in await q.inner_text('#st-nube'))
         # ---- sincronización automática ----
         await q.evaluate("FP.app.lsStorage.save('uxSettings',{mode:'x'}); FP.app.storage.save('aliases',{rules:['a']})")
@@ -141,12 +152,12 @@ async def main():
         await q.evaluate("FP.app.storage.save('aliases',{rules:['z']})"); await q.wait_for_timeout(6000)
         chk('L25 apagada, ya no sube cambios', all('"z"' not in y['payload'] for y in rows if y['key'] == 'aliases'))
         # ---- otro equipo ----
-        await q.click('#view-ajustes [data-action="cloud-signout"]'); await q.wait_for_timeout(400)
+        await signout_flow(q, '#view-ajustes [data-action="cloud-signout"]')
         await login('otro@otra.com', 'clave-otro-1'); await openNube()
         chk('L26 otro equipo: muestra su equipo', 'Otra empresa' in await q.inner_text('#st-nube'), (await q.inner_text('#st-nube'))[:200])
         await q.click('[data-action="cloud-download"]'); await q.wait_for_timeout(1500)
         chk('L27 otro equipo NO ve la copia del primero', 'No hay copia' in await q.inner_text('#cloud-msg'), await q.inner_text('#cloud-msg'))
-        await q.click('#view-ajustes [data-action="cloud-signout"]'); await q.wait_for_timeout(400)
+        await signout_flow(q, '#view-ajustes [data-action="cloud-signout"]')
         # ---- enlace del panel de Supabase (recuperación) ----
         await q.goto(u + '#access_token=AT7&refresh_token=RT7&expires_in=3600&token_type=bearer&type=recovery'); await q.reload(); await q.wait_for_timeout(2500)
         chk('L28 enlace de recuperación: abre Configuración, hash limpio, sesión con equipo y aviso de cambiar contraseña', 'access_token' not in await q.evaluate('location.hash') and 'Cambia tu contraseña' in await q.inner_text('#st-nube') and await q.evaluate("JSON.parse(localStorage.getItem('fp.cloudSession')).team_id") == 'T-A', (await q.inner_text('#st-nube'))[:300])
