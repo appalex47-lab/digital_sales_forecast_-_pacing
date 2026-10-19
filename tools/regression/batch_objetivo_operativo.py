@@ -38,6 +38,9 @@ async def flow(b, w, h, tag, errs):
     await q.goto(u + '#medir'); await q.wait_for_selector('#mx-actions tbody tr', timeout=20000)
     mx = await q.evaluate("document.getElementById('mx-actions').innerText")
     chk(f'{tag}8 Medir muestra el objetivo operativo y su avance', 'Objetivo operativo' in mx and 'Logrado' in mx, mx[:300])
+    await q.evaluate("window.scrollTo(0,0)"); await q.click('#mx-actions [data-action="mx-select"]'); await q.wait_for_timeout(1200)
+    top = await q.evaluate("document.getElementById('mx-chain').getBoundingClientRect().top")
+    chk(f'{tag}8b «Ver cadena» desplaza la pantalla hasta la cadena (top={top:.0f}px)', -5 <= top <= 200, top)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}9 Medir sin desborde ({ov}px)', ov <= 1 or w >= 860, ov)
     # cambio de fechas con objetivo editado: no se pisa
     await q.goto(u + '#recovery'); await q.wait_for_selector('#rc-plan [data-key="goalTarget"]', timeout=20000)

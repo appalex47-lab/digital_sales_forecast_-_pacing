@@ -1680,6 +1680,20 @@
           byPeriod = shown.map((p) => ({ key: p.key, from: p.from, to: p.to, partial: Boolean(p.partial), value: sums.has(p.key) ? sums.get(p.key) : null }));
         }
       }
+      /* Clientes por período (nuevos / recurrentes / reactivados / no regresaron): del libro de clientes (una fila por PEDIDO, sin producto).
+         Por eso solo aplica al total y al canal, y a períodos mensuales; en un producto o categoría se avisa en vez de inventar la cifra. */
+      let customers = null;
+      const wholeScope = Object.keys(filter).length === 0;   // total o un canal (sin producto/categoría/geografía)
+      if (!wholeScope) customers = { status: 'entity', note: 'El libro de clientes es por pedido, no por producto: aquí no se puede separar cuántos clientes de este producto son nuevos, recurrentes o reactivados. Se ve en el Detalle temporal del total o de un canal.' };
+      else if (ctx.periodType !== 'month') customers = { status: 'period', note: 'Los clientes nuevos, recurrentes y reactivados se calculan por mes. Cambia el período a «Mes» para verlos.' };
+      else if (!FP.customerStore) customers = { status: 'none', note: 'No hay libro de clientes cargado.' };
+      else {
+        try {
+          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan }); if (!mine()) return;
+          if (ca && ca.status === 'ok') customers = { status: 'ok', byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          else customers = { status: 'none', note: 'Para ver clientes nuevos, recurrentes y reactivados carga un archivo de ventas con id de cliente y de pedido.' };
+        } catch (e) { customers = { status: 'none', note: 'No se pudo leer el libro de clientes.' }; }
+      }
       let records = null;
       if (sku) {
         const from = base ? (base.from < cur.from ? base.from : cur.from) : cur.from;
@@ -1689,7 +1703,7 @@
           period: within(r, cur) ? 'actual' : 'comparación' }));
         records = { sku, total: rows.length, rows: rows.slice(-40).reverse(), sumCurrent: rows.filter((r) => r.period === 'actual').reduce((s, r) => s + (Number.isFinite(r[ctx.metric]) ? r[ctx.metric] : 0), 0) };
       }
-      d.data.byPeriod = byPeriod; d.data.records = records; d.pending = false; d.step = null;
+      d.data.byPeriod = byPeriod; d.data.customers = customers; d.data.records = records; d.pending = false; d.step = null;
     } catch (e) { if (mine()) { d.error = e && e.message ? e.message : String(e); d.pending = false; } }
     finally { clearTimeout(watchdog); if (mine()) { d.loading = false; repaint(); } }
   }
@@ -2589,7 +2603,7 @@
       if (!saveActionPlan()) { render(); return; }
       render(); FP.ui.toast(r.unchanged ? 'La conclusión ya estaba registrada igual.' : 'Conclusión registrada. Es tu juicio con la evidencia medida; no prueba causalidad.');
     },
-    'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); },
+    'mx-select'(el) { state.ux.measureAction = el.dataset.id; render(); const c = document.getElementById('mx-chain'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     'tour-start'() { if (!state.ux.tour.path) { offerTour(true); return; } tourGo(state.ux.tour.ended ? 0 : (state.ux.tour.step || 0)); },
     'tour-restart'() { state.ux.tour = { ...state.ux.tour, skipped: {}, ended: null, micro: {} }; tourGo(0); },
     'tour-next'() {

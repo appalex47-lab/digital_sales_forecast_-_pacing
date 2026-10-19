@@ -119,6 +119,8 @@
     return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
   }
 
+  const addMonthsKey = (key, k) => new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1 + k, 1)).toISOString().slice(0, 7);
+
   function analyze(ledger, options) {
     const L = ledger;
     if (!L || !L.key.length) return { status: 'no_ledger' };
@@ -145,6 +147,7 @@
     /* Mensual: segmento del cliente en cada mes */
     const months = new Map();
     const mget = (key) => { let m = months.get(key); if (!m) { m = { key, revenue: [0, 0, 0], orders: [0, 0, 0], customers: [0, 0, 0] }; months.set(key, m); } return m; };
+    const act = new Map();   // mes → clientes con pedido ese mes (mismo canal/rango) para contar quién no regresó
     let curC = -1, curMonth = '', curSeg = 0, counted = false;
     for (let p = 0; p < n; p++) {
       const i = P.order[p], c = L.cust[i], d = L.day[i];
@@ -153,6 +156,7 @@
       if (c !== curC || mk !== curMonth) { curC = c; curMonth = mk; curSeg = P.seg[i]; counted = false; }
       if (chId >= 0 && L.ch[i] !== chId) continue;
       const m = mget(mk);
+      (act.get(mk) || act.set(mk, new Set()).get(mk)).add(c);
       m.revenue[curSeg] += L.rev[i]; m.orders[curSeg]++;
       if (!counted) { m.customers[curSeg]++; counted = true; }
     }
@@ -163,6 +167,8 @@
         orders: { new: m.orders[0], recurrent: m.orders[1], reactivated: m.orders[2], total: sum(m.orders) },
         customers: { new: m.customers[0], recurrent: m.customers[1], reactivated: m.customers[2], total: sum(m.customers) },
         newShareRevenue: sum(m.revenue) > 0 ? m.revenue[0] / sum(m.revenue) : null,
+        lapsed: (() => { const pk = addMonthsKey(m.key, -1), prev = act.get(pk), cur = act.get(m.key); if (!prev || !cur) return null; let n = 0; prev.forEach((c) => { if (!cur.has(c)) n++; }); return n; })(),
+        lapsedBase: (() => { const prev = act.get(addMonthsKey(m.key, -1)); return prev ? prev.size : null; })(),
         historyDays: Math.max(0, known), reliableNew: known >= o.warmupDays };
     });
 
