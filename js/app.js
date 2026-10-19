@@ -2025,7 +2025,7 @@
       refresh();
       resetPeriod();
       render();
-      FP.ui.toast('Datos de prueba importados por el pipeline y plan original bloqueado');
+      FP.ui.toast('Datos de prueba importados por el pipeline y plan original bloqueado', { ms: 3500 });
     },
 
     'run-tests'() {
@@ -2530,9 +2530,15 @@
       const p = el.dataset.path; if (!FP.tour.PATHS[p]) return;
       const t = state.ux.tour;
       if (t.active && t.path === p) { render(); return; }
-      state.ux.tour = { ...t, path: p, skipped: {}, ended: null, upDismissed: '' }; FP.tour.setPath(p); tourGo(0);
+      state.ux.tour = { ...t, path: p, skipped: {}, ended: null, upDismissed: '' }; FP.tour.setPath(p); prefSet('onboardingDone', '1'); tourGo(0);
     },
     'tour-change-path'() { offerTour(true); },
+    'tour-demo'() {
+      const st = entryStatus();
+      if (!st || localHasData(st)) { FP.ui.toast('Ya hay datos cargados: el demo no se carga para no mezclarlos con los tuyos.'); return; }
+      closeTourOffer(); state.ux.tourOffered = true; prefSet('onboardingDone', '1'); saveUx();
+      actions['generate-mock']();
+    },
     'tour-path-up'(el) { const p = el.dataset.path; if (!FP.tour.PATHS[p]) return; state.ux.tour = { ...state.ux.tour, path: p, ended: null, upDismissed: '' }; FP.tour.setPath(p); tourGo(0); },
     'tour-up-dismiss'(el) { state.ux.tour.upDismissed = el.dataset.key || ''; render(); },
     'tour-compact-off'() { const t = state.ux.tour; t.compact = false; t.went = false; render(); },
@@ -2793,8 +2799,13 @@
     },
 
     /* ----- Acceso por equipo: correo y contraseña (cuentas creadas por la persona administradora) ----- */
-    'login-open'() { openLogin(); },
+    'login-open'() { openLoginFromMenu(); },
     'login-cancel'() { closeLogin(); },
+    'entry-guest'() { entryContinueGuest(true); },
+    'entry-login'() { openLogin(); },
+    'entry-retry'() { entryCheckData({ announce: true }); },
+    'entry-skip'() { entry.busy = false; entry.resolved = true; entry.noTour = true; closeEntry(); render(); },
+    'entry-restore'() { entry.busy = false; closeEntry(); return actions['cloud-download'](); },
     async 'login-submit'() {
       const email = ((document.getElementById('login-email') || {}).value || '').trim(), pw = (document.getElementById('login-password') || {}).value || '';
       const msg = document.getElementById('login-msg'), btn = document.querySelector('#login-dialog [data-action="login-submit"]');
@@ -2804,9 +2815,11 @@
       if (btn) btn.disabled = false;
       if (!r.ok) { say(r.error, true); return; }
       const pwEl = document.getElementById('login-password'); if (pwEl) pwEl.value = '';
-      closeLogin(); cloudRefreshSession();
+      entry.busy = true; entry.loginOk = true; closeLoginQuiet(); cloudRefreshSession(); prefSet('authChoice', 'team');
       cloudNote(`Entraste como ${r.session.email} · equipo ${r.session.team_name || 'sin nombre'}. Usa «Restaurar desde la nube» para traer los datos del equipo.`, 'ok');
       render();
+      entry.loginOk = false;
+      await entryCheckData({ announce: true });
     },
     'cloud-password-change'() {
       const a = (document.getElementById('cloud-pw-new') || {}).value || '', b = (document.getElementById('cloud-pw-new2') || {}).value || '';
@@ -3540,12 +3553,99 @@
   }
 
   /** Recorrido guiado: activa el paso y navega a su vista. */
+  /* ---------- Entrada: un único flujo (bienvenida → acceso → comprobación de datos → recorrido) ----------
+     Nunca hay dos diálogos abiertos a la vez: cada paso cierra el anterior antes de abrir el siguiente.
+     Preferencias (envoltorio estándar de storage, claves fp.v1:authChoice y fp.v1:onboardingDone):
+       authChoice: 'guest' (continuó sin sesión) o 'team' (completó el acceso con éxito); onboardingDone: '1' al elegir tipo de uso. */
+  const entry = { step: '', busy: false, resolved: false, fromEntry: false, cloudHas: null, cloudError: null, noTour: false };
+  const prefGet = (k) => { const e = storage.load(k); return e ? e.data : null; };
+  const prefSet = (k, v) => storage.save(k, v);
+  const localHasData = (st) => Boolean(st.data.historical || st.data.actual || st.targets.defined);
+  /** ¿Se puede afirmar que no hay datos locales? Si el almacenamiento falló no se puede: no se trata como vacío. */
+  const localConfirmable = () => !(state.storage && state.storage.mode === 'unavailable');
+  const entryStatus = () => { try { return FP.contextEngine.collectStatus(state); } catch (e) { return null; } };
+  function closeEntry() { const d = document.getElementById('entry-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrado */ } d.remove(); } }
+  function entryDialog(html) {
+    closeEntry(); closeLoginQuiet();
+    const d = document.createElement('dialog'); d.id = 'entry-dialog'; d.className = 'tour-offer login-dialog entry-dialog'; d.setAttribute('aria-labelledby', 'entry-t');
+    d.innerHTML = html;
+    d.addEventListener('cancel', (e) => {   // Esc: equivale a la salida «neutra» de cada paso, sin dejar el flujo a medias
+      e.preventDefault(); if (entry.busy) return;
+      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entry.noTour = true; closeEntry(); render(); }
+    });
+    document.body.appendChild(d);
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    const f = d.querySelector('[autofocus],button'); if (f) f.focus();
+    return d;
+  }
+  function openWelcome() {
+    entry.fromEntry = true; entry.step = 'welcome';
+    entryDialog(`<p class="tour-offer__eyebrow">RevNavigator</p><h2 id="entry-t">Bienvenido a RevNavigator</h2>
+      <p>Inicia sesión para ver los datos de tu equipo, o continúa sin sesión y empieza desde cero.</p>
+      <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-guest" autofocus>Continuar sin sesión</button><button type="button" class="btn" data-action="entry-login">Iniciar sesión con el equipo</button></div>`);
+  }
+  function openLoading() { entry.busy = true; entry.step = 'loading'; entryDialog('<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Cargando datos del equipo…</h2><p role="status" aria-live="polite">Estoy comprobando si tu equipo ya tiene datos. No cambio nada de lo que tienes aquí.</p>'); }
+  function openEntryError(msg) {
+    entry.busy = false; entry.step = 'error';
+    entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">No pude comprobar los datos del equipo</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No digo que tu cuenta esté vacía porque no lo pude comprobar.</p>
+      <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-retry" autofocus>Reintentar</button><button type="button" class="btn" data-action="entry-skip">Continuar sin comprobar</button></div>`);
+  }
+  function openCloudHasData() {
+    entry.busy = false; entry.step = 'cloud';
+    entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Tu equipo tiene datos en la nube</h2><p>Aquí en este navegador todavía no hay datos. Puedes traer la copia del equipo ahora o hacerlo después desde Configuración → Cuenta y nube. No se restaura nada sin tu confirmación.</p>
+      <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Restaurar desde la nube</button><button type="button" class="btn" data-action="entry-skip">Más tarde</button></div>`);
+  }
+  /** Comprueba (solo lectura) si el equipo tiene datos en la nube y decide el siguiente paso. */
+  async function entryCheckData({ announce }) {
+    const st0 = entryStatus();
+    if (st0 && localHasData(st0)) { entry.resolved = true; entry.busy = false; closeEntry(); render(); return; }   // con datos locales no hace falta consultar
+    if (announce) openLoading(); else entry.busy = true;
+    let r; try { r = await FP.cloud.listKeys({}); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+    if (!r.ok) { entry.cloudError = r.error; openEntryError(r.error); return; }
+    entry.cloudError = null;
+    const has = r.keys.some((k) => (FP.repository.isDataKey && FP.repository.isDataKey(k)) || (FP.productSync.isKey && FP.productSync.isKey(k)));
+    entry.cloudHas = has; entry.resolved = true; entry.busy = false;
+    if (has) { openCloudHasData(); return; }
+    closeEntry();
+    const st = entryStatus();
+    if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); } else render();
+  }
+  function entryContinueGuest(persist = true) {
+    if (persist) prefSet('authChoice', 'guest'); entry.busy = false; entry.resolved = true; closeEntry();
+    const st = entryStatus();
+    if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); }
+  }
+  /** Arranque: decide qué entrada corresponde. Se llama antes del primer render. */
+  function entryBoot() {
+    const https = root.location && root.location.protocol === 'https:';
+    if (!https) { entry.resolved = true; return; }   // sin https (archivo local o pruebas) no hay acceso por equipo: queda la bienvenida clásica por datos
+    if (state.cloud.session) {
+      // sesión activa: con datos locales entra directo; sin ellos se consulta la nube antes de decidir el recorrido
+      const st = entryStatus();
+      if (!st || localHasData(st)) { entry.resolved = true; return; }
+      entry.busy = true; setTimeout(() => entryCheckData({ announce: false }), 0); return;
+    }
+    entry.resolved = true;
+    try {
+      if (prefGet('authChoice') === 'guest') return;                     // ya eligió continuar sin sesión: no se le insiste
+      if (root.sessionStorage.getItem('fp.loginAsked') === '1') return;  // una vez por visita
+      root.sessionStorage.setItem('fp.loginAsked', '1');
+    } catch (e) { return; }
+    openWelcome();
+  }
+
   /** Ventana de inicio de sesión (correo y contraseña). Sin registro: las cuentas las crea la persona administradora. */
-  function closeLogin() { const d = document.getElementById('login-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); afterLoginClosed(); } }
-  /** Al cerrarse el acceso (Entrar, «Ahora no» o Esc) se retoma la bienvenida que quedó en espera; no repite si ya se ofreció. */
-  function afterLoginClosed() { try { maybeOfferTourFirstTime(FP.contextEngine.collectStatus(state)); } catch (e) { /* sin estado todavía */ } }
+  function closeLoginQuiet() { const d = document.getElementById('login-dialog'); if (d) { d.removeEventListener('close', onLoginClose); try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
+  function closeLogin() { const d = document.getElementById('login-dialog'); if (d) { closeLoginQuiet(); afterLoginClosed(); } }
+  function onLoginClose() { const d = document.getElementById('login-dialog'); if (d) d.remove(); afterLoginClosed(); }
+  /** Al cerrarse el acceso sin entrar (Esc o «Ahora no»): si venía de la bienvenida se vuelve a ella; si no, se retoma lo que estaba en espera. */
+  function afterLoginClosed() {
+    if (entry.loginOk) return;
+    if (entry.fromEntry && !state.cloud.session) { openWelcome(); return; }
+    try { maybeOfferTourFirstTime(FP.contextEngine.collectStatus(state)); } catch (e) { /* sin estado todavía */ }
+  }
   function openLogin() {
-    closeLogin();
+    closeEntry(); closeLoginQuiet(); entry.loginOk = false;
     const d = document.createElement('dialog'); d.id = 'login-dialog'; d.className = 'tour-offer login-dialog'; d.setAttribute('aria-labelledby', 'login-t');
     d.innerHTML = `<form id="login-form" novalidate><p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="login-t">Inicia sesión</h2>
       <p class="field__hint">Entra con la cuenta que te dio la persona administradora. No hay registro abierto. Con tu sesión ves y guardas los mismos datos que tu equipo.</p>
@@ -3553,21 +3653,16 @@
       <div class="field"><label for="login-password">Contraseña</label><input id="login-password" type="password" autocomplete="current-password"></div>
       <p class="note" id="login-msg" role="status" hidden></p>
       <div class="tour-offer__btns"><button type="submit" class="btn btn--primary" data-action="login-submit">Entrar</button><button type="button" class="btn" data-action="login-cancel">Ahora no</button></div></form>`;
-    d.addEventListener('close', () => { d.remove(); afterLoginClosed(); });
+    d.addEventListener('close', onLoginClose);
     d.querySelector('#login-form').addEventListener('submit', (e) => { e.preventDefault(); actions['login-submit'](); });
     document.body.appendChild(d);
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     const em = d.querySelector('#login-email'); if (em) em.focus();
   }
-  /** Al arrancar en el sitio publicado (https) sin sesión, se ofrece iniciar sesión una vez por visita (Esc o «Ahora no» la cierran). */
-  function maybePromptLogin() {
-    try {
-      if (!root.location || root.location.protocol !== 'https:' || state.cloud.session) return;
-      if (root.sessionStorage.getItem('fp.loginAsked') === '1') return;
-      root.sessionStorage.setItem('fp.loginAsked', '1');
-    } catch (e) { return; }
-    openLogin();
-  }
+  /** Acceso desde menú/Configuración: no pasa por la bienvenida. */
+  function openLoginFromMenu() { entry.fromEntry = false; openLogin(); }
+  /** Al arrancar en el sitio publicado (https) sin sesión se ofrece la bienvenida una vez por visita (ver entryBoot). */
+  function maybePromptLogin() { entryBoot(); }
 
   /** Al activar el Modo Aprendiz se ofrece el recorrido guiado (ventana con foco atrapado; Esc o «Ahora no» la cierran). */
   function closeTourOffer() { const d = document.getElementById('tour-offer'); if (d) { try { d.close(); } catch (e) { /* ya cerrada */ } d.remove(); } }
@@ -3576,9 +3671,12 @@
     const d = document.createElement('dialog');
     d.id = 'tour-offer'; d.className = modal ? 'tour-offer' : 'tour-offer tour-offer--soft'; d.setAttribute('aria-labelledby', 'tour-offer-t');
     const cur = state.ux.tour.active ? state.ux.tour.path : null;
+    // «Quiero ver un demo completo»: carga de verdad los datos de prueba (acción «generate-mock»); solo si no hay datos, para no mezclarlos con los reales
+    const stNow = entryStatus(); const hasNow = !stNow || localHasData(stNow);
+    const demoOpt = `<button type="button" class="tour-opt" data-action="tour-demo" ${hasNow ? 'disabled aria-disabled="true"' : ''}><b>Quiero ver un demo completo</b><span>${hasNow ? 'Ya tienes datos: el demo no se carga para no mezclarlos con los tuyos.' : 'Carga datos de prueba (plan y venta real de ejemplo) para recorrer toda la herramienta.'}</span><em>${hasNow ? 'No disponible con datos cargados' : 'Datos de prueba · se pueden borrar después'}</em></button>`;
     const opt = (p, t1, t2, t3) => `<button type="button" class="tour-opt${cur === p ? ' is-cur' : ''}" data-action="tour-path" data-path="${p}"${cur === p ? ' aria-current="true"' : ''}><b>${t1}</b><span>${t2}</span><em>${t3}</em></button>`;
     d.innerHTML = `<p class="tour-offer__eyebrow">${modal ? 'Recorrido guiado' : 'Bienvenido a RevNavigator'}</p><h2 id="tour-offer-t">¿Con qué datos cuentas hoy?</h2><p>Con tu respuesta te muestro solo los pasos que te sirven. Puedes cambiarla cuando quieras.</p>`
-      + `<div class="tour-offer__opts">${opt('A', 'Ya tengo datos', 'Cuento con histórico y venta real del año.', `Recorrido completo · ${FP.guidanceConfig.TOUR.filter((x) => x.paths.includes('A')).length} pasos`)}${opt('B', 'Solo tengo histórico', 'Empiezo el año o aún no tengo venta real.', 'Histórico → Meta → Plan → Pacing en espera')}${opt('C', 'Soy una empresa nueva', 'Todavía no tengo datos de venta.', 'Meta → Plan → Cómo empezar a cargar datos')}</div>`
+      + `<div class="tour-offer__opts">${opt('A', 'Ya tengo datos', 'Cuento con histórico y venta real del año.', `Recorrido completo · ${FP.guidanceConfig.TOUR.filter((x) => x.paths.includes('A')).length} pasos`)}${opt('B', 'Solo tengo histórico', 'Empiezo el año o aún no tengo venta real.', 'Histórico → Meta → Plan → Pacing en espera')}${opt('C', 'Soy una empresa nueva', 'Todavía no tengo datos de venta.', 'Meta → Plan → Cómo empezar a cargar datos')}${demoOpt}</div>`
       + '<div class="tour-offer__btns"><button type="button" class="btn" data-action="tour-offer-no">Ahora no</button></div>';
     d.addEventListener('close', () => d.remove());
     document.body.appendChild(d);
@@ -3593,10 +3691,11 @@
   /** Primera visita sin datos: se ofrece el recorrido una sola vez (ventana que no bloquea la pantalla). */
   function maybeOfferTourFirstTime(status) {
     if (state.ux.tourOffered || state.ux.tour.active) return;
-    if (document.getElementById('login-dialog')) return;   // secuencia de arranque: primero el acceso; la bienvenida espera a que se cierre
+    if (document.getElementById('login-dialog') || document.getElementById('entry-dialog') || entry.busy || !entry.resolved || entry.noTour) return;   // secuencia de arranque: primero el acceso; el recorrido espera
+    if (!localConfirmable()) return;   // si no se pudo leer el almacenamiento no se asume que está vacío
     if (status.data.historical || status.data.actual || status.targets.defined) { state.ux.tourOffered = true; saveUx(); return; }
     state.ux.tourOffered = true; saveUx();
-    offerTour(false);
+    offerTour(Boolean(root.location && root.location.protocol === 'https:'));   // en el sitio publicado (https) es modal con foco atrapado; en archivo local/pruebas sigue sin bloquear
   }
 
 

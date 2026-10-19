@@ -165,6 +165,13 @@
   }
 
 
+  /** Volver a abrir la elección de tipo de uso (el recorrido guiado inicial). */
+  function usePanel() {
+    return `<section class="panel" id="st-uso"><div class="panel__body stack"><h3 class="panel__title">Tipo de uso</h3>
+      <p class="field__hint">Si cambió lo que tienes (por ejemplo ya cargaste histórico o venta real), vuelve a elegir con qué datos cuentas y te muestro los pasos que te sirven. No borra ni cambia tus datos.</p>
+      <div class="btn-row"><button type="button" class="btn" data-action="tour-change-path">Cambiar tipo de uso</button></div></div></section>`;
+  }
+
   /** Nube (Supabase) con acceso por equipo: correo y contraseña; todos los miembros del equipo comparten la misma copia. */
   function cloudPanel(state) {
     const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session;
@@ -232,7 +239,7 @@
       </div>`;
     const bEl = $('settings-view-b');
     if (bEl) bEl.innerHTML = `
-      <div class="st-pane" id="stp-cuenta" data-pane="cuenta" role="tabpanel" aria-labelledby="sttab-cuenta">${cloudPanel(state)}</div>
+      <div class="st-pane" id="stp-cuenta" data-pane="cuenta" role="tabpanel" aria-labelledby="sttab-cuenta">${cloudPanel(state)}${usePanel()}</div>
       <div class="st-pane" id="stp-ia" data-pane="ia" role="tabpanel" aria-labelledby="sttab-ia">
       ${accStart(state, 'st-ia', 'Conexión con Cohere (análisis con IA)', 'La usan Diagnóstico, Recovery Center, Narrativa y el mapeo semántico de importaciones. Todas comparten esta misma conexión de Cohere; no se crea otra API key. Cohere no calcula ni cambia cifras.')}
         <div class="panel__body stack">

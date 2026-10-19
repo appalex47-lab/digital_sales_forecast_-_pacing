@@ -418,14 +418,14 @@
   /* ---------- Feedback ---------- */
 
   let toastTimer = null;
-  function toast(message) {
+  function toast(message, opts) {
     const el = $('toast');
     el.textContent = message;
     if (!el.dataset.tap) { el.dataset.tap = '1'; el.addEventListener('click', () => { clearTimeout(toastTimer); el.classList.remove('is-visible'); }); }   // tocar el aviso lo cierra (en móvil)
     el.classList.add('is-visible');
     clearTimeout(toastTimer);
     // tiempo según el largo del mensaje: los avisos largos (conversión de GA4, archivos omitidos) se alcanzan a leer
-    toastTimer = setTimeout(() => el.classList.remove('is-visible'), Math.min(10000, 2600 + String(message || '').length * 35));
+    toastTimer = setTimeout(() => el.classList.remove('is-visible'), opts && opts.ms ? opts.ms : Math.min(10000, 2600 + String(message || '').length * 35));
   }
 
   function renderAll(state) {

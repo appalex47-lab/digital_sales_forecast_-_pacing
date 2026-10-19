@@ -28,8 +28,8 @@ async def main():
         await q.route('https://api.cohere.com/**', direct)
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); u = f'http://127.0.0.1:{port}/index.html'
         async def prep():
-            await q.goto(u + '#ajustes'); await q.reload(); await q.wait_for_timeout(1500)
-            await q.evaluate("(()=>{const d=document.getElementById('tour-offer');if(d)d.remove()})()")
+            await q.goto(u + '#ajustes'); await q.reload(); await q.wait_for_timeout(2200)
+            await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
             await q.evaluate("FP.app.state.stTab='ia'; FP.app.render()"); await q.wait_for_timeout(250)
         await prep()
         chk('C1 sin sesión: se explica que se usa la key pegada y no hay botón de probar el servidor', await q.locator('[data-ai-local]').count() == 1 and await q.locator('[data-action="dx-proxy-test"]').count() == 0)

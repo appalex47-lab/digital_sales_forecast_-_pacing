@@ -1856,3 +1856,13 @@ tr.is-evidence { outline-offset: -3px; }
   .back-top:focus-visible { outline: 3px solid #F5B301; outline-offset: 2px; }
   body.nav-open .back-top, body:has(.tour-bar:not([hidden])) .back-top, body:has(dialog[open]) .back-top { display: none; }
 }
+
+/* Avisos en celular: abajo (no tapan título, chips ni controles) y sin chocar con el botón «Volver arriba». */
+@media (max-width: 860px) {
+  .toast { top: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 16px; right: 72px; max-width: none; transform: translateY(6px); }
+  .toast.is-visible { transform: none; }
+}
+
+/* Recorrido en ventana no modal (esquina, ratón): con la cuarta opción se compacta para no tapar controles de la pantalla. */
+@media (pointer: fine) { .tour-offer--soft .tour-opt { padding: 4px 12px; min-height: 34px; } .tour-offer--soft .tour-offer__opts { gap: 6px; } }
+.tour-offer--soft > p:not(.tour-offer__eyebrow) { display: none; }   /* ventana de esquina: la frase explicativa sobra (las opciones se explican solas) y así no tapa controles */

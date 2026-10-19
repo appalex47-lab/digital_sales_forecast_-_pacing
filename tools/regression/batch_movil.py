@@ -72,7 +72,7 @@ async def main():
         await q.goto(u + '#pacing'); await q.wait_for_timeout(400)
         await q.evaluate("FP.ui.toast('Aviso de prueba')"); await q.wait_for_timeout(300)
         tp = await q.evaluate("(()=>{const t=document.getElementById('toast').getBoundingClientRect();const h=document.querySelector('.app-header').getBoundingClientRect();return {top:Math.round(t.top),hb:Math.round(h.bottom),vis:document.getElementById('toast').classList.contains('is-visible')}})()")
-        chk('M-20 en móvil el aviso sale arriba, debajo del encabezado y no tapa el contenido de abajo', tp['vis'] and tp['top'] >= tp['hb'] and tp['top'] < 200, tp)
+        chk('M-20 en móvil el aviso sale abajo (no tapa el título ni los controles de arriba) y deja libre el botón «Volver arriba»', tp['vis'] and tp['top'] > 300, tp)
         await q.click('#toast'); await q.wait_for_timeout(250)
         chk('M-21 tocar el aviso lo cierra', await q.evaluate("!document.getElementById('toast').classList.contains('is-visible')"))
         await q.goto(u + '#pacing'); await q.wait_for_timeout(300)

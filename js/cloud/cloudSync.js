@@ -242,6 +242,15 @@
   }
 
 
+  /** Solo lectura: nombres de las claves que existen en la copia del equipo (una fila por clave). No baja ni cambia datos. */
+  async function listKeys({ fetchImpl } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: false, error: 'Inicia sesión para consultar la copia de tu equipo.' };
+    let rows;
+    try { rows = await rest(`${cfg().table}?select=key&part=eq.0`, { fetchImpl, session: se.session }); }
+    catch (e) { return { ok: false, error: e.message }; }
+    return { ok: true, keys: [...new Set((rows || []).map((r) => r.key))] };
+  }
+
   /* ---------- S2: sincronización automática de lo liviano ---------- */
   const AUTO_FLAG = 'fp.cloudAuto';   // fuera del namespace de datos: es una preferencia de este navegador
   const autoOn = () => { try { return root.localStorage.getItem(AUTO_FLAG) === '1'; } catch (e) { return false; } };
@@ -311,5 +320,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
+  FP.cloud = { listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
