@@ -1866,3 +1866,19 @@ tr.is-evidence { outline-offset: -3px; }
 /* Recorrido en ventana no modal (esquina, ratón): con la cuarta opción se compacta para no tapar controles de la pantalla. */
 @media (pointer: fine) { .tour-offer--soft .tour-opt { padding: 4px 12px; min-height: 34px; } .tour-offer--soft .tour-offer__opts { gap: 6px; } }
 .tour-offer--soft > p:not(.tour-offer__eyebrow) { display: none; }   /* ventana de esquina: la frase explicativa sobra (las opciones se explican solas) y así no tapa controles */
+
+/* v0.14.1 — Cerrar sesión: diálogo de borrado local */
+.signout-dialog ul { margin: 4px 0 8px; padding-left: 18px; font-size: .9em; }
+.signout-dialog .signout__ack { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; font-size: .92em; }
+.signout-dialog .signout__ack input { margin-top: 3px; }
+.signout-dialog .tour-offer__btns { flex-wrap: wrap; }
+
+/* v0.14.1 — restaurar desde la nube con avance */
+.entry-dialog .rs__bar { height: 12px; background: var(--ds-border-strong); border-radius: 99px; overflow: hidden; margin: 12px 0 6px; }
+.entry-dialog .rs__bar i { display: block; height: 100%; width: 0; background: var(--ds-accent); border-radius: 99px; transition: width .25s; }
+.entry-dialog .rs__row { display: flex; justify-content: space-between; gap: 8px; font-size: .85em; opacity: .8; }
+.entry-dialog .rs__stages { list-style: none; margin: 10px 0 0; padding: 0; font-size: .92em; }
+.entry-dialog .rs__stages li { display: flex; gap: 8px; padding: 2px 0; opacity: .6; }
+.entry-dialog .rs__stages li.on { opacity: 1; font-weight: 600; }
+.entry-dialog .rs__stages li.done { opacity: 1; color: #0a7a45; }
+@media (prefers-reduced-motion: reduce) { .entry-dialog .rs__bar i { transition: none; } }

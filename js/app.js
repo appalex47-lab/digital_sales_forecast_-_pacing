@@ -2804,8 +2804,9 @@
     'entry-guest'() { entryContinueGuest(true); },
     'entry-login'() { openLogin(); },
     'entry-retry'() { entryCheckData({ announce: true }); },
-    'entry-skip'() { entry.busy = false; entry.resolved = true; entry.noTour = true; closeEntry(); render(); },
-    'entry-restore'() { entry.busy = false; closeEntry(); return actions['cloud-download'](); },
+    'entry-skip'() { entry.busy = false; entry.resolved = true; entryOfferTourIfEmpty(); },
+    'entry-restore'() { return runRestore(); },
+    'restore-cancel'() { if (restoreRun.ctl) restoreRun.ctl.abort(); },
     async 'login-submit'() {
       const email = ((document.getElementById('login-email') || {}).value || '').trim(), pw = (document.getElementById('login-password') || {}).value || '';
       const msg = document.getElementById('login-msg'), btn = document.querySelector('#login-dialog [data-action="login-submit"]');
@@ -2843,7 +2844,13 @@
         cloudNote(`Sincronización automática encendida. Subí ${r.pushed} ajuste(s)${pull.applied && pull.applied.length ? ` y traje ${pull.applied.length} más nuevos de la nube (recarga para aplicarlos)` : ''}.`, 'ok');
       });
     },
-    'cloud-signout'() { FP.cloud.setAuto(false); state.cloud.auto.on = false; FP.cloud.signOut(); cloudRefreshSession(); cloudNote('Sesión cerrada en este navegador. La copia de tu equipo sigue en Supabase; vuelve a iniciar sesión para usarla.', 'warn'); render(); },
+    /* Cerrar sesión (cuenta de equipo): borra de ESTE navegador los datos del equipo, tras comprobar que están respaldados en la nube. */
+    'cloud-signout'() { return openSignout(); },
+    'signout-cancel'() { closeSignout(); },
+    'signout-upload'() { return signoutUpload(); },
+    'signout-download'() { return signoutDownload(); },
+    'signout-confirm'() { return signoutConfirm(); },
+    'signout-ack'(el) { signout.ack = Boolean(el.checked); paintSignout(); },
     async 'storage-retry-writes'() {
       const st = await repo.retryFailed();
       state.persist = st; render();
@@ -3570,8 +3577,10 @@
     const d = document.createElement('dialog'); d.id = 'entry-dialog'; d.className = 'tour-offer login-dialog entry-dialog'; d.setAttribute('aria-labelledby', 'entry-t');
     d.innerHTML = html;
     d.addEventListener('cancel', (e) => {   // Esc: equivale a la salida «neutra» de cada paso, sin dejar el flujo a medias
-      e.preventDefault(); if (entry.busy) return;
-      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entry.noTour = true; closeEntry(); render(); }
+      e.preventDefault();
+      if (entry.step === 'restoring') { if (restoreRun.ctl) restoreRun.ctl.abort(); return; }   // solo se cancela mientras se descarga; al guardar no
+      if (entry.busy) return;
+      if (entry.step === 'welcome') entryContinueGuest(false); else { entry.resolved = true; entryOfferTourIfEmpty(); }
     });
     document.body.appendChild(d);
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
@@ -3595,6 +3604,70 @@
     entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Tu equipo tiene datos en la nube</h2><p>Aquí en este navegador todavía no hay datos. Puedes traer la copia del equipo ahora o hacerlo después desde Configuración → Cuenta y nube. No se restaura nada sin tu confirmación.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Restaurar desde la nube</button><button type="button" class="btn" data-action="entry-skip">Más tarde</button></div>`);
   }
+  /** Sin datos locales y sin restaurar (Más tarde, cancelar, continuar sin comprobar): se ofrece el recorrido; con datos, no. */
+  function entryOfferTourIfEmpty() {
+    closeEntry(); const st = entryStatus();
+    if (localConfirmable() && st && !localHasData(st)) { state.ux.tourOffered = true; saveUx(); offerTour(true); } else render();
+  }
+  /* ----- Restaurar desde la nube con avance (barra real por bytes, tiempo estimado y cancelar solo mientras se descarga) ----- */
+  const restoreRun = { ctl: null };
+  const RESTORE_STAGES = ['Descargando de la nube', 'Guardando en este navegador', 'Preparando tus pantallas'];
+  function openRestoring() {
+    entry.busy = true; entry.step = 'restoring';
+    entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">Cargando tus datos…</h2>
+      <p class="mut">Espera un momento, esto puede tardar unos minutos según el tamaño de tu copia. No cierres esta ventana.</p>
+      <div class="rs__bar" id="rs-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Avance de la restauración"><i id="rs-fill"></i></div>
+      <div class="rs__row"><span id="rs-pct">0 %</span><span id="rs-eta">Calculando tiempo…</span></div>
+      <ol class="rs__stages" id="rs-stages">${RESTORE_STAGES.map((t) => `<li><span class="rs__ic">○</span>${t}</li>`).join('')}</ol>
+      <p class="visually-hidden" id="rs-live" role="status" aria-live="polite"></p>
+      <div class="tour-offer__btns"><button type="button" class="btn" id="rs-cancel" data-action="restore-cancel">Cancelar</button></div>`);
+  }
+  let rsLastSay = -1;
+  function paintRestore(pct, stage, eta) {
+    const $ = (id) => document.getElementById(id); if (!$('rs-fill')) return;
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    $('rs-fill').style.width = `${v}%`; $('rs-bar').setAttribute('aria-valuenow', String(v)); $('rs-pct').textContent = `${v} %`;
+    $('rs-eta').textContent = eta || (stage === 0 ? 'Calculando tiempo…' : stage === 1 ? 'Esto ya no se puede cancelar' : 'Casi listo');
+    [...$('rs-stages').children].forEach((li, i) => { li.className = i < stage ? 'done' : i === stage ? 'on' : ''; li.firstChild.textContent = i < stage ? '✓' : i === stage ? '●' : '○'; });
+    const c = $('rs-cancel'); if (c) { c.disabled = stage > 0; c.hidden = stage > 0; }
+    if (v >= rsLastSay + 25 || v === 100) { rsLastSay = v; $('rs-live').textContent = `${v} por ciento. ${RESTORE_STAGES[stage]}.`; }
+  }
+  const etaText = (ms) => { const s = Math.max(1, Math.round(ms / 1000)); return s < 90 ? `Faltan ~${s} s` : `Faltan ~${Math.round(s / 60)} min`; };
+  function openRestoreError(msg) {
+    entry.busy = false; entry.step = 'restore-error';
+    entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">No pude terminar la carga</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No se aplicó nada: tus datos locales siguen como estaban.</p>
+      <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-restore" autofocus>Reintentar</button><button type="button" class="btn" data-action="entry-skip">Continuar sin restaurar</button></div>`);
+  }
+  async function runRestore() {
+    if (restoreRun.ctl) return;
+    openRestoring(); rsLastSay = -1; paintRestore(0, 0);
+    const ctl = new AbortController(); restoreRun.ctl = ctl; const t0 = Date.now();
+    let d;
+    try {
+      d = await FP.cloud.downloadProgress({ signal: ctl.signal, onProgress: (p) => {
+        const f = p.totalBytes ? p.doneBytes / p.totalBytes : 0, el = Date.now() - t0;
+        paintRestore(70 * f, 0, f > 0.05 && el > 1500 ? etaText(el / f * (1 - f)) : null);
+      } });
+    } catch (e) { d = { ok: false, error: String(e && e.message || e) }; }
+    restoreRun.ctl = null;
+    if (d.aborted) { entry.busy = false; entry.resolved = true; entryOfferTourIfEmpty(); return; }
+    if (!d.ok) return openRestoreError(d.error);
+    if (!d.items.length) return openRestoreError('La nube no tiene copia todavía.');
+    try {
+      paintRestore(72, 1);
+      await repo.flush();
+      const pr = await FP.productSync.restore(repo, d.items, { onProgress: (i, n) => paintRestore(72 + 22 * (i / Math.max(1, n)), 1) });   // productos primero: valida antes de tocar nada
+      if (!pr.ok) return openRestoreError(pr.error);
+      for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+      await repo.flush();
+      paintRestore(96, 2);
+    } catch (e) { return openRestoreError(`Falló el guardado: ${e && e.message || e}`); }
+    state.ux.tourOffered = true; saveUx(); prefSet('authChoice', 'team'); state.cu.status = 'idle';
+    paintRestore(100, 2);
+    const h = document.getElementById('entry-t'); if (h) h.textContent = '✓ Datos cargados';
+    setTimeout(() => root.location.reload(), 700);   // se recarga: config.js lee parte de los datos al arrancar. Con datos locales no sale la pregunta de los cuatro escenarios
+  }
+
   /** Comprueba (solo lectura) si el equipo tiene datos en la nube y decide el siguiente paso. */
   async function entryCheckData({ announce }) {
     const st0 = entryStatus();
@@ -3979,8 +4052,9 @@
     if (!state.cloud.auto.on || !FP.cloud.isAutoKey(key, FP.repository.isDataKey)) return;
     autoPending.add(key); autoSchedule();
   }
+  let wiping = false;   // true mientras se borran los datos al cerrar sesión: nada vuelve a escribirse
   const _save = storage.save.bind(storage);
-  storage.save = (key, data) => { const ok = _save(key, data); if (ok) autoMark(key); return ok; };
+  storage.save = (key, data) => { if (wiping) return false; const ok = _save(key, data); if (ok) autoMark(key); return ok; };
   async function autoPull(announce) {
     const r = await FP.cloud.pullNewer(cloudWriter, FP.repository.isDataKey, {});
     if (!r.ok) { state.cloud.auto.error = r.error; autoPaint(); return r; }
@@ -3994,6 +4068,127 @@
     }
     if (announce) render();
     return r;
+  }
+
+
+  /* ---------- Cerrar sesión: el navegador no conserva los datos del equipo ----------
+     Se conservan (preferencias de este navegador, sin datos de negocio): uxSettings, productSettings, cohereApiKey, storageMigration, onboardingDone.
+     Se borran: todo lo demás de la app (datos en IndexedDB, claves fp.v1: de negocio, avance de ruta, cola de cambios) y la sesión.
+     La copia de la nube del equipo no se toca. Antes de borrar se compara cada bloque local con la nube; lo que no esté respaldado se avisa. */
+  const SIGNOUT_KEEP = ['uxSettings', 'productSettings', 'cohereApiKey', 'storageMigration', 'onboardingDone'];
+  const signout = { phase: 'idle', audit: null, busy: false, ack: false, msg: '' };
+  const baseOf = (k) => String(k).split(':')[0];
+  const KEY_LABEL = { actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
+  const keyName = (k) => { const b = baseOf(k), y = String(k).split(':')[1]; return `${KEY_LABEL[b] || b}${y && /^\d{4}$/.test(y) ? ' ' + y : ''}`; };
+  /** Compara lo local con la nube (solo lectura). Devuelve { ok, unsynced:[texto], checked } o { ok:false, error }. */
+  async function signoutAudit() {
+    await repo.flush();
+    const cl = await FP.cloud.listKeys({});
+    if (!cl.ok) return { ok: false, error: cl.error };
+    const skip = new Set(C.cloud.skipKeys.concat(C.cloud.autoSkipKeys, SIGNOUT_KEEP, ['authChoice']));
+    const unsynced = []; let checked = 0;
+    for (const key of await cloudProvider.keys()) {
+      if (skip.has(baseOf(key)) || FP.productSync.isKey(key)) continue;
+      const env = await cloudProvider.read(key); if (!env) continue;
+      checked++;
+      const at = cl.at && cl.at[key];
+      if (!at) { unsynced.push(`${keyName(key)}: no está en la nube`); continue; }
+      const local = env.savedAt ? Date.parse(env.savedAt) : 0;
+      if (local > Date.parse(at) + 2000) unsynced.push(`${keyName(key)}: tiene cambios más nuevos que la nube`);
+    }
+    // Productos: viven en IndexedDB por lotes; se compara el último lote importado contra la última subida (manifiesto)
+    if (FP.productStore && repo.ready) {
+      let batches = []; try { batches = await FP.productStore.listBatches(); } catch (e) { batches = []; }
+      if (batches.length) {
+        checked++;
+        const last = Math.max(...batches.map((b) => Date.parse(b.importedAt) || 0));
+        const man = cl.at && cl.at[`${FP.productSync.PREFIX}:manifest`];
+        if (!man) unsynced.push('Productos: no hay copia en la nube');
+        else if (last > Date.parse(man) + 2000) unsynced.push('Productos: hay cargas más nuevas que la última copia en la nube');
+      }
+    }
+    return { ok: true, unsynced, checked };
+  }
+  function closeSignout() { const d = document.getElementById('signout-dialog'); if (d) { try { d.close(); } catch (e) { /* ya cerrado */ } d.remove(); } signout.phase = 'idle'; signout.audit = null; signout.ack = false; signout.busy = false; }
+  function paintSignout() {
+    let d = document.getElementById('signout-dialog');
+    if (!d) {
+      d = document.createElement('dialog'); d.id = 'signout-dialog'; d.className = 'tour-offer login-dialog signout-dialog'; d.setAttribute('aria-labelledby', 'signout-t');
+      d.addEventListener('cancel', (e) => { e.preventDefault(); if (!signout.busy) closeSignout(); });
+      document.body.appendChild(d);
+      if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    }
+    const esc = FP.ui.helpers.esc, a = signout.audit;
+    let status = '', btns = '';
+    if (signout.phase === 'checking') status = '<p role="status" aria-live="polite">Comprobando que tus datos estén respaldados en la nube…</p>';
+    else if (signout.phase === 'wiping') status = '<p role="status" aria-live="polite">Borrando los datos de este navegador…</p>';
+    else if (a && a.ok && !a.unsynced.length) {
+      status = `<p class="signout__ok" role="status">Todo está respaldado en la nube del equipo (${a.checked} bloque${a.checked === 1 ? '' : 's'} comprobado${a.checked === 1 ? '' : 's'}).</p>`;
+      btns = '<button type="button" class="btn btn--primary" data-action="signout-confirm" autofocus>Cerrar sesión y borrar datos de este navegador</button><button type="button" class="btn" data-action="signout-cancel">Cancelar</button>';
+    } else {
+      const why = a && a.ok ? `<p role="alert"><strong>Hay datos sin respaldar en la nube.</strong> Si cierras sesión ahora se pierden:</p><ul>${a.unsynced.slice(0, 6).map((u) => `<li>${esc(u)}</li>`).join('')}${a.unsynced.length > 6 ? `<li>y ${a.unsynced.length - 6} más</li>` : ''}</ul>`
+        : `<p role="alert"><strong>No pude comprobar el respaldo</strong> (${esc((a && a.error) || 'sin detalle')}). No sé si tus datos están en la nube.</p>`;
+      status = `${why}${signout.msg ? `<p role="status">${esc(signout.msg)}</p>` : ''}<label class="signout__ack"><input type="checkbox" data-action="signout-ack" ${signout.ack ? 'checked' : ''}> Entiendo que lo que no esté en la nube se pierde</label>`;
+      btns = `<button type="button" class="btn btn--primary" data-action="signout-upload" ${signout.busy ? 'disabled' : ''} autofocus>Subir copia a la nube ahora</button><button type="button" class="btn" data-action="signout-download" ${signout.busy ? 'disabled' : ''}>Descargar copia (.json)</button><button type="button" class="btn" data-action="signout-confirm" ${signout.ack && !signout.busy ? '' : 'disabled'}>Cerrar sesión y borrar de todos modos</button><button type="button" class="btn" data-action="signout-cancel">Cancelar</button>`;
+    }
+    d.innerHTML = `<p class="tour-offer__eyebrow">Cuenta de equipo</p><h2 id="signout-t">Cerrar sesión</h2>
+      <p>Al cerrar sesión se borran de este navegador los datos del equipo (ventas, metas, productos y análisis). La copia de la nube no se toca; al volver a entrar se pueden traer de nuevo. Se conservan tus preferencias, el tipo de uso y la clave de Cohere si la guardaste.</p>${status}
+      <div class="tour-offer__btns">${btns}</div>`;
+    const f = d.querySelector('[autofocus]'); if (f && !d.contains(document.activeElement)) f.focus();
+  }
+  async function openSignout() {
+    if (signout.phase === 'checking' || signout.phase === 'wiping') return;
+    signout.phase = 'checking'; signout.audit = null; signout.ack = false; signout.msg = ''; paintSignout();
+    let a; try { a = await signoutAudit(); } catch (e) { a = { ok: false, error: e && e.message || String(e) }; }
+    if (signout.phase === 'idle') return;
+    signout.audit = a; signout.phase = 'ready'; paintSignout();
+  }
+  async function signoutUpload() {
+    if (signout.busy) return; signout.busy = true; signout.msg = 'Subiendo copia…'; paintSignout();
+    try {
+      await repo.flush();
+      const bundle = await FP.productSync.build(repo);
+      if (bundle.tooBig) { signout.msg = 'Los productos rebasan el tope de la nube; no se subieron.'; }
+      else {
+        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), {});
+        if (!up.ok) signout.msg = `No se pudo subir: ${up.error}`;
+        else { await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {}); signout.msg = ''; }
+      }
+    } catch (e) { signout.msg = `Falló la subida: ${e && e.message || e}`; }
+    if (!document.getElementById('signout-dialog')) { signout.busy = false; return; }
+    signout.busy = false; signout.phase = 'checking'; paintSignout();
+    let a; try { a = await signoutAudit(); } catch (e) { a = { ok: false, error: e && e.message || String(e) }; }
+    signout.audit = a; signout.phase = 'ready'; paintSignout();
+  }
+  /** Copia local de los bloques generales (sin productos: pesan demasiado; esos solo se respaldan con «Subir copia a la nube»). */
+  async function signoutDownload() {
+    await repo.flush(); const out = {};
+    const skip = new Set(C.cloud.skipKeys);
+    for (const key of await cloudProvider.keys()) { if (skip.has(baseOf(key)) || FP.productSync.isKey(key)) continue; const env = await cloudProvider.read(key); if (env) out[key] = env; }
+    FP.exporter.download(`revnavigator-copia-local-${new Date().toISOString().slice(0, 10)}.json`, { app: 'RevNavigator', kind: 'copia-local', at: new Date().toISOString(), keys: out });
+    signout.msg = 'Copia descargada (sin productos).'; paintSignout();
+  }
+  /** Borra los datos de este navegador y recarga. No toca la nube. */
+  async function wipeLocalData() {
+    wiping = true;
+    clearTimeout(autoTimer); autoPending.clear();
+    FP.cloud.setAuto(false); state.cloud.auto.on = false;
+    await repo.flush();
+    const keep = {}; SIGNOUT_KEEP.forEach((k) => { const raw = lsAdapter.get(`${C.storage.namespace}:${k}`); if (raw != null) keep[k] = raw; });
+    storage.clear();                                   // localStorage de la app + IndexedDB (todos los almacenes)
+    if (FP.productStore) FP.productStore.reset();
+    if (FP.customerStore) FP.customerStore.reset();
+    Object.keys(keep).forEach((k) => lsAdapter.set(`${C.storage.namespace}:${k}`, keep[k]));
+    FP.cloud.signOut();
+    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    ['fp.route.origin.v1', 'fp.loginAsked'].forEach((k) => { try { root.sessionStorage.removeItem(k); } catch (e) { /* nada */ } });
+  }
+  async function signoutConfirm() {
+    if (signout.busy || signout.phase === 'wiping') return;
+    const a = signout.audit; if (!(a && a.ok && !a.unsynced.length) && !signout.ack) return;
+    signout.phase = 'wiping'; signout.busy = true; paintSignout();
+    try { await wipeLocalData(); } catch (e) { wiping = false; signout.busy = false; signout.phase = 'ready'; signout.msg = `No pude borrar todo: ${e && e.message || e}`; paintSignout(); return; }
+    root.location.reload();
   }
 
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }

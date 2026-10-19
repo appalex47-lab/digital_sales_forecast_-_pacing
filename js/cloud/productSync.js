@@ -85,7 +85,7 @@
 
   /* ---------- restaurar ---------- */
   /** items: los de FP.cloud.download(). Reemplaza los productos locales por la copia del equipo. Devuelve { ok, rows } o { ok:false, error }. */
-  async function restore(repo, items) {
+  async function restore(repo, items, { onProgress } = {}) {
     const mine = new Map(items.filter((i) => isKey(i.key)).map((i) => [i.key, i.envelope]));
     if (!mine.size) return { ok: true, none: true };
     if (!repo || !repo.ready) return { ok: false, error: 'Este navegador no tiene IndexedDB disponible: no se pueden restaurar los productos.' };
@@ -95,7 +95,9 @@
     if (miss.length) return { ok: false, error: `La copia de productos está incompleta en la nube (faltan ${miss.length} trozos). No se restauró nada de productos.` };
     const decoded = {};
     try {
+      let n = 0;
       for (const k of man.keys) {
+        if (onProgress) onProgress(n++, man.keys.length);
         const d = mine.get(k).data; (decoded[d.store] = decoded[d.store] || []).push(...await unpack(d.z));
       }
     } catch (e) { return { ok: false, error: 'La copia de productos está dañada. No se restauró nada de productos.' }; }
