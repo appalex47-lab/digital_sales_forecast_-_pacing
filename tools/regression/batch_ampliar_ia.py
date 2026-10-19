@@ -41,6 +41,10 @@ async def flow(b, w, h, tag, errs):
     chk(f'{tag}-3b abre en «Detallado» por defecto', await q.evaluate("document.querySelector('[data-action=\"rc-expand-style\"][data-style=\"detailed\"]').getAttribute('aria-pressed')") == 'true' and await q.locator('#rcx-risks').count() == 1)
     kn = await q.evaluate("(document.getElementById('rcx-known')||{}).innerText||''")
     chk(f'{tag}-3c «Ya sabemos» (solo lectura) con canal y objetivo operativo', 'Ya sabemos' in kn and 'Canal:' in kn and 'Objetivo operativo' in kn and await q.locator('#rcx-known textarea, #rcx-known input').count() == 0, kn[:200])
+    chk(f'{tag}-3d «Ya sabemos» va en chips', await q.locator('#rcx-known .rcx__chip').count() >= 2)
+    await q.click('[data-action="rc-expand-tab"][data-tab="data"]'); await q.wait_for_timeout(150)
+    chk(f'{tag}-3e las secciones de apoyo van en pestañas (solo una visible)', await q.evaluate("[...document.querySelectorAll('#rcx .rcx-pane')].filter(p=>!p.hidden).length") == 1 and await q.evaluate("document.querySelector('#rcx .rcx-pane:not([hidden])').dataset.pane") == 'data')
+    await q.click('[data-action="rc-expand-tab"][data-tab="measure"]')
     chk(f'{tag}-4 generar no guarda nada en el plan', await q.evaluate("FP.app.state.rc.plan.actions.length") == n0)
     ov = await q.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     chk(f'{tag}-5 sin desborde horizontal ({ov}px)', ov <= 1, ov)
@@ -48,7 +52,7 @@ async def flow(b, w, h, tag, errs):
     if w < 860: chk(f'{tag}-6 móvil: campos del paso apilados a todo el ancho', not box['same'] and box['tw'] > w * 0.6, box)
     else: chk(f'{tag}-6 escritorio: texto, responsable y cuándo en una fila', box['same'], box)
     # estilo detallado (regenera) y regresar
-    await q.click('[data-action="rc-expand-style"][data-style="detailed"]'); await q.wait_for_selector('#rcx #rcx-risks', timeout=8000)
+    await q.click('[data-action="rc-expand-style"][data-style="detailed"]'); await q.wait_for_selector('#rcx #rcx-risks', state='attached', timeout=8000)
     chk(f'{tag}-7 «Detallado» agrega riesgos y qué NO hacer', await q.locator('#rcx-dont').count() == 1)
     # editar y copiar
     await q.fill('#rcx-objective', 'Objetivo editado a mano'); 

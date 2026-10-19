@@ -121,6 +121,9 @@
 
   /* ---------- ¿Qué tendría que cambiar? ---------- */
 
+  /** «Plan de recuperación»: el cálculo inverso (qué tendría que cambiar) y el simulador conviven en un solo bloque.
+   *  Cada ruta ya trae su resultado simulado; «Guardar como escenario» la guarda con la hipótesis elegida y «Llevar al simulador» la deja para ajustarla a mano. */
+  const signedInt = (v) => (Number.isFinite(v) ? `${v > 0 ? '+' : ''}${F().integer(v)}` : F().DASH);
   function renderInverse(state) {
     const esc = H().esc;
     const rc = state.rc;
@@ -128,32 +131,43 @@
     const tp = rc.settings.targetPct;
     const seg = H().segmented('rc-target-pct', C().recovery.recoveryTargets.map((t) => [String(t), `${Math.round(t * 100)} %`]), String(tp));
     if (!ro || !ro.ok) {
-      $('rc-inverse').innerHTML = `<div class="subhead"><h3 class="panel__title">¿Qué tendría que cambiar? ${SIM}</h3>${seg}</div>
+      $('rc-inverse').innerHTML = `<div class="subhead"><h3 class="panel__title">Plan de recuperación ${SIM}</h3>${seg}</div>
         <p class="note">${esc(ro ? ro.reason : 'Sin contexto.')}</p>`;
       return;
     }
-    const rows = ro.alternatives.map((a) => {
-      const x = a.display;
-      const parts = [];
-      if (a.drivers.includes('trafficVolume')) parts.push(`Volumen ${spct(x.trafficPct)}`);
-      if (a.drivers.includes('conversionRate')) parts.push(`CR ${pp(x.crPP)} (${spct(x.crRelPct)} relativo; de ${F().percent(x.crFrom, 2)} a ${F().percent(x.crTo, 2)})`);
-      if (a.drivers.includes('aov')) parts.push(`AOV ${spct(x.aovPct)}`);
-      return `<tr><td><strong>${a.id}</strong> · ${esc(a.label)}</td><td class="wrap">${esc(parts.join('; '))}</td>
-        <td class="num">${a.simulated ? esc(signedMoney(a.simulated.incremental)) : F().DASH}</td>
-        <td class="num">${a.simulated ? esc(pct(a.simulated.recoveryPercent)) : F().DASH}</td>
-        <td>${!a.feasible ? H().pill('error', 'No posible') + `<span class="cell-sub">${esc(a.errors[0] || '')}</span>` : a.exceedsConstraints.length ? H().pill('warning', 'Excede restricción') + `<span class="cell-sub">${esc(a.exceedsConstraints.join(' '))}</span>` : H().pill('ok', 'Dentro de restricciones')}</td>
-        <td><button type="button" class="btn btn--small" data-action="rc-use-alt" data-id="${a.id}" ${a.feasible ? '' : 'disabled'}>Llevar al simulador</button></td></tr>`;
-    }).join('');
+    const ch = (C().channels || []).find((c) => c.id === rc.ctx.channel);
+    const unit = ch ? String(ch.trafficLabel || 'tráfico').toLowerCase() : 'tráfico';
+    const eff = (a) => Math.max(Math.abs(a.display.trafficPct || 0), Math.abs(a.display.crRelPct || 0), Math.abs(a.display.aovPct || 0));
+    const rank = (a) => (!a.feasible ? 2 : a.exceedsConstraints.length ? 1 : 0);
+    const sorted = ro.alternatives.slice().sort((x, y) => rank(x) - rank(y) || eff(x) - eff(y));
+    const best = sorted.find((a) => rank(a) === 0);   // «Menor cambio relativo»: descriptivo (el más pequeño dentro de restricciones), no una recomendación
+    const hyps = rc.analysis ? rc.analysis.hypotheses : [];
+    const hypSel = rc.altHyp !== undefined ? rc.altHyp : (rc.draft.hypothesisId || (hyps[0] ? hyps[0].id : ''));
+    const card = (a) => {
+      const x = a.display, parts = [];
+      if (a.drivers.includes('trafficVolume')) parts.push(`<div class="big">Volumen ${esc(spct(x.trafficPct))}</div>`);
+      if (a.drivers.includes('conversionRate')) parts.push(`<div class="big">CR ${esc(pp(x.crPP))}</div><small>de ${esc(F().percent(x.crFrom, 2))} a ${esc(F().percent(x.crTo, 2))} (${esc(spct(x.crRelPct))} relativo)</small>`);
+      if (a.drivers.includes('aovPct') || a.drivers.includes('aov')) parts.push(`<div class="big">Ticket ${esc(spct(x.aovPct))}</div>`);
+      const sim = a.simulated;
+      const need = sim ? `<small>${Number.isFinite(sim.trafficVolume) && Math.abs(sim.trafficVolume) >= 0.5 ? `${esc(signedInt(sim.trafficVolume))} ${esc(unit)} · ` : ''}${Number.isFinite(sim.orders) ? `${esc(signedInt(sim.orders))} pedidos` : ''}</small>` : '';
+      const status = !a.feasible ? H().pill('error', 'No posible') + `<small>${esc(a.errors[0] || '')}</small>` : a.exceedsConstraints.length ? H().pill('warning', 'Excede restricción') + `<small>${esc(a.exceedsConstraints.join(' '))}</small>` : H().pill('ok', 'Dentro de restricciones');
+      return `<div class="rcr${best && best.id === a.id ? ' rcr--best' : ''}${a.feasible ? '' : ' rcr--off'}">
+        <span class="field__hint">${esc(a.label)}${best && best.id === a.id ? ' · <strong>Menor cambio relativo</strong>' : ''}</span>${parts.join('')}${need}
+        ${sim ? `<div class="rcr__bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, (sim.recoveryPercent || 0) * 100))}%"></i></div><b>${esc(signedMoney(sim.incremental))}</b> · ${esc(pct(sim.recoveryPercent))}` : ''}
+        <div>${status}</div>
+        <div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="rc-alt-save" data-id="${a.id}" ${a.feasible ? '' : 'disabled'}>Guardar como escenario</button>
+          <button type="button" class="btn btn--small btn--ghost" data-action="rc-use-alt" data-id="${a.id}" ${a.feasible ? '' : 'disabled'}>Llevar al simulador</button></div></div>`;
+    };
     const mw = ro.maxWithinConstraints;
     $('rc-inverse').innerHTML = `
-      <div class="subhead"><h3 class="panel__title">¿Qué tendría que cambiar? ${SIM}</h3>
-        <div class="field"><span class="field__hint">Objetivo de recuperación del gap</span>${seg}</div></div>
+      <div class="subhead"><h3 class="panel__title">Plan de recuperación ${SIM}</h3>
+        <div class="field"><span class="field__hint">Recuperar del gap</span>${seg}</div></div>
       <p>Para recuperar <strong>${esc(pct(tp, 0))}</strong> del gap (${esc(money(ro.required))} de ${esc(money(ro.gap.gapBefore))}) ${rc.ctx.aggregated ? 'en la parte restante del periodo' : `en ${ro.editableDays} días`}:</p>
-      <div class="table-wrap"><table class="table ds-table">
-        <thead><tr><th>Alternativa</th><th>Cambio requerido</th><th class="num">Venta simulada</th><th class="num">Recovery</th><th>Restricciones</th><th></th></tr></thead>
-        <tbody>${rows}</tbody></table></div>
+      <div class="rcr-grid">${sorted.map(card).join('')}</div>
+      <div class="field rcr-hyp"><label for="rc-alt-hyp" class="field__hint">Al guardar, ligar el escenario a la hipótesis</label>
+        <select id="rc-alt-hyp" data-action="rc-alt-hyp"><option value="">Sin hipótesis (exploración)</option>${hyps.map((h) => `<option value="${esc(h.id)}" ${hypSel === h.id ? 'selected' : ''}>${esc(h.id)} · ${esc(h.hypothesis.slice(0, 90))}</option>`).join('')}</select></div>
       ${mw ? `<p class="note">Con todos los drivers en su restricción máxima (${esc(changesText(mw.changes))}): ${mw.error ? esc(mw.error) : `recovery simulado ${esc(pct(mw.recoveryPercent))}, gap restante ${esc(money(mw.gapAfter))}.`}</p>` : ''}
-      <p class="field__hint">${esc(ro.note)} Dos o tres drivers: mismo cambio relativo en cada uno. Cálculo inverso matemático, no recomendación.</p>`;
+      <p class="field__hint">${esc(ro.note)} Dos o tres drivers: mismo cambio relativo en cada uno. «Menor cambio relativo» solo marca la ruta más pequeña dentro de restricciones: cálculo inverso matemático, no recomendación.</p>`;
   }
 
   /* ---------- Escenarios guardados, recuperación y comparación ---------- */

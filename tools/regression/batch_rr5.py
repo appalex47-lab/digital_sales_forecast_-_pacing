@@ -61,15 +61,15 @@ async def main():
         o = {k: await top(s) for k, s in [('ctx', '#rc-context'), ('gap', '#rc-gap'), ('sim', '#rc-simulator'), ('saved', '#rc-saved'), ('lib', '#rc-library'), ('plan', '#rc-plan'), ('track', '#rc-tracking'), ('more', '#view-recovery .pacing-more')]}
         chk('X6 Recovery Center: filtros → brecha → simulador → escenarios → catálogo → plan → seguimiento → «Ver más»', all(v is not None for v in o.values()) and o['ctx'] < o['gap'] < o['sim'] < o['saved'] < o['lib'] < o['plan'] < o['track'] < o['more'], o)
         r = await vis('recovery')
-        chk('X7 Recovery Center: 3 «Ver más» (archivos y restricciones, inverso, trazabilidad) cerrados', r['n'] == 3 and r['shown'] == 3 and r['open'] == 0 and r['layer'], r)
+        chk('X7 Recovery Center: 2 «Ver más» (archivos y restricciones, trazabilidad) cerrados; el inverso ya está en el Plan de recuperación', r['n'] == 2 and r['shown'] == 2 and r['open'] == 0 and r['layer'], r)
         f = await q.evaluate("(()=>({ch:document.querySelector('#rc-ch').checkVisibility(), apply:document.querySelector('#rc-apply').checkVisibility(), pt:document.querySelectorAll('#view-recovery [data-action=rc-ptype]').length, file:document.querySelector('[data-action=rc-import]').checkVisibility(), exp:document.querySelector('[data-action=rc-export]').checkVisibility()}))()")
         chk('X8 Recovery Center: canal, periodo y «Aplicar a» se ven; importar y exportar quedan plegados', f['ch'] and f['apply'] and f['pt'] == 5 and not f['file'] and not f['exp'], f)
         n = await q.evaluate("(()=>{document.querySelectorAll('#view-recovery details.pacing-more').forEach(d=>d.open=true); const e=document.querySelector('#rc-extra'); return {imp:e.querySelectorAll('input[data-action=rc-import]').length, exp:e.querySelectorAll('[data-action=rc-export]').length, cmp:!!e.querySelector('#rc-cmp'), cons:e.querySelectorAll('[data-action=rc-constraint]').length, inv:document.querySelector('#rc-inverse').textContent.trim().length, tree:document.querySelector('#rc-tree').textContent.trim().length}})()")
-        chk('X9 Recovery Center abierto: 2 importaciones, exportar, diagnóstico de origen, 4 restricciones, inverso y trazabilidad', n['imp'] == 2 and n['exp'] == 1 and n['cmp'] and n['cons'] == 4 and n['inv'] > 20 and n['tree'] > 20, n)
+        chk('X9 Recovery Center abierto: 2 importaciones, exportar, diagnóstico de origen, 4 restricciones, plan de recuperación y trazabilidad', n['imp'] == 2 and n['exp'] == 1 and n['cmp'] and n['cons'] == 4 and n['inv'] > 20 and n['tree'] > 20, n)
         # cambiar un filtro conserva lo abierto
         await q.select_option('#rc-apply', 'future'); await q.wait_for_timeout(600)
         op = await q.evaluate("document.querySelectorAll('#view-recovery details.pacing-more[open]').length")
-        chk('X10 al cambiar un filtro, lo que la persona abrió sigue abierto', op == 3, op)
+        chk('X10 al cambiar un filtro, lo que la persona abrió sigue abierto', op == 2, op)
         await q.evaluate("document.querySelectorAll('#view-recovery details.pacing-more, #view-reforecast details.pacing-more').forEach(d=>d.open=false)")
         chk('Sin errores de página', not errs, errs[:3])
         await b.close()

@@ -100,6 +100,19 @@ const c = under(mk()); c.summary.channels = { status: 'ok', rows: [{ id: 'app', 
 r = AE.evaluate(c); const ch = r.findings.find((x) => x.id === 'channel_app');
 ok('Canal: el canal rezagado enlaza a Pacing con ese canal', Boolean(ch) && ch.next.view === 'pacing' && ch.next.channel === 'app', ch && ch.next);
 c.channel = 'app'; ok('Canal: si ya se mira un canal, no se repite el hallazgo por canal', !AE.evaluate(c).findings.some((x) => x.kind === 'channel'));
+// varios canales en problema (caso real: WhatsApp rezagado + Ecommerce en el plan a la fecha pero con cierre corto)
+const mc = under(mk()); mc.summary.channels = { status: 'ok', rows: [
+  { id: 'whatsapp', label: 'WhatsApp', state: 'ok', pacing: 'below', compliance: 0.8, actual: 5e4, forecastGapPct: -0.2 },
+  { id: 'ecommerce', label: 'Ecommerce', state: 'ok', pacing: 'on_plan', compliance: 1.0, actual: 9e5, forecastGapPct: -0.08 },
+  { id: 'app', label: 'App', state: 'ok', pacing: 'above', compliance: 1.05, actual: 3e5, forecastGapPct: 0.03 }] };
+r = AE.evaluate(mc); const mf = r.findings.find((x) => x.kind === 'channel');
+ok('Canales: lista TODOS los canales en problema (rezagado o cierre corto), no solo el peor', Boolean(mf) && mf.channels.length === 2 && mf.channels.map((x) => x.id).join() === 'whatsapp,ecommerce', mf && mf.channels);
+const mc2 = under(mk()); mc2.summary.channels = { status: 'ok', rows: [
+  { id: 'chico', label: 'Chico', state: 'ok', pacing: 'below', compliance: 0.8, actual: 5e4, forecastGapPct: -0.2 },
+  { id: 'grande', label: 'Grande', state: 'ok', pacing: 'below', compliance: 0.92, actual: 9e5, forecastGapPct: -0.1 }] };
+ok('Canales: se ordenan por monto de brecha (el grande al 92 % antes que el chico al 80 %)', AE.evaluate(mc2).findings.find((x) => x.kind === 'channel').channels.map((x) => x.id).join() === 'grande,chico');
+ok('Canales: un canal sano no aparece', !mf.channels.some((x) => x.id === 'app'));
+ok('Canales: el paso conserva la lista para la vista', (r.route.all.find((o) => o.id === 'review_channel') || {}).channels && r.route.all.find((o) => o.id === 'review_channel').channels.length === 2);
 // visibles
 ok('Visibles: máximo 3 hallazgos y el resto va aparte', r.visible.length <= 3 && r.visible.length + r.rest.length === r.findings.length, [r.visible.length, r.rest.length]);
 

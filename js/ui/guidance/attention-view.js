@@ -208,6 +208,13 @@
       ${o.state === 'blocked' || o.state === 'done' ? '' : `<button type="button" class="btn btn--ghost" ${attrs(o, S, key)}>${esc(wait ? 'Ver seguimiento' : 'Abrir esta ruta')}</button>`}</li>`;
   }
 
+  /** Canales en problema (Total digital): uno por fila, cada uno con su propio acceso a Pacing. */
+  function chanListHtml(p, S, key) {
+    if (!p.channels || p.channels.length < 2) return '';
+    const { esc } = H();
+    return `<ul class="nbs__chans" data-troubled="${p.channels.length}">${p.channels.map((c) => `<li data-chan="${esc(c.id)}"><span><strong>${esc(c.label)}</strong> · ${c.compliance != null ? `${Math.round(c.compliance * 100)} % del plan${c.gapMoney != null && c.gapMoney < 0 ? ` (${money(c.gapMoney)} abajo)` : ''}` : 'sin cumplimiento'}${c.forecastGapPct != null ? ` · cierre ${c.forecastGapPct >= 0 ? '+' : '−'}${Math.abs(Math.round(c.forecastGapPct * 1000) / 10)} % vs meta` : ''}</span> <button type="button" class="btn btn--ghost btn--sm" ${attrs({ ...p, channel: c.id }, S, key)}>Ver ${esc(c.label)}</button></li>`).join('')}</ul>`;
+  }
+
   function nextStepHtml(att, S, key) {
     const { esc } = H(), p = att.route.primary, ch = att.route.chain;
     const waiting = p.state === 'waiting';
@@ -224,6 +231,7 @@
       <p class="home__next-t">${esc(p.title)}</p><p class="ds-card__sub">${esc(p.why || '')}</p>
       <dl class="nbs__facts">${facts.map(([t, v]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       ${waiting ? `<p class="field__hint">En espera: todavía no hay venta real de toda la ventana. Vuelve a partir del ${esc(p.waitingUntil)}.</p>` : ''}
+      ${chanListHtml(p, S, key)}
       <p><button type="button" class="btn btn--primary btn--lg" ${attrs(p, S, key)}>${esc(label)}</button></p>
       ${waiting ? '' : '<p class="field__hint nbs__how">Cómo sigue: el botón abre el módulo con tu canal y periodo. Allí verás una barra con este paso; al terminar lo confirmas (o se completa solo con los datos) y regresas aquí para ver la ruta avanzada.</p>'}${others}</section>`;
   }

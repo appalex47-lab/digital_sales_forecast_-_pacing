@@ -2166,10 +2166,17 @@
           if (state.view === 'analisis') FP.trendView.render(state);
         });
     },
+    'an-assistant-group'(el) {
+      const g = Number(el.dataset.group); state.an.assistant = { ...state.an.assistant, group: String(state.an.assistant.group) === String(g) ? null : g };
+      if (state.view === 'analisis') FP.trendView.render(state);
+    },
     'an-assistant-suggest'(el) {
       const q = el.dataset.question || '';
-      state.an.assistant = { ...state.an.assistant, open: true, question: q, panorama: el.dataset.panorama === '1' };
+      const isPan = el.dataset.panorama === '1';
+      state.an.assistant = { ...state.an.assistant, open: true, question: q, panorama: isPan, panBusy: isPan && !(state.an._panorama), pan: isPan && state.an._panorama ? state.an._panorama.value : state.an.assistant.pan };
       if (state.view === 'analisis') FP.trendView.render(state);
+      if (isPan) buildPanorama().then((pr) => { state.an.assistant = { ...state.an.assistant, panBusy: false, pan: pr.ok ? pr.panorama : null }; if (state.view === 'analisis') FP.trendView.render(state); })
+        .catch(() => { state.an.assistant = { ...state.an.assistant, panBusy: false }; if (state.view === 'analisis') FP.trendView.render(state); });
       const input = document.getElementById('an-assistant-input');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     },
@@ -2912,6 +2919,17 @@
       render();
       document.getElementById('rc-simulator').scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
+    'rc-alt-hyp'(el) { state.rc.altHyp = el.value; },
+    'rc-alt-save'(el) {   // una ruta del plan de recuperación → escenario guardado (misma validación y motor que el simulador)
+      const ro = state.rc.analysis && state.rc.analysis.recoveryOptions;
+      const alt = ro && ro.alternatives.find((a) => a.id === el.dataset.id); if (!alt || !alt.feasible) return;
+      const c = alt.changes, hypId = state.rc.altHyp !== undefined ? state.rc.altHyp : (state.rc.draft.hypothesisId || '');
+      state.rc.draft = { ...state.rc.draft, trafficPct: +((c.trafficPct || 0) * 100).toFixed(4), crMode: c.crMode || 'pp', crValue: +((c.crValue || 0) * 100).toFixed(6),
+        aovMode: 'pct', aovValue: +((c.aovValue || 0) * 100).toFixed(4), target: 'channel', hypothesisId: hypId, type: state.rc.draft.type || 'custom',
+        name: `Recuperar ${Math.round(state.rc.settings.targetPct * 100)} % · ${alt.label}`, supersedes: null };
+      ensureRecovery();   // recalcula la vista previa con esta ruta
+      actions['rc-save-scenario']();
+    },
     'rc-save-scenario'() {
       learn('scenario-saved');
       const rc = state.rc;
@@ -2996,6 +3014,10 @@
       const x = state.rc.expand; if (!x || x.style === el.dataset.style) return;
       if (x.status === 'ready' && expandDirty() && !root.confirm('Cambiar el estilo vuelve a generar el borrador y se pierden tus ediciones. ¿Continuar?')) return;
       state.rc.expandStyle = el.dataset.style; try { localStorage.setItem('fp.v1:expandStyle', el.dataset.style); } catch (e) { /* solo conveniencia */ } return runExpand(x.actionId, el.dataset.style);
+    },
+    'rc-expand-tab'(el) {   // solo alterna lo visible: no se vuelve a pintar, así no se pierde lo que se esté editando
+      const t = el.dataset.tab; document.querySelectorAll('#rcx .rcx-tab').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === t)));
+      document.querySelectorAll('#rcx .rcx-pane').forEach((p) => { p.hidden = p.dataset.pane !== t; });
     },
     'rc-expand-discard'() { state.rc.expand = null; render(); },
     'rc-expand-step-add'() { const x = state.rc.expand; if (!x || !x.draft) return; x.draft = collectExpand(); x.draft.steps.push({ text: '', owner: '', when: '' }); render(); },
