@@ -44,10 +44,10 @@ INV = """async()=>{const r=FP.app.repo; const kv=r.ready?(await r.kvAllKeys()):[
  return {kv, ls, ses: localStorage.getItem('fp.cloudSession'), route: localStorage.getItem('fp.route.v1'), changes: localStorage.getItem('fp.changes.v1')}}"""
 async def seeded(b, M):
     """Contexto con datos locales de prueba, preferencias y sesión de equipo."""
-    c = await newctx(b, M); q = await c.new_page(); await q.goto(URL + '#inicio'); await q.wait_for_timeout(900); await clean(q)
+    c = await newctx(b, M); q = await c.new_page(); await q.goto(URL + '#inicio'); await q.wait_for_function('window.FP && FP.app && FP.app.repo && FP.app.actions', timeout=30000); await q.wait_for_timeout(900); await clean(q)
     await q.evaluate("FP.app.actions['generate-mock']()"); await q.wait_for_timeout(1500)
     await q.evaluate("FP.app.storage.save('uxSettings',{x:1});FP.app.storage.save('onboardingDone','1');FP.app.storage.save('authChoice','team');FP.app.storage.save('cohereApiKey','k-123');localStorage.setItem('fp.route.v1','{\"a\":1}');localStorage.setItem('fp.changes.v1','{\"b\":2}')")
-    await q.evaluate(SESSION); await q.reload(); await q.wait_for_timeout(1500); await clean(q)
+    await q.evaluate(SESSION); await q.reload(); await q.wait_for_function('window.FP && FP.app && FP.app.repo && FP.app.actions', timeout=30000); await q.wait_for_timeout(1500); await clean(q)
     return c, q
 async def sync_all(q, M):
     ks = await q.evaluate("""async()=>{const sk=new Set(FP.config.cloud.skipKeys.concat(FP.config.cloud.autoSkipKeys,['uxSettings','productSettings','cohereApiKey','storageMigration','onboardingDone','authChoice']));

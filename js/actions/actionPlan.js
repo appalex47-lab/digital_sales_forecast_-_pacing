@@ -61,6 +61,7 @@
       expectedImpact: a.expectedImpact || null,
       measurement: { metric: a.measurementMetric || a.driver || 'revenue', windowDays: a.windowDays || null },
       startDate: a.startDate || null, endDate: a.endDate || null, notes: a.notes || '',
+      detail: a.detail ? JSON.parse(JSON.stringify(a.detail)) : null,   // plan de trabajo ampliado (opcional; p. ej. redactado con IA y editado por la persona)
       createdAt: now,
       history: [{ at: now, field: 'status', from: null, to: 'proposed', note: 'Creada' }]
     };

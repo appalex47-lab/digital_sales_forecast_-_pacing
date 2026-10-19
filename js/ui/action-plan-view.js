@@ -19,6 +19,62 @@
 
   const scenariosWithHyp = (rc) => (rc.analysis ? rc.analysis.scenarios : []).filter((s) => s.links.hypothesisId);
 
+
+  /** Texto plano del plan ampliado (para copiar a un correo o ticket). */
+  function detailText(title, d) {
+    if (!d) return '';
+    const L = [title, '', `Objetivo: ${d.objective}`, '', 'Pasos:'];
+    (d.steps || []).forEach((x, i) => L.push(`${i + 1}. ${x.text}${x.owner ? ` — ${x.owner}` : ''}${x.when ? ` (${x.when})` : ''}`));
+    if (d.measure) L.push('', `Cómo se mide: ${d.measure}`);
+    if ((d.dataToReview || []).length) { L.push('', 'Datos a revisar antes de ejecutar:'); d.dataToReview.forEach((x) => L.push(`- ${x}`)); }
+    if ((d.risks || []).length) { L.push('', 'Riesgos y supuestos:'); d.risks.forEach((x) => L.push(`- ${x}`)); }
+    if ((d.dontDo || []).length) { L.push('', 'Qué NO hacer:'); d.dontDo.forEach((x) => L.push(`- ${x}`)); }
+    L.push('', 'Borrador redactado con IA a partir de tus datos ya calculados; sus hipótesis requieren validación.');
+    return L.join('\n');
+  }
+  const lines = (a) => (a || []).join('\n');
+  /** Detalle de solo lectura dentro del plan de acción. */
+  function detailHtml(a) {
+    const esc = H().esc, d = a.detail; if (!d) return '';
+    const ul = (arr) => (arr && arr.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+    return `<details class="disclosure rcx-detail"><summary><span class="ds-badge">✦ ${d.edited ? 'Ampliado con IA y editado' : 'Ampliado con IA'}</span> Ver el plan de trabajo</summary>
+      <div class="rcx-detail__body"><p><strong>Objetivo.</strong> ${esc(d.objective)}</p>
+      <ol>${(d.steps || []).map((x) => `<li>${esc(x.text)}${x.owner || x.when ? `<span class="cell-sub">${esc([x.owner, x.when].filter(Boolean).join(' · '))}</span>` : ''}</li>`).join('')}</ol>
+      ${d.measure ? `<p><strong>Cómo se mide.</strong> ${esc(d.measure)}</p>` : ''}
+      ${(d.dataToReview || []).length ? `<p><strong>Datos a revisar.</strong></p>${ul(d.dataToReview)}` : ''}
+      ${(d.risks || []).length ? `<p><strong>Riesgos y supuestos.</strong></p>${ul(d.risks)}` : ''}${(d.dontDo || []).length ? `<p><strong>Qué NO hacer.</strong></p>${ul(d.dontDo)}` : ''}
+      <p class="field__hint">Redactado con IA a partir de tus datos ya calculados; no calcula impacto y sus hipótesis requieren validación.</p>
+      <button type="button" class="btn btn--small" data-action="rc-detail-copy" data-id="${esc(a.actionId)}">Copiar texto</button></div></details>`;
+  }
+  /** Panel del borrador «Ampliar con IA» (debajo de la tabla del catálogo; sirve igual en móvil y escritorio). */
+  function expandPanel(state) {
+    const esc = H().esc, x = state.rc.expand; if (!x) return '';
+    const item = (state.rc._catalogItems || []).find((a) => a.actionId === x.actionId) || { name: x.actionId };
+    const style = x.style === 'detailed' ? 'detailed' : 'summary';
+    const seg = `<div class="rcx-seg" role="group" aria-label="Estilo del plan"><button type="button" class="rcx-seg__b" data-action="rc-expand-style" data-style="summary" aria-pressed="${style === 'summary'}">Resumido</button><button type="button" class="rcx-seg__b" data-action="rc-expand-style" data-style="detailed" aria-pressed="${style === 'detailed'}">Detallado</button></div>`;
+    const head = `<p class="rcx__eye">✦ ${x.status === 'busy' ? 'Ampliando con IA' : 'Borrador generado con IA · hipótesis por validar'}</p><h4 id="rcx-title">${esc(item.name)}</h4>`;
+    if (x.status === 'busy') return `<section class="rcx" id="rcx" aria-labelledby="rcx-title" aria-busy="true">${head}<p role="status" aria-live="polite">Cohere está armando el borrador… puede tardar unos segundos.</p><div class="rcx__bar" aria-hidden="true"><i></i></div><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-expand-discard">Cancelar</button></div></section>`;
+    if (x.status !== 'ready') return `<section class="rcx" id="rcx" aria-labelledby="rcx-title" role="alert">${head}<p class="ds-alert ds-alert--danger">${esc((x.errors || []).join(' ') || 'No se pudo generar el borrador.')} El resto del módulo sigue funcionando.</p>${seg}<div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-expand-regen">Reintentar</button><button type="button" class="btn btn--small" data-action="rc-expand-discard">Cerrar</button></div></section>`;
+    const d = x.draft, det = style === 'detailed';
+    return `<section class="rcx" id="rcx" aria-labelledby="rcx-title">${head}${seg}
+      <p class="field__hint">Cambiar el estilo vuelve a generar el borrador. Edita lo que quieras: solo se guarda al agregarlo al plan.</p>
+      <div class="field"><label for="rcx-objective" class="field__hint">Objetivo</label><textarea id="rcx-objective" rows="2">${esc(d.objective)}</textarea></div>
+      <h5 class="rcx__h">Pasos</h5>
+      <div class="rcx__steps" role="list">${d.steps.map((st, i) => `<div class="rcx__step" role="listitem" data-rcx-step="${i}">
+        <span class="rcx__n" aria-hidden="true">${i + 1}</span>
+        <div class="field rcx__f-text"><label for="rcx-t-${i}" class="field__hint">Paso ${i + 1}</label><textarea id="rcx-t-${i}" rows="2" data-k="text">${esc(st.text)}</textarea></div>
+        <div class="field"><label for="rcx-o-${i}" class="field__hint">Responsable</label><input id="rcx-o-${i}" type="text" data-k="owner" value="${esc(st.owner)}"></div>
+        <div class="field"><label for="rcx-w-${i}" class="field__hint">Cuándo</label><input id="rcx-w-${i}" type="text" data-k="when" value="${esc(st.when)}"></div>
+        <button type="button" class="btn btn--small btn--ghost rcx__del" data-action="rc-expand-step-del" data-index="${i}" aria-label="Quitar el paso ${i + 1}">Quitar</button></div>`).join('')}</div>
+      <div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-expand-step-add">+ Agregar paso</button></div>
+      <div class="field"><label for="rcx-measure" class="field__hint">Cómo se mide (el impacto lo calcula el motor de escenarios, no la IA)</label><textarea id="rcx-measure" rows="2">${esc(d.measure)}</textarea></div>
+      <div class="field"><label for="rcx-data" class="field__hint">Datos a revisar antes de ejecutar (uno por línea)</label><textarea id="rcx-data" rows="3">${esc(lines(d.dataToReview))}</textarea></div>
+      ${det ? `<div class="field"><label for="rcx-risks" class="field__hint">Riesgos y supuestos (uno por línea)</label><textarea id="rcx-risks" rows="3">${esc(lines(d.risks))}</textarea></div>
+      <div class="field"><label for="rcx-dont" class="field__hint">Qué NO hacer (uno por línea)</label><textarea id="rcx-dont" rows="2">${esc(lines(d.dontDo))}</textarea></div>` : ''}
+      <p class="note note--warning">Borrador de IA: revísalo. Las cifras que cite se validan contra tus datos; si alguna no coincide, no se genera.</p>
+      <div class="btn-row rcx__btns"><button type="button" class="btn btn--primary" data-action="rc-expand-add">Agregar al plan</button><button type="button" class="btn" data-action="rc-expand-regen">↻ Regenerar</button><button type="button" class="btn" data-action="rc-expand-copy">Copiar texto</button><button type="button" class="btn" data-action="rc-expand-discard">Descartar</button></div></section>`;
+  }
+
   function renderLibrary(state) {
     const esc = H().esc;
     const rc = state.rc;
@@ -31,6 +87,9 @@
     const catalog = FP.actionLibrary.applicable(rc.custom, { driver: driver || null, channel: rc.ctx.channel === '__import' ? 'total' : rc.ctx.channel,
       signalMetrics: signals.map((s) => s.metric), availableData: avail });
     const ai = rc.ai;
+    rc._catalogItems = catalog;   // el panel «Ampliar con IA» y la acción leen el mismo catálogo filtrado que se ve
+    const cohereOk = Boolean(FP.cohereConnection && FP.cohereConnection.isConfigured());
+    const expandOff = !selSc ? 'Primero guarda y elige un escenario' : !cohereOk ? 'Para usar la IA inicia sesión con tu equipo o pega tu API key de Cohere en Configuración' : (rc.expand && rc.expand.status === 'busy') ? 'Consultando…' : '';
     $('rc-library').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Catálogo de acciones posibles</h3>
         <span class="field__hint">Catálogo configurable; no son recomendaciones y nada se ejecuta automáticamente.</span></div>
@@ -50,7 +109,9 @@
           <td>${esc(DRIVER[a.driver])}${a.signalMatch ? '<span class="cell-sub">hay señales de este driver</span>' : ''}</td><td>${esc(a.ownerArea)}</td>
           <td>${esc(C().metrics[a.measurementMetric] ? C().metrics[a.measurementMetric].label : a.measurementMetric)}${a.defaultWindowDays ? `<span class="cell-sub">${a.defaultWindowDays} días</span>` : ''}</td>
           <td>${a.dataAvailable ? H().pill('ok', 'Disponibles') : H().pill('warning', 'Faltan') + `<span class="cell-sub">${esc(a.missingData.join(', '))}</span>`}</td>
-          <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : `disabled title="${selSc ? 'Falta el dato que esta acción necesita' : 'Primero guarda y elige un escenario'}"`}>Agregar al plan</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+          <td><div class="btn-row"><button type="button" class="btn btn--small" data-action="rc-add-action" data-id="${esc(a.actionId)}" ${selSc && a.dataAvailable ? '' : `disabled title="${selSc ? 'Falta el dato que esta acción necesita' : 'Primero guarda y elige un escenario'}"`}>Agregar al plan</button><button type="button" class="btn btn--small btn--ai" data-action="rc-expand" data-id="${esc(a.actionId)}" ${expandOff ? `disabled title="${expandOff}" aria-describedby="rcx-why"` : ''}>✦ Ampliar con IA</button>${a.custom ? `<button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-custom" data-id="${esc(a.actionId)}" aria-label="Quitar la acción propia ${esc(a.name)} del catálogo">Quitar</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>
+      ${expandOff && selSc ? `<p class="field__hint" id="rcx-why" role="note">«Ampliar con IA» no está disponible: ${expandOff}.</p>` : ''}
+      ${expandPanel(state)}
       <details class="disclosure"><summary>Agregar una acción propia al catálogo</summary><div class="panel__body">
         <div class="settings-grid">
           <div class="field"><label for="rc-cu-name" class="field__hint">Nombre</label><input id="rc-cu-name" data-draft type="text"></div>
@@ -88,7 +149,7 @@
           const p = a.priority || {};
           const last = FP.actionTracking.latest(rc.plan, a.actionId);
           return `<tr>
-            <td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}<span class="cell-sub">${esc(a.description || '')}${a.source === 'cohere' ? ' · propuesta por IA' : ''}</span></td>
+            <td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}<span class="cell-sub">${esc(a.description || '')}${a.source === 'cohere' ? ' · propuesta por IA' : ''}</span>${detailHtml(a)}</td>
             <td class="wrap"><span class="cell-sub">Driver ${esc(DRIVER[a.driver] || a.driver || '—')} · ${esc(a.hypothesisId || '—')} · ${esc(a.scenarioId || '—')}</span></td>
             <td><input type="text" value="${esc(a.owner)}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="owner" aria-label="Responsable" class="input--compact"></td>
             <td><select data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="status" aria-label="Estado">${FP.actionPlan.nextStates(state.rc.plan, a).map((o) =>
@@ -138,5 +199,5 @@
     renderTracking(state);
   }
 
-  FP.actionPlanView = { render };
+  FP.actionPlanView = { render, detailText };
 })(typeof window !== 'undefined' ? window : globalThis);

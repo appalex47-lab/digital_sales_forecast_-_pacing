@@ -1891,3 +1891,32 @@ tr.is-evidence { outline-offset: -3px; }
   /* las anchuras por columna (19 %, 13 %…) son de la tabla ancha; en tarjetas la primera celda (nombre) se quedaba en ~100 px */
   #view-analisis .table--cards th, #view-analisis .table--cards td { width: 100% !important; }
 }
+
+/* ---------- «Ampliar con IA» (Recovery Center): escritorio y móvil ---------- */
+.btn--ai { border-color: var(--ds-accent, #2563eb); color: var(--ds-accent, #2563eb); background: transparent; }
+.btn--ai:disabled { opacity: .55; }
+.rcx { margin: 1rem 0; padding: 1rem; border: 1px solid var(--ds-accent, #2563eb); border-radius: .75rem; background: var(--ds-accent-soft, rgba(37,99,235,.06)); min-width: 0; }
+.rcx__eye { margin: 0 0 .25rem; font-size: .8125rem; font-weight: 600; color: var(--ds-accent, #2563eb); }
+.rcx h4 { margin: 0 0 .75rem; overflow-wrap: anywhere; }
+.rcx__h { margin: 1rem 0 .5rem; }
+.rcx textarea, .rcx input[type=text] { width: 100%; box-sizing: border-box; }
+.rcx-seg { display: inline-flex; border: 1px solid var(--ds-control-border, #7D8A9F); border-radius: .5rem; overflow: hidden; margin-bottom: .5rem; }
+.rcx-seg__b { border: 0; background: transparent; padding: .5rem .9rem; min-height: 44px; cursor: pointer; font: inherit; color: inherit; }
+.rcx-seg__b[aria-pressed="true"] { background: var(--ds-accent, #2563eb); color: var(--ds-on-accent, #fff); }
+.rcx__steps { display: grid; gap: .75rem; }
+.rcx__step { display: grid; grid-template-columns: 2rem minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: .5rem; align-items: start; padding: .75rem; border: 1px solid var(--border, #d8dde5); border-radius: .5rem; background: var(--ds-surface, transparent); }
+.rcx__n { display: inline-flex; width: 1.75rem; height: 1.75rem; border-radius: 50%; align-items: center; justify-content: center; background: var(--ds-accent, #2563eb); color: var(--ds-on-accent, #fff); font-size: .8125rem; margin-top: 1.4rem; }
+.rcx__del { margin-top: 1.4rem; }
+.rcx__btns { margin-top: 1rem; flex-wrap: wrap; }
+.rcx-detail { margin-top: .5rem; }
+.rcx-detail__body { overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .rcx { padding: .75rem; }
+  .rcx__step { grid-template-columns: 2rem minmax(0, 1fr); }
+  .rcx__step > .field, .rcx__step > .rcx__del { grid-column: 1 / -1; }
+  .rcx__n { margin-top: 0; }
+  .rcx__del { margin-top: 0; justify-self: start; }
+  .rcx__btns .btn { flex: 1 1 100%; min-height: 44px; }
+  .rcx-seg { display: flex; width: 100%; }
+  .rcx-seg__b { flex: 1; }
+}

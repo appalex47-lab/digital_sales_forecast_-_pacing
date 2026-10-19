@@ -2972,6 +2972,28 @@
       if (a) addActionFrom({ actionId: a.actionId, name: a.action, description: a.rationale, driver: a.relatedDriver, measurementMetric: a.relatedDriver,
         defaultWindowDays: null, signalIds: a.relatedSignals }, 'cohere');
     },
+    /* ----- «Ampliar con IA»: plan de trabajo de una acción del catálogo (borrador editable; solo se guarda al agregarlo al plan) ----- */
+    'rc-expand'(el) { return runExpand(el.dataset.id, state.rc.expandStyle || 'summary'); },
+    'rc-expand-regen'() { const x = state.rc.expand; if (x) return runExpand(x.actionId, x.style); },
+    'rc-expand-style'(el) {
+      const x = state.rc.expand; if (!x || x.style === el.dataset.style) return;
+      if (x.status === 'ready' && expandDirty() && !root.confirm('Cambiar el estilo vuelve a generar el borrador y se pierden tus ediciones. ¿Continuar?')) return;
+      state.rc.expandStyle = el.dataset.style; return runExpand(x.actionId, el.dataset.style);
+    },
+    'rc-expand-discard'() { state.rc.expand = null; render(); },
+    'rc-expand-step-add'() { const x = state.rc.expand; if (!x || !x.draft) return; x.draft = collectExpand(); x.draft.steps.push({ text: '', owner: '', when: '' }); render(); },
+    'rc-expand-step-del'(el) { const x = state.rc.expand; if (!x || !x.draft) return; x.draft = collectExpand(); if (x.draft.steps.length > 1) x.draft.steps.splice(Number(el.dataset.index), 1); render(); },
+    'rc-expand-copy'() { const x = state.rc.expand; if (!x || !x.draft) return; copyText(FP.actionPlanView.detailText(expandTitle(x), collectExpand()), 'Plan copiado.'); },
+    'rc-detail-copy'(el) { const a = state.rc.plan.actions.find((z) => z.actionId === el.dataset.id); if (a && a.detail) copyText(FP.actionPlanView.detailText(`${a.actionId} ${a.title}`, a.detail), 'Plan copiado.'); },
+    'rc-expand-add'() {
+      const x = state.rc.expand; if (!x || x.status !== 'ready') return;
+      const item = (state.rc._catalogItems || []).find((a) => a.actionId === x.actionId); if (!item) { FP.ui.toast('La acción ya no está en el catálogo filtrado.'); return; }
+      const d = collectExpand(); d.steps = d.steps.filter((st) => st.text);
+      if (!d.objective || !d.steps.length) { FP.ui.toast('El plan necesita un objetivo y al menos un paso.'); return; }
+      d.edited = JSON.stringify({ ...d, edited: false, generatedAt: null }) !== JSON.stringify({ ...x.original, edited: false, generatedAt: null });
+      state.rc.expand = null;
+      addActionFrom({ ...item, detail: d }, 'catalog');
+    },
     'rc-add-custom'() {
       const v = (id) => document.getElementById(id).value;
       const r = FP.actionLibrary.validateCustom({ name: v('rc-cu-name'), driver: v('rc-cu-driver'), ownerArea: v('rc-cu-owner'), defaultWindowDays: v('rc-cu-days'), description: v('rc-cu-desc') });
@@ -3773,6 +3795,49 @@
 
 
   /** Crea una acción del plan ligada al escenario (y su hipótesis) seleccionado. */
+  /* ---------- Ampliar con IA: ayudas ---------- */
+  const expandTitle = (x) => { const it = (state.rc._catalogItems || []).find((a) => a.actionId === x.actionId); return it ? it.name : x.actionId; };
+  const byId = (id) => document.getElementById(id);
+  const splitLines = (id) => ((byId(id) || {}).value || '').split('\n').map((t) => t.trim()).filter(Boolean);
+  /** Lee el borrador tal como está en pantalla (lo que la persona editó). */
+  function collectExpand() {
+    const x = state.rc.expand, base = x && x.draft ? x.draft : { steps: [] };
+    const steps = [...document.querySelectorAll('#rcx [data-rcx-step]')].map((row) => {
+      const g = (k) => ((row.querySelector(`[data-k="${k}"]`) || {}).value || '').trim(); return { text: g('text'), owner: g('owner'), when: g('when') };
+    });
+    return { ...base, objective: ((byId('rcx-objective') || {}).value || '').trim(), steps, measure: ((byId('rcx-measure') || {}).value || '').trim(),
+      dataToReview: splitLines('rcx-data'), risks: byId('rcx-risks') ? splitLines('rcx-risks') : (base.risks || []), dontDo: byId('rcx-dont') ? splitLines('rcx-dont') : (base.dontDo || []) };
+  }
+  function expandDirty() {
+    const x = state.rc.expand; if (!x || !x.original) return false;
+    const strip = (d) => JSON.stringify({ o: d.objective, s: d.steps, m: d.measure, d: d.dataToReview, r: d.risks, n: d.dontDo });
+    return strip(collectExpand()) !== strip(x.original);
+  }
+  function copyText(text, msg) {
+    const ok = () => FP.ui.toast(msg);
+    try { if (root.navigator && navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(ok, () => fallback()); return; } } catch (e) { /* sigue */ }
+    fallback();
+    function fallback() { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); let done = false; try { done = document.execCommand('copy'); } catch (e) { done = false; } t.remove(); if (done) ok(); else FP.ui.toast('No pude copiar. Selecciona el texto y cópialo a mano.'); }
+  }
+  let expandToken = 0;
+  async function runExpand(actionId, style) {
+    const rc = state.rc;
+    const item = (rc._catalogItems || []).find((a) => a.actionId === actionId);
+    const sc = rc.scenarioStore.scenarios.find((s) => s.scenarioId === rc.actionScenario);
+    if (!item || !sc || !sc.links.hypothesisId) { FP.ui.toast('Elige una acción y un escenario ligado a una hipótesis.'); return; }
+    if (!FP.cohereConnection.isConfigured()) { FP.ui.toast('Inicia sesión (o pega tu API key de Cohere en Configuración de RevNavigator).'); return; }
+    const token = ++expandToken;
+    rc.expand = { actionId, style, status: 'busy', draft: null, original: null, errors: [] }; render();
+    const hyp = rc.analysis.hypotheses.find((h) => h.id === sc.links.hypothesisId) || { id: sc.links.hypothesisId, hypothesis: sc.links.hypothesis, driver: sc.links.driver };
+    const res = await FP.cohereActions.expandAction({ item, hypothesis: hyp, signals: rc.analysis.signals.filter((z) => (sc.links.signalIds || []).includes(z.id)), scenario: sc,
+      availableDimensions: rc.analysis.dataQuality.availableTargets, constraints: rc.constraints, style }, { apiKey: state.dx.apiKey, model: state.dx.model });
+    if (token !== expandToken || !rc.expand) return;   // se canceló o se pidió otro: se descarta esta respuesta
+    rc.expand = res.ok ? { actionId, style, status: 'ready', draft: res.detail, original: JSON.parse(JSON.stringify(res.detail)), errors: [] }
+      : { actionId, style, status: 'error', draft: null, original: null, errors: res.errors };
+    render();
+    if (res.ok) { const t = byId('rcx'); if (t && t.scrollIntoView) { t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
+  }
+
   function addActionFrom(item, source) {
     const rc = state.rc;
     const sc = rc.scenarioStore.scenarios.find((s) => s.scenarioId === rc.actionScenario);
@@ -3786,7 +3851,7 @@
       hypothesisId: hyp.id, hypothesis: hyp.hypothesis, scenarioId: sc.scenarioId, signalIds: item.signalIds || sc.links.signalIds,
       driver: item.driver, channel: rc.ctx.channel, period: { start: rc.ctx.period.start, end: rc.ctx.period.end, label: rc.ctx.period.label },
       expectedImpact: sc.expectedImpact, measurementMetric: item.measurementMetric || item.driver, windowDays: win,
-      startDate: start, endDate: win ? Cal.addDays(start, win - 1) : rc.ctx.period.end,
+      startDate: start, endDate: win ? Cal.addDays(start, win - 1) : rc.ctx.period.end, detail: item.detail || null,
       priority: FP.actionPlan.priorityFactors({ scenario: sc, hypothesis: hyp, periodEnd: rc.ctx.period.end, today: rc.ctx.referenceDate || today,
         constraintsExceeded: (sc.warnings || []).some((w) => /restricción/.test(w)) })
     });
