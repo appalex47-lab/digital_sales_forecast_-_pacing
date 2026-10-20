@@ -42,7 +42,13 @@
   }
 
   /** «Categoría Diabetes · Sucursal 108» para rótulos. */
-  const describe = (f) => KEYS.filter((k) => f && f[k]).map((k) => `${LABEL[k]} ${f[k]}`).join(' · ');
+  /** Rótulo de un valor: la sucursal se muestra por su nombre (nombre_sucursal); el código solo si no hay nombre. */
+  function label(key, value) {
+    if (key !== 'branch' || !value) return value;
+    try { const b = (FP.productStore.geoOptions({}).branches || []).find((x) => x.code === value); if (b && b.name && b.name !== b.code) return b.name; } catch (e) { /* sin nombres */ }
+    return value;
+  }
+  const describe = (f) => KEYS.filter((k) => f && f[k]).map((k) => `${LABEL[k]} ${label(k, f[k])}`).join(' · ');
 
-  FP.productFilter = { KEYS, LABEL, active, isActive, options, cascade, describe };
+  FP.productFilter = { KEYS, LABEL, active, isActive, options, cascade, describe, label };
 })(typeof window !== 'undefined' ? window : globalThis);

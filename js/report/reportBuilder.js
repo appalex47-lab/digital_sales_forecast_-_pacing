@@ -433,7 +433,7 @@
   function pageTraffic(s) {
     const d = s.diag;
     const dims = d && d.level2 ? d.level2.filter((x) => x.source !== 'core' && x.groups && x.groups.length) : [];
-    if (!dims.length) return omit('traffic', 'Tráfico y conversión', 'No hay archivo de segmentos de tráfico (dispositivo, fuente/medio, campaña o página de destino) para el período.');
+    if (!dims.length) return omit('traffic', 'Tráfico y conversión', (String((d && d.availability && d.availability.segmentsNote) || '').slice(0, 230) || 'No hay segmentos de tráfico (GA4 o archivo de Segmentos) para el período.'));
     const dim = dims[0];
     const rows = dim.groups.map((g) => {
       const m = g.metrics || {};
