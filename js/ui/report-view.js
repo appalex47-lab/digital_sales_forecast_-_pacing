@@ -220,7 +220,7 @@
   function summaryBody(p, x) {
     const cards = p.items.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
     const band = p.focus ? `<div class="rp-since">${p.focus.spark ? `<div class="rp-since__g">${focusSpark(p.focus.spark)}<div class="rp-since__k"><i class="k1"></i>${esc(p.focus.entity)} <i class="k2"></i>Resto del negocio</div></div>` : ''}<div class="rp-since__t">${esc(p.focus.text)}</div></div>` : '';
-    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
+    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${p.filterStrip ? `<p class="rp-yr rp-yr--f">${esc(p.filterStrip)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
       ${p.review ? `<div class="rp-callout rp-callout--info"><strong>Qué revisar primero.</strong> ${esc(p.review.text)}</div>` : ''}`;
   }
 
@@ -264,7 +264,9 @@
   const DECO = '<svg class="rp-deco" width="640" height="420" viewBox="0 0 640 420" aria-hidden="true"><g fill="#fff" opacity=".10"><rect x="330" y="250" width="34" height="170"/><rect x="380" y="210" width="34" height="210"/><rect x="430" y="165" width="34" height="255"/><rect x="480" y="120" width="34" height="300"/><rect x="530" y="70" width="34" height="350"/><rect x="580" y="20" width="34" height="400"/></g><g fill="none" stroke="#8DB6E8" stroke-width="2.5" opacity=".55"><path d="M0 330 L90 290 L180 308 L270 230 L360 250 L450 160 L540 150 L640 60"/></g><circle cx="640" cy="60" r="7" fill="#8DB6E8" opacity=".8"/></svg>';
   function pageHtml(u, x) {
     const p = u.page;
-    const ctxLine = [x.channelLabel === 'Total digital' ? null : x.channelLabel, p.ctx || null].filter(Boolean).join(' · ');
+    const fl = ((x.units.find((q) => q.id === 'cover') || {}).page || {}).filterLabel || '';
+    const scopeTag = !fl ? null : ['categories', 'trends', 'customers'].includes(u.id) ? `Filtro: ${fl}` : ['pacing', 'drivers', 'recovery'].includes(u.id) ? 'Total del negocio (el plan no tiene este filtro)' : null;
+    const ctxLine = [x.channelLabel === 'Total digital' ? null : x.channelLabel, scopeTag, p.ctx || null].filter(Boolean).join(' · ');
     const foot = `<div class="rp-foot"><span>Reporte ejecutivo de ventas digitales · Corte ${esc(x.cutoff)}</span><span>${x.tags && p.sources && p.sources.length ? `Fuente: ${esc(p.sources.join(', '))}${p.tags && p.tags.length ? ` · ${esc(p.tags.join(' / '))}` : ''}` : ''}</span></div>`;
     const no = `<span class="rp-pgno">${u.number} de ${x.total}</span>`;
     if (u.id === 'cover') {
@@ -344,16 +346,18 @@
   function scale(rootEl) {
     rootEl.querySelectorAll('.rp-frame').forEach((f) => { const s = Math.max(0.5, Math.min(1, f.clientWidth / PW)); f.style.setProperty('--rp-s', s.toFixed(3)); });
   }
-  /** Un único desplegable con categorías, subcategorías, productos y farmacias (sucursales). Solo se muestra si hay catálogo de productos cargado. */
+  /** Filtros separados y encadenados (categoría → subcategoría → producto; estado → ciudad → sucursal; entrega). Solo se muestran los que tienen opciones. */
   function filterSelect(state) {
     const PF = FP.productFilter, PS = FP.productStore;
     if (!PF || !PS || !PS.available || !PS.available()) return '';
-    let o = {}; try { o = PF.options({}, ['category', 'subcategory', 'product', 'branch']); } catch (e) { return ''; }
-    const cur = state.rp.filter ? Object.entries(PF.active(state.rp.filter))[0] : null, curVal = cur ? JSON.stringify(cur) : '';
-    const grp = (label, key) => (o[key] && o[key].length ? `<optgroup label="${esc(label)}">${o[key].map((v) => { const val = JSON.stringify([key, v]); return `<option value="${esc(val)}"${val === curVal ? ' selected' : ''}>${esc(v)}</option>`; }).join('')}</optgroup>` : '');
-    return `<div class="field"><label class="field__label" for="rp-filter">Filtro de la presentación</label>
-      <select class="select" id="rp-filter" data-action="rp-filter"><option value="">Sin filtro adicional (cada vista usa lo que tenga elegido)</option>${grp('Categorías', 'category')}${grp('Subcategorías', 'subcategory')}${grp('Productos', 'product')}${grp('Farmacias (sucursales)', 'branch')}</select>
-      <p class="field__hint">Un solo filtro para categorías, subcategorías, productos o farmacias. Aplica a las láminas de categorías, evolución y clientes; pacing, forecast, diagnóstico y recuperación siguen mostrando el total del negocio porque el plan no está por producto ni por farmacia.</p></div>`;
+    const cur = PF.active(state.rp.filter || {});
+    let o = {}; try { o = PF.options(cur, PF.KEYS); } catch (e) { return ''; }
+    const sel = (k) => (o[k] && o[k].length ? `<div class="field rp-f"><label class="field__label" for="rp-f-${k}">${esc(PF.LABEL[k])}</label>
+      <select class="select" id="rp-f-${k}" data-action="rp-filter" data-key="${k}"><option value="">Todas</option>${o[k].map((v) => `<option value="${esc(v)}"${cur[k] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>` : '');
+    const any = PF.isActive(cur);
+    return `<div class="rp-filters"><div class="rp-filters__head"><h3 class="panel__title">Filtros de la presentación</h3>${any ? '<button type="button" class="btn btn--ghost" data-action="rp-filter-clear">Limpiar filtros</button>' : ''}</div>
+      <div class="rp-filters__grid">${PF.KEYS.map(sel).join('')}</div>
+      <p class="field__hint">Se pueden combinar. Aplican a las láminas de categorías, evolución y clientes; pacing, forecast, diagnóstico y recuperación siguen siendo del total del negocio porque el plan no está por producto ni por sucursal (cada una lo indica en su encabezado).</p></div>`;
   }
   function render(state) {
     const el = document.getElementById('presentacion-view'); if (!el) return;
@@ -370,7 +374,7 @@
         </div></div>
         <div class="panel__body stack">
           <div><h3 class="panel__title">Periodo y canal</h3>
-            <p class="field__hint">Son los mismos de Diagnóstico y Narrativa. Pacing, forecast y reforecast son del año completo al corte. Cada página usa los filtros y ajustes actuales de su vista (Evolución, Productos y Clientes).</p>
+            <p class="field__hint">Son los mismos de Diagnóstico y Narrativa. Si eliges un mes, todo el reporte gira en torno a ese mes y canal, y el año aparece solo como contexto en el resumen y el cierre. Con semana o año, el pacing sigue siendo del año completo al corte.</p>
             ${FP.narrativeView.contextControls(state, 'rp', 'pkg-context', 'pkg-context')}</div>
           ${filterSelect(state)}
           <div class="rp-opts"><label class="check"><input type="checkbox" data-action="rp-option" data-key="showTags" ${rp.options.showTags ? 'checked' : ''}> Mostrar etiquetas Observado / Calculado / Estimado</label>
