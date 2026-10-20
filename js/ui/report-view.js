@@ -179,7 +179,13 @@
   /* Alcance: solo se imprime lo que cambia la lectura (filtro activo, período parcial); el resto va en el encabezado de la lámina. */
   const scopeNote = (p) => { const sc = p.scope || {}; const bits = [sc.filter ? `Filtro: ${sc.filter}` : null, sc.partial ? 'Incluye un período parcial.' : null].filter(Boolean); return bits.length ? `<p class="rp-scope">${esc(bits.join(' · '))}</p>` : ''; };
   /* ================= cuerpo por página ================= */
+  const TYPECLS = { Canal: 'c', Palanca: 'p', 'Categoría': 'g', Producto: 'r' };
+  const moverRow = (i, pos) => `<div class="rp-mv__r"><span class="rp-mv__tp rp-mv__tp--${TYPECLS[i.type] || 'o'}">${esc(i.type)}</span><div class="rp-mv__n"><b>${esc(i.name)}</b>${i.evidence ? `<small>${esc(i.evidence)}</small>` : ''}</div><div class="rp-mv__v ${pos ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', i.value))}<span class="rp-mv__bar"><i class="${pos ? 'pos' : 'neg'}" style="width:${Math.max(4, Math.round((i.weight || 0) * 100))}%"></i></span></div></div>`;
+  const moversStrip = (m) => `<div class="rp-strip"><div class="rp-strip__g rp-strip__g--m"><span class="rp-strip__t">Lo que más resta</span>${m.minus.map((i) => `<div class="rp-chip rp-chip--m"><i>${esc(i.type.toUpperCase())}</i><b>${esc(fmt('smoney', i.value))}</b><span>${esc(i.name)}</span></div>`).join('') || '<div class="rp-chip rp-chip--e"><span>Nada resta de forma medible</span></div>'}</div>
+    <div class="rp-strip__g rp-strip__g--p"><span class="rp-strip__t">Lo que más suma</span>${m.plus.map((i) => `<div class="rp-chip rp-chip--p"><i>${esc(i.type.toUpperCase())}</i><b>${esc(fmt('smoney', i.value))}</b><span>${esc(i.name)}</span></div>`).join('') || '<div class="rp-chip rp-chip--e"><span>Nada suma de forma medible</span></div>'}</div></div>`;
   const BODY = {
+    movers: (p) => `<div class="rp-mv"><section class="rp-mv__c rp-mv__c--m"><h3 class="rp-mv__h">Lo que resta</h3>${p.minus.map((i) => moverRow(i, false)).join('') || '<p class="rp-empty">Nada resta de forma medible en este período.</p>'}</section>
+      <section class="rp-mv__c rp-mv__c--p"><h3 class="rp-mv__h">Lo que suma</h3>${p.plus.map((i) => moverRow(i, true)).join('') || '<p class="rp-empty">Nada suma de forma medible en este período.</p>'}</section></div>${notesHtml(p)}`,
     pacing: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>
       ${p.caveat ? callout(p.caveat, 'warn') : ''}${p.reconciliation ? callout(p.notes[0], 'warn') : ''}<ul class="rp-notes">${p.notes.filter((n, i) => !(p.reconciliation && i === 0)).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`,
     reliability: (p, x) => {
@@ -219,14 +225,15 @@
   }
   const p0 = () => 'la entidad contra el resto del negocio';
   function summaryBody(p, x) {
-    const cards = p.items.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
+    const shown = p.focus ? p.items.filter((i) => i.page !== 'focus') : p.items;   // con la banda del foco, su tarjeta sería repetir lo mismo
+    const cards = shown.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
     const band = p.focus ? `<div class="rp-since">${p.focus.spark ? `<div class="rp-since__g">${focusSpark(p.focus.spark)}<div class="rp-since__k"><i class="k1"></i>${esc(p.focus.entity)} <i class="k2"></i>Resto del negocio</div></div>` : ''}<div class="rp-since__t">${esc(p.focus.text)}</div></div>` : '';
-    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${p.filterStrip ? `<p class="rp-yr rp-yr--f">${esc(p.filterStrip)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
+    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${p.filterStrip ? `<p class="rp-yr rp-yr--f">${esc(p.filterStrip)}</p>` : ''}${p.movers ? moversStrip(p.movers) : ''}${band}<ol class="rp-finds rp-finds--${shown.length}">${cards}</ol>
       ${p.review ? `<div class="rp-callout rp-callout--info"><strong>Qué revisar primero.</strong> ${esc(p.review.text)}</div>` : ''}`;
   }
 
   function closingBody(p) {
-    return `<div class="rp-close">${p.blocks.map((b, i) => `<section class="rp-cl rp-cl--${i + 1}"><h3 class="rp-cl__t">${esc(b.title)}</h3>${b.big ? `<div class="rp-cl__big">${esc(b.big)}</div><div class="rp-cl__u">${esc(b.unit)}</div>` : ''}<p class="rp-cl__x">${esc(b.text)}</p></section>`).join('')}</div>`;
+    return `<div class="rp-close">${p.blocks.map((b, i) => `<section class="rp-cl rp-cl--${i + 1}"><h3 class="rp-cl__t">${esc(b.title)}</h3>${b.big ? `<div class="rp-cl__big">${esc(b.big)}</div><div class="rp-cl__u">${esc(b.unit)}</div>` : ''}${b.list ? `<ul class="rp-cl__list">${b.list.map((i) => `<li><span><em>${esc(i.type)}</em> ${esc(i.name)}</span><b class="${i.value < 0 ? 'rp-neg' : 'rp-pos'}">${esc(fmt('smoney', i.value))}</b></li>`).join('')}</ul>` : ''}${b.text ? `<p class="rp-cl__x">${esc(b.text)}</p>` : ''}</section>`).join('')}</div>`;
   }
 
   function relBlock(r) {
@@ -261,7 +268,7 @@
     return out;
   }
   const dateOf = (iso) => fmt('date', iso);
-  const TITLES = { summary: 'Resumen ejecutivo', pacing: 'Desempeño contra el plan y proyección de cierre', drivers: 'Qué explica la diferencia: tráfico, conversión y ticket', trends: 'Evolución: qué cae y qué compensa', categories: 'Categorías y productos: dónde se concentra el cambio', customers: 'Clientes, recurrencia y valor', traffic: 'Tráfico y conversión por segmento', recovery: 'Recuperación: lo que falta para la meta', seasonality: 'Estacionalidad y meta del siguiente año', closing: 'Cierre ejecutivo | Qué nos llevamos de este periodo' };
+  const TITLES = { movers: 'Qué resta y qué suma', summary: 'Resumen ejecutivo', pacing: 'Desempeño contra el plan y proyección de cierre', drivers: 'Qué explica la diferencia: tráfico, conversión y ticket', trends: 'Evolución: qué cae y qué compensa', categories: 'Categorías y productos: dónde se concentra el cambio', customers: 'Clientes, recurrencia y valor', traffic: 'Tráfico y conversión por segmento', recovery: 'Recuperación: lo que falta para la meta', seasonality: 'Estacionalidad y meta del siguiente año', closing: 'Cierre ejecutivo | Qué nos llevamos de este periodo' };
   const DECO = '<svg class="rp-deco" width="640" height="420" viewBox="0 0 640 420" aria-hidden="true"><g fill="#fff" opacity=".10"><rect x="330" y="250" width="34" height="170"/><rect x="380" y="210" width="34" height="210"/><rect x="430" y="165" width="34" height="255"/><rect x="480" y="120" width="34" height="300"/><rect x="530" y="70" width="34" height="350"/><rect x="580" y="20" width="34" height="400"/></g><g fill="none" stroke="#8DB6E8" stroke-width="2.5" opacity=".55"><path d="M0 330 L90 290 L180 308 L270 230 L360 250 L450 160 L540 150 L640 60"/></g><circle cx="640" cy="60" r="7" fill="#8DB6E8" opacity=".8"/></svg>';
   function pageHtml(u, x) {
     const p = u.page;
@@ -303,6 +310,13 @@
       pg.classList.remove('rp-compact', 'rp-tight'); pg.removeAttribute('data-overflow');
       if (b.scrollHeight > b.clientHeight + 1) { pg.classList.add('rp-compact'); }
       if (b.scrollHeight > b.clientHeight + 1) { pg.classList.add('rp-tight'); }   // último recurso antes de quitar filas: gráficos más bajos
+      // Resumen: antes de quitar nada se esconde el gráfico del foco; luego, los hallazgos secundarios (lo dice una nota; siguen en sus láminas).
+      if (pg.getAttribute('data-page') === 'summary' && b.scrollHeight > b.clientHeight + 1) {
+        pg.classList.add('rp-lean');
+        const finds = [...b.querySelectorAll('.rp-find')]; let dropped = 0;
+        while (b.scrollHeight > b.clientHeight + 1 && finds.length - dropped > 1) { finds[finds.length - 1 - dropped].remove(); dropped++; }
+        if (dropped) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = `Por espacio, el resumen muestra ${finds.length - dropped} de ${finds.length} hallazgos; el resto está en sus láminas.`; b.appendChild(n); pg.setAttribute('data-trimmed', '1'); }
+      }
       // Aun compacta no cabe: se muestran solo las filas de mayor magnitud (las tablas ya vienen ordenadas) y la lámina lo dice; nunca se recorta en silencio.
       if (b.scrollHeight > b.clientHeight + 1 && !/^annex/.test(pg.getAttribute('data-page') || '')) {
         const note = document.createElement('p'); note.className = 'rp-scope rp-trim'; b.appendChild(note);
