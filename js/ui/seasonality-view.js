@@ -25,7 +25,7 @@
     const profiles = ps.profiles;
     const ch = ps.seasonalityChannel;
     const seg = H().segmented('season-channel', C().channels.map((c) => [c.id, c.label]), ch);
-    if (!profiles) { box.innerHTML = '<div class="empty" role="status"><strong>Calculando…</strong></div>'; return; }
+    if (!profiles) { box.innerHTML = FP.loader.html('Calculando la estacionalidad…', { key: 'estac' }); return; }
     const p = profiles[ch];
     const cfg = FP.seasonality.effectiveConfig(ps.settings);
     const components = cfg.methods[cfg.method].components;

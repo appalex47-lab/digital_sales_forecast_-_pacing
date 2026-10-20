@@ -185,7 +185,7 @@
     }
     return null;
   }
-  const cityLabel = (c) => (c > 0 ? `${dims.cities[c].name}${dims.cities[c].stateIdx ? `, ${stateCode(dims.cities[c].stateIdx)}` : ''}` : '(sin dato)');
+  const cityLabel = (c) => (c > 0 ? `${(dims.cities[c] || {}).name || '(sin dato)'}${dims.cities[c] && dims.cities[c].stateIdx ? `, ${stateCode(dims.cities[c].stateIdx)}` : ''}` : '(sin dato)');
 
   /**
    * Opciones de los filtros de geografía respetando la jerarquía: estados de la región, ciudades del estado,
@@ -497,7 +497,7 @@
       const f = flagsAt(p, i), c = cityAt(p, i), r = rowRegion(p, i);
       o.state = f & GF.stateInvalid ? '(inválido)' : p.stateIdx[i] ? dims.states[p.stateIdx[i]] : null;
       o.stateCode = stateCode(p.stateIdx[i]);
-      o.city = c ? dims.cities[c].name : null;
+      o.city = c && dims.cities[c] ? dims.cities[c].name : null;
       o.region = r ? geo.regions[r] : null;
       o.branch = p.branchIdx[i] ? dims.branches[p.branchIdx[i]] : null;
       o.branchName = p.branchIdx[i] ? ((geo.branchInfo[p.branchIdx[i]] || {}).name || null) : null;

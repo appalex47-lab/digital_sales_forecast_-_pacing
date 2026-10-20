@@ -58,3 +58,20 @@ r = E.analyze(mix, { filter: { category: 'Diabetes' } }); assert.strictEqual(r.s
 const d5 = E.draftLedger([]); d5.add({ order: '1', customer: 'A', day: D('2025-01-05'), channel: 'ecommerce', revenue: 5, line: line('s1') }); E.mergeInto(mix, d5, { id: 'x2', fileName: 'viejo.csv' });
 r = E.analyze(mix, { filter: { category: 'Diabetes' } }); assert.strictEqual(r.status, 'ok', 'tras recargar el archivo el filtro queda disponible');
 console.log('test-customer-filter: OK');
+// Alcance «selección»: nuevo = primera compra de la categoría; LTV y cohortes de la selección
+{
+  const L2 = ledger();
+  let r = E.analyze(L2, { filter: { category: 'Derma' }, scope: 'selection' }); assert.strictEqual(r.status, 'ok'); assert.strictEqual(r.scope, 'selection');
+  const m = Object.fromEntries(r.monthly.map((x) => [x.key, x]));
+  assert.strictEqual(m['2025-02'].customers.new, 0, 'A ya compró Derma en enero: en febrero es recurrente en la selección');
+  assert.strictEqual(m['2025-02'].customers.recurrent, 1);
+  assert.strictEqual(r.summary.customers, 2, 'solo A y B compraron Derma');
+  assert.strictEqual(r.summary.revenue, 50 + 40 + 70, 'venta de la selección: 50 + 40 + 70');
+  assert.ok(Array.isArray(r.cohorts) && r.cohorts.length >= 1, 'hay cohortes de la selección (LTV)');
+  // Diabetes: A (s1, ene) y D (feb); A ya compró Derma pero en Diabetes es nuevo en la selección
+  r = E.analyze(L2, { filter: { category: 'Diabetes' }, scope: 'selection', channel: 'ecommerce' });
+  const m2 = Object.fromEntries(r.monthly.map((x) => [x.key, x]));
+  assert.strictEqual(m2['2025-01'].customers.new, 1); assert.strictEqual(m2['2025-02'].customers.new, 1);
+  assert.strictEqual(E.analyze(L2, { filter: { category: 'Nada' }, scope: 'selection' }).status, 'no_ledger');
+}
+console.log('test-customer-filter (selección): OK');

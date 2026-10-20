@@ -186,6 +186,19 @@
     if (hasFilter) {
       flt = buildFilter(L, options.filter, n);
       if (flt.status) return flt;
+      /* scope «selección»: el historial del cliente se mide solo con los pedidos de la selección. «Nuevo» = su primera compra DE esa categoría, producto o sucursal;
+         el LTV y la retención quedan de esa selección. Se arma un libro derivado y se corre el mismo análisis. */
+      if (options.scope === 'selection') {
+        const D = { v: 1, channels: L.channels, batches: L.batches, customers: [], key: [], cust: [], day: [], ch: [], rev: [], bat: [] }, cm = new Map();
+        for (let i = 0; i < n; i++) {
+          if (!flt.mask[i]) continue;
+          let c = cm.get(L.cust[i]); if (c === undefined) { c = D.customers.length; D.customers.push(L.customers[L.cust[i]]); cm.set(L.cust[i], c); }
+          D.key.push(L.key[i]); D.cust.push(c); D.day.push(L.day[i]); D.ch.push(L.ch[i]); D.rev.push(flt.rev[i]); D.bat.push(L.bat[i]);
+        }
+        if (!D.key.length) return { status: 'no_ledger', reason: 'empty_selection' };
+        const r2 = analyze(D, { ...options, filter: null, scope: null });
+        return r2.status === 'ok' ? { ...r2, filtered: true, scope: 'selection', filter: options.filter } : r2;
+      }
     }
 
     /* Resumen del histórico completo */
@@ -233,7 +246,7 @@
         historyDays: Math.max(0, known), reliableNew: known >= o.warmupDays };
     });
 
-    if (flt) return { status: 'ok', filtered: true, filter: options.filter, options: o, summary, monthly, cohorts: [], pooled: [], byFirstChannel: [], channelsAvailable: L.channels.slice(), maxDay: isoOf(P.maxDay), minDay: isoOf(P.minDay) };
+    if (flt) return { status: 'ok', filtered: true, scope: 'company', filter: options.filter, options: o, summary, monthly, cohorts: [], pooled: [], byFirstChannel: [], channelsAvailable: L.channels.slice(), maxDay: isoOf(P.maxDay), minDay: isoOf(P.minDay) };
 
     /* Cohortes por mes del primer pedido */
     const cohorts = new Map();

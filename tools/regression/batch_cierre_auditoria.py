@@ -58,7 +58,7 @@ async def main():
         # --- Errores globales
         await q.evaluate("window.dispatchEvent(new ErrorEvent('error',{error:new Error('fallo de prueba'),message:'fallo de prueba'}))"); await q.wait_for_timeout(300)
         tv = await q.evaluate("document.getElementById('toast').textContent")
-        chk('E1 un error no capturado se avisa al usuario (no falla en silencio)', 'error inesperado' in tv, tv)
+        chk('E1 un error no capturado se avisa al usuario (no falla en silencio)', 'Algo no se pudo mostrar' in tv, tv)
         real = [e for e in errs if 'fallo de prueba' not in e]
         chk('E2 sin errores de página adicionales', not real, real)
         await b.close()

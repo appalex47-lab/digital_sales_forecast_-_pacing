@@ -86,7 +86,7 @@
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
-    an: { channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
+    an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
     // Asistente de metas (no se guarda: solo llena el formulario)
@@ -1256,6 +1256,9 @@
     if (state.view === 'producto') FP.productView.render(state);
   }
 
+  /** Filtro de página de Evolución y patrones (categoría, producto, sucursal…): se suma a TODA lectura de productos. */
+  const pageFilter = () => (FP.productFilter ? FP.productFilter.active(state.an && state.an.filter) : {});
+  const aggF = (args) => FP.productStore.aggregate({ ...args, filter: { ...pageFilter(), ...(args.filter || {}) } });
   /** Cambia una parte del contexto de Análisis y descarta TODO resultado derivado (sin contexto viejo en pantalla). */
   function resetAnalysis(patch) {
     Object.assign(state.an, patch || {}, { page: 1, forecastPage: 1, rows: [], advanced: [], groups: [], selected: null, key: null, error: null, priorities: null, risks: null, forecast: null,
@@ -1281,8 +1284,8 @@
         if (dim === an.level) continue;
         try {
           const [cm, bm] = await Promise.all([
-            FP.productStore.aggregate({ from: cmp.current.from, to: cmp.current.to, channel: chan, groupBy: dim, filter }),
-            FP.productStore.aggregate({ from: cmp.baseline.from, to: cmp.baseline.to, channel: chan, groupBy: dim, filter })
+            aggF({ from: cmp.current.from, to: cmp.current.to, channel: chan, groupBy: dim, filter }),
+            aggF({ from: cmp.baseline.from, to: cmp.baseline.to, channel: chan, groupBy: dim, filter })
           ]);
           const rows = []; const keys = new Set([...cm.keys(), ...bm.keys()]);
           keys.forEach(k => {
@@ -1390,16 +1393,16 @@
     const focus = periods.at(-1);
     const closed = periods.filter(p => !p.partial);                      // los patrones se leen sobre períodos CERRADOS
     const firstPeriod = periods[0]?.key || '';
-    const key = JSON.stringify([ch, metric, an.level, periodType, count, firstPeriod, ctx.focus.key, an.comparison, ctx.focus.to, m.dateMin, m.dateMax]);
+    const key = JSON.stringify([ch, metric, an.level, JSON.stringify(pageFilter()), periodType, count, firstPeriod, ctx.focus.key, an.comparison, ctx.focus.to, m.dateMin, m.dateMax]);
     if (an.rows.length && an.key === key && !an.loading) return;
     an.loading = true; an.error = null; an.key = key;
     const runId = an._run = (an._run || 0) + 1, STALE = { stale: true }, chk = () => { if (an._run !== runId) throw STALE; };
     startAnLoader(an, periods.length);
     if (state.view === 'analisis') FP.trendView.render(state);   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
-    an.context = ctx;
+    ctx.filter = pageFilter(); an.context = ctx;
     const aggTotal = async (range) => {
       if (!range || range.to < range.from) return null;
-      const map = await FP.productStore.aggregate({ from: range.from, to: range.to, channel: ch, groupBy: 'total' });
+      const map = await aggF({ from: range.from, to: range.to, channel: ch, groupBy: 'total' });
       let total = 0, any = false;
       map.forEach(acc => { const fin = FP.productStore.finalize(acc, null); if (Number.isFinite(fin?.[metric]?.value)) { total += fin[metric].value; any = true; } });
       return any ? total : null;
@@ -1409,7 +1412,7 @@
       const monthlyMaps = [];
       const entities = new Set();
       for (const period of periods) {
-        const map = await FP.productStore.aggregate({ from: period.from, to: period.to, channel: ch, groupBy: an.level }); chk();
+        const map = await aggF({ from: period.from, to: period.to, channel: ch, groupBy: an.level }); chk();
         const s = sumMap(map, metric);
         s.values.forEach((_, e) => entities.add(e));
         monthlyMaps.push({ period: period.key, partial: period.partial, values: s.values, parts: s.parts, total: s.total, size: s.size });
@@ -1426,7 +1429,7 @@
           try {
             const rg = FP.temporalEngine.rangeForKey(lyK, 'month');
             if (rg && rg.from >= (m.dateMin || '0000') ) {
-              const map = await FP.productStore.aggregate({ from: rg.from, to: rg.to, channel: ch, groupBy: an.level }); chk();
+              const map = await aggF({ from: rg.from, to: rg.to, channel: ch, groupBy: an.level }); chk();
               const s2 = sumMap(map, metric);
               seasonRef = { total: { [lyK]: s2.total }, byEntity: new Map([...s2.values].map(([e, v]) => [e, { [lyK]: v }])) };
             }
@@ -1448,7 +1451,7 @@
       const cc = ctx.comparison;
       const focusMap = monthlyMaps.at(-1);
       let baseSum = null;
-      if (cc.available && cc.baseline) baseSum = sumMap(await FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: an.level }), metric); chk();
+      if (cc.available && cc.baseline) baseSum = sumMap(await aggF({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: an.level }), metric); chk();
       const comparable = Boolean(baseSum && baseSum.size > 0 && baseSum.total > 0 && focusMap && focusMap.size > 0);
       const cmpMessage = !cc.available ? cc.note
         : comparable ? null
@@ -1527,8 +1530,8 @@
         if (['product', 'sku', 'subcategory'].includes(an.level) && closed.length) {
           try {
             const rg = { from: closed[0].from, to: closed.at(-1).to };
-            const cats = [...(await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: 'category' })).keys()]; chk();
-            for (const cat of cats) { const mm = await FP.productStore.aggregate({ ...rg, channel: ch, groupBy: an.level, filter: { category: cat } }); mm.forEach((_, e) => { if (!catOf.has(e)) catOf.set(e, cat); }); chk(); }
+            const cats = [...(await aggF({ ...rg, channel: ch, groupBy: 'category' })).keys()]; chk();
+            for (const cat of cats) { const mm = await aggF({ ...rg, channel: ch, groupBy: an.level, filter: { category: cat } }); mm.forEach((_, e) => { if (!catOf.has(e)) catOf.set(e, cat); }); chk(); }
             catOf.forEach((cat, e) => { const ser = series.get(e); if (!ser) return; if (!catSeries.has(cat)) catSeries.set(cat, ser.map((x) => ({ period: x.period, value: 0 })));
               const acc = catSeries.get(cat); ser.forEach((x, i) => { if (Number.isFinite(x.value)) acc[i].value += x.value; }); });
           } catch (e) { catOf.clear(); catSeries.clear(); }
@@ -1563,7 +1566,9 @@
           return { entity: e, r0: a0.r, u0: a0.u, r1: a1.r, u1: a1.u }; });
         an.pvm = FP.pvmEngine ? { ...FP.pvmEngine.analyze(pvmRows), level: an.level, comparisonLabel: cc.text } : null;
         if (an.pvm && an.pvm.status === 'unavailable' && !pvmRows.some((x) => x.u0 > 0 || x.u1 > 0)) an.pvm.message = 'El archivo de productos no trae unidades válidas: no se puede separar volumen, precio y mezcla.';
-        if (FP.planBridgeEngine) {
+        if (FP.productFilter && FP.productFilter.isActive(an.filter)) {
+          an.bridge = { status: 'not_applicable', message: `La meta (plan) existe por canal, no por ${FP.productFilter.describe(an.filter)}. El Puente al plan no aplica con una selección de producto o sucursal; quita la selección para verlo.` };
+        } else if (FP.planBridgeEngine) {
           const planInfo = await planForRange(cc.current, ch); chk();
           const mixR = [...ent].map((e) => ({ entity: e, current: focusMap.values.get(e), baseline: baseSum.values.get(e) }));
           an.bridge = { ...FP.planBridgeEngine.analyze({ rows: mixR, plan: planInfo, actual: focusMap.total, baselineTotal: baseSum.total }), level: an.level, comparisonLabel: cc.text, currentLabel: cc.current.label, planNote: planInfo.note || null, planMessage: planInfo.message || null };
@@ -1646,7 +1651,7 @@
     const watchdog = setTimeout(() => { if (mine() && d.loading) { d.loading = false; d.pending = false; d.error = 'El detalle tarda más de lo normal (90 s). Puede seguir calculándose; si no aparece, pulsa «Reintentar» o acota el período.'; repaint(); } }, an.drillTimeoutMs || 90000);
     try {
       const nodes = d.scope === 'total' ? [...d.path] : [{ level: an.level, key: d.entity }, ...d.path];
-      const filter = {}; let chan = ctx.channel;
+      const filter = { ...pageFilter() }; let chan = ctx.channel;
       nodes.forEach((n) => { if (n.level === 'channel') chan = n.key; else filter[n.level] = n.key; });
       const nodeLevel = nodes.length ? nodes[nodes.length - 1].level : null;
       const childLevel = nodeLevel ? DRILL_CHILD[nodeLevel] || null : an.level;
@@ -1713,8 +1718,8 @@
       else {
         try {
           // Canal + categoría / subcategoría / producto / SKU / geografía: se cuentan los clientes que compraron ESA selección en cada mes.
-          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan, ...(wholeScope ? {} : { filter }) }); if (!mine()) return;
-          if (ca && ca.status === 'ok') customers = { status: 'ok', filtered: !wholeScope, byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan, ...(wholeScope ? {} : { filter, scope: state.an.cuScope === 'selection' ? 'selection' : 'company' }) }); if (!mine()) return;
+          if (ca && ca.status === 'ok') customers = { status: 'ok', filtered: !wholeScope, scope: ca.scope || 'company', byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
           else if (ca && ca.status === 'filter_unavailable') customers = { status: 'filter_unavailable', note: ca.reason === 'no_matcher' ? 'No se pudo aplicar el filtro de productos a los clientes.' : `Para ver los clientes de esta selección (categoría, producto o sucursal) hay que volver a cargar y guardar ${ca.missingFiles && ca.missingFiles.length ? `el archivo de ventas (${ca.missingFiles.slice(0, 3).join(', ')}${ca.missingFiles.length > 3 ? '…' : ''})` : 'tus archivos de ventas'}: los guardados antes no traen el detalle por producto de cada pedido. No se borra nada; al recargarlo se reemplazan sus pedidos.` };
           else customers = { status: 'none', note: 'Para ver clientes nuevos, recurrentes y reactivados carga un archivo de ventas con id de cliente y de pedido.' };
         } catch (e) { customers = { status: 'none', note: 'No se pudo leer el libro de clientes.' }; }
@@ -2236,6 +2241,10 @@
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
     'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
     'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
+    'an-filter'(el) { const k = el.dataset.fkey; if (!k || !FP.productFilter) return; resetAnalysis({ filter: FP.productFilter.cascade(state.an.filter, k, el.value) }); state.an.reopen = null; render(); },
+    'an-filter-clear'() { resetAnalysis({ filter: {} }); state.an.reopen = null; render(); },
+    'an-cu-scope'(el) { state.an.cuScope = el.value === 'selection' ? 'selection' : 'company'; const d = state.an.drill; if (d) { d.loading = true; loadDrill(); } render(); },
     'an-drill-down'(el) { const d = state.an.drill; if (!d) return; d.path = [...d.path, { level: el.dataset.level, key: el.dataset.key }]; d.loading = true; loadDrill(); render(); },
     'an-drill-up'(el) { const d = state.an.drill; if (!d) return; const i = Number(el.dataset.index); d.path = d.path.slice(0, i + 1); d.loading = true; loadDrill(); render(); },
     'an-drill-retry'() { const d = state.an.drill; if (!d) return; d.loading = true; loadDrill(); render(); },
@@ -3917,13 +3926,13 @@
   async function buildPanorama() {
     const an = state.an, ctx = an.context, cc = ctx && ctx.comparison;
     if (!FP.productStore || !FP.productStore.available() || !ctx || !cc || !cc.available || !cc.baseline || !cc.current) return { ok: false, error: 'El Análisis todavía no tiene un período comparable.' };
-    const key = JSON.stringify([an.channel, an.metric, cc.current.from, cc.current.to, cc.baseline.from, cc.baseline.to, FP.productStore.meta && FP.productStore.meta.dateMax]);
+    const key = JSON.stringify([an.channel, an.metric, JSON.stringify(pageFilter()), cc.current.from, cc.current.to, cc.baseline.from, cc.baseline.to, FP.productStore.meta && FP.productStore.meta.dateMax]);
     if (an._panorama && an._panorama.key === key) return { ok: true, panorama: an._panorama.value };
     const metric = an.metric, ch = an.channel, round = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null), missing = (e) => /^\(?\s*(sin|n\/?a|null|undefined|vac)/i.test(String(e)) || e === '';
     const levels = {};
     for (const [lv, label] of PANORAMA_LEVELS) {
       try {
-        const [cur, base] = await Promise.all([FP.productStore.aggregate({ from: cc.current.from, to: cc.current.to, channel: ch, groupBy: lv }), FP.productStore.aggregate({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: lv })]);
+        const [cur, base] = await Promise.all([aggF({ from: cc.current.from, to: cc.current.to, channel: ch, groupBy: lv }), aggF({ from: cc.baseline.from, to: cc.baseline.to, channel: ch, groupBy: lv })]);
         const c = sumMap(cur, metric), b = sumMap(base, metric), names = new Set([...c.values.keys(), ...b.values.keys()].filter((e) => !missing(e)));
         if (names.size < 2) { levels[lv] = { label, available: false, note: names.size ? 'Solo hay un valor en este nivel; no hay con qué comparar.' : 'No hay datos cargados para este nivel.' }; continue; }
         const rows = [...names].map((e) => { const cv = c.values.get(e), bv = b.values.get(e); const current = Number.isFinite(cv) ? cv : 0, previous = Number.isFinite(bv) ? bv : 0; return { entity: String(e), current: round(current), previous: round(previous), delta: round(current - previous), deltaPct: previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : null, sharePct: c.total > 0 ? Math.round((current / c.total) * 1000) / 10 : null }; });
@@ -3983,6 +3992,12 @@
   function bind() {
     document.addEventListener('change', async (e) => {
       const tt = e.target;
+      if (tt && tt.getAttribute && tt.getAttribute('data-cu-f')) {
+        const k = tt.getAttribute('data-cu-f'), f = state.cu.opts.filter = state.cu.opts.filter || {};
+        f[k] = tt.value || undefined;
+        if (k === 'category') { f.subcategory = undefined; f.product = undefined; } else if (k === 'subcategory') f.product = undefined; else if (k === 'state') f.branch = undefined;
+        state.cu.status = 'idle'; render(); return;
+      }
       if (tt && tt.getAttribute && tt.getAttribute('data-cu')) {
         const k = tt.getAttribute('data-cu');
         state.cu.opts[k] = k === 'channel' ? tt.value : Number(tt.value); state.cu.status = 'idle'; render(); return;
@@ -4098,17 +4113,17 @@
   /** Red de seguridad: errores no capturados se avisan (una vez cada 5 s, máximo 5) en vez de fallar en silencio. Nunca muestra la API key. */
   function installGlobalErrorHandlers() {
     let shown = 0, lastAt = 0;
-    const report = (kind, err) => {
+    const report = (kind, err, where) => {
       let msg = String(err && err.message || err || 'error desconocido');
       const key = state.dx && state.dx.apiKey;
       if (key) msg = msg.split(key).join('[key]');
-      try { console.error(`[RevNavigator] ${kind}:`, msg); } catch (e) { /* sin consola */ }
+      try { console.error(`[RevNavigator] ${kind}:`, msg, where || '', err && err.stack || ''); } catch (e) { /* sin consola */ }
       const now = Date.now();
       if (shown >= 5 || now - lastAt < 5000) return;
       shown++; lastAt = now;
-      if (FP.ui && FP.ui.toast) FP.ui.toast(`Ocurrió un error inesperado (${msg.slice(0, 120)}). Tus datos guardados no se modificaron; si algo no responde, recarga la página.`);
+      if (FP.ui && FP.ui.toast) FP.ui.toast(`Algo no se pudo mostrar${state.view ? ` en «${state.view}»` : ''}. Tus datos guardados no se modificaron. Puedes seguir usando la app; si esta parte no responde, recarga la página. Detalle técnico: ${msg.slice(0, 100)}${where ? ` (${where})` : ''}.`);
     };
-    root.addEventListener('error', (ev) => report('error', ev && (ev.error || ev.message)));
+    root.addEventListener('error', (ev) => report('error', ev && (ev.error || ev.message), ev && ev.filename ? `${String(ev.filename).split('/').pop()}:${ev.lineno}` : ''));
     root.addEventListener('unhandledrejection', (ev) => report('promesa rechazada', ev && ev.reason));
   }
 
