@@ -167,3 +167,5 @@
 .rp-cl__list em{font-style:normal;font-size:13.4px;font-weight:700;color:var(--grey);margin-right:4px}.rp-cl__list b{white-space:nowrap}
 
 .rp-lean .rp-since__g{display:none}.rp-lean .rp-since{padding:4px 12px}
+/* hasta 8 filas por lado: filas más bajas cuando la lámina va apretada */
+.rp-tight .rp-mv__r{padding:1px 0}.rp-tight .rp-mv__n small{line-height:1.15}.rp-tight .rp-mv__bar{height:6px;margin-top:1px}.rp-tight .rp-mv__h{margin-bottom:2px}

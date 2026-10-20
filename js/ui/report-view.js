@@ -365,6 +365,8 @@
   function filterSelect(state) {
     const PF = FP.productFilter, PS = FP.productStore;
     if (!PF || !PS || !PS.available || !PS.available()) return '';
+    // sin venta por producto cargada no hay categorías ni sucursales reales: se avisa en vez de mostrar selectores vacíos o de relleno
+    if (!(PS.meta && PS.meta.batches)) return '<div class="rp-filters"><h3 class="panel__title">Filtros de la presentación</h3><p class="field__hint">Para filtrar por categoría, subcategoría, producto, estado, ciudad o sucursal, primero carga la venta por producto en Datos → Productos.</p></div>';
     const cur = PF.active(state.rp.filter || {});
     const KEYS = ['category', 'subcategory', 'product', 'state', 'city', 'branch'], LBL = { ...PF.LABEL, branch: 'Nombre de sucursal' };
     let o = {}, names = {}; try { o = PF.options(cur, KEYS); const g = PS.geoOptions({ state: cur.state || undefined, city: cur.city || undefined }); (g.branches || []).forEach((b) => { names[b.code] = b.name || b.code; }); } catch (e) { return ''; }

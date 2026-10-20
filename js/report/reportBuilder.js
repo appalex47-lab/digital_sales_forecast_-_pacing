@@ -687,14 +687,14 @@
     const types = [...new Set(items.map((i) => i.type))].sort((a, b) => (MOVER_ORDER.indexOf(a) + 1 || 99) - (MOVER_ORDER.indexOf(b) + 1 || 99));
     const maxBy = {}; items.forEach((i) => { maxBy[i.type] = Math.max(maxBy[i.type] || 0, Math.abs(i.value)); });
     items.forEach((i) => { i.weight = maxBy[i.type] ? Math.abs(i.value) / maxBy[i.type] : 0; });
-    // por lado: se reparte entre tipos (uno por tipo, por vuelta) hasta 6, para que no domine un solo tipo
+    // por lado: se reparte entre tipos (uno por tipo, por vuelta) hasta 8, para que no domine un solo tipo
     const side = (neg, cap) => {
       const q = types.map((t) => items.filter((i) => i.type === t && (neg ? i.value < 0 : i.value > 0)).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)));
       const out = []; let k = 0;
       while (out.length < cap && q.some((x) => x.length > k)) { q.forEach((x) => { if (x[k] && out.length < cap) { x[k].rank = out.length; out.push(x[k]); } }); k++; }
       return out.sort((a, b) => (types.indexOf(a.type) - types.indexOf(b.type)) || (Math.abs(b.value) - Math.abs(a.value)));
     };
-    return { items, types, minus: side(true, 6), plus: side(false, 6) };
+    return { items, types, minus: side(true, 8), plus: side(false, 8) };
   }
   function pageMovers(s, pages) {
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
@@ -709,7 +709,7 @@
       question: '¿Qué está moviendo la venta hacia abajo y hacia arriba, y cuánto pesa cada cosa?',
       headline: head, minus: M.minus, plus: M.plus, types: M.types,
       totals: tot && isNum(tot.gap) ? { gap: tot.gap, ref: sel ? 'la referencia' : 'el plan' } : null,
-      notes: ['Cada fila es un ángulo distinto del mismo resultado (canal, palanca, categoría, producto): no se suman entre sí. La barra compara dentro de cada tipo.', 'Las contribuciones son aritméticas y descriptivas; no demuestran la causa.', s.reportFilter ? 'Con filtro, las palancas del diagnóstico se omiten porque son del total del negocio.' : null].filter(Boolean),
+      notes: ['Cada fila es un ángulo distinto del mismo resultado: no se suman entre sí y la barra compara dentro de cada tipo. Son contribuciones descriptivas; no demuestran la causa.', s.reportFilter ? 'Con filtro, las palancas del diagnóstico se omiten porque son del total del negocio.' : null].filter(Boolean),
       sources: ['Pacing, diagnóstico, categorías y evolución'], tags: [TAG.calc]
     });
   }
