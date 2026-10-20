@@ -79,6 +79,8 @@
     return page('cover', 'Portada', {
       headline: 'Reporte ejecutivo de ventas digitales',
       scope: s.channel === 'total' || !s.channel ? 'Total digital · Ecommerce, App, WhatsApp y Llamadas' : chLabel(s.channel),
+      filterLabel: s.reportFilter || null,
+      filterNote: s.reportFilter ? 'El filtro aplica a las láminas de categorías, evolución y clientes; el resto muestra el total del negocio.' : null,
       facts: [
         { id: 'period', label: 'Período analizado', value: run ? `Año ${run.year} · acumulado al corte` : NA },
         { id: 'cutoff', label: 'Fecha de corte', value: run && run.cutoff ? dateLabel(run.cutoff) : NA, note: 'La fecha de corte es diaria; la herramienta no registra hora de corte.' },
@@ -513,12 +515,12 @@
   }
 
   /* ---------------- ensamblado ---------------- */
-  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'trends', 'categories', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
+  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'categories', 'trends', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
   function build(src) {
     const s = { channel: 'total', options: {}, filters: [], ...src };
     s.options = { includeAnnex: true, showTags: false, showBusinessName: false, ...(s.options || {}) };
     const adv = advise(s);
-    const core = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageTrends(s), pageCategories(s), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
+    const core = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageCategories(s), pageTrends(s), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
     const all = [core[0], pageSummary(s, core), ...core.slice(1)];
     const rel = all.find((p) => p.id === 'reliability'), pac = all.find((p) => p.id === 'pacing');
     if (rel && rel.status === 'included' && rel.warning && pac && pac.status === 'included') pac.caveat = 'El cierre estimado depende del método de proyección: los métodos con datos suficientes difieren de forma material (detalle en el anexo técnico).';

@@ -258,7 +258,7 @@
       const per = (x.units.find((q) => q.id === 'cover').page.facts.find((f) => f.id === 'period') || {}).value || '';
       return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>
         <h1 class="rp-cover__title">${esc(p.headline)}</h1><div class="rp-cover__rule"></div>${p.businessName ? `<p class="rp-cover__sub">${esc(p.businessName)}</p>` : ''}
-        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div></dl></div></section>`;
+        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
     }
     const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
     const title = u.id === 'annex' ? u.title : (TITLES[u.id] || p.title);
@@ -326,10 +326,21 @@
   /* ================= vista «Presentación (PDF)» ================= */
   function signature(state) {
     const s = state.dx.settings, an = state.an || {};
-    return JSON.stringify([s.channel, s.periodType, s.periodKey, s.comparison, state.year, state.rp.options.showBusinessName, (an.filter && FP.productFilter) ? FP.productFilter.active(an.filter) : null, state.fc.run ? state.fc.run.generatedAt : null]);
+    return JSON.stringify([s.channel, s.periodType, s.periodKey, s.comparison, state.year, state.rp.options.showBusinessName, state.rp.filter || null, (an.filter && FP.productFilter) ? FP.productFilter.active(an.filter) : null, state.fc.run ? state.fc.run.generatedAt : null]);
   }
   function scale(rootEl) {
     rootEl.querySelectorAll('.rp-frame').forEach((f) => { const s = Math.max(0.5, Math.min(1, f.clientWidth / PW)); f.style.setProperty('--rp-s', s.toFixed(3)); });
+  }
+  /** Un único desplegable con categorías, subcategorías, productos y farmacias (sucursales). Solo se muestra si hay catálogo de productos cargado. */
+  function filterSelect(state) {
+    const PF = FP.productFilter, PS = FP.productStore;
+    if (!PF || !PS || !PS.available || !PS.available()) return '';
+    let o = {}; try { o = PF.options({}, ['category', 'subcategory', 'product', 'branch']); } catch (e) { return ''; }
+    const cur = state.rp.filter ? Object.entries(PF.active(state.rp.filter))[0] : null, curVal = cur ? JSON.stringify(cur) : '';
+    const grp = (label, key) => (o[key] && o[key].length ? `<optgroup label="${esc(label)}">${o[key].map((v) => { const val = JSON.stringify([key, v]); return `<option value="${esc(val)}"${val === curVal ? ' selected' : ''}>${esc(v)}</option>`; }).join('')}</optgroup>` : '');
+    return `<div class="field"><label class="field__label" for="rp-filter">Filtro de la presentación</label>
+      <select class="select" id="rp-filter" data-action="rp-filter"><option value="">Sin filtro adicional (cada vista usa lo que tenga elegido)</option>${grp('Categorías', 'category')}${grp('Subcategorías', 'subcategory')}${grp('Productos', 'product')}${grp('Farmacias (sucursales)', 'branch')}</select>
+      <p class="field__hint">Un solo filtro para categorías, subcategorías, productos o farmacias. Aplica a las láminas de categorías, evolución y clientes; pacing, forecast, diagnóstico y recuperación siguen mostrando el total del negocio porque el plan no está por producto ni por farmacia.</p></div>`;
   }
   function render(state) {
     const el = document.getElementById('presentacion-view'); if (!el) return;
@@ -348,6 +359,7 @@
           <div><h3 class="panel__title">Periodo y canal</h3>
             <p class="field__hint">Son los mismos de Diagnóstico y Narrativa. Pacing, forecast y reforecast son del año completo al corte. Cada página usa los filtros y ajustes actuales de su vista (Evolución, Productos y Clientes).</p>
             ${FP.narrativeView.contextControls(state, 'rp', 'pkg-context', 'pkg-context')}</div>
+          ${filterSelect(state)}
           <div class="rp-opts"><label class="check"><input type="checkbox" data-action="rp-option" data-key="showTags" ${rp.options.showTags ? 'checked' : ''}> Mostrar etiquetas Observado / Calculado / Estimado</label>
             <label class="check"><input type="checkbox" data-action="rp-option" data-key="showBusinessName" ${rp.options.showBusinessName ? 'checked' : ''}> Incluir el nombre del negocio en la portada</label></div>
           <div class="btn-row"><button type="button" class="btn ${ready && !stale ? '' : 'btn--primary'}" data-action="rp-generate" ${rp.status === 'busy' ? 'disabled aria-busy="true"' : ''}>${ready ? 'Volver a generar' : 'Generar vista previa'}</button>

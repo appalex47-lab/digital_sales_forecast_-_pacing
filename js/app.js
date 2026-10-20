@@ -83,7 +83,7 @@
     },
     // Fase 8.1: Categoría → Producto (resultados en memoria; datos en IndexedDB)
     pkg: { busy: false, last: null },
-    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: false, showBusinessName: false }, sig: null, at: null },   // «Presentación (PDF)»
+    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: false, showBusinessName: false }, filter: null, sig: null, at: null },   // «Presentación (PDF)»
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
@@ -805,16 +805,22 @@
     let run = null, rf = null, diag = null;
     try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
     const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
-    let productByLevel = null;
+    let productByLevel = null, trendSnap = null;
+    const rpF = FP.productFilter && state.rp.filter && FP.productFilter.isActive(state.rp.filter) ? FP.productFilter.active(state.rp.filter) : null;
     if (hasProducts) {
       try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
-      try { await ensureTrendAnalysis(); } catch (e) { /* página omitida con motivo */ }
+      if (rpF) {
+        // Filtro único de la presentación: se aplica a Evolución solo durante el armado y luego se restaura la vista tal como estaba.
+        const snap = { ...state.an }; state.an.filter = rpF;
+        try { await ensureTrendAnalysis(); trendSnap = { priorities: state.an.priorities, rows: state.an.rows, context: state.an.context, share: state.an.share }; } catch (e) { /* página omitida con motivo */ }
+        finally { Object.assign(state.an, snap); }
+      } else { try { await ensureTrendAnalysis(); } catch (e) { /* página omitida con motivo */ } }
       // Categorías y productos: el cambio se muestra por categoría y la participación por subcategoría (mismo período, referencia, canal y filtro).
       try {
         const pr = state.pa.result;
         if (pr && pr.period) {
-          const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: state.pa.channel, filter: pr.filter || undefined, next: null };
-          const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l) lv[l] = pr; });
+          const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: state.pa.channel, filter: rpF || pr.filter || undefined, next: null };
+          const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l && !rpF) lv[l] = pr; });
           for (const l of ['category', 'subcategory']) if (!lv[l]) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
           productByLevel = lv;
         }
@@ -823,6 +829,7 @@
     let customers = null;
     try {
       const o = { ...FP.customersView.optsOf(state), channel: ch === 'total' ? null : ch };
+      if (rpF) o.filter = rpF;
       const res = await FP.customerStore.analyze(o);
       customers = { result: res, scopeLabel: o.filter ? `Selección: ${FP.productFilter.describe(o.filter)}` : 'Toda la empresa' };
     } catch (e) { /* sin libro de clientes la página se omite */ }
@@ -830,14 +837,15 @@
     let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run }); } catch (e) { /* sin proyección */ }
     const an = state.an, pa = state.pa;
     const desc = (f) => (FP.productFilter && f ? FP.productFilter.describe(FP.productFilter.active(f)) : '');
-    const filters = [{ page: 'Evolución', label: desc(an.filter) }, { page: 'Productos', label: pa.result && pa.result.filter ? desc(pa.result.filter) : '' }, { page: 'Clientes', label: customers && customers.result && customers.result.filtered ? desc(state.cu.opts.filter) : '' }].filter((f) => f.label);
+    const rpLabel = rpF ? FP.productFilter.describe(rpF) : '';
+    const filters = [{ page: 'Evolución', label: rpF ? rpLabel : desc(an.filter) }, { page: 'Productos', label: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : '') }, { page: 'Clientes', label: rpF ? rpLabel : (customers && customers.result && customers.result.filtered ? desc(state.cu.opts.filter) : '') }].filter((f) => f.label);
     const rcA = state.rc.analysis, store = state.rc.scenarioStore;
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
       app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, diag,
-      trend: { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: desc(an.filter),
-      product: pa.result, productByLevel, productFilterLabel: pa.result && pa.result.filter ? desc(pa.result.filter) : '', customers, projection, profiles,
+      trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
+      product: pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
       quality: FP.coverage.summarize(state.store), filters, recovery,
       options: { showTags: state.rp.options.showTags, showBusinessName: state.rp.options.showBusinessName },
@@ -3562,6 +3570,7 @@
     },
     'rp-print'() { const rp = state.rp; if (rp.report) FP.reportView.print(rp.report, { exclude: rp.exclude, tags: rp.options.showTags }); },
     'rp-toggle-page'(el) { const rp = state.rp, id = el.dataset.id; rp.exclude = rp.exclude.includes(id) ? rp.exclude.filter((x) => x !== id) : [...rp.exclude, id]; render(); },
+    'rp-filter'(el) { try { const [k, v] = JSON.parse(el.value || 'null') || []; state.rp.filter = k && v ? FP.productFilter.cascade({}, k, v) : null; } catch (e) { state.rp.filter = null; } render(); },
     'rp-option'(el) { state.rp.options[el.dataset.key] = Boolean(el.checked); render(); },
     async 'pkg-download'() {
       const pkg = FP.packageView.setBusy(true);
