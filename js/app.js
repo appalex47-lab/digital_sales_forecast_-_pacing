@@ -86,6 +86,7 @@
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
+    fs: {},
     an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
@@ -2243,6 +2244,22 @@
     'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
     'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
     'an-filter'(el) { const k = el.dataset.fkey; if (!k || !FP.productFilter) return; resetAnalysis({ filter: FP.productFilter.cascade(state.an.filter, k, el.value) }); state.an.reopen = null; render(); },
+    'fs-toggle'(el) { const pg = el.dataset.fsPage; if (!pg) return; state.fs = { ...(state.fs || {}), [pg]: !(state.fs && state.fs[pg]) }; render(); },
+    'fs-chip'(el) {
+      const pg = el.dataset.fsPage, k = el.dataset.fsKey || '';
+      if (pg === 'an') {
+        if (k.startsWith('f:')) return actions['an-filter']({ dataset: { fkey: k.slice(2) }, value: '' });
+        const reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
+        if (k in reset) { state.an[k] = reset[k]; state.an.page = 1; render(); }
+      } else if (pg === 'pa' && k.startsWith('geo:')) actions['pa-geo']({ dataset: { key: k.slice(4) }, value: '' });
+      else if (pg === 'cu' && k.startsWith('cu:')) { const f = state.cu.opts.filter = state.cu.opts.filter || {}; const kk = k.slice(3); f[kk] = undefined; if (kk === 'category') { f.subcategory = undefined; f.product = undefined; } else if (kk === 'subcategory') f.product = undefined; else if (kk === 'state') f.branch = undefined; state.cu.status = 'idle'; render(); }
+    },
+    'fs-clear'(el) {
+      const pg = el.dataset.fsPage;
+      if (pg === 'an') { Object.assign(state.an, { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0, page: 1 }); actions['an-filter-clear'](); }
+      else if (pg === 'pa') actions['pa-geo-clear']();
+      else if (pg === 'cu') actions['cu-clear-filter']();
+    },
     'an-filter-clear'() { resetAnalysis({ filter: {} }); state.an.reopen = null; render(); },
     'an-cu-scope'(el) { state.an.cuScope = el.value === 'selection' ? 'selection' : 'company'; const d = state.an.drill; if (d) { d.loading = true; loadDrill(); } render(); },
     'an-drill-down'(el) { const d = state.an.drill; if (!d) return; d.path = [...d.path, { level: el.dataset.level, key: el.dataset.key }]; d.loading = true; loadDrill(); render(); },

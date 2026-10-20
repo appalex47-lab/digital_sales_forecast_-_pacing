@@ -47,14 +47,11 @@
     const pts = vals.map((x, i) => `${(i / Math.max(1, vals.length - 1)) * 100},${28 - ((x.value - min) / span) * 24}`).join(' ');
     return `<svg class="trend-spark" viewBox="0 0 100 30" role="img" aria-label="Evolución histórica"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
-  /** Selección de página: categoría, producto, sucursal… (se combina con el Canal y filtra TODA la página). */
-  function pageFilterRow(a) {
+  /** Selectores en cascada de producto y ubicación (se combinan con el Canal y filtran TODA la página). */
+  function pageFilterFields(a) {
     const PF = FP.productFilter; if (!PF) return '';
     const f = PF.active(a.filter), opts = PF.options(f);
-    const sel = (k) => `<div class="field"><label for="an-f-${k}">${esc(PF.LABEL[k])}</label><select id="an-f-${k}" data-action="an-filter" data-fkey="${k}"><option value="">Todas</option>${(opts[k] || []).map((v) => `<option value="${esc(v)}" ${f[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`;
-    return `<details class="an-pagefilter" ${PF.isActive(f) ? 'open' : ''}><summary>Filtrar toda la página por producto o ubicación${PF.isActive(f) ? ` · <b>${esc(PF.describe(f))}</b>` : ''}</summary>
-      <div class="settings-grid">${PF.KEYS.map(sel).join('')}</div>
-      ${PF.isActive(f) ? '<div class="an-pagefilter__note">Todo lo de esta página (series, patrones, pronóstico, detalle, asistente) se calcula solo con esta selección, dentro del canal elegido. El Puente al plan no aplica: la meta existe por canal.</div><button type="button" class="btn btn--ghost" data-action="an-filter-clear">Quitar selección</button>' : ''}</details>`;
+    return PF.KEYS.map((k) => `<div class="field"><label for="an-f-${k}">${esc(PF.LABEL[k])}</label><select id="an-f-${k}" data-action="an-filter" data-fkey="${k}"><option value="">Todas</option>${(opts[k] || []).map((v) => `<option value="${esc(v)}" ${f[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`).join('');
   }
   function filters(state) {
     const a = state.an;
@@ -78,28 +75,42 @@
     const comparisonNote = ci && ci.message ? `<div class="note note--warning analysis-comparison-warning"><strong>Comparación no disponible (N/A).</strong> ${esc(ci.message)} Puedes cambiar la comparación o el canal sin recargar la página.</div>`
       : ci && ci.partial ? `<div class="note analysis-comparison-info"><strong>Período en curso.</strong> ${esc(ci.note || '')}</div>`
       : ci && ci.truncated ? `<div class="note analysis-comparison-info">${esc(ci.note || '')}</div>` : '';
-    return `<div class="analysis-filter-bar">
-      <div class="settings-grid analysis-period-controls">
-        <div class="field"><label for="an-channel">Canal</label><select id="an-channel" data-action="an-channel">${FP.analysisContext.channelList().map(c => `<option value="${c}" ${c === (a.channel || 'total') ? 'selected' : ''}>${esc(FP.analysisContext.channelLabel(c))}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-metric">Métrica</label><select id="an-metric" data-action="an-metric">${Object.entries(FP.analysisContext.METRICS).map(([k, m]) => `<option value="${k}" ${k === (a.metric || 'revenue') ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-period-type">Granularidad</label><select id="an-period-type" data-action="an-period-type"><option value="year" ${pt==='year'?'selected':''}>Año</option><option value="month" ${pt==='month'?'selected':''}>Mes</option><option value="week" ${pt==='week'?'selected':''}>Semana</option><option value="day" ${pt==='day'?'selected':''}>Día</option></select></div>
-        <div class="field"><label for="an-focus">Periodo focal</label><select id="an-focus" data-action="an-focus">${opts.length ? opts.slice().reverse().map(o => `<option value="${esc(o.key)}" ${o.key===focusKey?'selected':''}>${esc(FP.temporalEngine.label(pt,o.key,o.range))}</option>`).join('') : '<option>Sin periodos</option>'}</select></div>
-        <div class="field"><label for="an-period-count">Historia</label><input id="an-period-count" type="number" min="3" max="${pt==='day'?90:24}" step="1" value="${count}" data-action="an-period-count"></div>
-        <div class="field"><label for="an-comparison">Comparación principal</label><select id="an-comparison" data-action="an-comparison"><option value="previous" ${a.comparison!=='year_ago'?'selected':''}>Período anterior</option><option value="year_ago" ${a.comparison==='year_ago'?'selected':''}>Mismo periodo año anterior</option></select></div>
-        <div class="field"><label for="an-level">Analizar por</label><select id="an-level" data-action="an-level">${levels.map(([v,l])=>`<option value="${v}" ${v===a.level?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
-      </div>
-      ${pageFilterRow(a)}
-      <div class="settings-grid analysis-filter-controls">
-        <div class="field"><label for="an-state">Estado actual</label><select id="an-state" data-action="an-state">${STATE_ORDER.map(([v, l]) => `<option value="${v}" ${v === (a.stateFilter || 'all') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-entity-query">Buscar</label><input id="an-entity-query" type="search" value="${esc(a.entityQuery || '')}" placeholder="Producto, categoría, SKU…" data-action="an-entity-query"></div>
-      </div>
-      <details class="disclosure analysis-more-filters"><summary>Más filtros (patrón, señal, anomalía, impacto mínimo, materialidad)</summary><div class="settings-grid analysis-filter-controls">
-        <div class="field"><label for="an-pattern">Patrón</label><select id="an-pattern" data-action="an-pattern">${patterns.map(([v,l])=>`<option value="${v}" ${v===a.pattern?'selected':''}>${l}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-signal">Señal avanzada</label><select id="an-signal" data-action="an-signal">${signals.map(([v,l])=>`<option value="${v}" ${v===a.signal?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-anomaly-direction">Anomalía</label><select id="an-anomaly-direction" data-action="an-anomaly-direction"><option value="all" ${a.anomalyDirection==='all'?'selected':''}>Todas</option><option value="increase" ${a.anomalyDirection==='increase'?'selected':''}>Subida inusual</option><option value="decrease" ${a.anomalyDirection==='decrease'?'selected':''}>Caída inusual</option></select></div>
-        <div class="field"><label for="an-min-share">Materialidad</label><select id="an-min-share" data-action="an-min-share">${[[0,'Mostrar todas'],[0.1,'Desde 0.1 % del total'],[0.5,'Desde 0.5 % del total'],[1,'Desde 1 % del total'],[2,'Desde 2 % del total']].map(([v,l])=>`<option value="${v}" ${Number(a.minSharePct)===v?'selected':''}>${l}</option>`).join('')}</select></div>
-        <div class="field"><label for="an-min-impact">Impacto mínimo${D()}</label><input id="an-min-impact" type="number" min="0" step="100" value="${a.minImpact || ''}" placeholder="0" data-action="an-min-impact"></div>
-      </div><p class="field__hint">Patrón y señal clasifican la forma de la serie; «Anomalía» filtra movimientos inusuales; «Impacto mínimo» oculta cambios pequeños; «Materialidad» oculta entidades que pesan menos de ese % del total (por defecto 0.5 %), porque su movimiento suele ser ruido. Contribución y totales siguen incluyéndolas.</p></details>
+    const F_an_channel = `<div class="field"><label for="an-channel">Canal</label><select id="an-channel" data-action="an-channel">${FP.analysisContext.channelList().map(c => `<option value="${c}" ${c === (a.channel || 'total') ? 'selected' : ''}>${esc(FP.analysisContext.channelLabel(c))}</option>`).join('')}</select></div>`;
+    const F_an_metric = `<div class="field"><label for="an-metric">Métrica</label><select id="an-metric" data-action="an-metric">${Object.entries(FP.analysisContext.METRICS).map(([k, m]) => `<option value="${k}" ${k === (a.metric || 'revenue') ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></div>`;
+    const F_an_period_type = `<div class="field"><label for="an-period-type">Granularidad</label><select id="an-period-type" data-action="an-period-type"><option value="year" ${pt==='year'?'selected':''}>Año</option><option value="month" ${pt==='month'?'selected':''}>Mes</option><option value="week" ${pt==='week'?'selected':''}>Semana</option><option value="day" ${pt==='day'?'selected':''}>Día</option></select></div>`;
+    const F_an_focus = `<div class="field"><label for="an-focus">Periodo focal</label><select id="an-focus" data-action="an-focus">${opts.length ? opts.slice().reverse().map(o => `<option value="${esc(o.key)}" ${o.key===focusKey?'selected':''}>${esc(FP.temporalEngine.label(pt,o.key,o.range))}</option>`).join('') : '<option>Sin periodos</option>'}</select></div>`;
+    const F_an_period_count = `<div class="field"><label for="an-period-count">Historia</label><input id="an-period-count" type="number" min="3" max="${pt==='day'?90:24}" step="1" value="${count}" data-action="an-period-count"></div>`;
+    const F_an_comparison = `<div class="field"><label for="an-comparison">Comparación principal</label><select id="an-comparison" data-action="an-comparison"><option value="previous" ${a.comparison!=='year_ago'?'selected':''}>Período anterior</option><option value="year_ago" ${a.comparison==='year_ago'?'selected':''}>Mismo periodo año anterior</option></select></div>`;
+    const F_an_level = `<div class="field"><label for="an-level">Analizar por</label><select id="an-level" data-action="an-level">${levels.map(([v,l])=>`<option value="${v}" ${v===a.level?'selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+    const F_an_state = `<div class="field"><label for="an-state">Estado actual</label><select id="an-state" data-action="an-state">${STATE_ORDER.map(([v, l]) => `<option value="${v}" ${v === (a.stateFilter || 'all') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+    const F_an_entity_query = `<div class="field"><label for="an-entity-query">Buscar</label><input id="an-entity-query" type="search" value="${esc(a.entityQuery || '')}" placeholder="Producto, categoría, SKU…" data-action="an-entity-query"></div>`;
+    const F_an_pattern = `<div class="field"><label for="an-pattern">Patrón</label><select id="an-pattern" data-action="an-pattern">${patterns.map(([v,l])=>`<option value="${v}" ${v===a.pattern?'selected':''}>${l}</option>`).join('')}</select></div>`;
+    const F_an_signal = `<div class="field"><label for="an-signal">Señal avanzada</label><select id="an-signal" data-action="an-signal">${signals.map(([v,l])=>`<option value="${v}" ${v===a.signal?'selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+    const F_an_anomaly_direction = `<div class="field"><label for="an-anomaly-direction">Anomalía</label><select id="an-anomaly-direction" data-action="an-anomaly-direction"><option value="all" ${a.anomalyDirection==='all'?'selected':''}>Todas</option><option value="increase" ${a.anomalyDirection==='increase'?'selected':''}>Subida inusual</option><option value="decrease" ${a.anomalyDirection==='decrease'?'selected':''}>Caída inusual</option></select></div>`;
+    const F_an_min_share = `<div class="field"><label for="an-min-share">Materialidad</label><select id="an-min-share" data-action="an-min-share">${[[0,'Mostrar todas'],[0.1,'Desde 0.1 % del total'],[0.5,'Desde 0.5 % del total'],[1,'Desde 1 % del total'],[2,'Desde 2 % del total']].map(([v,l])=>`<option value="${v}" ${Number(a.minSharePct)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
+    const F_an_min_impact = `<div class="field"><label for="an-min-impact">Impacto mínimo${D()}</label><input id="an-min-impact" type="number" min="0" step="100" value="${a.minImpact || ''}" placeholder="0" data-action="an-min-impact"></div>`;
+    const PFm = FP.productFilter, pf = PFm ? PFm.active(a.filter) : {};
+    const chips = [];
+    if (PFm) PFm.KEYS.forEach((k) => { if (pf[k]) chips.push({ key: 'f:' + k, text: `${PFm.LABEL[k]}: ${pf[k]}` }); });
+    if ((a.stateFilter || 'all') !== 'all') chips.push({ key: 'stateFilter', text: `Estado: ${(STATE_ORDER.find(([v]) => v === a.stateFilter) || [0, a.stateFilter])[1]}` });
+    if (a.entityQuery) chips.push({ key: 'entityQuery', text: `Búsqueda: ${a.entityQuery}` });
+    if (a.pattern && a.pattern !== 'all') chips.push({ key: 'pattern', text: `Patrón: ${(PATTERN[a.pattern] && PATTERN[a.pattern][1]) || a.pattern}` });
+    if (a.signal && a.signal !== 'all') chips.push({ key: 'signal', text: `Señal: ${signalLabels[a.signal] || a.signal}` });
+    if (a.anomalyDirection && a.anomalyDirection !== 'all') chips.push({ key: 'anomalyDirection', text: 'Anomalía filtrada' });
+    if (Number(a.minSharePct) !== 0.5) chips.push({ key: 'minSharePct', text: Number(a.minSharePct) > 0 ? `Materialidad ≥ ${a.minSharePct} %` : 'Materialidad: todas' });
+    if (Number(a.minImpact) > 0) chips.push({ key: 'minImpact', text: `Impacto ≥ ${a.minImpact}` });
+    const shell = FP.filterShell.html({ page: 'an', open: Boolean(state.fs && state.fs.an),
+      primary: [F_an_channel, F_an_focus, F_an_comparison].join(''),
+      chips,
+      groups: [
+        { title: 'Qué', html: F_an_metric + F_an_level },
+        { title: 'Cuándo', html: F_an_period_type + F_an_period_count },
+        { title: 'Producto y ubicación (filtra toda la página)', html: pageFilterFields(a) },
+        { title: 'Resultados', html: F_an_state + F_an_entity_query + F_an_pattern + F_an_signal + F_an_anomaly_direction + F_an_min_share + F_an_min_impact }
+      ] });
+    return `<div class="analysis-filter-bar">${shell}
+      ${PFm && PFm.isActive(pf) ? '<p class="field__hint">Todo lo de esta página (series, patrones, pronóstico, detalle, asistente) se calcula solo con la selección de producto o ubicación, dentro del canal elegido. El Puente al plan no aplica: la meta existe por canal.</p>' : ''}
+      <p class="field__hint">Patrón y señal clasifican la forma de la serie; «Anomalía» filtra movimientos inusuales; «Impacto mínimo» oculta cambios pequeños; «Materialidad» oculta entidades que pesan menos de ese % del total (por defecto 0.5 %), porque su movimiento suele ser ruido. Contribución y totales siguen incluyéndolas.</p>
       ${comparisonNote}
     </div>`;
   }
