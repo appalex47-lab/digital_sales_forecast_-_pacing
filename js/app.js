@@ -858,13 +858,15 @@
     const monthSel = (dxs.periodType === 'month' && /^\d{4}-\d{2}$/.test(dxs.periodKey || '')) || (dxs.periodType === 'week' && /^\d{4}-W\d{2}$/.test(dxs.periodKey || '')) ? dxs.periodKey : null;
     const monthArgs = monthSel && diag && FP.productAnalysis.fromDiagnosis ? FP.productAnalysis.fromDiagnosis(diag) : null;
     const monthOn = Boolean(monthArgs && monthArgs.periodType === dxs.periodType && monthArgs.from && (dxs.periodType === 'week' || monthArgs.from.slice(0, 7) === monthSel));
-    const trendBase = monthOn ? { periodType: dxs.periodType, focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : {};
+    // Lectura anual: Evolución se centra en el mes del corte (en curso contra los mismos días del anterior), no en el último mes completo que usa la vista por defecto.
+    const cutMonthKey = run && run.cutoff && /^\d{4}-\d{2}-\d{2}$/.test(run.cutoff) ? run.cutoff.slice(0, 7) : null;
+    const trendBase = monthOn ? { periodType: dxs.periodType, focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : (cutMonthKey ? { periodType: 'month', focusKey: cutMonthKey, channel: ch, comparison: 'previous' } : {});
     let rfMonth = null;
     if (rf && !localCut) { const r = state.rf; rfMonth = [r.run, r.altRun].find((x) => x && x.total && x.total.horizon && x.total.horizon.type === 'month') || null; }
     const rpF = FP.productFilter && state.rp.filter && FP.productFilter.isActive(state.rp.filter) ? FP.productFilter.active(state.rp.filter) : null;
     if (hasProducts) {
       try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
-      if (rpF || monthOn) {
+      if (rpF || monthOn || cutMonthKey) {
         // Filtro único de la presentación: se aplica a Evolución solo durante el armado y luego se restaura la vista tal como estaba.
         const snap = { ...state.an }; Object.assign(state.an, trendBase, { filter: rpF || {} });
         try { await ensureTrendAnalysis(); trendSnap = { priorities: state.an.priorities, rows: state.an.rows, context: state.an.context, share: state.an.share }; } catch (e) { /* página omitida con motivo */ }
