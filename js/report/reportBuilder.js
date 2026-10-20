@@ -409,6 +409,7 @@
   }
 
   /* ---------------- 8 · Clientes, recurrencia y LTV ---------------- */
+  const addMonthKey = (k) => { const y = +k.slice(0, 4), m = +k.slice(5, 7); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; };   // mes anterior de AAAA-MM
   function pageCustomers(s) {
     const c = s.customers && s.customers.result;
     if (!c || c.status !== 'ok' || !c.summary || !(c.summary.customers > 0)) return omit('customers', 'Clientes, recurrencia y LTV', 'No hay libro de clientes: carga venta con ID de pedido e ID de cliente.');
@@ -420,16 +421,19 @@
     const retention = pooled.map((p) => ({ window: `${p.days} días`, mature: p.mature, repeat: p.repeatRate, ltv: p.ltv }));
     const filtered = Boolean(c.filtered);
     const cutIso = s.run && s.run.cutoff, inProgress = Boolean(cutIso && last.key === cutIso.slice(0, 7) && cutIso < periodEnd({ type: 'month', key: last.key }));
+    const mLab = (k) => (monthName(k) || k).split(' ')[0].toLowerCase(), dim = (k) => new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7), 0)).getUTCDate();
+    const returns = months.filter((m) => isNum(m.lapsed) && isNum(m.lapsedBase) && m.lapsedBase > 0).map((m) => ({ key: m.key, label: mLab(m.key), rate: 1 - m.lapsed / m.lapsedBase, partial: Boolean(inProgress && m.key === last.key) }));
     return page('customers', 'Clientes, recurrencia y LTV', {
-      ctx: `${last.key}${inProgress ? ` (en curso, datos al ${dateLabel(cutIso)})` : ''} · últimos ${months.length} meses`,
+      ctx: `${monthName(last.key) || last.key}${inProgress ? ` (en curso, datos al ${dateLabel(cutIso)})` : ''} · últimos ${months.length} meses`,
       question: '¿Qué calidad tiene la base de clientes detrás de la venta?',
-      headline: `${int(c.summary.customers)} clientes identificados; en ${last.key} ${int(last.customers.total)} compraron (${int(last.customers.new)} nuevos, ${int(last.customers.recurrent)} recurrentes, ${int(last.customers.reactivated)} reactivados).`,
+      headline: `${int(c.summary.customers)} clientes identificados; en ${mLab(last.key)} ${int(last.customers.total)} compraron (${int(last.customers.new)} nuevos, ${int(last.customers.recurrent)} recurrentes, ${int(last.customers.reactivated)} reactivados)${inProgress ? `; el mes va al ${Math.round(+cutIso.slice(8, 10) / new Date(Date.UTC(+last.key.slice(0, 4), +last.key.slice(5, 7), 0)).getUTCDate() * 100)} %` : ''}.`,
       kpis: [kpi('customers', 'Clientes identificados', c.summary.customers, 'int', TAG.obs), kpi('repeat', 'Recompra (histórico)', c.summary.repeatRate, 'pct', TAG.calc), kpi('rpc', 'Venta por cliente', c.summary.revenuePerCustomer, 'moneyC', TAG.calc)],
       charts: [{ type: 'stacked', id: 'mix', title: 'Clientes por mes: nuevos, recurrentes y reactivados', labels: months.map((m) => m.key), series: [{ name: 'Nuevos', values: months.map((m) => m.customers.new) }, { name: 'Recurrentes', values: months.map((m) => m.customers.recurrent) }, { name: 'Reactivados', values: months.map((m) => m.customers.reactivated) }] }],
       tables: [{ id: 'retention', title: 'Recompra y LTV observado por ventana (clientes con la ventana completa)', columns: [{ key: 'window', label: 'Ventana', kind: 'text' }, { key: 'mature', label: 'Clientes', kind: 'int', num: true }, { key: 'repeat', label: 'Recompraron', kind: 'pct', num: true }, { key: 'ltv', label: 'LTV observado', kind: 'money', num: true }], rows: retention }],
-      lapsed: isNum(last.lapsed) && isNum(last.lapsedBase) ? { month: last.key, count: last.lapsed, base: last.lapsedBase } : null,
+      lapsed: isNum(last.lapsed) && isNum(last.lapsedBase) ? { month: last.key, count: last.lapsed, base: last.lapsedBase, monthLabel: mLab(last.key), prevLabel: mLab(addMonthKey(last.key)), returned: last.lapsedBase - last.lapsed, inProgress, dayShare: inProgress ? +cutIso.slice(8, 10) / dim(last.key) : 1 } : null,
+      returns,
       scope: { filtered, label: s.customers.scopeLabel || (filtered ? 'Selección' : 'Toda la empresa') },
-      notes: [inProgress ? `${last.key} está en curso (datos al ${dateLabel(cutIso)}): sus clientes y compras no son comparables con meses completos.` : null, reliableNew ? null : 'Con poca historia previa, «nuevo» puede incluir clientes que ya compraban: la apertura nuevo/recurrente de los primeros meses no es confiable.', isNum(last.lapsed) ? `${int(last.lapsed)} de ${int(last.lapsedBase)} clientes que compraron el mes anterior no compraron en ${last.key}; es una ventana de un mes, no una pérdida definitiva.` : null, 'El LTV observado es la venta acumulada de clientes con la ventana completa; no es un valor futuro garantizado.'].filter(Boolean),
+      notes: [inProgress ? `${monthName(last.key) || last.key} está en curso (datos al ${dateLabel(cutIso)}): sus clientes y compras no son comparables con meses completos.` : null, reliableNew ? null : 'Con poca historia previa, «nuevo» puede incluir clientes que ya compraban: la apertura nuevo/recurrente de los primeros meses no es confiable.', isNum(last.lapsed) ? `${int(last.lapsed)} de ${int(last.lapsedBase)} clientes que compraron el mes anterior no compraron en ${mLab(last.key)}; es una ventana de un mes, no una pérdida definitiva.` : null, 'El LTV observado es la venta acumulada de clientes con la ventana completa; no es un valor futuro garantizado.'].filter(Boolean),
       sources: ['Clientes y LTV'], tags: [TAG.obs, TAG.calc]
     });
   }

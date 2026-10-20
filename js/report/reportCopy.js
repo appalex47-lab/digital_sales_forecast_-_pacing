@@ -84,7 +84,12 @@
       return `${cut(top.label, 30)} concentra el mayor ${top.value < 0 ? 'descenso' : 'aumento'} (${money(top.value)})`;
     },
     customers(p) {
-      if (p.lapsed && p.lapsed.count === 0 && fin(p.lapsed.base) && p.lapsed.base > 0) return `Ninguno de los ${RB().fmt('int', p.lapsed.base)} clientes del mes anterior dejó de comprar en ${p.lapsed.month}`;
+      if (p.lapsed && p.lapsed.count === 0 && fin(p.lapsed.base) && p.lapsed.base > 0) return `Ninguno de los ${RB().fmt('int', p.lapsed.base)} clientes del mes anterior dejó de comprar en ${p.lapsed.monthLabel || p.lapsed.month}`;
+      const L = p.lapsed;
+      if (L && L.monthLabel && L.prevLabel && fin(L.count) && fin(L.base) && L.base > 0 && L.count > 0) {
+        const pc = Math.round(L.count / L.base * 100), n = RB().fmt('int', L.count), b = RB().fmt('int', L.base);
+        return L.inProgress ? `${n} de ${b} clientes de ${L.prevLabel} aún no vuelven a comprar (${pc} %)` : `${n} de ${b} clientes de ${L.prevLabel} no volvieron a comprar en ${L.monthLabel} (${pc} %)`;
+      }
       if (p.lapsed && fin(p.lapsed.count) && fin(p.lapsed.base) && p.lapsed.base > 0) return `${RB().fmt('int', p.lapsed.count)} de ${RB().fmt('int', p.lapsed.base)} clientes del mes anterior no volvieron a comprar en ${p.lapsed.month}`;
       const n = kpi(p, 'customers'); return fin(n) ? `${RB().fmt('int', n)} clientes identificados compran en el período` : null;
     },

@@ -59,4 +59,8 @@ const cmo = inc('campaigns', { campaigns: { rows: [{ name: 'beta', quadrant: 'co
 t('campañas: oportunidad concluyente', /^beta concentra la mayor oportunidad/.test(T(cmo, rep(cmo))) && /\$250K/.test(RC.reading(cmo, rep(cmo))), RC.reading(cmo, rep(cmo)));
 t('lectura sin datos → null', RC.reading(inc('traffic'), rep()) === null && RC.reading(inc('campaigns'), rep()) === null);
 
+{ const o = inc('customers', { lapsed: { count: 6786, base: 8489, month: '2026-10', monthLabel: 'octubre', prevLabel: 'septiembre', inProgress: true, dayShare: 19 / 31 } });
+  t('clientes (mes abierto): título prudente', T(o, rep(o)) === '6,786 de 8,489 clientes de septiembre aún no vuelven a comprar (80 %)', T(o, rep(o)));
+  const c2 = inc('customers', { lapsed: { count: 2000, base: 8000, month: '2026-09', monthLabel: 'septiembre', prevLabel: 'agosto', inProgress: false, dayShare: 1 } });
+  t('clientes (mes cerrado): título con porcentaje', T(c2, rep(c2)) === '2,000 de 8,000 clientes de agosto no volvieron a comprar en septiembre (25 %)', T(c2, rep(c2))); }
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);

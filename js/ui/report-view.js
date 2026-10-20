@@ -121,7 +121,7 @@
     c.labels.forEach((lab, i) => {
       const x = L + i * slot + (slot - bw) / 2; let acc = 0;
       c.series.forEach((s, k) => { const v = isNum(s.values[i]) ? s.values[i] : 0; if (v > 0) g += `<rect x="${x}" y="${Y(acc + v)}" width="${bw}" height="${Y(acc) - Y(acc + v)}" fill="${fills[k % 3]}" stroke="${strokes[k % 3]}"/>`; acc += v; });
-      g += svgT(x + bw / 2, Y(acc) - 5, fmt('int', acc), { anchor: 'middle', fill: C.ink, weight: 700 }) + svgT(x + bw / 2, H - 8, lab.slice(2), { anchor: 'middle' });
+      g += svgT(x + bw / 2, Y(acc) - 5, fmt('int', acc), { anchor: 'middle', fill: C.ink, weight: 700 }) + svgT(x + bw / 2, H - 8, /^\d{4}-\d{2}$/.test(lab) ? `${MO[+lab.slice(5) - 1].toLowerCase()} ${lab.slice(2, 4)}` : lab.slice(2), { anchor: 'middle' });
     });
     let lx = L; c.series.forEach((s, k) => { g += `<rect x="${lx}" y="8" width="16" height="14" fill="${fills[k % 3]}" stroke="${strokes[k % 3]}"/>${svgT(lx + 21, 20, s.name)}`; lx += 38 + s.name.length * 7.5; });
     return wrap(W, H, g, c.title);
@@ -213,8 +213,7 @@
       ${scopeNote(p)}${notesHtml(p)}`,
     categories: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>
       ${scopeNote(p)}${notesHtml(p)}`,
-    customers: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}
-      ${p.lapsed ? `<div class="rp-box"><div class="rp-box__t">Compraron el mes anterior y no regresaron en ${esc(p.lapsed.month)}</div><div class="rp-box__v">${esc(fmt('int', p.lapsed.count))} de ${esc(fmt('int', p.lapsed.base))}</div></div>` : ''}</div></div>
+    customers: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}${p.lapsed ? lapsedBox(p) : ''}</div></div>
       ${p.scope && p.scope.label && !/^Toda la empresa$/i.test(p.scope.label) ? `<p class="rp-scope">Alcance: ${esc(p.scope.label)}</p>` : ''}${notesHtml(p)}`,
     traffic: (p, x) => p.overview ? trafficBody(p, x) : `${p.tables.map(tableHtml).join('')}<p class="rp-scope">${esc([p.scope.dimension, p.scope.comparison, p.scope.denominator].filter(Boolean).join(' · '))}</p>${notesHtml(p)}`,
     recovery: (p, x) => `${kpisHtml(p, x.tags)}${p.progress ? `<div class="rp-panel"><div class="rp-panel__t"><span>Avance hacia la meta anual</span><span>${esc(fmt('pct', p.progress.pct))} · ${esc(fmt('moneyC', p.progress.real))} de ${esc(fmt('moneyC', p.progress.target))}</span></div><div class="rp-bar" role="img" aria-label="Avance ${esc(fmt('pct', p.progress.pct))}"><i style="width:${Math.max(0, Math.min(100, p.progress.pct * 100)).toFixed(1)}%"></i></div></div>` : ''}<div class="rp-row"><div class="rp-col-h"><div class="rp-tbl__t">Escenarios guardados</div>${p.scenarios.length
@@ -226,6 +225,17 @@
   };
 
 
+
+
+  /* Clientes del mes anterior que volvieron a comprar este mes, con la tasa de los meses anteriores como referencia. */
+  function lapsedBox(p) {
+    const L = p.lapsed;
+    if (!L.monthLabel) return `<div class="rp-box"><div class="rp-box__t">Compraron el mes anterior y no regresaron en ${esc(L.month)}</div><div class="rp-box__v">${esc(fmt('int', L.count))} de ${esc(fmt('int', L.base))}</div></div>`;
+    const pc = (v) => `${Math.round(v * 100)} %`, ret = L.returned;
+    const chips = (p.returns || []).map((r) => `<span class="rp-rt${r.partial ? ' rp-rt--p' : ''}"><em>${esc(r.label)}${r.partial ? ' (parcial)' : ''}</em><b>${pc(r.rate)}</b></span>`).join('');
+    return `<div class="rp-box"><div class="rp-box__t">Compraron en ${esc(L.prevLabel)} y volvieron en ${esc(L.monthLabel)}${L.inProgress ? ' (mes en curso)' : ''}</div><div class="rp-box__v">${esc(fmt('int', ret))} de ${esc(fmt('int', L.base))} · ${pc(ret / L.base)} <small>(sin volver aún: ${esc(fmt('int', L.count))})</small></div>
+      <div class="rp-rts"><span class="rp-rt__h">Regreso mes a mes:</span>${chips}</div></div>`;
+  }
 
   /* ================= Brecha: barras divergentes por palanca (reemplaza la cascada) ================= */
   const GLOSS = { trafficVolume: 'Más o menos visitas y contactos', conversionRate: 'Qué parte de ellas termina en pedido', aov: 'Cuánto vale cada pedido' };
