@@ -2046,3 +2046,8 @@ tr.is-evidence { outline-offset: -3px; }
 .gs__foot{font-size:.75rem;opacity:.65;padding:8px 14px;border-top:1px solid var(--border,#e3e7ee)}
 body.gs-lock{overflow:hidden}
 @media (max-width:760px){.gs__box{top:0;left:0;transform:none;width:100vw;height:100vh;max-height:none;border-radius:0}.gs__back{display:inline-block}.gs__k,.gs__foot{display:none}}
+
+/* Avance de la subida de la copia a la nube */
+.cloud-progress { display: grid; gap: .35rem; margin: .5rem 0 .75rem; max-width: 520px; }
+.cloud-progress [data-prog-label] { font-weight: 600; font-size: .95rem; }
+.cloud-progress .an-loader__bar { width: 100%; }
