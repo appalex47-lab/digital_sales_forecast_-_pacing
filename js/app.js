@@ -806,19 +806,31 @@
     try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
     const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
     let productByLevel = null, trendSnap = null;
+    // Período y canal seleccionados (Diagnóstico): si es un mes, Productos y Evolución se leen sobre ESE mes y canal.
+    const dxs = state.dx.settings || {};
+    const monthSel = dxs.periodType === 'month' && /^\d{4}-\d{2}$/.test(dxs.periodKey || '') ? dxs.periodKey : null;
+    const monthArgs = monthSel && diag && FP.productAnalysis.fromDiagnosis ? FP.productAnalysis.fromDiagnosis(diag) : null;
+    const monthOn = Boolean(monthArgs && monthArgs.periodType === 'month' && monthArgs.from && monthArgs.from.slice(0, 7) === monthSel);
+    const trendBase = monthOn ? { periodType: 'month', focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : {};
+    let rfMonth = null;
+    if (rf) { const r = state.rf; rfMonth = [r.run, r.altRun].find((x) => x && x.total && x.total.horizon && x.total.horizon.type === 'month') || null; }
     const rpF = FP.productFilter && state.rp.filter && FP.productFilter.isActive(state.rp.filter) ? FP.productFilter.active(state.rp.filter) : null;
     if (hasProducts) {
       try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
-      if (rpF) {
+      if (rpF || monthOn) {
         // Filtro único de la presentación: se aplica a Evolución solo durante el armado y luego se restaura la vista tal como estaba.
-        const snap = { ...state.an }; state.an.filter = rpF;
+        const snap = { ...state.an }; Object.assign(state.an, trendBase, { filter: rpF || {} });
         try { await ensureTrendAnalysis(); trendSnap = { priorities: state.an.priorities, rows: state.an.rows, context: state.an.context, share: state.an.share }; } catch (e) { /* página omitida con motivo */ }
         finally { Object.assign(state.an, snap); }
       } else { try { await ensureTrendAnalysis(); } catch (e) { /* página omitida con motivo */ } }
       // Categorías y productos: el cambio se muestra por categoría y la participación por subcategoría (mismo período, referencia, canal y filtro).
       try {
         const pr = state.pa.result;
-        if (pr && pr.period) {
+        if (monthOn) {
+          const args = { from: monthArgs.from, to: monthArgs.to, periodType: 'month', comparison: monthArgs.comparison, channel: ch, filter: rpF || undefined, next: null };
+          const lv = {}; for (const l of ['category', 'subcategory']) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
+          productByLevel = lv;
+        } else if (pr && pr.period) {
           const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: state.pa.channel, filter: rpF || pr.filter || undefined, next: null };
           const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l && !rpF) lv[l] = pr; });
           for (const l of ['category', 'subcategory']) if (!lv[l]) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
@@ -831,7 +843,7 @@
     let focusData = null;
     if (hasProducts && !rpF) {
       const trendAt = async (level, filter) => {
-        const snap = { ...state.an }; Object.assign(state.an, { level, filter: filter || {}, periodCount: 14 });
+        const snap = { ...state.an }; Object.assign(state.an, trendBase, { level, filter: filter || {}, periodCount: 14 });
         try { await ensureTrendAnalysis(); const an = state.an; return an.priorities && an.priorities.status === 'available' ? { priorities: an.priorities, rows: an.rows, context: an.context } : null; }
         catch (e) { return null; } finally { Object.assign(state.an, snap); }
       };
@@ -871,9 +883,9 @@
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
-      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, diag,
+      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, selection: monthOn ? { periodType: 'month', periodKey: monthSel } : null,
       focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
-      product: pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
+      product: monthOn && productByLevel ? productByLevel.category : pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
       quality: FP.coverage.summarize(state.store), filters, recovery,
       options: { showTags: state.rp.options.showTags, showBusinessName: state.rp.options.showBusinessName },
