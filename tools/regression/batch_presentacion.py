@@ -28,10 +28,11 @@ async def main():
         chk('PR-5 ninguna página desborda su cuerpo', ov == [], ov)
         fs = await q.evaluate("Math.min(...[...document.querySelectorAll('#rp-print-host .rp-page *')].filter(e=>e.childNodes.length&&[...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())).map(e=>parseFloat(getComputedStyle(e).fontSize)))")
         chk('PR-6 letra mínima ≥ 13 px (≈10 pt) en el PDF', fs >= 13, fs)
+        n_print = await q.evaluate("document.querySelectorAll('#rp-print-host .rp-page').length")   # la vista previa omite por defecto el anexo técnico; el montaje de la prueba incluye todo
         await q.pdf(path='/tmp/rp_test.pdf', prefer_css_page_size=True, print_background=True)
         import subprocess; info = subprocess.run(['pdfinfo', '/tmp/rp_test.pdf'], capture_output=True, text=True).stdout
         pg = re.search(r'Pages:\s+(\d+)', info); sz = re.search(r'Page size:\s+([\d.]+) x ([\d.]+)', info)
-        chk('PR-7 el PDF real sale en 16:9 con una hoja por página del reporte', bool(pg and sz) and int(pg.group(1)) == st['n'] and abs(float(sz.group(1)) / float(sz.group(2)) - 16 / 9) < 0.01, [pg and pg.group(1), sz and sz.groups(), st['n']])
+        chk('PR-7 el PDF real sale en 16:9 con una hoja por página del reporte', bool(pg and sz) and int(pg.group(1)) == n_print and abs(float(sz.group(1)) / float(sz.group(2)) - 16 / 9) < 0.01, [pg and pg.group(1), sz and sz.groups(), n_print])
         txt = subprocess.run(['pdftotext', '/tmp/rp_test.pdf', '-'], capture_output=True, text=True).stdout
         chk('PR-8 el PDF no imprime «null», «undefined» ni «NaN»', not re.search(r'\b(null|undefined|NaN)\b', txt), re.findall(r'.{20}\b(?:null|undefined|NaN)\b.{20}', txt)[:3])
         await q.emulate_media(media='screen')

@@ -83,7 +83,7 @@
     },
     // Fase 8.1: Categoría → Producto (resultados en memoria; datos en IndexedDB)
     pkg: { busy: false, last: null },
-    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: false, showBusinessName: false }, filter: null, sig: null, at: null },   // «Presentación (PDF)»
+    rp: { status: 'idle', report: null, error: null, exclude: ['reliability', 'seasonality', 'annex'], options: { showTags: false, showBusinessName: false }, filter: null, sig: null, at: null },   // «Presentación (PDF)»
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
