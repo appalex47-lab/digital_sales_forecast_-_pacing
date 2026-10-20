@@ -16,7 +16,7 @@ async def main():
         await q.goto(U + '#presentacion'); await q.wait_for_selector('[data-action="rp-generate"]'); await q.click('[data-action="rp-generate"]')
         await q.wait_for_function("FP.app.state.rp.status==='ready'||FP.app.state.rp.status==='error'", timeout=120000)
         st = await q.evaluate("({s:FP.app.state.rp.status,ids:FP.app.state.rp.report.pages.map(p=>p.id),om:FP.app.state.rp.report.omitted.map(o=>[o.id,!!o.reason]),n:document.querySelectorAll('#view-presentacion .rp-page').length})")
-        chk('PR-2 genera el reporte: portada, resumen, pacing, confiabilidad y anexo', st['s'] == 'ready' and st['ids'][:2] == ['cover', 'summary'] and 'reliability' in st['ids'] and 'annex' in st['ids'], st)
+        chk('PR-2 genera el reporte: portada, resumen, pacing, confiabilidad y anexo', st['s'] == 'ready' and st['ids'][:2] == ['cover', 'summary'] and 'reliability' in st['ids'] and 'closing' in st['ids'] and 'annex' in st['ids'], st)
         chk('PR-3 toda página omitida trae su motivo', all(r for _, r in st['om']), st['om'])
         chk('PR-4 la vista previa dibuja las páginas del reporte', st['n'] >= 5, st)
         # desborde y tamaño mínimo de letra en cada página
@@ -60,7 +60,7 @@ async def main():
         await mount(f)
         full = await f.evaluate("({ids:FP.app.state.rp.report.included, n:document.querySelectorAll('#rp-print-host .rp-page').length, bad:FP.reportView.fitPages(document.getElementById('rp-print-host'))})")
         chk('PR-14 con recuperación la presentación incluye la lámina de Recuperación y todas caben', 'recovery' in full['ids'] and full['bad'] == [], full)
-        chk('PR-14 la lámina de recuperación muestra las cuatro brechas con su período', await f.evaluate("document.querySelector('#rp-print-host [data-page=\"recovery\"]').innerText.includes('Brecha pendiente (recuperación)') && document.querySelector('#rp-print-host [data-page=\"recovery\"]').innerText.includes('no se suman ni tienen por qué coincidir')"))
+        chk('PR-14 las cuatro brechas con su período viven en el anexo técnico y no en la lámina de recuperación', await f.evaluate("(()=>{const q=(id)=>document.querySelector('#rp-print-host [data-page=\"'+id+'\"]').innerText;return q('annex-1').includes('Brecha pendiente (recuperación)') && q('annex-1').includes('no se suman ni tienen por qué coincidir') && !q('recovery').includes('Brecha proyectada al cierre')})()"))
         chk('PR-14 sin solapes entre bloques, ni invasión del pie (escenario completo)', (await f.evaluate(OVL)) == [], await f.evaluate(OVL))
         hov = await f.evaluate("(()=>{const out=[];document.querySelectorAll('#rp-print-host .rp-page').forEach(pg=>{const pr=pg.getBoundingClientRect();pg.querySelectorAll('.rp-body *').forEach(e=>{const r=e.getBoundingClientRect();if(r.width>0&&(r.right>pr.right-20||r.left<pr.left+20)&&!e.closest('svg'))out.push(pg.dataset.page+':'+e.tagName+':'+(e.textContent||'').trim().slice(0,20));});});return out.slice(0,6)})()")
         chk('PR-14 ningún elemento de ninguna lámina se sale del ancho imprimible (columnas de tablas incluidas)', hov == [], hov)
@@ -79,6 +79,14 @@ async def main():
         import subprocess; t2 = subprocess.run(['pdftotext', '/tmp/rp_full.pdf', '-'], capture_output=True, text=True).stdout
         chk('PR-16 el PDF completo no imprime null/undefined/NaN/Infinity', not re.search(r'\b(null|undefined|NaN|Infinity)\b', t2))
         chk('PR-16 el PDF completo conserva la etiqueta de cada tipo de cifra', all(w in t2 for w in ('Observado', 'Calculado', 'Estimado')))
+        # 17 · la presentación por defecto no expone metadatos de la herramienta
+        await f.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[]})")
+        main_txt = await f.evaluate("[...document.querySelectorAll('#rp-print-host .rp-page')].filter(p=>!/^annex/.test(p.dataset.page)).map(p=>p.innerText).join('\\n')")
+        banned = ['Hecho observado', 'Cálculo aritmético', 'Requerimiento aritmético', 'Fuente:', 'Etiquetas:', 'Sin filtros', 'Selección y filtros', 'Cobertura del reporte', 'Método de forecast', 'Calidad de datos', 'Configuración de la herramienta', 'Pág. ', 'ver el anexo', 'sin datos suficientes']
+        chk('PR-17 la presentación por defecto no expone filtros, etiquetas, fuentes internas ni cobertura de módulos', not [b for b in banned if b in main_txt], [b for b in banned if b in main_txt])
+        chk('PR-17 hay resumen con narrativa y cierre ejecutivo con sus cuatro bloques', all(w in main_txt for w in ('Cierre ejecutivo', 'DÓNDE ESTAMOS', 'QUÉ SOBRESALIÓ', 'QUÉ DEBEMOS MOVER', 'QUÉ DEBEMOS VIGILAR', 'Al corte del')) or all(w in main_txt.lower() for w in ('dónde estamos','qué debemos vigilar','al corte del')), main_txt[:200])
+        cov_txt = await f.evaluate("document.querySelector('#rp-print-host [data-page=\"cover\"]').innerText")
+        chk('PR-17 la portada no trae configuración de la herramienta', not any(w in cov_txt for w in ('Plan / meta', 'Generado', 'Selección')), cov_txt)
         # móvil
         m = await new_page(b, 375, 800); await m.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})"); await load_products(m, U)
         await m.goto(U + '#presentacion'); await m.wait_for_selector('#view-presentacion:not([hidden])'); await m.wait_for_timeout(500)

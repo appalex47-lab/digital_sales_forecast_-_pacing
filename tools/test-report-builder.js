@@ -98,7 +98,7 @@ rep = RB.build(base());
 const dr = pg(rep, 'drivers');
 t('10 · la atribución cierra exacto con la brecha y se muestra el método', dr.status === 'included' && dr.method.closes && Math.abs(dr.method.sum - dr.method.gap) < 1e-9 && /Secuencial/.test(dr.method.label));
 t('10 · cascada: referencia + 3 palancas + real', dr.charts[0].steps.length === 5 && dr.charts[0].steps[0].value === 900 && dr.charts[0].steps[4].value === 855);
-t('10 · lenguaje no causal', /no demuestra que una palanca sea la causa/.test(dr.notes.join(' ')) && !/causó|se debe a|causa raíz/i.test(JSON.stringify(dr)));
+t('10 · lenguaje no causal', /no demuestra que sea la causa/.test(dr.notes.join(' ')) && !/causó|se debe a|causa raíz/i.test(JSON.stringify(dr)));
 let dg = diagOk(); dg.level1Drivers[0].contribution = 40;
 t('10 · si las contribuciones no cierran, no se muestra atribución', pg(RB.build(base({ diag: dg })), 'drivers').status === 'omitted' && /no cierra/.test(pg(RB.build(base({ diag: dg })), 'drivers').reason));
 dg = diagOk(); dg.level1Drivers[1].contribution = null; dg.level1Drivers[2].contribution = null;
@@ -192,9 +192,9 @@ t('20 · brecha a la fecha = real − plan esperado (fuente: pacing)', gp['Brech
 t('20 · brecha del diagnóstico = la del motor de diagnóstico', gp['Brecha del diagnóstico'].value === -45 && /Septiembre 2026/.test(gp['Brecha del diagnóstico'].period));
 t('20 · brecha proyectada es Estimado y viene del forecast (cierre − meta)', gp['Brecha proyectada al cierre'].tag === 'Estimado' && gp['Brecha proyectada al cierre'].value === 1150 - 1200 || gp['Brecha proyectada al cierre'].value === 1140 - 1200, gp['Brecha proyectada al cierre']);
 t('20 · brecha pendiente = lo que reporta el reforecast (meta − real acumulado)', gp['Brecha pendiente (recuperación)'].value === 345 && /01 oct – 31 dic 2026|oct – 31 dic 2026/.test(gp['Brecha pendiente (recuperación)'].period), gp['Brecha pendiente (recuperación)'].period);
-t('20 · la lámina advierte que son brechas distintas que no se suman', rcl.notes.some((n) => /no se suman ni tienen por qué coincidir/.test(n)));
+t('20 · la lámina advierte que son brechas distintas que no se suman', /no se suman ni tienen por qué coincidir/.test(rcl.gapsNote || ''));
 t('20 · sin diagnóstico no se inventa esa brecha', !pg(RB.build(base({ rf: rfOk, diag: null })), 'recovery').gaps.some((g) => g.name === 'Brecha del diagnóstico'));
-t('20 · la meta anual no se presenta como pronóstico', rcl.kpis.find((k) => k.id === 'target').label === 'Meta anual 2026' && rcl.kpis.find((k) => k.id === 'target').tag === 'Calculado' && /no es el pronóstico/.test(rcl.notes.join(' ')));
+t('20 · la meta anual no se presenta como pronóstico', rcl.kpis.find((k) => k.id === 'target').label === 'Meta anual 2026' && rcl.kpis.find((k) => k.id === 'target').tag === 'Calculado' && /no es una proyección/.test(rcl.notes.join(' ')));
 // 21 · resumen: hasta 3 hallazgos con criterio fijo
 t('21 · resumen: exactamente 3 hallazgos en el orden pacing → drivers → recuperación', sm.items.length === 3 && sm.items.map((i) => i.page).join() === 'pacing,drivers,recovery', sm.items.map((i) => i.page));
 t('21 · resumen: el hallazgo de pacing no repite el cierre en un 2.º hallazgo', sm.items.filter((i) => /cierre estimado/.test(i.text)).length === 1);
@@ -216,4 +216,23 @@ const repBad = RB.build(base({ diag: dgBad, rf: rfMk({ type: 'year', key: '2026'
 const sBad = []; const w2 = (v) => { if (typeof v === 'string') sBad.push(v); else if (Array.isArray(v)) v.forEach(w2); else if (v && typeof v === 'object') Object.values(v).forEach(w2); }; w2(repBad.pages.map((p) => [p.headline, p.notes, p.items, p.facts, p.ctx, p.gaps]));
 const bs = sBad.find((x) => /\b(null|undefined|NaN|Infinity)\b/.test(x)); t('24 · valores NaN/Infinity/undefined no aparecen en titulares, notas ni etiquetas', !bs, bs);
 t('24 · una brecha infinita no entra a la descomposición', pg(repBad, 'drivers').status === 'omitted');
+// 25 · rediseño editorial: narrativa, cierre ejecutivo, sin metadatos de la herramienta en el cuerpo
+const rep25 = RB.build(base()), sm25 = pg(rep25, 'summary'), cl25 = pg(rep25, 'closing'), cv25 = pg(rep25, 'cover');
+t('25 · el resumen abre con una narrativa y sin textos técnicos', typeof sm25.narrative === 'string' && sm25.narrative.length > 40 && !/Hecho observado|Cálculo aritmético|Pág\./.test(sm25.narrative), sm25.narrative);
+t('25 · cada hallazgo trae título, cifra y relevancia en lenguaje de negocio', sm25.items.every((i) => i.title && i.why && 'figure' in i), JSON.stringify(sm25.items.map((i) => i.title)));
+t('25 · el cierre ejecutivo tiene cuatro bloques en orden', cl25.status === 'included' && cl25.blocks.map((b) => b.title).join('|') === 'Dónde estamos|Qué sobresalió|Qué debemos mover|Qué debemos vigilar', cl25.blocks && cl25.blocks.map((b) => b.title));
+t('25 · el cierre no inventa prioridad sin respaldo', pg(RB.build(base({ trend: null, run: mkRun() })), 'closing').blocks[2].text.length > 10);
+t('25 · la portada expone el alcance y el título editorial', cv25.headline === 'Reporte ejecutivo de ventas digitales' && /Total digital/.test(cv25.scope));
+t('25 · la confiabilidad del forecast queda marcada como anexo', pg(rep25, 'reliability').annex === true);
+t('25 · las etiquetas Observado/Calculado/Estimado son opcionales y no se activan por defecto', rep25.options.showTags === false);
+t('25 · sin resultados de pacing no hay cierre', pg(RB.build(base({ run: null, diag: null })), 'closing').status === 'omitted');
+const s25 = []; const w25 = (v) => { if (typeof v === 'string') s25.push(v); else if (Array.isArray(v)) v.forEach(w25); else if (v && typeof v === 'object') Object.values(v).forEach(w25); }; w25([sm25.narrative, sm25.items.map((i) => [i.title, i.figure, i.why, i.note]), cl25.blocks]);
+const b25 = s25.find((x) => /\b(null|undefined|NaN|Infinity)\b/.test(x)); t('25 · narrativa y cierre sin null/NaN/Infinity', !b25, b25);
+// 26 · Categorías y productos: cambio por categoría a la izquierda, participación por subcategoría a la derecha
+const catRes = JSON.parse(JSON.stringify(product)); catRes.level = 'category';
+const subRes = JSON.parse(JSON.stringify(product)); subRes.level = 'subcategory'; subRes.rows = subRes.rows.map((x) => ({ ...x, key: `Sub ${x.key}` }));
+const c26 = pg(RB.build(base({ product: catRes, productByLevel: { category: catRes, subcategory: subRes } })), 'categories');
+t('26 · la gráfica de cambio sigue por categoría', /categoría/.test(c26.charts[0].title) && !/^Sub /.test(c26.charts[0].items[0].label), c26.charts[0].title);
+t('26 · la tabla de participación va por subcategoría', /Subcategoría/.test(c26.tables[0].title) && c26.tables[0].columns[0].label === 'Subcategoría' && /^Sub /.test(c26.tables[0].rows[0].key), c26.tables[0].title);
+t('26 · sin análisis por nivel, la lámina conserva su comportamiento anterior', /Participación en venta/.test(pg(RB.build(base({ product })), 'categories').tables[0].title));
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);

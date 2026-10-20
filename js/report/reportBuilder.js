@@ -77,7 +77,8 @@
     const run = s.run, q = s.quality;
     const filters = (s.filters || []).filter((f) => f && f.label);
     return page('cover', 'Portada', {
-      headline: 'Reporte Ejecutivo de Ventas Digitales',
+      headline: 'Reporte ejecutivo de ventas digitales',
+      scope: s.channel === 'total' || !s.channel ? 'Total digital · Ecommerce, App, WhatsApp y Llamadas' : chLabel(s.channel),
       facts: [
         { id: 'period', label: 'Período analizado', value: run ? `Año ${run.year} · acumulado al corte` : NA },
         { id: 'cutoff', label: 'Fecha de corte', value: run && run.cutoff ? dateLabel(run.cutoff) : NA, note: 'La fecha de corte es diaria; la herramienta no registra hora de corte.' },
@@ -128,7 +129,7 @@
     }
     if (!hasPlan) notes.push('Sin plan comparable no se calculan brecha ni cumplimiento; se muestra solo el real.');
     if (!isNum(A.forecast && A.forecast.revenue)) notes.push('El forecast al cierre no está disponible: el plan no cubre todo el año o no hay método con datos suficientes.');
-    notes.push(`Plan esperado = plan de los mismos días contados (del 1 ene al ${dateLabel(cutIso)}, con real cargado). El cierre estimado ${s.run.year} depende del método elegido; no es un compromiso ni una meta.`);
+    notes.push(`Plan esperado: plan de los mismos ${A.countedDays} días con venta real cargada (1 ene – ${dateLabel(cutIso)}). El cierre estimado no es un compromiso ni una meta.`);
     return page('pacing', 'Pacing y forecast', {
       ctx: `Año ${s.run.year}: 1 ene – ${dateLabel(cutIso)} · ${A.countedDays} días contados`,
       question: '¿Vamos arriba o abajo del plan hoy y dónde cerraríamos al ritmo actual?', headline,
@@ -141,6 +142,7 @@
       charts: [Object.assign({ type: 'cumulative', id: 'cum', title: 'Venta acumulada por mes: real, plan y forecast' }, cumulativeByMonth(S))],
       tables: [{ id: 'by-channel', title: 'Por canal (a la fecha)', columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'real', label: 'Real', kind: 'moneyC', num: true }, { key: 'plan', label: 'Plan esperado', kind: 'moneyC', num: true }, { key: 'gap', label: 'Brecha', kind: 'smoney', num: true, tone: true }, { key: 'gapPct', label: 'Brecha %', kind: 'spct', num: true, tone: true }, { key: 'days', label: 'Días', kind: 'int', num: true }], rows }],
       reconciliation: recon && recon.excludedDays > 0 ? recon : null,
+      caveat: null,
       notes, sources: ['Pacing y forecast (motor de forecast)'], tags: [TAG.obs, TAG.calc, TAG.est]
     });
   }
@@ -179,7 +181,7 @@
       ],
       suficiencia: { light, text: light ? LIGHT_TEXT[light] : NA, reasons: adv && adv.methods && adv.methods[mid] ? adv.methods[mid].reasons || [] : [], confidence: confText || null, countedDays: A.countedDays, dataQuality: s.quality ? s.quality.statusText : null },
       charts: range ? [{ type: 'range', id: 'range', title: 'Rango de cierre entre métodos con datos suficientes', min: range.min, max: range.max, selected: isNum(fc) ? fc : null, goal: isNum(goal) ? goal : null, material: Boolean(material) }] : [],
-      warning: material ? 'divergence' : null, notes, sources: ['Pacing y forecast', 'Comparación de métodos'], tags: [TAG.calc, TAG.est]
+      annex: true, warning: material ? 'divergence' : null, notes, sources: ['Pacing y forecast', 'Comparación de métodos'], tags: [TAG.calc, TAG.est]
     });
   }
 
@@ -219,7 +221,7 @@
       tables: [{ id: 'drivers', title: 'Contribución por palanca', columns: [{ key: 'driver', label: 'Palanca', kind: 'text' }, { key: 'baseline', label: 'Referencia', kindBy: '_kind', num: true }, { key: 'current', label: 'Real', kindBy: '_kind', num: true }, { key: 'deltaPct', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'contribution', label: 'Contribución', kind: 'smoney', num: true, tone: true }], rows, kindMap: { trafficVolume: 'int', conversionRate: 'pct2', aov: 'money' } },
         ...(chRows && chRows.length ? [{ id: 'channels', title: 'Lectura por canal', columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'gap', label: 'Brecha', kind: 'smoney', num: true, tone: true }, { key: 'main', label: 'Mayor contribución aritmética', kind: 'text' }], rows: chRows.slice(0, 4) }] : [])],
       method: { id: d.attributionMethod, label: d.attributionMethodLabel, closes: true, sum: L1.reduce((a, x) => a + x.contribution, 0), gap: d.gap.abs },
-      notes: [`Método de atribución: ${d.attributionMethodLabel || d.attributionMethod}; las contribuciones suman exactamente la brecha (${smoney(L1.reduce((a, x) => a + x.contribution, 0))}). Es aritmética de Venta = Tráfico × CR × AOV: no demuestra que una palanca sea la causa.`, dPartial ? `Período seleccionado: ${d.period.label}. Solo hay datos observados ${obsRange}; la comparación usa los mismos días de la referencia, no el período completo.` : null, d.coverage && isNum(d.coverage.unpaired) && d.coverage.unpaired > 0 ? `${d.coverage.unpaired} día(s) sin par comparable quedaron fuera de la comparación.` : null].filter(Boolean),
+      notes: [`Las contribuciones suman exactamente la brecha (${smoney(L1.reduce((a, x) => a + x.contribution, 0))}). Es aritmética de Venta = Tráfico × CR × AOV: indica cuánto aporta cada palanca, no demuestra que sea la causa.`, dPartial ? `Período seleccionado: ${d.period.label}. Solo hay datos observados ${obsRange}; la comparación usa los mismos días de la referencia, no el período completo.` : null, d.coverage && isNum(d.coverage.unpaired) && d.coverage.unpaired > 0 ? `${d.coverage.unpaired} día(s) sin par comparable quedaron fuera de la comparación.` : null].filter(Boolean),
       comparison: { label: d.comparison && d.comparison.label, period: d.period && d.period.label, channel: d.channel && d.channel.label },
       sources: ['Diagnóstico de brecha'], tags: [TAG.obs, TAG.calc]
     });
@@ -262,7 +264,9 @@
 
   /* ---------------- 7 · Categorías y productos ---------------- */
   function pageCategories(s) {
-    const r = s.product;
+    // Izquierda: cambio de venta por categoría. Derecha: participación en venta por subcategoría (si el análisis por nivel está disponible).
+    const PL = s.productByLevel || {};
+    const r = PL.category || s.product, rt = PL.subcategory || r;
     if (!r || !r.rows || !r.rows.length) return omit('categories', 'Categorías y productos', 'No hay venta por producto cargada para el período.');
     const rows = r.rows.filter((x) => x.revenue && isNum(x.revenue.current));
     if (!rows.length) return omit('categories', 'Categorías y productos', 'Los grupos del período no tienen venta observada.');
@@ -272,7 +276,10 @@
     const byDelta = [...rows].filter((x) => isNum(x.revenue.delta)).sort((a, b) => Math.abs(b.revenue.delta) - Math.abs(a.revenue.delta));
     const top3 = byShare.slice(0, 3).reduce((a, x) => a + (isNum(x.share) ? x.share : 0), 0);
     const stable = isNum(tot.delta) && isNum(tot.baseline) && tot.baseline > 0 && Math.abs(tot.delta) / tot.baseline >= 0.01;
-    const tbl = byShare.slice(0, 6).map((x) => ({ key: x.key, current: x.revenue.current, delta: x.revenue.delta, deltaPct: x.revenue.deltaPct, share: x.share, contribution: stable && isNum(x.contribution) ? x.contribution : null }));
+    const levelT = { category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', sku: 'SKU', channel: 'Canal' }[rt.level] || 'Grupo';
+    const rowsT = (rt.rows || []).filter((x) => x.revenue && isNum(x.revenue.current)).sort((a, b) => b.revenue.current - a.revenue.current);
+    const stableT = rt === r ? stable : (() => { const t = rt.total && rt.total.revenue ? rt.total.revenue : {}; return isNum(t.delta) && isNum(t.baseline) && t.baseline > 0 && Math.abs(t.delta) / t.baseline >= 0.01; })();
+    const tbl = rowsT.slice(0, 6).map((x) => ({ key: x.key, current: x.revenue.current, delta: x.revenue.delta, deltaPct: x.revenue.deltaPct, share: x.share, contribution: stableT && isNum(x.contribution) ? x.contribution : null }));
     const lead = byDelta[0];
     const pr = r.period || {}, bl = r.baseline || {};
     return page('categories', 'Categorías y productos', {
@@ -281,7 +288,7 @@
       headline: `${level}s: los 3 mayores concentran ${pct(top3, 0)} de la venta${lead ? `; el mayor cambio está en ${lead.key} (${smoney(lead.revenue.delta)})` : ''}.`,
       kpis: [kpi('total', 'Venta del período', tot.current, 'moneyC', TAG.obs), kpi('delta', 'Cambio vs. referencia', tot.delta, 'smoney', TAG.calc, { tone: toneOfGap(tot.delta), sub: isNum(tot.deltaPct) ? spct(tot.deltaPct) : null }), kpi('top3', 'Top 3 en venta', top3, 'pct', TAG.calc)],
       charts: [{ type: 'hbar', id: 'contrib', title: `Cambio de venta por ${level.toLowerCase()}`, unit: 'money', items: byDelta.slice(0, 6).map((x) => ({ label: x.key, value: x.revenue.delta })) }],
-      tables: [{ id: 'share', title: `Participación en venta · ${level}`, columns: [{ key: 'key', label: level, kind: 'text' }, { key: 'current', label: 'Venta', kind: 'moneyC', num: true }, { key: 'share', label: 'Participación', kind: 'pct', num: true }, { key: 'delta', label: 'Cambio', kind: 'smoney', num: true, tone: true }, { key: 'contribution', label: 'Aporte al cambio', kind: 'pct', num: true }], rows: tbl }],
+      tables: [{ id: 'share', title: `Participación en venta · ${levelT}`, columns: [{ key: 'key', label: levelT, kind: 'text' }, { key: 'current', label: 'Venta', kind: 'moneyC', num: true }, { key: 'share', label: 'Participación', kind: 'pct', num: true }, { key: 'delta', label: 'Cambio', kind: 'smoney', num: true, tone: true }, { key: 'contribution', label: 'Aporte al cambio', kind: 'pct', num: true }], rows: tbl }],
       scope: { period: r.period, baseline: r.baseline, channel: r.channel, level, filter: s.productFilterLabel || null },
       notes: ['Participación = venta del grupo ÷ venta total. Aporte al cambio = cambio del grupo ÷ cambio total; son medidas distintas.', stable ? null : 'El cambio total es muy pequeño, así que el «aporte al cambio» no es estable y no se muestra.', r.compensation && clean(r.compensation.text) ? r.compensation.text : null].filter(Boolean),
       sources: ['Categoría → Producto'], tags: [TAG.obs, TAG.calc]
@@ -362,7 +369,7 @@
     ].filter(Boolean);
     return page('recovery', 'Recuperación y plan de acción', {
       ctx: `Horizonte ${hz || 'resto del año'} · ${int(days)} días restantes`,
-      gaps: gapsRows,
+      gaps: gapsRows, gapsNote: 'Las brechas responden preguntas distintas (otro período y otra referencia): no se suman ni tienen por qué coincidir.',
       question: '¿Qué tendría que pasar de aquí al cierre para cumplir la meta?',
       headline: met ? `La meta del horizonte ya está cubierta (excedente ${money(h.surplus)}).` : `Faltan ${moneyC(h.remaining)} para la meta; en ${int(days)} días restantes se requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.`,
       kpis: [
@@ -371,7 +378,9 @@
       ],
       scenarios: scen.map((x) => ({ name: x.name, type: x.type || null, impact: x.impact, tag: TAG.est })),
       actions: actions.map((a) => ({ title: a.title, owner: a.owner || null, status: a.status || null, start: a.startDate || null, end: a.endDate || null, impact: a.expectedImpact && isNum(a.expectedImpact.incrementalValue) ? a.expectedImpact.incrementalValue : null })),
-      notes: ['Las brechas de la tabla responden preguntas distintas (otro período y otra referencia): no se suman ni tienen por qué coincidir.', 'Requerimiento = lo que tendría que ocurrir para cumplir la meta; no es el pronóstico (ese es el forecast).', scen.length ? 'Los escenarios son simulaciones con supuestos; su impacto es Estimado.' : 'No hay escenarios guardados en la herramienta.', actions.length ? null : 'No hay acciones registradas en el plan de acción; no se muestran responsables ni fechas.'].filter(Boolean),
+      progress: isNum(h.actualToDate) && h.target > 0 ? { real: h.actualToDate, target: h.target, pct: h.actualToDate / h.target } : null,
+      notes: ['El requerimiento diario es lo que tendría que ocurrir para cumplir la meta; no es una proyección.', scen.length ? 'Los escenarios guardados son simulaciones con supuestos, no resultados.' : null, actions.length ? null : 'No hay acciones registradas en el plan de acción; no se muestran responsables ni fechas.'].filter(Boolean),
+      annex: false,
       sources: ['Reforecast', 'Recovery Center'], tags: [TAG.calc, TAG.est]
     });
   }
@@ -395,31 +404,81 @@
     });
   }
 
+  /* ---------------- lectura ejecutiva común (resumen y cierre): todo sale de las páginas ya calculadas ---------------- */
+  function readout(s, by) {
+    const out = {};
+    const pc = by.pacing, kp = (p, id) => (p && p.kpis.find((k) => k.id === id)) || null;
+    const rows = pc && pc.tables[0] ? pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)) : [];
+    const real = kp(pc, 'real'), plan = kp(pc, 'plan'), comp = kp(pc, 'compliance'), fc = kp(pc, 'forecast');
+    const hasPlan = Boolean(pc && comp && isNum(comp.value) && plan && isNum(plan.value));
+    const gap = hasPlan ? real.value - plan.value : null;
+    out.state = !hasPlan ? null : Math.abs(comp.value - 1) < 0.005 ? 'en línea' : comp.value < 1 ? 'por debajo' : 'por encima';
+    out.pc = pc ? { real: real && real.value, plan: plan && plan.value, compliance: comp && comp.value, gap, forecast: fc && fc.value, forecastSub: fc && fc.sub } : null;
+    out.best = rows.filter((r) => r.gap > 0).sort((a, b) => b.gap - a.gap)[0] || null;
+    out.worst = rows.filter((r) => r.gap < 0).sort((a, b) => a.gap - b.gap)[0] || null;
+    const drag = by.trends && by.trends.tables[0] && by.trends.tables[0].rows[0];
+    out.drag = drag && isNum(drag.impact) && drag.impact < 0 ? drag : null;
+    out.material = Boolean(by.reliability && by.reliability.warning);
+    const rc = by.recovery;
+    out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
+    out.cutoff = s.run && s.run.cutoff ? dateLabel(s.run.cutoff) : null;
+    return out;
+  }
+  const phrasePlan = (r) => (r.state === 'en línea' ? 'va en línea con el plan' : `va ${pct(Math.abs(1 - r.pc.compliance))} ${r.state} del plan`);
+
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
   function pageSummary(s, pages) {
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
-    const items = [];
-    const get = (p, id) => (p && p.kpis.find((k) => k.id === id)) || null;
+    const R = readout(s, by), items = [];
     // Hasta 3 hallazgos, por criterio fijo: 1) dónde estamos contra el plan (incluye el cierre estimado si existe), 2) qué lo explica
     // aritméticamente, 3) lo que falta para la meta; si no hay recuperación, la señal de evolución y luego categorías.
     const pc = by.pacing;
     if (pc) {
-      const comp = get(pc, 'compliance');
-      items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Pacing y forecast', limit: comp && comp.value === null ? 'Sin plan comparable.' : (by.reliability && by.reliability.warning ? 'El cierre estimado depende del método; los alternativos difieren de forma material.' : 'El cierre estimado depende del método elegido.'), page: 'pacing' });
+      const comp = pc.kpis.find((k) => k.id === 'compliance');
+      const f = R.pc && isNum(R.pc.forecast) ? `Cierre estimado del año: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : null;
+      items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Pacing y forecast', limit: comp && comp.value === null ? 'Sin plan comparable.' : (by.reliability && by.reliability.warning ? 'El cierre estimado depende del método; los alternativos difieren de forma material.' : 'El cierre estimado depende del método elegido.'), page: 'pacing',
+        title: R.state ? `El negocio ${phrasePlan(R)}` : 'Venta real acumulada al corte', figure: R.state ? pct(R.pc.compliance) : moneyC(R.pc && R.pc.real), figureLabel: R.state ? 'de cumplimiento al corte' : 'venta real',
+        why: [R.state ? `${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados (${smoney(R.pc.gap)}).` : null, f].filter(Boolean).join(' '), note: R.material ? 'El cierre depende del método de proyección elegido; los alternativos difieren de forma material.' : null });
     }
-    if (by.drivers) items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: by.drivers.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers' });
-    if (by.recovery) items.push({ tag: TAG.est, certainty: 'Requerimiento aritmético', text: by.recovery.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery' });
-    if (by.trends) items.push({ tag: TAG.calc, certainty: 'Señal calculada', text: by.trends.headline, source: 'Pág. Evolución y patrones', limit: by.trends.scope && by.trends.scope.partial ? 'Incluye un período parcial.' : 'Patrones descriptivos.', page: 'trends' });
-    if (by.categories) items.push({ tag: TAG.calc, certainty: 'Cálculo', text: by.categories.headline, source: 'Pág. Categorías y productos', limit: null, page: 'categories' });
+    const dv = by.drivers;
+    if (dv) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoney(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
+    const rv = by.recovery;
+    if (rv) items.push({ tag: TAG.est, certainty: 'Requerimiento aritmético', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: 'brecha pendiente a la meta', why: rv.headline, note: 'El ritmo diario es lo que se requiere, no una proyección.' });
+    if (by.trends) items.push({ tag: TAG.calc, certainty: 'Señal calculada', text: by.trends.headline, source: 'Pág. Evolución y patrones', limit: by.trends.scope && by.trends.scope.partial ? 'Incluye un período parcial.' : 'Patrones descriptivos.', page: 'trends', title: 'Qué cae y qué compensa', figure: '', figureLabel: '', why: by.trends.headline, note: null });
+    if (by.categories) items.push({ tag: TAG.calc, certainty: 'Cálculo', text: by.categories.headline, source: 'Pág. Categorías y productos', limit: null, page: 'categories', title: 'Dónde se concentra la venta', figure: '', figureLabel: '', why: by.categories.headline, note: null });
     const out = items.filter((i) => clean(i.text)).slice(0, 3).map((i, k) => ({ ...i, n: k + 1 }));
     if (!out.length) return omit('summary', 'Resumen ejecutivo', 'Todavía no hay cálculos válidos que resumir.');
-    // «Qué revisar primero»: solo si lo respalda un cálculo (mayor arrastre, o requerimiento mayor al plan).
-    let review = null;
-    const drag = by.trends && by.trends.tables[0] && by.trends.tables[0].rows[0];
-    const rc = by.recovery && by.recovery.kpis.find((k) => k.id === 'daily');
-    if (drag && isNum(drag.impact) && drag.impact < 0) review = `Revisar primero ${drag.entity}: es la entidad que más arrastra (${smoney(drag.impact)}) en el período comparado.`;
-    else if (rc && by.recovery && by.recovery.headline.includes('vs. el plan diario')) review = 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.';
-    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
+    // Introducción narrativa: estado contra plan → qué sobresale → área de atención → implicación para el cierre. Cada frase solo si hay dato.
+    const sent = [];
+    if (R.state) sent.push(`Al corte del ${R.cutoff}, el negocio ${phrasePlan(R)}: ${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados.`);
+    else if (R.pc && isNum(R.pc.real)) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
+    if (R.best) sent.push(`${R.best.channel} es el canal que más sobresale (${smoney(R.best.gap)} frente al plan).`);
+    if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} en el período comparado.`);
+    else if (R.worst) sent.push(`La principal área de atención es ${R.worst.channel} (${smoney(R.worst.gap)} frente al plan).`);
+    if (R.pc && isNum(R.pc.forecast)) sent.push(`Al ritmo actual, el año cerraría en ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}${R.material ? ', cifra que depende del método de proyección' : ''}.`);
+    else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir la meta faltan ${moneyC(R.rec.remaining)}.`);
+    const review = R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
+    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
+  }
+
+  /* ---------------- 13 · Cierre ejecutivo ---------------- */
+  function pageClosing(s, pages) {
+    const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
+    const R = readout(s, by); if (!R.pc) return omit('closing', 'Cierre ejecutivo', 'Sin resultados de pacing no hay base para un cierre.');
+    const where = R.state ? { title: 'Dónde estamos', big: pct(R.pc.compliance), unit: 'de cumplimiento al corte', text: `${moneyC(R.pc.real)} de venta real contra ${moneyC(R.pc.plan)} del plan comparable (${smoney(R.pc.gap)}). ${isNum(R.pc.forecast) ? `Cierre estimado del año: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : ''}`.trim() }
+      : { title: 'Dónde estamos', big: moneyC(R.pc.real), unit: 'venta real acumulada', text: 'No hay plan comparable: no es posible medir el cumplimiento del período.' };
+    const stand = R.best ? { title: 'Qué sobresalió', big: smoney(R.best.gap), unit: `${R.best.channel} frente al plan`, text: `${R.best.channel} es el canal con mayor avance sobre el plan comparable.` }
+      : (by.categories && by.categories.headline ? { title: 'Qué sobresalió', big: '', unit: '', text: by.categories.headline } : { title: 'Qué sobresalió', big: '', unit: '', text: 'Ningún canal supera su plan comparable al corte.' });
+    const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
+    const move = R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída del período comparado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+      : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente al plan`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+      : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
+    const watch = [];
+    if (R.material) watch.push('El cierre estimado cambia de forma material según el método de proyección.');
+    if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir la meta requiere ${moneyC(R.rec.daily)} por día en ${int(R.rec.days)} días restantes.`);
+    if (s.quality && s.quality.status && s.quality.status !== 'ok') watch.push('Hay advertencias de calidad de datos (ver anexo técnico).');
+    const vig = { title: 'Qué debemos vigilar', big: R.rec && isNum(R.rec.daily) ? moneyC(R.rec.daily) : '', unit: R.rec && isNum(R.rec.daily) ? 'requeridos por día para la meta' : '', text: watch.length ? watch.join(' ') : 'Sin riesgos materiales identificados en los datos disponibles.' };
+    return page('closing', 'Cierre ejecutivo', { question: 'Qué nos llevamos de este periodo', headline: '', blocks: [where, stand, move, vig], sources: [], tags: [] });
   }
 
   /* ---------------- 12 · Anexo técnico y calidad ---------------- */
@@ -454,13 +513,16 @@
   }
 
   /* ---------------- ensamblado ---------------- */
-  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'trends', 'categories', 'customers', 'traffic', 'recovery', 'seasonality', 'annex'];
+  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'trends', 'categories', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
   function build(src) {
     const s = { channel: 'total', options: {}, filters: [], ...src };
-    s.options = { includeAnnex: true, showTags: true, showBusinessName: false, ...(s.options || {}) };
+    s.options = { includeAnnex: true, showTags: false, showBusinessName: false, ...(s.options || {}) };
     const adv = advise(s);
     const core = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageTrends(s), pageCategories(s), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
     const all = [core[0], pageSummary(s, core), ...core.slice(1)];
+    const rel = all.find((p) => p.id === 'reliability'), pac = all.find((p) => p.id === 'pacing');
+    if (rel && rel.status === 'included' && rel.warning && pac && pac.status === 'included') pac.caveat = 'El cierre estimado depende del método de proyección: los métodos con datos suficientes difieren de forma material (detalle en el anexo técnico).';
+    all.push(pageClosing(s, all));
     const annex = pageAnnex(s, all, adv);
     const pages = [...all, annex].filter((p) => p.id !== 'annex' || s.options.includeAnnex || true);   // el anexo siempre existe: lista las omisiones
     const included = pages.filter((p) => p.status === 'included');

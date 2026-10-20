@@ -83,7 +83,7 @@
     },
     // Fase 8.1: Categoría → Producto (resultados en memoria; datos en IndexedDB)
     pkg: { busy: false, last: null },
-    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: true, showBusinessName: false }, sig: null, at: null },   // «Presentación (PDF)»
+    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: false, showBusinessName: false }, sig: null, at: null },   // «Presentación (PDF)»
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
@@ -805,9 +805,20 @@
     let run = null, rf = null, diag = null;
     try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
     const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
+    let productByLevel = null;
     if (hasProducts) {
       try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
       try { await ensureTrendAnalysis(); } catch (e) { /* página omitida con motivo */ }
+      // Categorías y productos: el cambio se muestra por categoría y la participación por subcategoría (mismo período, referencia, canal y filtro).
+      try {
+        const pr = state.pa.result;
+        if (pr && pr.period) {
+          const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: state.pa.channel, filter: pr.filter || undefined, next: null };
+          const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l) lv[l] = pr; });
+          for (const l of ['category', 'subcategory']) if (!lv[l]) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
+          productByLevel = lv;
+        }
+      } catch (e) { productByLevel = null; /* se usa el nivel que tenga el análisis */ }
     }
     let customers = null;
     try {
@@ -826,7 +837,7 @@
     return FP.reportBuilder.build({
       app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, diag,
       trend: { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: desc(an.filter),
-      product: pa.result, productFilterLabel: pa.result && pa.result.filter ? desc(pa.result.filter) : '', customers, projection, profiles,
+      product: pa.result, productByLevel, productFilterLabel: pa.result && pa.result.filter ? desc(pa.result.filter) : '', customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
       quality: FP.coverage.summarize(state.store), filters, recovery,
       options: { showTags: state.rp.options.showTags, showBusinessName: state.rp.options.showBusinessName },
