@@ -35,12 +35,17 @@ async def main():
         for _ in range(60):
             await q.wait_for_timeout(1000)
             if await q.evaluate("FP.app.state.staging.items.length") == 0: break
+        # el guardado del libro de clientes es asíncrono: se espera a que exista, no un tiempo fijo
+        try: await q.wait_for_function("(()=>{const i=FP.customerStore.info();return i&&i.orders>0})()", timeout=90000)
+        except Exception: pass
         info = await q.evaluate("FP.customerStore.info()")
         chk('K5 al guardar, el libro de clientes queda en el navegador', info and info['orders'] == sm['orders'] and info['customers'] > 1000, info and (info['orders'], info['customers']))
         # las ventas de productos siguen guardándose como siempre
         cnt = await q.evaluate("FP.productStore.counts()")
         chk('K6 los productos se guardan como siempre (filas SKU-día > 0)', cnt['salesRows'] > 0, cnt)
-        await q.evaluate("location.hash='#carga'"); await q.wait_for_timeout(300); await q.evaluate("location.hash='#clientes'"); await q.wait_for_timeout(2500)
+        await q.evaluate("location.hash='#carga'"); await q.wait_for_timeout(300); await q.evaluate("location.hash='#clientes'"); await q.wait_for_timeout(500)
+        try: await q.wait_for_function("(document.getElementById('cus-body')||{innerText:''}).innerText.includes('Compran más de una vez')", timeout=60000)
+        except Exception: pass
         t1 = await q.evaluate("document.getElementById('cus-body').innerText")
         chk('K7 la vista muestra KPIs, mensual, LTV, retención y canal', all(x in t1 for x in ('Clientes', 'Compran más de una vez', 'Nuevos, recurrentes y reactivados por mes', 'Valor del cliente (LTV) por cohorte', 'Retención por mes', 'Por canal del primer pedido')), t1[:200])
         chk('K8 avisa de histórico insuficiente al inicio de la serie', 'histórico insuficiente' in t1)

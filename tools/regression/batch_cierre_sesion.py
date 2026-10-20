@@ -55,22 +55,33 @@ async def sync_all(q, M):
     for k in ks: M['at'][k] = (dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) + dt.timedelta(minutes=5)).isoformat() + 'Z'
     return ks
 OPEN = "document.querySelector('#signout-dialog') && document.querySelector('#signout-dialog').open"
+async def inv_safe(q):
+    """Lee el inventario; si la página se está recargando (cierre de sesión) reintenta en vez de fallar por una carrera."""
+    err = None
+    for _ in range(40):
+        try:
+            await q.wait_for_function('window.FP && FP.app && FP.app.repo', timeout=5000)
+            return await q.evaluate(INV)
+        except Exception as e:
+            err = e; await q.wait_for_timeout(500)
+    raise err
+
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
         # ---- S1 todo respaldado → borra ----
         M = {'at': {}, 'status': 200, 'posts': 0}
         c, q = await seeded(b, M); q.on('pageerror', lambda e: errs.append(str(e)[:150]))
-        inv0 = await q.evaluate(INV)
+        inv0 = await inv_safe(q)
         chk('S0 antes: hay datos en IndexedDB y sesión', len(inv0['kv']) > 0 and inv0['ses'] and 'actualData' in ' '.join(inv0['kv']), inv0)
         ks = await sync_all(q, M)
         await q.evaluate("FP.app.actions['cloud-signout']()"); await q.wait_for_selector('#signout-dialog [data-action="signout-confirm"]:not([disabled])', timeout=6000)
         t = await q.evaluate("document.querySelector('#signout-dialog').innerText")
         chk('S1a respaldado: aviso verde, botón directo, sin casilla', 'Todo está respaldado' in t and 'Entiendo' not in t, t)
         chk('S1b el texto dice qué se borra y qué se conserva', 'se borran de este navegador' in t and 'preferencias' in t and 'Cohere' in t, t)
-        chk('S1c aún no se borró nada', len((await q.evaluate(INV))['kv']) == len(inv0['kv']))
+        chk('S1c aún no se borró nada', len((await inv_safe(q))['kv']) == len(inv0['kv']))
         await q.click('#signout-dialog [data-action="signout-confirm"]'); await q.wait_for_timeout(2500)
-        inv = await q.evaluate(INV)
+        inv = await inv_safe(q)
         chk('S1d IndexedDB vacío (kv)', inv['kv'] == [], inv['kv'])
         data_ls = [k for k in inv['ls'] if k.split(':')[0] in ('historicalData','planData','actualData','segmentsData','dataset','plans','forecasts','targets','settings','aliases','businessContext','diagnosticSettings')]
         chk('S1e sin claves de datos en localStorage', data_ls == [], data_ls)
@@ -84,15 +95,15 @@ async def main():
         await c.close()
         # ---- S2 sin respaldo: advertencia, casilla obligatoria, cancelar conserva ----
         M = {'at': {}, 'status': 200, 'posts': 0}
-        c, q = await seeded(b, M); inv0 = await q.evaluate(INV)
+        c, q = await seeded(b, M); inv0 = await inv_safe(q)
         await q.evaluate("FP.app.actions['cloud-signout']()"); await q.wait_for_selector('#signout-dialog [data-action="signout-upload"]', timeout=6000)
         t = await q.evaluate("document.querySelector('#signout-dialog').innerText")
         chk('S2a sin respaldo: avisa y lista bloques', 'sin respaldar' in t and 'no está en la nube' in t, t)
         chk('S2b «borrar de todos modos» deshabilitado hasta marcar la casilla', await q.evaluate("document.querySelector('#signout-dialog [data-action=\"signout-confirm\"]').disabled"))
         await q.evaluate("FP.app.actions['signout-confirm']()"); await q.wait_for_timeout(800)
-        chk('S2c llamar a confirmar sin casilla no borra nada', len((await q.evaluate(INV))['kv']) == len(inv0['kv']) and await q.evaluate(OPEN))
+        chk('S2c llamar a confirmar sin casilla no borra nada', len((await inv_safe(q))['kv']) == len(inv0['kv']) and await q.evaluate(OPEN))
         await q.keyboard.press('Escape'); await q.wait_for_timeout(300)
-        chk('S2d Esc cierra el diálogo y conserva datos y sesión', not await q.evaluate("!!document.querySelector('#signout-dialog')") and (await q.evaluate(INV))['ses'] is not None and len((await q.evaluate(INV))['kv']) == len(inv0['kv']))
+        chk('S2d Esc cierra el diálogo y conserva datos y sesión', not await q.evaluate("!!document.querySelector('#signout-dialog')") and (await inv_safe(q))['ses'] is not None and len((await inv_safe(q))['kv']) == len(inv0['kv']))
         # ---- S3 subir copia → pasa a respaldado ----
         await q.evaluate("FP.app.actions['cloud-signout']()"); await q.wait_for_selector('#signout-dialog [data-action="signout-upload"]', timeout=6000)
         await q.click('#signout-dialog [data-action="signout-upload"]')
@@ -101,14 +112,14 @@ async def main():
         await q.click('#signout-dialog [data-action="signout-cancel"]'); await c.close()
         # ---- S4 sin conexión / error: no se sabe → casilla + borrar de todos modos ----
         M = {'at': {}, 'status': 500, 'posts': 0}
-        c, q = await seeded(b, M); inv0 = await q.evaluate(INV)
+        c, q = await seeded(b, M); inv0 = await inv_safe(q)
         await q.evaluate("FP.app.actions['cloud-signout']()"); await q.wait_for_selector('#signout-dialog [data-action="signout-upload"]', timeout=6000)
         t = await q.evaluate("document.querySelector('#signout-dialog').innerText")
         chk('S4a error al comprobar: lo dice y no afirma que esté respaldado', 'No pude comprobar el respaldo' in t and 'Todo está respaldado' not in t, t)
         await q.check('#signout-dialog input[data-action="signout-ack"]'); await q.wait_for_timeout(200)
         chk('S4b con la casilla marcada se habilita el borrado', not await q.evaluate("document.querySelector('#signout-dialog [data-action=\"signout-confirm\"]').disabled"))
         await q.click('#signout-dialog [data-action="signout-confirm"]'); await q.wait_for_timeout(2500)
-        inv = await q.evaluate(INV)
+        inv = await inv_safe(q)
         chk('S4c se borra al confirmar con casilla', inv['kv'] == [] and inv['ses'] is None, inv)
         await c.close()
         # ---- S5 descarga de copia local ----
@@ -132,7 +143,7 @@ async def main():
         n = await q.evaluate("[...document.querySelectorAll('[data-action=\"cloud-signout\"]')].length")
         await q.evaluate("document.querySelector('.hmenu__item[data-action=\"cloud-signout\"], [data-action=\"cloud-signout\"]').click()")
         await q.wait_for_selector('#signout-dialog', timeout=4000)
-        chk('S7 el botón de cerrar sesión abre el diálogo (no cierra directo)', await q.evaluate(OPEN) and (await q.evaluate(INV))['ses'] is not None, n)
+        chk('S7 el botón de cerrar sesión abre el diálogo (no cierra directo)', await q.evaluate(OPEN) and (await inv_safe(q))['ses'] is not None, n)
         await c.close()
         chk('Sin errores de página', not errs, errs)
         await b.close()
