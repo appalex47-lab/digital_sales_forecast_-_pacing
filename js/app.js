@@ -3530,8 +3530,8 @@
     'pkg-context'(el) {
       const k = el.dataset.key, v = el.dataset.value || el.value;
       const dx = state.dx.settings, rc = state.rc.settings, pa = state.pa;
-      if (k === 'periodType') { dx.periodType = v; dx.periodKey = null; rc.periodType = v; rc.periodKey = null; }
-      else if (k === 'periodKey') { dx.periodKey = v; rc.periodKey = v; }
+      if (k === 'periodType') { dx.periodType = v; dx.periodKey = null; rc.periodType = v; rc.periodKey = null; state.ux.ctx.periodType = v; state.ux.ctx.periodKey = null; }
+      else if (k === 'periodKey') { dx.periodKey = v; rc.periodKey = v; state.ux.ctx.periodKey = v; }
       else if (k === 'channel') { dx.channel = v; rc.channel = v; pa.channel = v; state.ux.ctx.channel = v; }
       state.dx.run = null;
       saveDiagnosticSettings(); saveRecoverySettings();

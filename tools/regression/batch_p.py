@@ -80,7 +80,7 @@ async def main():
         idx = json.loads(z.read('indice.json')); files = {f['key']: f['file'] for f in idx['files']}
         chk('P-3 el zip sale con esa selección: Diagnóstico, Recovery y Narrativa de agosto en App', files['analysis'] == 'analysis_export_2026-08_app.json' and files['actionPlan'] == 'action_plan_export_2026-08.json' and files['narrative'] == 'narrative_export_2026-08_app.json', files)
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(600)
-        chk('P-3 al volver a Diagnóstico la selección es la misma (App, agosto)', await q.evaluate("[document.getElementById('dx-ch').value, document.getElementById('dx-key').value]") == ['app', '2026-08'])
+        _v = await q.evaluate("[document.getElementById('dx-ch').value, document.getElementById('dx-key').value, FP.app.state.dx.settings.channel, FP.app.state.dx.settings.periodKey]"); chk('P-3 al volver a Diagnóstico la selección es la misma (App, agosto)', _v[:2] == ['app', '2026-08'], _v)
         await c.close()
         chk('Sin errores de página', not errs, errs[:2])
         await b.close()

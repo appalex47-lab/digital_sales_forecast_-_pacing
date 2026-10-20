@@ -35,7 +35,7 @@ async def main():
         await q.goto(u + '#paquete'); await q.wait_for_timeout(800)
         nav = await q.evaluate("[...document.querySelectorAll('#snav-g-medir .snav__item')].map(a=>a.innerText.trim())")
         rows = await q.evaluate("[...document.querySelectorAll('#package-view tbody tr')].map(r=>[r.cells[0].innerText.trim(),r.cells[1].innerText.trim()])")
-        chk('O-1 «Paquete de análisis» está en «Medir y aprender» y lista los 7 exports con su estado', nav == ['Seguimiento y aprendizaje', 'Narrativa ejecutiva', 'Paquete de análisis'] and len(rows) == 7, (nav, rows))
+        chk('O-1 «Presentación (PDF)» cierra «Medir y aprender» y el paquete lista los 7 exports y lista los 7 exports con su estado', nav == ['Seguimiento y aprendizaje', 'Narrativa ejecutiva', 'Presentación (PDF)'] and len(rows) == 7, (nav, rows))
         name0, z0 = await get_zip(q)
         zf = zipfile.ZipFile(io.BytesIO(z0)); bad = zf.testzip(); names0 = zf.namelist()
         idx0 = json.loads(zf.read('indice.json'))

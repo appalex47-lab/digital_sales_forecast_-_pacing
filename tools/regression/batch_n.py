@@ -36,9 +36,9 @@ async def main():
         chk('N-1 ningún texto visible, etiqueta accesible, título ni marcador de las 18 vistas dice «Sales Navigator»', not left, left)
         ay = await q.evaluate("document.getElementById('view-ayuda').innerText")
         ft = await q.evaluate("(document.querySelector('.app-footer')||{innerText:''}).innerText")
-        chk('N-1 la ayuda («¿Cómo funciona RevNavigator?») y el pie de página usan el nombre nuevo y conservan la versión', '¿Cómo funciona RevNavigator?' in ay and ('RevNavigator' in ft and '0.14.0' in ft), (ay[:80], ft[:120]))
+        chk('N-1 la ayuda («¿Cómo funciona RevNavigator?») y el pie de página usan el nombre nuevo y conservan la versión', '¿Cómo funciona RevNavigator?' in ay and ('RevNavigator' in ft and '0.16.6' in ft), (ay[:80], ft[:120]))
         exp = await q.evaluate("""()=>{const hits=[];const src=JSON.stringify({a:FP.config.app});return src}""")
-        chk('N-1 la configuración de la app (de donde salen source.app y metadata.app de los 7 exports) dice RevNavigator con la misma versión', '"name":"RevNavigator"' in exp and '"version":"0.14.0"' in exp, exp)
+        chk('N-1 la configuración de la app (de donde salen source.app y metadata.app de los 7 exports) dice RevNavigator con la misma versión', '"name":"RevNavigator"' in exp and '"version":"0.16.6"' in exp, exp)
         # exports reales capturados con el botón de cada vista
         got = {}
         for v, sel in (('pacing', '[data-action="fc-export"]'), ('reforecast', '[data-action="rf-export"]'), ('diagnostico', '[data-action="dx-export"]'), ('narrativa', '[data-action="nx-export"]'), ('recovery', '[data-action="rc-export"]')):

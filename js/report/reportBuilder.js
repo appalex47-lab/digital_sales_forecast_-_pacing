@@ -415,8 +415,7 @@
       quality, missing, methods, backtest: btRows, backtestNote: bt ? 'Error histórico (WAPE) a 7 días, calculado por canal; las muestras y períodos pueden no ser comparables entre métodos.' : 'El error histórico (backtest) no se había calculado al generar el reporte; se calcula en Pacing y forecast → «Calcular error histórico». El total no tiene backtest propio.',
       assumptions: [
         { item: 'Ventana reciente (método C)', value: ST.recentWindow ? (/^last(\d+)$/.test(String(ST.recentWindow)) ? `últimos ${String(ST.recentWindow).replace('last','')} días` : `${ST.recentWindow} días`) : NA }, { item: 'Mínimo de días comparables', value: isNum(ST.minComparableDays) ? `${ST.minComparableDays} días` : NA },
-        { item: 'Cobertura mínima de ventana', value: isNum(ST.minWindowCoverage) ? pct(ST.minWindowCoverage, 0) : NA }, { item: 'Método de atribución de la brecha', value: s.diag && s.diag.attributionMethodLabel ? s.diag.attributionMethodLabel : NA },
-        { item: 'Versión de la herramienta', value: s.app ? `${s.app.name} ${s.app.version}` : NA }],
+        { item: 'Cobertura mínima de ventana', value: isNum(ST.minWindowCoverage) ? pct(ST.minWindowCoverage, 0) : NA }, { item: 'Método de atribución de la brecha', value: s.diag && s.diag.attributionMethodLabel ? s.diag.attributionMethodLabel : NA }],
       definitions: [
         ['Venta', 'Tráfico × CR × AOV. Las tres palancas explican la venta de forma aritmética, no causal.'], ['CR', 'Pedidos ÷ tráfico, siempre desde sumas del período (nunca promedio de tasas diarias).'], ['AOV', 'Venta ÷ pedidos, desde sumas.'],
         ['Corte', 'Último día con venta real cargada que se usa para comparar con el plan.'], ['Día contado', 'Día con real válido en el canal; en el Total, día con real en todos los canales.'], ['Plan comparable', 'Plan de los mismos días contados que el real.'],
