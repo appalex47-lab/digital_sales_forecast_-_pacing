@@ -199,9 +199,10 @@
     const sIdx = sel.state ? dims.states.indexOf(sel.state) : 0;
     const cities = dims.cities.map((c, i) => ({ c, i })).filter(({ c, i }) => i > 0 && (!sIdx || c.stateIdx === sIdx) && (!sel.region || regionOf(c.stateIdx) === sel.region)).map(({ i }) => cityLabel(i)).sort();
     const cIdx = sel.city ? dims.cities.findIndex((x, i) => i > 0 && cityLabel(i) === sel.city) : 0;
-    const inData = new Set((meta.branches || []).map(String));   // solo sucursales con venta cargada (el catálogo guardado puede traer restos)
+    // Solo sucursales con venta cargada (el catálogo guardado puede traer restos); si la lista de la carga no corresponde a este catálogo, no se filtra.
+    const loaded = new Set((meta.branches || []).map(String)), useLoaded = dims.branches.some((b, i) => i > 0 && loaded.has(String(b)));
     const branches = dims.branches.map((b, i) => ({ b, i })).filter(({ b, i }) => {
-      if (i === 0 || (inData.size && !inData.has(String(b)))) return false;
+      if (i === 0 || (useLoaded && !loaded.has(String(b)))) return false;
       const info = geo.branchInfo[i] || {};
       if (cIdx > 0 && info.cityIdx !== cIdx) return false;
       if (sIdx > 0 && info.stateIdx !== sIdx) return false;
