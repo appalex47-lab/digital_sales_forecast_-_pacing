@@ -3610,7 +3610,8 @@
     },
     'rp-print'() { const rp = state.rp; if (rp.report) FP.reportView.print(rp.report, { exclude: rp.exclude, tags: rp.options.showTags }); },
     'rp-toggle-page'(el) { const rp = state.rp, id = el.dataset.id; rp.exclude = rp.exclude.includes(id) ? rp.exclude.filter((x) => x !== id) : [...rp.exclude, id]; render(); },
-    'rp-filter'(el) { try { const [k, v] = JSON.parse(el.value || 'null') || []; state.rp.filter = k && v ? FP.productFilter.cascade({}, k, v) : null; } catch (e) { state.rp.filter = null; } render(); },
+    'rp-filter'(el) { const f = FP.productFilter.cascade(state.rp.filter || {}, el.dataset.key, el.value); state.rp.filter = Object.keys(f).length ? f : null; render(); },
+    'rp-filter-clear'() { state.rp.filter = null; render(); },
     'rp-option'(el) { state.rp.options[el.dataset.key] = Boolean(el.checked); render(); },
     async 'pkg-download'() {
       const pkg = FP.packageView.setBusy(true);

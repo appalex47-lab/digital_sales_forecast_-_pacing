@@ -136,3 +136,8 @@
 
 /* línea de contexto del año en el resumen (el reporte gira en torno al mes seleccionado) */
 .rp-yr{margin:2px 0 8px;padding:5px 10px;font-size:13.4px;line-height:1.35;color:#475569;background:#f1f5f9;border-radius:6px}
+
+/* filtros separados de la presentación (pantalla) */
+.rp-filters{display:grid;gap:8px}.rp-filters__head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rp-filters__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px}.rp-f .select{width:100%;min-width:0}
+.rp-yr--f{background:#eef5ff;color:#1e3a5f}
