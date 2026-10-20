@@ -325,27 +325,47 @@
   const SRC_CODE = { observed: 'o', calculated: 'c', missing: 'm', invalid: 'i', quarantined: 'q' };
   const CODE_SRC = { o: 'observed', c: 'calculated', m: 'missing', i: 'invalid', q: 'quarantined' };
 
-  /** Empaqueta los registros [from, to) con el índice de lotes de la colección (formato 'packed-v1'). */
+  /**
+   * Empaqueta los registros [from, to) con el índice de lotes de la colección (formato 'packed-v1').
+   * Optimización: preobtener `metricKeys`, predimensionar el arreglo de salida `out` y evitar la creación de
+   * arreglos temporales (`.map()`) y propagación (`...`) por cada registro reduce asignaciones de memoria y tiempo de guardado.
+   */
   function packRecords(col, from = 0, to = col.records.length, index = null) {
     const idx = index || new Map(col.batches.map((b, i) => [b.id, i]));
-    const out = [];
+    const metricKeys = C().metricKeys;
+    const numMetrics = metricKeys.length;
+    const count = Math.max(0, to - from);
+    const out = new Array(count);
+    let outIdx = 0;
     for (let n = from; n < to; n++) {
       const r = col.records[n];
+      const batchIdx = idx.get(r.provenance.batchId);
+      const metrics = r.metrics;
       const a = [
         r.date, r.channel, r.dayType, r.holiday, r.event, r.season, r.notes, r.status,
-        r.issueCounts.error, r.issueCounts.warning, idx.has(r.provenance.batchId) ? idx.get(r.provenance.batchId) : -1, r.provenance.row,
-        ...C().metricKeys.map((k) => {
-          const c = r.metrics[k];
-          const m = [c.value, SRC_CODE[c.source]];
-          if (c.source === 'quarantined') { m.push(c.raw === undefined ? null : c.raw, c.note || null, { p: c.parsedValue === undefined ? null : c.parsedValue, r: c.rule || null }); return m; }
-          if (c.raw !== undefined || c.note) m.push(c.raw === undefined ? null : c.raw);
-          if (c.note) m.push(c.note);
-          return m;
-        })
+        r.issueCounts.error, r.issueCounts.warning, batchIdx !== undefined ? batchIdx : -1, r.provenance.row
       ];
+      for (let m = 0; m < numMetrics; m++) {
+        const k = metricKeys[m];
+        const c = metrics[k];
+        if (!c) {
+          a.push([null, 'm']);
+          continue;
+        }
+        const srcCode = SRC_CODE[c.source] || 'm';
+        if (c.source === 'quarantined') {
+          a.push([c.value, srcCode, c.raw === undefined ? null : c.raw, c.note || null, { p: c.parsedValue === undefined ? null : c.parsedValue, r: c.rule || null }]);
+        } else if (c.note) {
+          a.push([c.value, srcCode, c.raw === undefined ? null : c.raw, c.note]);
+        } else if (c.raw !== undefined) {
+          a.push([c.value, srcCode, c.raw]);
+        } else {
+          a.push([c.value, srcCode]);
+        }
+      }
       // Fase 5 (aditivo, índice 17): dimensión, segmento y métricas extra
       if (r.dimension || r.extra) a.push({ d: r.dimension || null, s: r.segment || null, k: r.segmentKey || null, x: r.extra || null });
-      out.push(a);
+      out[outIdx++] = a;
     }
     return out;
   }
@@ -393,26 +413,35 @@
     return { collection: { batches: manifest.batches, records: recs }, missingChunks: missing };
   }
 
+  /**
+   * Optimización: iteración directa con `for` sobre `metricKeys` preobtenidas sin instanciar closures por cada registro.
+   */
   function unpackRecord(a, batchesList, dataType) {
     const b = batchesList[a[10]] || { id: null, fileName: null };
     const metrics = {};
-    C().metricKeys.forEach((k, i) => {
+    const metricKeys = C().metricKeys;
+    const numMetrics = metricKeys.length;
+    for (let i = 0; i < numMetrics; i++) {
+      const k = metricKeys[i];
       const m = a[12 + i] || [null, 'm'];
-      metrics[k] = { value: m[0], source: CODE_SRC[m[1]] || 'missing' };
-      if (m.length > 2 && m[2] !== null) metrics[k].raw = m[2];
-      if (m.length > 3) metrics[k].note = m[3];
+      const src = CODE_SRC[m[1]] || 'missing';
       if (m[1] === 'q') {   // Fase A: la cuarentena conserva su valor original, el interpretado y la regla al guardar y recargar
         const x = m[4] && typeof m[4] === 'object' ? m[4] : {};
         metrics[k] = { value: null, source: 'quarantined', raw: m.length > 2 ? m[2] : null, parsedValue: x.p === undefined ? null : x.p, rule: x.r || null, note: m[3] || '' };
+      } else {
+        const item = { value: m[0], source: src };
+        if (m.length > 2 && m[2] !== null) item.raw = m[2];
+        if (m.length > 3) item.note = m[3];
+        metrics[k] = item;
       }
-    });
+    }
     const rec = {
       key: `${a[0]}|${a[1]}|${dataType}`, dataType, date: a[0], channel: a[1], dayType: a[2],
       holiday: a[3], event: a[4], season: a[5], notes: a[6], metrics, status: a[7],
       issueCounts: { error: a[8], warning: a[9] },
       provenance: { batchId: b.id, fileName: b.fileName, row: a[11] }
     };
-    const ex = a[12 + C().metricKeys.length];
+    const ex = a[12 + numMetrics];
     if (ex && typeof ex === 'object' && !Array.isArray(ex)) {
       if (ex.x) rec.extra = ex.x;
       if (ex.d) { rec.dimension = ex.d; rec.segment = ex.s; rec.segmentKey = ex.k; rec.key = `${rec.key}|${ex.d}|${ex.k}`; }
