@@ -179,7 +179,7 @@
   const callout = (txt, tone = 'info', title = '') => `<div class="rp-callout rp-callout--${tone}">${title ? `<strong>${esc(title)}</strong> ` : ''}${esc(dx(txt))}</div>`;
 
   /* Alcance: solo se imprime lo que cambia la lectura (filtro activo, período parcial); el resto va en el encabezado de la lámina. */
-  const scopeNote = (p) => { const sc = p.scope || {}; const bits = [sc.filter ? `Filtro: ${sc.filter}` : null, sc.partial ? 'Incluye un período parcial.' : null].filter(Boolean); return bits.length ? `<p class="rp-scope">${esc(bits.join(' · '))}</p>` : ''; };
+  const scopeNote = (p) => { const sc = p.scope || {}; const bits = [sc.filter ? `Filtro: ${sc.filter}` : null, sc.partial && !(p.notes || []).some((n) => /parcial/i.test(n)) ? 'Incluye un período parcial.' : null].filter(Boolean); return bits.length ? `<p class="rp-scope">${esc(bits.join(' · '))}</p>` : ''; };
   /* ================= cuerpo por página ================= */
   const TYPECLS = { Canal: 'c', Palanca: 'p', 'Categoría': 'g', Producto: 'r' };
   const moverRow = (i, pos) => `<div class="rp-mv__r"><span class="rp-mv__tp rp-mv__tp--${TYPECLS[i.type] || 'o'}">${esc(i.type)}</span><div class="rp-mv__n"><b>${esc(i.name)}</b>${i.evidence ? `<small>${esc(i.evidence)}</small>` : ''}</div><div class="rp-mv__v ${pos ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', i.value))}<span class="rp-mv__bar"><i class="${pos ? 'pos' : 'neg'}" style="width:${Math.max(4, Math.round((i.weight || 0) * 100))}%"></i></span></div></div>`;
@@ -213,8 +213,8 @@
       ${scopeNote(p)}${notesHtml(p)}`,
     categories: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>
       ${scopeNote(p)}${notesHtml(p)}`,
-    customers: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}${p.lapsed ? lapsedBox(p) : ''}</div></div>
-      ${p.scope && p.scope.label && !/^Toda la empresa$/i.test(p.scope.label) ? `<p class="rp-scope">Alcance: ${esc(p.scope.label)}</p>` : ''}${notesHtml(p)}`,
+    customers: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}${retStrip(p)}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}${p.lapsed ? lapsedBox(p) : ''}</div></div>
+      ${p.scope && p.scope.label && !/^Toda la empresa$/i.test(p.scope.label) ? `<p class="rp-scope">Alcance: ${esc(p.scope.label)}</p>` : ''}${notesHtml(p.lapsed && p.lapsed.monthLabel ? { notes: (p.notes || []).filter((n) => !/clientes que compraron el mes anterior/.test(n)) } : p)}`,
     traffic: (p, x) => p.overview ? trafficBody(p, x) : `${p.tables.map(tableHtml).join('')}<p class="rp-scope">${esc([p.scope.dimension, p.scope.comparison, p.scope.denominator].filter(Boolean).join(' · '))}</p>${notesHtml(p)}`,
     recovery: (p, x) => `${kpisHtml(p, x.tags)}${p.progress ? `<div class="rp-panel"><div class="rp-panel__t"><span>Avance hacia la meta anual</span><span>${esc(fmt('pct', p.progress.pct))} · ${esc(fmt('moneyC', p.progress.real))} de ${esc(fmt('moneyC', p.progress.target))}</span></div><div class="rp-bar" role="img" aria-label="Avance ${esc(fmt('pct', p.progress.pct))}"><i style="width:${Math.max(0, Math.min(100, p.progress.pct * 100)).toFixed(1)}%"></i></div></div>` : ''}<div class="rp-row"><div class="rp-col-h"><div class="rp-tbl__t">Escenarios guardados</div>${p.scenarios.length
         ? `<table class="rp-t"><thead><tr><th>Escenario</th><th>Tipo</th></tr></thead><tbody>${p.scenarios.slice(0, 3).map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(fmt('text', s.type))}</td></tr>`).join('')}</tbody></table>` : '<p class="rp-empty">No hay escenarios guardados.</p>'}</div>
@@ -232,9 +232,15 @@
     const L = p.lapsed;
     if (!L.monthLabel) return `<div class="rp-box"><div class="rp-box__t">Compraron el mes anterior y no regresaron en ${esc(L.month)}</div><div class="rp-box__v">${esc(fmt('int', L.count))} de ${esc(fmt('int', L.base))}</div></div>`;
     const pc = (v) => `${Math.round(v * 100)} %`, ret = L.returned;
-    const chips = (p.returns || []).map((r) => `<span class="rp-rt${r.partial ? ' rp-rt--p' : ''}"><em>${esc(r.label)}${r.partial ? ' (parcial)' : ''}</em><b>${pc(r.rate)}</b></span>`).join('');
-    return `<div class="rp-box"><div class="rp-box__t">Compraron en ${esc(L.prevLabel)} y volvieron en ${esc(L.monthLabel)}${L.inProgress ? ' (mes en curso)' : ''}</div><div class="rp-box__v">${esc(fmt('int', ret))} de ${esc(fmt('int', L.base))} · ${pc(ret / L.base)} <small>(sin volver aún: ${esc(fmt('int', L.count))})</small></div>
-      <div class="rp-rts"><span class="rp-rt__h">Regreso mes a mes:</span>${chips}</div></div>`;
+    const hist = isNum(L.histBase) && isNum(L.histBought) ? ` · Base histórica: ${esc(fmt('int', L.histBase))} clientes; en ${esc(L.monthLabel)} compraron ${esc(fmt('int', L.histBought))} (${pc(L.histBought / L.histBase)})` : '';
+    return `<div class="rp-box"><div class="rp-box__t">Compraron en ${esc(L.prevLabel)} y volvieron en ${esc(L.monthLabel)}${L.inProgress ? ' (mes en curso)' : ''}</div><div class="rp-box__v">${esc(fmt('int', ret))} de ${esc(fmt('int', L.base))} · ${pc(ret / L.base)} <small>(sin volver aún: ${esc(fmt('int', L.count))})</small></div><p class="rp-box__h rp-box__h--s">${hist ? hist.slice(3) : ''}</p></div>`;
+  }
+  /* Regreso mes a mes debajo de cada barra: alineado con las barras del gráfico (misma columna por mes). */
+  function retStrip(p) {
+    const ch = (p.charts || [])[0], rs = p.returns || []; if (!ch || !ch.labels || !rs.length) return '';
+    const by = Object.fromEntries(rs.map((r) => [r.key, r])), pc = (v) => (isNum(v) ? `${Math.round(v * 100)} %` : '—');
+    const row = (lbl, k) => (rs.some((r) => isNum(r[k])) ? `<div class="rp-rs__cap">${lbl}</div><div class="rp-rs__row">${ch.labels.map((m) => { const r = by[m]; return `<span class="${r && r.partial ? 'rp-rs--p' : ''}">${r ? pc(r[k]) + (r.partial ? '*' : '') : '—'}</span>`; }).join('')}</div>` : '');
+    return `<div class="rp-rs">${row(`Volvieron del mes anterior (% de quienes compraron el mes previo)${rs.some((r) => r.partial) ? ' · *mes en curso' : ''}`, 'rate')}${row('Base histórica que compra (% de clientes con compra antes del mes)', 'histRate')}</div>`;
   }
 
   /* ================= Brecha: barras divergentes por palanca (reemplaza la cascada) ================= */
@@ -409,7 +415,7 @@
       // Aun compacta no cabe: se muestran solo las filas de mayor magnitud (las tablas ya vienen ordenadas) y la lámina lo dice; nunca se recorta en silencio.
       if (b.scrollHeight > b.clientHeight + 1 && !/^annex/.test(pg.getAttribute('data-page') || '')) {
         const note = document.createElement('p'); note.className = 'rp-scope rp-trim'; b.appendChild(note);
-        const tables = [...b.querySelectorAll('table.rp-t tbody')]; tables.forEach((t) => { t.dataset.total = t.rows.length; });
+        const tables = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')]; tables.forEach((t) => { t.dataset.total = t.rows.length; });
         let guard = 60;
         while (b.scrollHeight > b.clientHeight + 1 && guard-- > 0) {
           const t = tables.filter((x) => x.rows.length > 1).sort((a, c) => c.rows.length - a.rows.length)[0]; if (!t) break;
@@ -417,6 +423,12 @@
           note.textContent = `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${x.rows.length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
         }
         if (tables.every((x) => x.rows.length === +x.dataset.total)) note.remove(); else pg.setAttribute('data-trimmed', '1');
+      }
+      // Clientes: con filtro u otras líneas, primero se quita la fila de base histórica de la tira y luego su línea en la caja (siguen en la caja/notas).
+      if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'customers') {
+        const caps = [...b.querySelectorAll('.rp-rs__cap')], rows = [...b.querySelectorAll('.rp-rs__row')];
+        if (caps.length > 1 && rows.length > 1) { caps[caps.length - 1].remove(); rows[rows.length - 1].remove(); }
+        const bh = b.querySelector('.rp-box__h--s'); if (b.scrollHeight > b.clientHeight + 1 && bh) bh.remove();
       }
       // Brecha: si los textos largos no caben, se quitan los canales de menor peso de la lista lateral (la lámina lo dice).
       if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'drivers') {

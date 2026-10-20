@@ -13,7 +13,7 @@
   const cut = (s, n) => {
     s = String(s == null ? '' : s).trim(); if (s.length <= n) return s;
     if (!/\s/.test(s)) return s.length <= 48 ? s : s.slice(0, n - 1) + '…';
-    let w = s.split(/\s+/), out = []; for (const t of w) { if ((out.concat(t).join(' ')).length > n) break; out.push(t); }
+    let w = s.split(/\s+/), out = []; for (const t of w) { if ((out.concat(t).join(' ')).length > n || (out.length && /\d/.test(t))) break; out.push(t); }   // se detiene antes de la dosis/presentación (primer token con dígitos)
     while (out.length > 1 && /^[\d.,/%()+-]+[A-Za-zµ]{0,4}$|^(de|del|la|el|con|y|c\/\d*)$/i.test(out[out.length - 1])) out.pop();
     return out.length ? out.join(' ') : s.slice(0, n);
   };
@@ -121,6 +121,7 @@
       const rem = kpi(p, 'remaining'), days = kpi(p, 'days'), daily = kpi(p, 'daily');
       if (!fin(rem) || !fin(days)) return null;
       if (rem <= 0) return 'La meta del período ya está cubierta';
+      if (p.net && fin(p.net.gap) && fin(p.net.shortfall)) return `En neto faltan ${moneyC(p.net.gap)} a la meta; los canales rezagados necesitan ${moneyC(p.net.shortfall)}`;
       return `Faltan ${moneyC(rem)} en ${RB().fmt('int', days)} días${fin(daily) ? `: se requieren ${moneyC(daily)} por día` : ''}`;
     },
     closing(p, rep) {

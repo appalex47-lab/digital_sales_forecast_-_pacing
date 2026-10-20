@@ -63,4 +63,6 @@ t('lectura sin datos → null', RC.reading(inc('traffic'), rep()) === null && RC
   t('clientes (mes abierto): título prudente', T(o, rep(o)) === '6,786 de 8,489 clientes de septiembre aún no vuelven a comprar (80 %)', T(o, rep(o)));
   const c2 = inc('customers', { lapsed: { count: 2000, base: 8000, month: '2026-09', monthLabel: 'septiembre', prevLabel: 'agosto', inProgress: false, dayShare: 1 } });
   t('clientes (mes cerrado): título con porcentaje', T(c2, rep(c2)) === '2,000 de 8,000 clientes de agosto no volvieron a comprar en septiembre (25 %)', T(c2, rep(c2))); }
+{ const rn = inc('recovery', { kpis: [{ id: 'remaining', value: 35900000 }, { id: 'days', value: 73 }, { id: 'daily', value: 492000 }], net: { gap: 11000000, shortfall: 35900000, surplus: 24900000 } });
+  t('recuperación: con excedente en otros canales el título separa neto y canales rezagados', T(rn, rep(rn)) === 'En neto faltan $11.0M a la meta; los canales rezagados necesitan $35.9M', T(rn, rep(rn))); }
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);

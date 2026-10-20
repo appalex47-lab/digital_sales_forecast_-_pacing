@@ -369,7 +369,7 @@
         kpi('bal', 'Balance neto', P.totals ? P.totals.balance : null, 'smoney', TAG.calc, { tone: P.totals ? toneOfGap(P.totals.balance) : 'neutral' })
       ],
       tables: [{ id: 'drag', title: 'Arrastran', columns: cols, rows: drag }, { id: 'comp', title: 'Compensan', columns: cols, rows: comp }],
-      scope: { level: ctx.levelLabel || lvl, metric: ctx.metricLabel || 'Venta', channel: ctx.channelLabel || null, periodType: ctx.periodType || null, filter: s.trendFilterLabel || null, partial: Boolean(partial) },
+      scope: { level: ctx.levelLabel || lvl, metric: ctx.metricLabel || 'Venta', channel: ctx.channelLabel || null, periodType: ctx.periodType || null, currentPeriod: cmp.currentPeriod || null, filter: s.trendFilterLabel || null, partial: Boolean(partial) },
       notes: [partial ? 'Hay un período parcial en la comparación: los cambios pueden cambiar al cerrar el período.' : 'Comparación entre períodos completos.', 'Los patrones son descriptivos (cómo se movió la venta), no explican por qué. Una duración corta no es un deterioro estructural.'],
       sources: ['Evolución y patrones'], tags: [TAG.obs, TAG.calc]
     });
@@ -422,15 +422,18 @@
     const filtered = Boolean(c.filtered);
     const cutIso = s.run && s.run.cutoff, inProgress = Boolean(cutIso && last.key === cutIso.slice(0, 7) && cutIso < periodEnd({ type: 'month', key: last.key }));
     const mLab = (k) => (monthName(k) || k).split(' ')[0].toLowerCase(), dim = (k) => new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7), 0)).getUTCDate();
-    const returns = months.filter((m) => isNum(m.lapsed) && isNum(m.lapsedBase) && m.lapsedBase > 0).map((m) => ({ key: m.key, label: mLab(m.key), rate: 1 - m.lapsed / m.lapsedBase, partial: Boolean(inProgress && m.key === last.key) }));
+    // Base histórica: clientes que ya habían comprado antes de ese mes (suma de «nuevos» de los meses previos); compran ese mes los recurrentes y reactivados.
+    const histOf = (key) => { const all = c.monthly || [], base = all.filter((m) => m.key < key).reduce((a, m) => a + (m.customers && isNum(m.customers.new) ? m.customers.new : 0), 0), mm = all.find((m) => m.key === key); return mm && base > 0 ? { base, bought: mm.customers.recurrent + mm.customers.reactivated } : null; };
+    const returns = months.filter((m) => isNum(m.lapsed) && isNum(m.lapsedBase) && m.lapsedBase > 0).map((m) => { const h = histOf(m.key); return { key: m.key, label: mLab(m.key), rate: 1 - m.lapsed / m.lapsedBase, histRate: h ? h.bought / h.base : null, partial: Boolean(inProgress && m.key === last.key) }; });
+    const lastHist = histOf(last.key);
     return page('customers', 'Clientes, recurrencia y LTV', {
       ctx: `${monthName(last.key) || last.key}${inProgress ? ` (en curso, datos al ${dateLabel(cutIso)})` : ''} · últimos ${months.length} meses`,
       question: '¿Qué calidad tiene la base de clientes detrás de la venta?',
       headline: `${int(c.summary.customers)} clientes identificados; en ${mLab(last.key)} ${int(last.customers.total)} compraron (${int(last.customers.new)} nuevos, ${int(last.customers.recurrent)} recurrentes, ${int(last.customers.reactivated)} reactivados)${inProgress ? `; el mes va al ${Math.round(+cutIso.slice(8, 10) / new Date(Date.UTC(+last.key.slice(0, 4), +last.key.slice(5, 7), 0)).getUTCDate() * 100)} %` : ''}.`,
       kpis: [kpi('customers', 'Clientes identificados', c.summary.customers, 'int', TAG.obs), kpi('repeat', 'Recompra (histórico)', c.summary.repeatRate, 'pct', TAG.calc), kpi('rpc', 'Venta por cliente', c.summary.revenuePerCustomer, 'moneyC', TAG.calc)],
       charts: [{ type: 'stacked', id: 'mix', title: 'Clientes por mes: nuevos, recurrentes y reactivados', labels: months.map((m) => m.key), series: [{ name: 'Nuevos', values: months.map((m) => m.customers.new) }, { name: 'Recurrentes', values: months.map((m) => m.customers.recurrent) }, { name: 'Reactivados', values: months.map((m) => m.customers.reactivated) }] }],
-      tables: [{ id: 'retention', title: 'Recompra y LTV observado por ventana (clientes con la ventana completa)', columns: [{ key: 'window', label: 'Ventana', kind: 'text' }, { key: 'mature', label: 'Clientes', kind: 'int', num: true }, { key: 'repeat', label: 'Recompraron', kind: 'pct', num: true }, { key: 'ltv', label: 'LTV observado', kind: 'money', num: true }], rows: retention }],
-      lapsed: isNum(last.lapsed) && isNum(last.lapsedBase) ? { month: last.key, count: last.lapsed, base: last.lapsedBase, monthLabel: mLab(last.key), prevLabel: mLab(addMonthKey(last.key)), returned: last.lapsedBase - last.lapsed, inProgress, dayShare: inProgress ? +cutIso.slice(8, 10) / dim(last.key) : 1 } : null,
+      tables: [{ id: 'retention', title: 'Recompra y LTV observado por ventana', columns: [{ key: 'window', label: 'Ventana', kind: 'text' }, { key: 'mature', label: 'Clientes', kind: 'int', num: true }, { key: 'repeat', label: 'Recompraron', kind: 'pct', num: true }, { key: 'ltv', label: 'LTV observado', kind: 'money', num: true }], rows: retention }],
+      lapsed: isNum(last.lapsed) && isNum(last.lapsedBase) ? { month: last.key, count: last.lapsed, base: last.lapsedBase, monthLabel: mLab(last.key), prevLabel: mLab(addMonthKey(last.key)), returned: last.lapsedBase - last.lapsed, histBase: lastHist ? lastHist.base : null, histBought: lastHist ? lastHist.bought : null, inProgress, dayShare: inProgress ? +cutIso.slice(8, 10) / dim(last.key) : 1 } : null,
       returns,
       scope: { filtered, label: s.customers.scopeLabel || (filtered ? 'Selección' : 'Toda la empresa') },
       notes: [inProgress ? `${monthName(last.key) || last.key} está en curso (datos al ${dateLabel(cutIso)}): sus clientes y compras no son comparables con meses completos.` : null, reliableNew ? null : 'Con poca historia previa, «nuevo» puede incluir clientes que ya compraban: la apertura nuevo/recurrente de los primeros meses no es confiable.', isNum(last.lapsed) ? `${int(last.lapsed)} de ${int(last.lapsedBase)} clientes que compraron el mes anterior no compraron en ${mLab(last.key)}; es una ventana de un mes, no una pérdida definitiva.` : null, 'El LTV observado es la venta acumulada de clientes con la ventana completa; no es un valor futuro garantizado.'].filter(Boolean),
@@ -542,19 +545,22 @@
       fgp && isNum(fgp.gap) ? { name: 'Brecha proyectada al cierre', what: mk ? 'Cierre estimado − plan del mes' : 'Cierre estimado − meta anual', period: `${mk ? mname : `Año ${s.run.year}`} · método ${s.run.method ? s.run.method.id : '—'}`, value: fgp.gap, tag: TAG.est } : null,
       { name: 'Brecha pendiente (recuperación)', what: mk ? 'Plan del mes − real acumulado' : 'Meta − real acumulado', period: `${mk ? `Plan de ${mname}` : 'Meta anual'}; faltan ${hz || 'el resto del año'}`, value: h.remaining, tag: TAG.calc }
     ].filter(Boolean);
+    // En el total, «brecha pendiente» suma lo que falta en cada canal por debajo de su meta; el excedente de los demás no lo resta (así lo calcula el motor). El neto es meta − real.
+    const netGap = s.channel === 'total' && !mk && isNum(h.target) && isNum(h.actualToDate) && isNum(h.surplus) && h.surplus > 0 && isNum(h.remaining) && h.remaining > 0 ? Math.round((h.target - h.actualToDate) * 100) / 100 : null;
     return page('recovery', 'Recuperación y plan de acción', {
+      net: netGap !== null ? { gap: netGap, shortfall: h.remaining, surplus: h.surplus } : null,
       ctx: `Horizonte ${hz || 'resto del año'} · ${int(days)} días restantes`,
       gaps: gapsRows, gapsNote: 'Las brechas responden preguntas distintas (otro período y otra referencia): no se suman ni tienen por qué coincidir.',
       question: mk ? `¿Qué tendría que pasar de aquí al cierre de ${periodLow(mk)} para cumplir su plan?` : '¿Qué tendría que pasar de aquí al cierre para cumplir la meta?',
-      headline: met ? `La meta del horizonte ya está cubierta (excedente ${money(h.surplus)}).` : `Faltan ${moneyC(h.remaining)} para ${mk ? `el plan de ${periodLow(mk)}` : 'la meta'}; en ${int(days)} días restantes se requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.`,
+      headline: met ? `La meta del horizonte ya está cubierta (excedente ${money(h.surplus)}).` : netGap !== null ? `En neto, al total le faltan ${moneyC(netGap)} para la meta; los canales por debajo de la suya necesitan ${moneyC(h.remaining)} (el excedente de ${moneyC(h.surplus)} de otros canales no los compensa). En ${int(days)} días restantes, esos canales requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.` : `Faltan ${moneyC(h.remaining)} para ${mk ? `el plan de ${periodLow(mk)}` : 'la meta'}; en ${int(days)} días restantes se requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.`,
       kpis: [
-        kpi('target', mk ? `Plan de ${periodLow(mk)}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc), kpi('remaining', 'Brecha pendiente a la meta', h.remaining, 'moneyC', TAG.calc, { tone: h.remaining > 0 ? 'neg' : 'pos', sub: isNum(h.actualToDate) ? `meta − real ${moneyC(h.actualToDate)}` : null }),
+        kpi('target', mk ? `Plan de ${periodLow(mk)}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc), kpi('remaining', netGap !== null ? 'Brecha pendiente (canales rezagados)' : 'Brecha pendiente a la meta', h.remaining, 'moneyC', TAG.calc, { tone: h.remaining > 0 ? 'neg' : 'pos', sub: netGap !== null ? `neto del total: ${moneyC(netGap)}` : (isNum(h.actualToDate) ? `meta − real ${moneyC(h.actualToDate)}` : null) }),
         kpi('days', 'Días restantes', days, 'int', TAG.calc), kpi('daily', 'Requerimiento diario', reqDaily, 'moneyC', TAG.est, { sub: isNum(planDaily) ? `plan diario ${moneyC(planDaily)}` : null })
       ],
       scenarios: scen.map((x) => ({ name: x.name, type: x.type || null, impact: x.impact, tag: TAG.est })),
       actions: actions.map((a) => ({ title: a.title, owner: a.owner || null, status: a.status || null, start: a.startDate || null, end: a.endDate || null, impact: a.expectedImpact && isNum(a.expectedImpact.incrementalValue) ? a.expectedImpact.incrementalValue : null })),
       progress: isNum(h.actualToDate) && h.target > 0 ? { real: h.actualToDate, target: h.target, pct: h.actualToDate / h.target } : null,
-      notes: ['El requerimiento diario es lo que tendría que ocurrir para cumplir la meta; no es una proyección.', scen.length ? 'Los escenarios guardados son simulaciones con supuestos, no resultados.' : null, actions.length ? null : 'No hay acciones registradas en el plan de acción; no se muestran responsables ni fechas.'].filter(Boolean),
+      notes: [netGap !== null ? `La brecha pendiente se calcula por canal: suma lo que falta a cada canal por debajo de su meta (${moneyC(h.remaining)}); el excedente de los demás (${moneyC(h.surplus)}) no se resta. Neto del total: meta − real = ${moneyC(netGap)}.` : null, 'El requerimiento diario es lo que tendría que ocurrir para cumplir la meta; no es una proyección.', scen.length ? 'Los escenarios guardados son simulaciones con supuestos, no resultados.' : null, actions.length ? null : 'No hay acciones registradas en el plan de acción; no se muestran responsables ni fechas.'].filter(Boolean),
       annex: false,
       sources: ['Reforecast', 'Recovery Center'], tags: [TAG.calc, TAG.est]
     });
@@ -661,6 +667,8 @@
   const actionsOn = (R, f) => { const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : []; if (!acts.length) return 'No hay acciones registradas en el plan.'; const on = acts.filter((a) => String(a.title).toLowerCase().includes(String(f.entity).toLowerCase())); return on.length ? `Hay ${on.length} acción${on.length === 1 ? '' : 'es'} registrada${on.length === 1 ? '' : 's'} sobre ${f.entity}.` : (acts.length === 1 ? `La acción registrada en el plan no es sobre ${f.entity}.` : `Ninguna de las ${acts.length} acciones registradas en el plan es sobre ${f.entity}.`); };
 
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
+  /** «en septiembre (último mes completo)»: a qué período se refiere la señal de Evolución (en lectura anual es el último mes completo, no el corte). */
+  const trendWhen = (by, R) => { const sc = by.trends && by.trends.scope ? by.trends.scope : null; return sc && sc.currentPeriod ? `en ${sc.currentPeriod}${R.mk || sc.periodType !== 'month' ? '' : sc.partial ? ' (mes en curso, mismos días del anterior)' : ' (mes del corte)'}` : 'en el período comparado'; };
   function pageSummary(s, pages) {
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
     const R = readout(s, by), items = [];
@@ -689,6 +697,7 @@
     if (by.categories) items.push({ tag: TAG.calc, certainty: 'Cálculo', text: by.categories.headline, source: 'Pág. Categorías y productos', limit: null, page: 'categories', title: 'Dónde se concentra la venta', figure: '', figureLabel: '', why: by.categories.headline, note: null });
     const out = items.filter((i) => clean(i.text)).slice(0, 3).map((i, k) => ({ ...i, n: k + 1 }));
     if (!out.length) return omit('summary', 'Resumen ejecutivo', 'Todavía no hay cálculos válidos que resumir.');
+    const trPer = trendWhen(by, R);
     // Introducción narrativa: estado contra plan → qué sobresale → área de atención → implicación para el cierre. Cada frase solo si hay dato.
     const sent = [];
     if (R.sel) sent.push(`En ${R.sel.period}, ${R.sel.filter} vende ${moneyC(R.sel.real)}${isNum(R.sel.pct) ? `, ${Math.abs(R.sel.pct) < 0.005 ? 'sin cambio' : R.sel.pct < 0 ? `${pct(Math.abs(R.sel.pct))} menos` : `${pct(R.sel.pct)} más`} que ${R.sel.baseRef}` : ''}.`);
@@ -696,12 +705,12 @@
     else if (R.pc && isNum(R.pc.real) && !R.sel) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
     if (R.best) sent.push(`${R.best.channel} es el canal que más sobresale (${smoney(R.best.gap)} frente al plan).`);
     if (R.focus) sent.push(`Lo que más pesa en la caída es ${R.focus.entity}: concentra el ${pct(R.focus.share, 0)} de lo que se pierde${R.focus.sinceLabel ? ` y ${focusSince(R.focus).replace('cae desde', 'cae desde')}` : ''}.`);
-    else if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} en el período comparado.`);
+    else if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} ${trPer}.`);
     else if (R.worst) sent.push(`La principal área de atención es ${R.worst.channel} (${smoney(R.worst.gap)} frente al plan).`);
     if (R.pc && isNum(R.pc.forecast)) sent.push(`Al ritmo actual, ${R.mk ? R.mlow : 'el año'} cerraría en ${moneyC(R.pc.forecast)}${R.pc.forecastSub && !R.mk ? ` (${R.pc.forecastSub})` : ''}${R.material ? ', cifra que depende del método de proyección' : ''}.`);
     else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} faltan ${moneyC(R.rec.remaining)}.`);
     const yp = yearPhrase(R);
-    const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
+    const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) ${trPer}.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
     return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, movers: R.movers && (R.movers.minus.length || R.movers.plus.length) ? { minus: [...R.movers.minus].sort((a, b) => a.rank - b.rank).slice(0, 2), plus: [...R.movers.plus].sort((a, b) => a.rank - b.rank).slice(0, 2) } : null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. ${R.sel ? 'Venta, categorías, evolución y clientes muestran solo esa selección (la venta contra el periodo de referencia, no contra el plan); el diagnóstico y la recuperación son del total del negocio.' : 'Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.'}` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
   }
 
@@ -717,7 +726,7 @@
     const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
     const F = R.focus, fw = F ? focusWhere(F) : [];
     const move = F ? { title: 'Qué debemos mover', big: smoney(F.loss), unit: `${F.entity}${F.sinceLabel ? ` · cae desde ${F.sinceLabel}` : ' · mayor arrastre'}`, text: `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${F.sinceLabel ? ` y lleva ${F.periods} períodos sin recuperarse` : ''}.${fw.length ? ` Revisar primero ${fw.join(', ')}.` : ''} ${actionsOn(R, F)}` }
-      : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída del período comparado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+      : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída ${trendWhen(by, R)}.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
       : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
       : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
     const watch = [];
