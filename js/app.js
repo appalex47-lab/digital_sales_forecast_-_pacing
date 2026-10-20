@@ -879,7 +879,12 @@
           const [cc, bc, cd, bd] = await Promise.all([agg({ from, to }, 'channel'), agg(base, 'channel'), agg({ from, to }, 'date'), agg(base, 'date')]);
           const keys = [...new Set([...cc.keys(), ...bc.keys()])].filter((k) => k && k !== '(sin dato)');
           const daily = (mp) => [...mp.entries()].map(([d, acc]) => [d, rev(acc)]).filter(([, v]) => v !== null).sort((u, v) => (u[0] < v[0] ? -1 : 1));
-          selPacing = { from, to, base: { from: base.from, to: base.to, label: base.label }, comparison: x.comparison, channels: keys.map((k) => ({ key: k, cur: rev(cc.get(k)), prev: rev(bc.get(k)) })), curDaily: daily(cd), prevDaily: daily(bd) };
+          // segunda lectura: contra el mismo periodo del año anterior (separa temporada de deterioro), solo si hay historia y no es ya la referencia
+          let yoy = null;
+          if (x.comparison !== 'yoy') {
+            try { const yb = FP.productAnalysis.baselinePeriod({ from, to, periodType: x.periodType }, 'yoy'); if (m.dateMin && yb.from >= m.dateMin) { const t = await agg(yb, 'total'); let tot = 0, any = false; t.forEach((acc) => { const v = rev(acc); if (v !== null) { tot += v; any = true; } }); if (any && tot > 0) yoy = { prev: tot, from: yb.from, to: yb.to }; } } catch (e) { yoy = null; }
+          }
+          selPacing = { yoy, from, to, base: { from: base.from, to: base.to, label: base.label }, comparison: x.comparison, channels: keys.map((k) => ({ key: k, cur: rev(cc.get(k)), prev: rev(bc.get(k)) })), curDaily: daily(cd), prevDaily: daily(bd) };
         }
       } catch (e) { selPacing = null; /* sin esta lectura el pacing queda del total */ }
     }

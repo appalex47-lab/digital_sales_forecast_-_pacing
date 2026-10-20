@@ -187,6 +187,7 @@
     const delta = isNum(prev) ? cur - prev : null, dpct = isNum(prev) && prev > 0 ? delta / prev : null;
     const pname = s.selection && s.selection.periodKey ? monthName(s.selection.periodKey) : (SP.from && SP.to ? `${dShort(SP.from)} – ${dShort(SP.to)}` : 'el período');
     const baseLabel = SP.base && SP.base.label ? SP.base.label : 'periodo anterior', baseRef = `${/^semana/.test(baseLabel) ? 'la' : 'el'} ${baseLabel}`;
+    const yoyPct = SP.yoy && isNum(SP.yoy.prev) && SP.yoy.prev > 0 ? cur / SP.yoy.prev - 1 : null;
     const state = !isNum(dpct) ? null : Math.abs(dpct) < 0.005 ? 'se mantiene sin cambio' : dpct < 0 ? `cae ${pct(Math.abs(dpct))}` : `crece ${pct(Math.abs(dpct))}`;
     const cum = (arr, n) => { let a = 0; const out = []; for (let i = 0; i < n; i++) { const v = arr[i]; a += isNum(v) ? v : 0; out.push(i < arr.length ? a : null); } return out; };
     const dayVals = (daily, from, n) => { const m = new Map(daily); const out = []; for (let i = 0; i < n; i++) out.push(m.has(addDay(from, i)) ? m.get(addDay(from, i)) : 0); return out; };
@@ -203,7 +204,7 @@
         kpi('real', 'Venta de la selección', cur, 'moneyC', TAG.obs, { sub: pname }),
         kpi('prev', 'Periodo de referencia', prev, 'moneyC', TAG.obs, { sub: baseLabel }),
         kpi('change', 'Cambio vs. referencia', dpct, 'spct', TAG.calc, { tone: isNum(delta) ? toneOfGap(delta) : 'neutral', sub: isNum(delta) ? `Diferencia ${smoney(delta)}` : null })
-      ],
+      ].concat(isNum(yoyPct) ? [kpi('yoy', 'vs. mismo periodo del año anterior', yoyPct, 'spct', TAG.calc, { tone: toneOfGap(yoyPct), sub: `Referencia ${moneyC(SP.yoy.prev)}` })] : []),
       charts: n > 1 ? [{ type: 'cumulative', id: 'cum', title: 'Venta acumulada por día: período elegido vs. referencia', labels, plan: prevC, actual: curC, forecast: curC.map(() => null), cutIndex: n - 1, noCut: true, legend: ['Período elegido', baseLabel, null] }] : [],
       tables: [{ id: 'by-channel', title: 'Por canal', columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'real', label: 'Selección', kind: 'moneyC', num: true }, { key: 'plan', label: 'Referencia', kind: 'moneyC', num: true }, { key: 'gap', label: 'Cambio', kind: 'smoney', num: true, tone: true }, { key: 'gapPct', label: 'Cambio %', kind: 'spct', num: true, tone: true }], rows }],
       reconciliation: null, caveat: null,
@@ -573,6 +574,7 @@
     out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
     out.sel = pc && pc.selection ? { real: (kp(pc, 'real') || {}).value, prev: (kp(pc, 'prev') || {}).value, pct: (kp(pc, 'change') || {}).value, period: pc.periodLabel, base: pc.baseLabel, baseRef: pc.baseRef, filter: pc.filterLabel } : null;
     out.cutoff = s.run && s.run.cutoff ? dateLabel(s.run.cutoff) : null;
+    out.movers = by.movers ? { minus: by.movers.minus, plus: by.movers.plus } : null;
     out.mk = selMonth(s); out.mname = out.mk ? monthName(out.mk) : null; out.mlow = out.mk ? periodLow(out.mk) : null; out.year = out.mk ? yearLine(s) : null;
     out.scopeWord = out.mk ? out.mlow : 'año';
     out.focus = focusInsight(s);
@@ -634,7 +636,7 @@
     else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} faltan ${moneyC(R.rec.remaining)}.`);
     const yp = yearPhrase(R);
     const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
-    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. ${R.sel ? 'Venta, categorías, evolución y clientes muestran solo esa selección (la venta contra el periodo de referencia, no contra el plan); el diagnóstico y la recuperación son del total del negocio.' : 'Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.'}` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
+    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, movers: R.movers && (R.movers.minus.length || R.movers.plus.length) ? { minus: [...R.movers.minus].sort((a, b) => a.rank - b.rank).slice(0, 2), plus: [...R.movers.plus].sort((a, b) => a.rank - b.rank).slice(0, 2) } : null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. ${R.sel ? 'Venta, categorías, evolución y clientes muestran solo esa selección (la venta contra el periodo de referencia, no contra el plan); el diagnóstico y la recuperación son del total del negocio.' : 'Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.'}` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
   }
 
   /* ---------------- 13 · Cierre ejecutivo ---------------- */
@@ -657,7 +659,59 @@
     if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} requiere ${moneyC(R.rec.daily)} por día en ${int(R.rec.days)} días restantes.`);
     if (s.quality && s.quality.status && s.quality.status !== 'ok') watch.push('Hay advertencias de calidad de datos (ver anexo técnico).');
     const vig = { title: 'Qué debemos vigilar', big: R.rec && isNum(R.rec.daily) ? moneyC(R.rec.daily) : '', unit: R.rec && isNum(R.rec.daily) ? (R.mk ? `requeridos por día para cerrar ${R.mlow}` : 'requeridos por día para la meta') : '', text: watch.length ? watch.join(' ') : 'Sin riesgos materiales identificados en los datos disponibles.' };
+    if (R.movers) {
+      const top = (arr) => [...arr].sort((a, b) => a.rank - b.rank).slice(0, 3).map((i) => ({ name: i.name, value: i.value, type: i.type }));
+      if (R.movers.plus.length) { stand.list = top(R.movers.plus); stand.title = 'Qué suma'; stand.big = ''; stand.unit = ''; stand.text = R.best ? `${R.best.channel} es el canal con mayor avance${R.sel ? ' sobre la referencia' : ' sobre el plan'}.` : (by.categories && by.categories.headline ? stand.text : ''); }
+      if (R.movers.minus.length) { move.list = top(R.movers.minus); move.title = 'Qué resta'; move.big = ''; move.unit = ''; move.text = F ? `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${fw.length ? `; revisar primero ${fw.join(', ')}` : ''}. ${actionsOn(R, F)}` : (acts.length ? `Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : 'No hay acciones registradas en el plan.'); }
+    }
     return page('closing', 'Cierre ejecutivo', { question: 'Qué nos llevamos de este periodo', headline: '', blocks: [where, stand, move, vig], sources: [], tags: [] });
+  }
+
+
+  /* ---------------- Qué resta y qué suma: todo lo que mueve la venta del período, de mayor a menor peso ---------------- */
+  const MOVER_ORDER = ['Canal', 'Palanca', 'Categoría', 'Producto'];
+  function moversOf(s, by) {
+    const items = [], add = (type, name, value, evidence, page) => { if (isNum(value) && Math.abs(value) >= 1 && clean(name)) items.push({ type, name, value, evidence: evidence || null, page }); };
+    const ref = by.pacing && by.pacing.selection ? 'vs. referencia' : 'vs. plan';
+    const dv = by.drivers, chMain = new Map(((dv && dv.tables.find((t) => t.id === 'channels') || {}).rows || []).map((r) => [r.channel, r.main]));
+    const pc = by.pacing;
+    if (pc && pc.tables[0]) pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)).forEach((r) => add('Canal', r.channel, r.gap, `${isNum(r.gapPct) ? `${spct(r.gapPct)} ${ref}` : ref}${chMain.get(r.channel) && !pc.selection ? ` · mayor palanca: ${chMain.get(r.channel)}` : ''}`, 'pacing'));
+    if (dv && !s.reportFilter) (dv.tables[0] ? dv.tables[0].rows : []).filter((r) => isNum(r.contribution)).forEach((r) => add('Palanca', r.driver, r.contribution, isNum(r.deltaPct) ? `${spct(r.deltaPct)} vs. referencia` : null, 'drivers'));
+    const ca = by.categories;
+    if (ca && ca.charts[0]) ca.charts[0].items.forEach((i) => add('Categoría', i.label, i.value, null, 'categories'));
+    const tr = by.trends, lvl = tr && tr.scope && tr.scope.level ? String(tr.scope.level) : 'producto', typ = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+    if (tr) [...(tr.tables.find((t) => t.id === 'drag') || { rows: [] }).rows, ...(tr.tables.find((t) => t.id === 'comp') || { rows: [] }).rows].forEach((r) => {
+      if (typ === 'Categoría' && items.some((x) => x.type === 'Categoría' && x.name === r.entity)) return;
+      add(typ, r.entity, r.impact, [isNum(r.relative) ? spct(r.relative) : null, r.pattern].filter(Boolean).join(' · '), 'trends');
+    });
+    const types = [...new Set(items.map((i) => i.type))].sort((a, b) => (MOVER_ORDER.indexOf(a) + 1 || 99) - (MOVER_ORDER.indexOf(b) + 1 || 99));
+    const maxBy = {}; items.forEach((i) => { maxBy[i.type] = Math.max(maxBy[i.type] || 0, Math.abs(i.value)); });
+    items.forEach((i) => { i.weight = maxBy[i.type] ? Math.abs(i.value) / maxBy[i.type] : 0; });
+    // por lado: se reparte entre tipos (uno por tipo, por vuelta) hasta 6, para que no domine un solo tipo
+    const side = (neg, cap) => {
+      const q = types.map((t) => items.filter((i) => i.type === t && (neg ? i.value < 0 : i.value > 0)).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)));
+      const out = []; let k = 0;
+      while (out.length < cap && q.some((x) => x.length > k)) { q.forEach((x) => { if (x[k] && out.length < cap) { x[k].rank = out.length; out.push(x[k]); } }); k++; }
+      return out.sort((a, b) => (types.indexOf(a.type) - types.indexOf(b.type)) || (Math.abs(b.value) - Math.abs(a.value)));
+    };
+    return { items, types, minus: side(true, 6), plus: side(false, 6) };
+  }
+  function pageMovers(s, pages) {
+    const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
+    const M = moversOf(s, by);
+    if (!M.minus.length && !M.plus.length) return omit('movers', 'Qué resta y qué suma', 'No hay canales, palancas, categorías o entidades con un cambio medible en el período.');
+    const pc = by.pacing, per = pc ? (pc.monthLabel || pc.periodLabel || null) : null, sel = pc && pc.selection;
+    const tot = pc && pc.tables[0] ? pc.tables[0].rows.find((r) => r._total) : null;
+    const minusSum = M.minus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0), plusSum = M.plus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0);
+    const head = `${M.minus.length ? `Lo que más resta: ${M.minus.slice(0, 3).map((i) => `${i.name} (${smoney(i.value)})`).join(', ')}.` : 'Nada resta de forma medible.'} ${M.plus.length ? `Lo que más suma: ${M.plus.slice(0, 3).map((i) => `${i.name} (${smoney(i.value)})`).join(', ')}.` : 'Nada suma de forma medible.'}`;
+    return page('movers', 'Qué resta y qué suma', {
+      ctx: [per, s.reportFilter ? `Filtro: ${s.reportFilter}` : null].filter(Boolean).join(' · ') || 'Período elegido',
+      question: '¿Qué está moviendo la venta hacia abajo y hacia arriba, y cuánto pesa cada cosa?',
+      headline: head, minus: M.minus, plus: M.plus, types: M.types,
+      totals: tot && isNum(tot.gap) ? { gap: tot.gap, ref: sel ? 'la referencia' : 'el plan' } : null,
+      notes: ['Cada fila es un ángulo distinto del mismo resultado (canal, palanca, categoría, producto): no se suman entre sí. La barra compara dentro de cada tipo.', 'Las contribuciones son aritméticas y descriptivas; no demuestran la causa.', s.reportFilter ? 'Con filtro, las palancas del diagnóstico se omiten porque son del total del negocio.' : null].filter(Boolean),
+      sources: ['Pacing, diagnóstico, categorías y evolución'], tags: [TAG.calc]
+    });
   }
 
   /* ---------------- 12 · Anexo técnico y calidad ---------------- */
@@ -692,12 +746,13 @@
   }
 
   /* ---------------- ensamblado ---------------- */
-  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'categories', 'trends', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
+  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'categories', 'trends', 'movers', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
   function build(src) {
     const s = { channel: 'total', options: {}, filters: [], ...src };
     s.options = { includeAnnex: true, showTags: false, showBusinessName: false, ...(s.options || {}) };
     const adv = advise(s);
-    const core = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageCategories(s), pageTrends(s), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
+    const head6 = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageCategories(s), pageTrends(s)];
+    const core = [...head6, pageMovers(s, head6), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
     const all = [core[0], pageSummary(s, core), ...core.slice(1)];
     const rel = all.find((p) => p.id === 'reliability'), pac = all.find((p) => p.id === 'pacing');
     if (rel && rel.status === 'included' && rel.warning && pac && pac.status === 'included') pac.caveat = 'El cierre estimado depende del método de proyección: los métodos con datos suficientes difieren de forma material (detalle en el anexo técnico).';
