@@ -28,6 +28,22 @@
     return { ch, label, p, rp, run, rs };
   }
 
+  /** Estado para el encabezado de Inicio con las cifras del periodo y canal que muestra la pantalla (mes o año),
+   *  no las del año completo que arma collectStatus: así el chip «Venta acumulada…» coincide con «Lo esencial». */
+  function periodStatus(state, status) {
+    const f = periodFigures(state);
+    if (!f || !f.p || !f.p.toDate || !f.p.toDate.revenue) return status;
+    const p = f.p, run = f.run, future = p.status === 'future';
+    const forecast = future ? { available: false } : {
+      available: true, method: run.method.label, methodId: run.method.id,
+      target: p.plan ? p.plan.revenue : null, planToDate: p.planToDate ? p.planToDate.revenue : null, actualToDate: p.actualToDate ? p.actualToDate.revenue : null,
+      compliance: p.toDate.revenue.compliance, gapToDate: p.toDate.revenue.gap, gapToDatePct: p.toDate.revenue.gapPct,
+      forecast: p.forecast ? p.forecast.revenue : null, forecastGap: p.forecastGap.revenue.gap, forecastGapPct: p.forecastGap.revenue.gapPct };
+    const rp = f.rp;
+    const reforecast = rp ? { ...status.reforecast, pressure: rp.pressure && rp.pressure.revenue ? rp.pressure.revenue.pressure : null } : status.reforecast;
+    return { ...status, forecast, reforecast };
+  }
+
   function card(stateKind, label, value, compare, period, helpId, whyHtml = '') {
     const esc = H().esc;
     return `<div class="metric-card ${stateKind ? `metric-card--${stateKind}` : ''}">
@@ -186,5 +202,5 @@ ${body}
     if (!f) FP.help.enhanceEmpty($('home'), FP.contextEngine.requirements('inicio', status));
   }
 
-  FP.homeView = { render, periodFigures, journey };
+  FP.homeView = { render, periodFigures, periodStatus, journey };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -358,7 +358,8 @@
       if (kind === 'sales') { const rj = metrics.indexOf('revenue'); if (rj >= 0 && sts[rj] === ST.observed && isFinite(vals[rj])) d.summary.dayRev[date] = (d.summary.dayRev[date] || 0) + vals[rj]; }   // venta por día: para comparar versiones al reemplazar un archivo
       if (d.ledger) {
         const ri = metrics.indexOf('revenue');
-        d.ledger.add({ order: get(cells, 'orderId'), customer: get(cells, 'customerId'), day: FP.customerEngine.dayNum(date), channel, revenue: ri >= 0 && sts[ri] === ST.observed ? vals[ri] : NaN });
+        d.ledger.add({ order: get(cells, 'orderId'), customer: get(cells, 'customerId'), day: FP.customerEngine.dayNum(date), channel, revenue: ri >= 0 && sts[ri] === ST.observed ? vals[ri] : NaN,
+          line: kind === 'sales' ? { sku, stateIdx: sIdx, branch: bLabel, deliveryIdx: dIdx, city: cLabel, geoFlags: gFlags } : null });
       }
       if (kind === 'sales') {
         d.states.add(sIdx); if (bLabel) d.branches.add(bLabel); d.deliveries.add(dIdx); if (cLabel) d.cities.add(`${sIdx}\u0001${cLabel}`);
@@ -600,6 +601,16 @@
     if (f.product && (!c || (c.product || c.sku) !== f.product)) return false;
     if (f.sku && (!c || c.sku !== f.sku)) return false;
     return true;
+  }
+  /** Filtro por línea de venta con las MISMAS reglas que la agregación (categoría, producto, geografía), para el libro de clientes. */
+  function lineMatcher(filter) {
+    const f = filter || {};
+    const p = { n: 1, stateIdx: new Uint8Array(1), branchIdx: new Uint16Array(1), deliveryIdx: new Uint8Array(1), cityIdx: new Uint16Array(1), geoFlags: new Uint8Array(1) };
+    return (sku, stIdx, branchLbl, dlIdx, cityLbl, flags) => {
+      if (!matchesProduct(catalog.bySku.get(sku) || null, f)) return false;
+      p.stateIdx[0] = stIdx; p.branchIdx[0] = branchIdx(branchLbl, false); p.deliveryIdx[0] = dlIdx; p.cityIdx[0] = cityIdx(cityLbl, stIdx, false); p.geoFlags[0] = flags || 0;
+      return matchesGeo(p, 0, f);
+    };
   }
   function matchesGeo(p, i, f) {
     if (!f) return true;
@@ -1149,7 +1160,7 @@
 
   FP.productStore = {
     ST, KINDS, METRICS, metricsOf, fieldsOf, typeOf, storeOf, LEVELS, GEO, GF, dims, geo, resetDims, stateIdx, deliveryIdx, branchIdx, cityIdx, cityLabel, stateCode, deliveryLabel,
-    absorbGeo, deriveGeo, entity, geoOptions, rowRegion,
+    absorbGeo, deriveGeo, entity, geoOptions, rowRegion, lineMatcher,
     suggestMapping, detectKind, validateMapping, label, numberCell, createDraft, combine, toPartition, mergePartitions, cellAt,
     newAcc, mergeAcc, accumulateJoint, accumulatePartition, finalize, rollupsOf, accFromRollup, GROUPS, funnelJoinable, upgradeV1Block,
     catalog, init, available, compareWithStored, commit, rebuildRollups, keysIn, eachPartition, aggregate, aggregateScan, mergeMaps, crossRevenue, skuTrace, listBatches, removeBatch, counts,

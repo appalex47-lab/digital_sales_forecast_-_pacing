@@ -37,15 +37,25 @@
     return {
       orders, stats,
       isPlaceholder: (c) => ph.has(String(c).toLowerCase()),
-      add({ order, customer, day, channel, revenue }) {
+      hasLines: false,
+      add({ order, customer, day, channel, revenue, line }) {
         stats.lines++;
         const o = String(order || '').trim(), c = String(customer || '').trim();
         if (!o) { stats.withoutOrder++; return false; }
         if (!c || ph.has(c.toLowerCase())) { stats.withoutCustomer++; if (fin(revenue)) stats.revenueWithoutCustomer += revenue; return false; }
         if (!fin(revenue)) stats.unknownRevenueLines++;
         const k = `${channel}|${o}`, cur = orders.get(k);
-        if (!cur) orders.set(k, { c, d: day, ch: channel, rev: fin(revenue) ? revenue : 0 });
+        let o2 = cur;
+        if (!cur) { o2 = { c, d: day, ch: channel, rev: fin(revenue) ? revenue : 0 }; orders.set(k, o2); }
         else { if (day < cur.d) cur.d = day; if (fin(revenue)) cur.rev += revenue; if (cur.c !== c) cur.conflict = true; }
+        /* Detalle por línea (producto y geografía): permite filtrar a los clientes por categoría, producto, sucursal, etc. Se junta por combinación. */
+        if (line) {
+          this.hasLines = true;
+          const lk = `${line.sku}\u0001${line.stateIdx || 0}\u0001${line.branch || ''}\u0001${line.deliveryIdx || 0}\u0001${line.city || ''}\u0001${line.geoFlags || 0}`;
+          const ls = o2.lines || (o2.lines = new Map()), L0 = ls.get(lk);
+          if (L0) L0.rev += fin(revenue) ? revenue : 0;
+          else ls.set(lk, { sku: line.sku, st: line.stateIdx || 0, br: line.branch || '', dl: line.deliveryIdx || 0, ci: line.city || '', fl: line.geoFlags || 0, rev: fin(revenue) ? revenue : 0 });
+        }
         return true;
       }
     };
@@ -58,17 +68,34 @@
     const kIdx = new Map(L.key.map((k, i) => [k, i]));
     const chIdx = new Map(L.channels.map((c, i) => [c, i]));
     let b = L.batches.findIndex((x) => x.id === batch.id);
-    if (b < 0) { L.batches.push({ id: batch.id, fileName: batch.fileName || '' }); b = L.batches.length - 1; }
+    if (b < 0) { L.batches.push({ id: batch.id, fileName: batch.fileName || '', lines: Boolean(draft.hasLines) }); b = L.batches.length - 1; }
+    else L.batches[b].lines = Boolean(draft.hasLines);
     const rep = { added: 0, replaced: 0, conflicts: 0, customersAdded: 0 };
+    const LN = ensureLines(L), replacedRows = new Set(), newLines = [];
     draft.orders.forEach((o, k) => {
       if (o.conflict) rep.conflicts++;
       let ci = cIdx.get(o.c); if (ci === undefined) { ci = L.customers.length; L.customers.push(o.c); cIdx.set(o.c, ci); rep.customersAdded++; }
       let hi = chIdx.get(o.ch); if (hi === undefined) { hi = L.channels.length; L.channels.push(o.ch); chIdx.set(o.ch, hi); }
       const at = kIdx.get(k);
-      if (at !== undefined) { L.cust[at] = ci; L.day[at] = o.d; L.ch[at] = hi; L.rev[at] = o.rev; L.bat[at] = b; rep.replaced++; }
-      else { kIdx.set(k, L.key.length); L.key.push(k); L.cust.push(ci); L.day.push(o.d); L.ch.push(hi); L.rev.push(o.rev); L.bat.push(b); rep.added++; }
+      let row;
+      if (at !== undefined) { L.cust[at] = ci; L.day[at] = o.d; L.ch[at] = hi; L.rev[at] = o.rev; L.bat[at] = b; rep.replaced++; replacedRows.add(at); row = at; }
+      else { kIdx.set(k, L.key.length); row = L.key.length; L.key.push(k); L.cust.push(ci); L.day.push(o.d); L.ch.push(hi); L.rev.push(o.rev); L.bat.push(b); rep.added++; }
+      if (o.lines) o.lines.forEach((l) => newLines.push([row, l]));
     });
+    if (replacedRows.size && LN.o.length) {   // el pedido reemplazado trae sus líneas nuevas: se quitan las anteriores
+      const keep = []; for (let i = 0; i < LN.o.length; i++) if (!replacedRows.has(LN.o[i])) keep.push(i);
+      if (keep.length !== LN.o.length) ['o', 'sku', 'st', 'br', 'dl', 'ci', 'fl', 'rev'].forEach((f) => { LN[f] = keep.map((i) => LN[f][i]); });
+    }
+    const dIdx = (arr, map, v) => { let i = map.get(v); if (i === undefined) { i = arr.length; arr.push(v); map.set(v, i); } return i; };
+    const dm = { sku: new Map(LN.dict.sku.map((v, i) => [v, i])), br: new Map(LN.dict.br.map((v, i) => [v, i])), ci: new Map(LN.dict.ci.map((v, i) => [v, i])) };
+    newLines.forEach(([row, l]) => { LN.o.push(row); LN.sku.push(dIdx(LN.dict.sku, dm.sku, l.sku)); LN.st.push(l.st); LN.br.push(dIdx(LN.dict.br, dm.br, l.br)); LN.dl.push(l.dl); LN.ci.push(dIdx(LN.dict.ci, dm.ci, l.ci)); LN.fl.push(l.fl); LN.rev.push(l.rev); });
     return rep;
+  }
+
+  /** Tabla de líneas del libro (se crea vacía si el libro es anterior a esta versión: nada se migra ni se borra). */
+  function ensureLines(L) {
+    if (!L.lines) L.lines = { o: [], sku: [], st: [], br: [], dl: [], ci: [], fl: [], rev: [], dict: { sku: [], br: [], ci: [] } };
+    return L.lines;
   }
 
   /** Quita los pedidos que vinieron de un archivo y compacta clientes y archivos que ya no se usan. */
@@ -80,13 +107,37 @@
     const cMap = new Map(), customers = [];
     const bMap = new Map(), batches = [];
     const out = { v: 1, channels: L.channels.slice(), batches, customers, key: [], cust: [], day: [], ch: [], rev: [], bat: [] };
+    const rowMap = new Map();   // fila anterior → fila nueva (para las líneas)
     keep.forEach((i) => {
+      rowMap.set(i, out.key.length);
       let c = cMap.get(L.cust[i]); if (c === undefined) { c = customers.length; customers.push(L.customers[L.cust[i]]); cMap.set(L.cust[i], c); }
       let bb = bMap.get(L.bat[i]); if (bb === undefined) { bb = batches.length; batches.push(L.batches[L.bat[i]]); bMap.set(L.bat[i], bb); }
       out.key.push(L.key[i]); out.cust.push(c); out.day.push(L.day[i]); out.ch.push(L.ch[i]); out.rev.push(L.rev[i]); out.bat.push(bb);
     });
+    if (L.lines) {
+      const LN = L.lines, nl = { o: [], sku: [], st: [], br: [], dl: [], ci: [], fl: [], rev: [], dict: LN.dict };
+      for (let j = 0; j < LN.o.length; j++) { const r = rowMap.get(LN.o[j]); if (r === undefined) continue; nl.o.push(r); ['sku', 'st', 'br', 'dl', 'ci', 'fl', 'rev'].forEach((f) => nl[f].push(LN[f][j])); }
+      out.lines = nl;
+    }
     Object.assign(L, out);
     return { removed };
+  }
+
+  /** Marca los pedidos que tienen líneas de la selección. Si el libro no trae el detalle por línea (archivos cargados antes), no se inventa: se avisa. */
+  function buildFilter(L, filter, n) {
+    if (!L.lines || !L.lines.o.length) return { status: 'filter_unavailable', reason: 'no_lines', missingFiles: (L.batches || []).map((b) => b.fileName || b.id) };
+    const covered = new Uint8Array(n); for (let j = 0; j < L.lines.o.length; j++) covered[L.lines.o[j]] = 1;
+    const miss = new Set(); for (let i = 0; i < n; i++) if (!covered[i]) miss.add(L.bat[i]);
+    if (miss.size) return { status: 'filter_unavailable', reason: 'partial', missingFiles: [...miss].map((b) => (L.batches[b] && (L.batches[b].fileName || L.batches[b].id)) || '') };
+    const PS = FP.productStore;
+    if (!PS || !PS.lineMatcher) return { status: 'filter_unavailable', reason: 'no_matcher', missingFiles: [] };
+    const match = PS.lineMatcher(filter), LN = L.lines, d = LN.dict;
+    const mask = new Uint8Array(n), rev = new Float64Array(n);
+    for (let j = 0; j < LN.o.length; j++) {
+      if (!match(d.sku[LN.sku[j]], LN.st[j], d.br[LN.br[j]], LN.dl[j], d.ci[LN.ci[j]], LN.fl[j])) continue;
+      const r = LN.o[j]; mask[r] = 1; rev[r] += LN.rev[j];
+    }
+    return { mask, rev };
   }
 
   /* ---------- preparación ---------- */
@@ -127,6 +178,15 @@
     const P = prepare(L, options), o = P.o, n = L.key.length, nc = L.customers.length;
     const chId = options && options.channel && options.channel !== 'total' ? L.channels.indexOf(options.channel) : -1;
     const from = options && options.from ? dayNum(options.from) : -Infinity, to = options && options.to ? dayNum(options.to) : Infinity;
+    /* Filtro por producto o geografía (categoría, subcategoría, producto, SKU, región, estado, ciudad, sucursal, entrega): solo se cuentan los pedidos
+       que tienen al menos una línea de esa selección, con la venta de esas líneas. El segmento (nuevo / recurrente / reactivado) sigue siendo el del
+       cliente en TODO su histórico, igual que con el canal: «nuevo» = primer pedido con la empresa, no con esa categoría. */
+    const hasFilter = Boolean(options && options.filter && Object.values(options.filter).some(Boolean));
+    let flt = null;
+    if (hasFilter) {
+      flt = buildFilter(L, options.filter, n);
+      if (flt.status) return flt;
+    }
 
     /* Resumen del histórico completo */
     const ordersPer = new Int32Array(nc), revPer = new Float64Array(nc), chSet = new Array(nc);
@@ -155,9 +215,10 @@
       const mk = monthOf(d);
       if (c !== curC || mk !== curMonth) { curC = c; curMonth = mk; curSeg = P.seg[i]; counted = false; }
       if (chId >= 0 && L.ch[i] !== chId) continue;
+      if (flt && !flt.mask[i]) continue;
       const m = mget(mk);
       (act.get(mk) || act.set(mk, new Set()).get(mk)).add(c);
-      m.revenue[curSeg] += L.rev[i]; m.orders[curSeg]++;
+      m.revenue[curSeg] += flt ? flt.rev[i] : L.rev[i]; m.orders[curSeg]++;
       if (!counted) { m.customers[curSeg]++; counted = true; }
     }
     const monthly = [...months.values()].sort((a, b) => (a.key < b.key ? -1 : 1)).map((m) => {
@@ -171,6 +232,8 @@
         lapsedBase: (() => { const prev = act.get(addMonthsKey(m.key, -1)); return prev ? prev.size : null; })(),
         historyDays: Math.max(0, known), reliableNew: known >= o.warmupDays };
     });
+
+    if (flt) return { status: 'ok', filtered: true, filter: options.filter, options: o, summary, monthly, cohorts: [], pooled: [], byFirstChannel: [], channelsAvailable: L.channels.slice(), maxDay: isoOf(P.maxDay), minDay: isoOf(P.minDay) };
 
     /* Cohortes por mes del primer pedido */
     const cohorts = new Map();

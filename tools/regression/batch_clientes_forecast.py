@@ -38,7 +38,7 @@ async def run(b, w, h, tag):
     await q.wait_for_selector('#an-drill table[aria-label="Detalle por período"]', state='attached', timeout=60000); await q.wait_for_function("!FP.app.state.an.drill.pending", timeout=60000)
     await q.evaluate("document.querySelectorAll('#an-drill details.drill-fold').forEach(d=>d.open=true)")
     note = await q.evaluate("(document.querySelector('[data-customers-context]')||{}).innerText||''"); hd2 = await q.evaluate("[...document.querySelectorAll('#an-drill table[aria-label=\"Detalle por período\"] th')].map(t=>t.innerText.trim())")
-    chk(f'{tag}9 en un producto se muestran los clientes del CANAL rotulados como contexto (libro por pedido, no por producto)', 'Clientes nuevos del canal' in hd2 and 'no de esta entidad' in note and 'por pedido' in note, [hd2, note])
+    chk(f'{tag}9 en un producto las columnas de clientes son de ESA selección y se explica cómo se cuenta cada tipo', 'Clientes nuevos' in hd2 and 'Clientes de esta selección' in note and 'primer pedido en el histórico' in note, [hd2, note])
     # sin libro de clientes
     await q.evaluate("FP.customerStore={analyze:async()=>({status:'no_ledger'})}")
     await q.evaluate("FP.app.actions['an-drill-total']({dataset:{source:'kpi'}})"); await q.wait_for_selector('#an-drill table[aria-label="Detalle por período"]', state='attached', timeout=60000); await q.wait_for_function("!FP.app.state.an.drill.pending", timeout=60000)
