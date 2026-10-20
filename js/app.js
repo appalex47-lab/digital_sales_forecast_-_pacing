@@ -804,6 +804,22 @@
     const ch = state.dx.settings.channel || 'total';
     let run = null, rf = null, diag = null;
     try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
+    // La presentación se rige solo por su propio selector de periodo: con un mes o una semana ya cerrados, el corte es el último día de ese periodo
+    // (se recalcula en local con el mismo motor; la fecha de referencia del forecast de toda la app no se toca).
+    let localCut = null;
+    try {
+      const px = state.dx.settings || {}, coll = px.periodType === 'month' ? 'months' : px.periodType === 'week' ? 'weeks' : null;
+      const per = run && run.total && coll ? (run.total[coll] || []).find((m) => m.key === px.periodKey) : null;
+      if (per && per.lastDate && run.cutoff && per.lastDate < run.cutoff) {
+        const planVersion = FP.planning.getOriginalPlan(state.planning.registry);
+        const lrun = FP.forecastEngine.runForecast({ year: state.year, store: state.store, planVersion, dataset: planVersion ? null : state.dataset, events: state.events, settings: { ...state.fc.settings, referenceDate: per.lastDate } });
+        if (lrun && lrun.plan.source !== 'none') {
+          const lrf = FP.reforecastEngine.runReforecast({ run: lrun, planVersion, store: state.store, settings: state.rf.settings, simulated: true, forecastVersion: null });
+          const ldx = FP.diagnosticEngine.runDiagnostic({ comparison: px.comparison, period: { type: px.periodType, key: px.periodKey }, channel: px.channel, metric: px.metric, method: px.method, run: lrun, rf: lrf, store: state.store, quality: state.quality });
+          run = lrun; rf = lrf; diag = ldx; localCut = per.lastDate;
+        }
+      }
+    } catch (e) { /* si no se puede recalcular, el reporte usa el corte de la app */ }
     // Tráfico: contra el plan los segmentos solo se comparan con el mismo periodo del año anterior; si el export de GA4 no llega tan atrás
     // (o el diagnóstico no trae segmentos), la lámina se lee contra el periodo anterior y lo dice en su encabezado.
     let trafficDiag = null;
@@ -824,7 +840,7 @@
     const monthOn = Boolean(monthArgs && monthArgs.periodType === dxs.periodType && monthArgs.from && (dxs.periodType === 'week' || monthArgs.from.slice(0, 7) === monthSel));
     const trendBase = monthOn ? { periodType: dxs.periodType, focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : {};
     let rfMonth = null;
-    if (rf) { const r = state.rf; rfMonth = [r.run, r.altRun].find((x) => x && x.total && x.total.horizon && x.total.horizon.type === 'month') || null; }
+    if (rf && !localCut) { const r = state.rf; rfMonth = [r.run, r.altRun].find((x) => x && x.total && x.total.horizon && x.total.horizon.type === 'month') || null; }
     const rpF = FP.productFilter && state.rp.filter && FP.productFilter.isActive(state.rp.filter) ? FP.productFilter.active(state.rp.filter) : null;
     if (hasProducts) {
       try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
