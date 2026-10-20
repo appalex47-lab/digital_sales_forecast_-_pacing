@@ -27,7 +27,7 @@ async def main():
         await q.goto(u + '#pacing'); await q.wait_for_timeout(500)
         hd = await q.evaluate("""()=>({title:document.title,h1:document.querySelector('.app-title').innerText,ph:document.querySelector('.topbar__search input').placeholder,al:document.querySelector('.topbar__search input').getAttribute('aria-label'),
           avatar:document.querySelector('.avatar').innerText,nav:document.querySelector('.app-nav a[data-nav="ajustes"]').innerText.trim(),name:FP.config.app.name})""")
-        chk('N-1 encabezado, título de pestaña, buscador y menú dicen RevNavigator (avatar «RN»)', hd['h1'] == 'RevNavigator' and hd['title'] == 'Pacing & Forecast · RevNavigator' and hd['ph'] == 'Buscar en RevNavigator...' and 'RevNavigator' in hd['al'] and hd['avatar'] == 'RN' and hd['nav'] == 'Configuración de RevNavigator' and hd['name'] == 'RevNavigator', hd)
+        chk('N-1 encabezado, título de pestaña, buscador y menú dicen RevNavigator (avatar «RN»)', hd['h1'] == 'RevNavigator' and hd['title'] == 'Pacing & Forecast · RevNavigator' and hd['ph'].startswith('Buscar en RevNavigator') and 'RevNavigator' in hd['al'] and hd['avatar'] == 'RN' and hd['nav'] == 'Configuración de RevNavigator' and hd['name'] == 'RevNavigator', hd)
         left = []
         for v in VIEWS:
             await q.goto(u + '#' + v); await q.wait_for_timeout(250)

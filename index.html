@@ -26,15 +26,15 @@
           <h1 class="app-title" data-bind="app-name">RevNavigator</h1>
           <span class="app-subtitle" data-bind="app-subtitle"></span>
         </div>
-        <!-- Placeholder visual: la búsqueda global se define en una fase futura -->
+        <!-- Búsqueda global (js/ui/search.js): el campo abre el buscador; se escribe dentro del buscador -->
         <div class="topbar__search" role="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-          <input type="search" placeholder="Buscar en RevNavigator..." aria-label="Buscar en RevNavigator (próximamente)" disabled>
+          <input type="search" id="gs-field" data-action="gs-open" readonly placeholder="Buscar en RevNavigator…  Ctrl K" aria-label="Buscar en RevNavigator (Ctrl K)">
         </div>
         <!-- Estado de la herramienta: solo las píldoras. El detalle vive en Configuración de RevNavigator -->
         <div class="topbar__status" id="topbar-status" role="group" aria-label="Estado de la herramienta"></div>
         <div class="topbar__actions">
-          <button type="button" class="icon-btn gs-open" id="gs-open" aria-label="Buscar en RevNavigator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+          <button type="button" class="icon-btn gs-open" id="gs-open" data-action="gs-open" aria-label="Buscar en RevNavigator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
           <div class="topbar__help" id="topbar-help"></div>
           <button type="button" class="icon-btn" disabled aria-label="Notificaciones (próximamente)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 004 0"/></svg><span class="icon-btn__dot"></span></button>
           <div class="topbar__account" id="topbar-account"></div>

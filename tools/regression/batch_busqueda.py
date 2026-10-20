@@ -31,6 +31,16 @@ async def run(b, w, h, tag):
     await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
     chk(f'{tag}7 Esc la cierra', not await vis('#gs .gs__box'), None)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}8 sin desborde horizontal ({ov}px)', ov <= 1, ov)
+    if not mobile:
+        # el campo del encabezado NO se abre al recibir el foco con Tab (no atrapa el teclado); sí con Enter, Espacio, clic o una letra
+        await q.evaluate("document.getElementById('gs-field').focus()"); await q.wait_for_timeout(300)
+        chk(f'{tag}10 el foco por Tab en el campo del encabezado no abre la búsqueda', not await vis('#gs .gs__box') and await q.evaluate("document.activeElement.id") == 'gs-field', None)
+        await q.keyboard.press('Enter'); await q.wait_for_timeout(300)
+        chk(f'{tag}11 Enter en el campo la abre', await vis('#gs .gs__box'), None)
+        await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
+        await q.evaluate("document.getElementById('gs-field').focus()"); await q.keyboard.press('p'); await q.wait_for_timeout(300)
+        chk(f'{tag}12 una letra en el campo abre la búsqueda con esa letra', await vis('#gs .gs__box') and await q.evaluate("document.getElementById('gs-input').value") == 'p', None)
+        await q.keyboard.press('Escape'); await q.wait_for_timeout(200)
     chk(f'{tag}9 sin errores de JavaScript', not errs, errs[:2])
 async def main():
     async with async_playwright() as p:

@@ -103,10 +103,14 @@
   }
   function close() { if (el) el.hidden = true; document.body.classList.remove('gs-lock'); }
   function init() {
+    // El campo del encabezado solo abre el buscador (clic, Enter, Espacio o una letra); NUNCA al recibir el foco con Tab,
+    // para no atrapar el recorrido con teclado ni abrir una pantalla completa sin que la persona lo pida.
     const inp = document.querySelector('.topbar__search input');
-    if (inp) { inp.disabled = false; inp.removeAttribute('disabled'); inp.setAttribute('aria-label', 'Buscar en RevNavigator (Ctrl K)'); inp.placeholder = 'Buscar en RevNavigator…  Ctrl K';
-      inp.addEventListener('focus', () => { inp.blur(); open(''); }); inp.addEventListener('click', () => open('')); }
-    const btn = document.getElementById('gs-open'); if (btn) btn.addEventListener('click', () => open(''));
+    if (inp) { inp.removeAttribute('disabled'); inp.readOnly = true;
+      inp.addEventListener('click', () => open(''));
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(''); }
+        else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); open(e.key); } }); }
     document.addEventListener('keydown', (e) => {
       const tag = (e.target && e.target.tagName) || '', typing = /INPUT|TEXTAREA|SELECT/.test(tag) || (e.target && e.target.isContentEditable);
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(''); }
