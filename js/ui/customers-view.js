@@ -168,5 +168,5 @@
         <p>Las compras sin ID de cliente válido (vacío, 0, null, invitado) y las líneas sin ID de pedido no entran aquí, pero sí cuentan en Productos. El ID de cliente se toma tal cual del archivo: si un mismo cliente tiene IDs distintos por canal, se contará como dos.</p></div></details>`;
   }
 
-  FP.customersView = { render };
+  FP.customersView = { render, optsOf };
 })(typeof window !== 'undefined' ? window : globalThis);

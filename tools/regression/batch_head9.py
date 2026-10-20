@@ -13,7 +13,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
 
-ALL = ['inicio','carga','calidad','resumen','plan','estacionalidad','datos','configuracion','proyeccion','pacing','diagnostico','producto','segmentos','analisis','reforecast','recovery','medir','narrativa','paquete','ayuda','ajustes']
+ALL = ['inicio','carga','calidad','resumen','plan','estacionalidad','datos','configuracion','proyeccion','pacing','diagnostico','producto','segmentos','analisis','reforecast','recovery','medir','narrativa','presentacion','ayuda','ajustes']
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []

@@ -41,7 +41,8 @@
   const ACTIONS = [
     { id: 'a-carga', title: 'Cargar datos', desc: 'Importa histórico, plan, venta real, segmentos o productos.', keywords: 'subir archivo csv importar demo', view: 'carga' },
     { id: 'a-calidad', title: 'Revisar la calidad de los datos', desc: 'Filas rechazadas, duplicados y huecos.', keywords: 'validar errores', view: 'calidad', needsData: true },
-    { id: 'a-paquete', title: 'Exportar el paquete de análisis', desc: 'Descarga todo lo calculado en un .zip.', keywords: 'descargar zip exportar presentacion', view: 'paquete', needsData: true },
+    { id: 'a-paquete', title: 'Exportar el paquete de análisis', desc: 'Descarga todo lo calculado en un .zip (Datos → Exportar datos).', keywords: 'descargar zip exportar paquete', view: 'datos', needsData: true },
+    { id: 'a-presentacion', title: 'Generar la presentación en PDF', desc: 'Reporte ejecutivo de 16:9 con lo ya calculado.', keywords: 'pdf presentacion reporte ejecutivo imprimir guardar', view: 'presentacion', needsData: true },
     { id: 'a-diag', title: 'Exportar el diagnóstico', desc: 'Abre el diagnóstico para descargar su lectura.', keywords: 'descargar exportar brecha', view: 'diagnostico', needsData: true },
     { id: 'a-ajustes', title: 'Abrir ajustes', desc: 'Preferencias, nube y claves.', keywords: 'configuracion preferencias cohere', view: 'ajustes' },
     { id: 'a-glos', title: 'Ver el glosario completo', desc: 'Todos los términos con su definición.', keywords: 'ayuda terminos definiciones', glossary: true }

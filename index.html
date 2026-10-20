@@ -8,6 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230E5E6F'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/styles.css?v=20261019k">
   <link rel="stylesheet" href="css/design-system.css?v=20261019k">
+  <link rel="stylesheet" href="css/report.css?v=20261019k">
 </head>
 <body>
 
@@ -255,8 +256,8 @@
 
     <section class="panel" aria-labelledby="t-export">
       <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-export">Exportar</h2>
-        <p class="panel__desc">Archivos JSON con el modelo normalizado, el registro completo de errores, el resumen de calidad y la vista consolidada por día y canal.</p>
+        <h2 class="panel__title" id="t-export">Exportar datos</h2>
+        <p class="panel__desc">Archivos JSON con el modelo normalizado, el registro completo de errores, el resumen de calidad y la vista consolidada por día y canal. Más abajo, el paquete de análisis (.zip) con todo lo calculado.</p>
       </div></div>
       <div class="panel__body"><div class="btn-row">
         <button type="button" class="btn btn--primary" data-action="export" data-kind="normalized">Datos normalizados (JSON)</button>
@@ -266,6 +267,9 @@
         <button type="button" class="btn" data-action="export-csv">CSV normalizado</button>
       </div></div>
     </section>
+
+    <!-- Paquete de análisis (antes vista propia): vive en Datos → Exportar datos -->
+    <div id="package-view"></div>
 
     <section class="panel" aria-labelledby="t-batches">
       <div class="panel__head"><div><h2 class="panel__title" id="t-batches">Archivos importados</h2></div></div>
@@ -566,9 +570,9 @@
     <div id="projection-view"></div>
   </main>
 
-  <!-- ===================== Vista: Paquete de análisis (Fase 10) ===================== -->
-  <main class="app-main" data-view="paquete" id="view-paquete" hidden>
-    <div id="package-view"></div>
+  <!-- ===================== Vista: Presentación (PDF) ===================== -->
+  <main class="app-main" data-view="presentacion" id="view-presentacion" hidden>
+    <div id="presentacion-view"></div>
   </main>
 
   <main class="app-main" data-view="ajustes" id="view-ajustes" hidden>
@@ -692,6 +696,7 @@
   <script src="js/forecast/forecastMethods.js?v=20261019k"></script>
   <script src="js/forecast/forecastEngine.js?v=20261019k"></script>
   <script src="js/forecast/methodAdvisor.js?v=20261019k"></script>
+  <script src="js/report/reportBuilder.js?v=20261019k"></script>
   <script src="js/forecast/forecastVersioning.js?v=20261019k"></script>
   <script src="js/forecast/futureWeights.js?v=20261019k"></script>
   <script src="js/forecast/reforecastEngine.js?v=20261019k"></script>
@@ -778,6 +783,7 @@
   <script src="js/ui/guidance/diagnostic-guide.js?v=20261019k"></script>
   <script src="js/ui/narrative-view.js?v=20261019k"></script>
   <script src="js/ui/package-view.js?v=20261019k"></script>
+  <script src="js/ui/report-view.js?v=20261019k"></script>
   <script src="js/analytics/trafficConversionEngine.js?v=20261019k"></script>
   <script src="js/analytics/homeSummaryEngine.js?v=20261019k"></script>
   <script src="js/analytics/attentionEngine.js?v=20261019k"></script>

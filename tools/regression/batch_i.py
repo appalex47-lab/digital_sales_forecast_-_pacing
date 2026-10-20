@@ -13,8 +13,8 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda']
-GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','producto':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','paquete':'medir'}
+VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda']
+GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','producto':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','presentacion':'medir'}
 async def openref(q):
     """Abre el panel único de fecha/año del encabezado si está cerrado."""
     if not await q.is_visible('#topbar-date'):

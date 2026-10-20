@@ -15,7 +15,7 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda','ajustes']
+VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda','ajustes']
 TREE = """()=>[...document.querySelectorAll('#dx-tree details.driver-node')].map(d=>{const t=d.querySelector('summary strong');const r=document.createRange();r.selectNodeContents(t);
   return {cls:d.className,title:t.innerText.trim(),lines:new Set([...r.getClientRects()].map(x=>Math.round(x.top))).size,over:t.scrollWidth-t.clientWidth,tw:Math.round(t.getBoundingClientRect().width),textW:Math.round(r.getBoundingClientRect().width)}})"""
 async def main():

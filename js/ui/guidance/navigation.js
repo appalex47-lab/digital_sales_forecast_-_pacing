@@ -24,7 +24,7 @@
   function extractContext(view, state) {
     const c = { ...state.ux.ctx };
     // Narrativa y Paquete trabajan sobre la misma selección que Diagnóstico (periodo y canal se pueden cambiar en ellas)
-    if (view === 'diagnostico' || view === 'narrativa' || view === 'paquete' || view === 'segmentos') Object.assign(c, pick(state.dx.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
+    if (view === 'diagnostico' || view === 'narrativa' || view === 'presentacion' || view === 'segmentos') Object.assign(c, pick(state.dx.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
     else if (view === 'reforecast') { c.channel = state.rf.channel; if (state.rf.month && state.rf.period !== 'months') { c.periodType = 'month'; c.periodKey = state.rf.month; } }
@@ -47,7 +47,7 @@
     const notes = [];
     const monthKey = c.periodType === 'month' ? c.periodKey : c.periodType === 'day' && c.periodKey ? c.periodKey.slice(0, 7)
       : c.periodType === 'range' && c.periodKey ? c.periodKey.slice(0, 7) : null;
-    if (view === 'diagnostico' || view === 'narrativa' || view === 'paquete' || view === 'segmentos') {
+    if (view === 'diagnostico' || view === 'narrativa' || view === 'presentacion' || view === 'segmentos') {
       const s = state.dx.settings;
       const before = JSON.stringify([s.channel, s.periodType, s.periodKey, s.comparison]);
       s.channel = c.channel || s.channel;
@@ -132,7 +132,7 @@
     narrativa: I('<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/>'),
     proyeccion: I('<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>'),
     segmentos: I('<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'),
-    paquete: I('<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>'),
+    presentacion: I('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>'),
     ajustes: I('<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>'),
     ayuda: I('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17.5v.01"/>')
   };

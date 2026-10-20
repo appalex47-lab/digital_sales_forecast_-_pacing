@@ -68,7 +68,7 @@ async def main():
             try: await q.click(f'[data-action="{a}"]', timeout=2000); await q.wait_for_timeout(800)
             except Exception: pass
         await q.goto(u + '#paquete'); await q.wait_for_timeout(900)
-        has = await q.evaluate("[!!document.getElementById('pkg-key'), !!document.getElementById('pkg-ch'), document.querySelectorAll('#view-paquete [data-action=\"pkg-context\"][data-key=\"periodType\"]').length, document.getElementById('pkg-key').value]")
+        has = await q.evaluate("[!!document.getElementById('pkg-key'), !!document.getElementById('pkg-ch'), document.querySelectorAll('#package-view [data-action=\"pkg-context\"][data-key=\"periodType\"]').length, document.getElementById('pkg-key').value]")
         chk('P-3 la página del paquete trae periodo, «Cuál» y «Canal», y arranca en el último mes con venta real', has == [True, True, 3, '2026-09'], has)
         await q.select_option('#pkg-ch', 'app'); await q.wait_for_timeout(600)
         await q.select_option('#pkg-key', '2026-08'); await q.wait_for_timeout(800)
