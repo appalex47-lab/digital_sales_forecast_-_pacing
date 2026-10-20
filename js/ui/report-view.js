@@ -53,11 +53,12 @@
     if (c.cutIndex >= 0) {
       segs(c.actual, X, Y, 0, c.cutIndex).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.navy}" stroke-width="3.2"/>`; });
       c.actual.forEach((v, i) => { if (!daily && isNum(v) && i <= c.cutIndex) g += `<circle cx="${X(i)}" cy="${Y(v)}" r="3.6" fill="${C.navy}"/>`; });
-      g += `<line x1="${X(c.cutIndex)}" x2="${X(c.cutIndex)}" y1="${T}" y2="${H - B}" stroke="${C.orange}" stroke-width="1.5" stroke-dasharray="4 3"/>${svgT(X(c.cutIndex) + 4, T + 12, 'Corte', { fill: C.orange, weight: 600 })}`;
+      if (!c.noCut) g += `<line x1="${X(c.cutIndex)}" x2="${X(c.cutIndex)}" y1="${T}" y2="${H - B}" stroke="${C.orange}" stroke-width="1.5" stroke-dasharray="4 3"/>${svgT(X(c.cutIndex) + 4, T + 12, 'Corte', { fill: C.orange, weight: 600 })}`;
     }
     const lastF = c.forecast[LAST];
     if (isNum(lastF)) g += svgT(X(LAST), Y(lastF) - 7, fmt('moneyC', lastF), { anchor: 'end', fill: C.teal, weight: 700 });
-    const lg = [[C.navy, '', 'Real (Observado)', 3.2], [C.grey, '2 4', 'Plan', 2.2], [C.teal, '9 5', 'Forecast (Estimado)', 2.6]];
+    const L3 = c.legend || ['Real (Observado)', 'Plan', 'Forecast (Estimado)'];
+    const lg = [[C.navy, '', L3[0], 3.2], [C.grey, '2 4', L3[1], 2.2], [C.teal, '9 5', L3[2], 2.6]].filter((x) => x[2]);
     let lx = L;
     lg.forEach(([col, dash, txt, w]) => { g += `<line x1="${lx}" x2="${lx + 26}" y1="14" y2="14" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>${svgT(lx + 31, 19, txt)}`; lx += 40 + txt.length * 7; });
     return wrap(W, H, g, c.title);
@@ -265,7 +266,7 @@
   function pageHtml(u, x) {
     const p = u.page;
     const fl = ((x.units.find((q) => q.id === 'cover') || {}).page || {}).filterLabel || '';
-    const scopeTag = !fl ? null : ['categories', 'trends', 'customers'].includes(u.id) ? `Filtro: ${fl}` : ['pacing', 'drivers', 'recovery'].includes(u.id) ? 'Total del negocio (el plan no tiene este filtro)' : null;
+    const scopeTag = !fl ? null : (['categories', 'trends', 'customers'].includes(u.id) || (u.id === 'pacing' && p.selection)) ? `Filtro: ${fl}` : (['drivers', 'recovery'].includes(u.id) || (u.id === 'pacing' && !p.selection)) ? 'Total del negocio (el plan no tiene este filtro)' : null;
     const ctxLine = [x.channelLabel === 'Total digital' ? null : x.channelLabel, scopeTag, p.ctx || null].filter(Boolean).join(' · ');
     const foot = `<div class="rp-foot"><span>Reporte ejecutivo de ventas digitales · Corte ${esc(x.cutoff)}</span><span>${x.tags && p.sources && p.sources.length ? `Fuente: ${esc(p.sources.join(', '))}${p.tags && p.tags.length ? ` · ${esc(p.tags.join(' / '))}` : ''}` : ''}</span></div>`;
     const no = `<span class="rp-pgno">${u.number} de ${x.total}</span>`;
@@ -276,7 +277,7 @@
         <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
     }
     const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
-    const title = u.id === 'annex' ? u.title : (TITLES[u.id] || p.title);
+    const title = u.id === 'annex' ? u.title : (u.id === 'pacing' && p.selection ? 'Venta de la selección contra su periodo de referencia' : (TITLES[u.id] || p.title));
     const q = u.id === 'annex' ? '' : u.id === 'closing' ? '' : (p.question || '');
     return `<section class="rp-page" data-page="${esc(u.id)}${u.sub ? `-${u.sub}` : ''}"><div class="rp-top"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>${no}</div>
       <h2 class="rp-title">${esc(title)}</h2><div class="rp-sub"><p class="rp-q">${esc(q)}</p>${ctxLine ? `<div class="rp-ctx">${esc(ctxLine)}</div>` : ''}</div>${!['summary', 'annex', 'closing'].includes(u.id) && p.headline ? `<p class="rp-headline">${esc(p.headline)}</p>` : ''}

@@ -808,10 +808,10 @@
     let productByLevel = null, trendSnap = null;
     // Período y canal seleccionados (Diagnóstico): si es un mes, Productos y Evolución se leen sobre ESE mes y canal.
     const dxs = state.dx.settings || {};
-    const monthSel = dxs.periodType === 'month' && /^\d{4}-\d{2}$/.test(dxs.periodKey || '') ? dxs.periodKey : null;
+    const monthSel = (dxs.periodType === 'month' && /^\d{4}-\d{2}$/.test(dxs.periodKey || '')) || (dxs.periodType === 'week' && /^\d{4}-W\d{2}$/.test(dxs.periodKey || '')) ? dxs.periodKey : null;
     const monthArgs = monthSel && diag && FP.productAnalysis.fromDiagnosis ? FP.productAnalysis.fromDiagnosis(diag) : null;
-    const monthOn = Boolean(monthArgs && monthArgs.periodType === 'month' && monthArgs.from && monthArgs.from.slice(0, 7) === monthSel);
-    const trendBase = monthOn ? { periodType: 'month', focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : {};
+    const monthOn = Boolean(monthArgs && monthArgs.periodType === dxs.periodType && monthArgs.from && (dxs.periodType === 'week' || monthArgs.from.slice(0, 7) === monthSel));
+    const trendBase = monthOn ? { periodType: dxs.periodType, focusKey: monthSel, channel: ch, comparison: monthArgs.comparison === 'yoy' ? 'yoy' : 'previous' } : {};
     let rfMonth = null;
     if (rf) { const r = state.rf; rfMonth = [r.run, r.altRun].find((x) => x && x.total && x.total.horizon && x.total.horizon.type === 'month') || null; }
     const rpF = FP.productFilter && state.rp.filter && FP.productFilter.isActive(state.rp.filter) ? FP.productFilter.active(state.rp.filter) : null;
@@ -827,7 +827,7 @@
       try {
         const pr = state.pa.result;
         if (monthOn) {
-          const args = { from: monthArgs.from, to: monthArgs.to, periodType: 'month', comparison: monthArgs.comparison, channel: ch, filter: rpF || undefined, next: null };
+          const args = { from: monthArgs.from, to: monthArgs.to, periodType: dxs.periodType, comparison: monthArgs.comparison, channel: ch, filter: rpF || undefined, next: null };
           const lv = {}; for (const l of ['category', 'subcategory']) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
           productByLevel = lv;
         } else if (pr && pr.period) {
@@ -866,6 +866,23 @@
         }
       } catch (e) { focusData = null; /* sin foco: el resumen usa la lectura de siempre */ }
     }
+    // Con filtro: no hay plan por producto ni sucursal, así que el pacing se lee como la venta de la selección contra su periodo de referencia.
+    let selPacing = null;
+    if (rpF && hasProducts && diag) {
+      try {
+        const x = FP.productAnalysis.fromDiagnosis(diag), m = FP.productStore.meta || {};
+        if (x && x.from) {
+          let from = x.from, to = x.to; if (m.dateMax && to > m.dateMax && from <= m.dateMax) to = m.dateMax;
+          const base = FP.productAnalysis.baselinePeriod({ from, to, periodType: x.periodType }, x.comparison);
+          const rev = (acc) => { const f = acc ? FP.productStore.finalize(acc, null) : null; return f && f.revenue && Number.isFinite(f.revenue.value) ? f.revenue.value : null; };
+          const agg = (r, g) => FP.productStore.aggregate({ from: r.from, to: r.to, channel: ch, groupBy: g, filter: rpF });
+          const [cc, bc, cd, bd] = await Promise.all([agg({ from, to }, 'channel'), agg(base, 'channel'), agg({ from, to }, 'date'), agg(base, 'date')]);
+          const keys = [...new Set([...cc.keys(), ...bc.keys()])].filter((k) => k && k !== '(sin dato)');
+          const daily = (mp) => [...mp.entries()].map(([d, acc]) => [d, rev(acc)]).filter(([, v]) => v !== null).sort((u, v) => (u[0] < v[0] ? -1 : 1));
+          selPacing = { from, to, base: { from: base.from, to: base.to, label: base.label }, comparison: x.comparison, channels: keys.map((k) => ({ key: k, cur: rev(cc.get(k)), prev: rev(bc.get(k)) })), curDaily: daily(cd), prevDaily: daily(bd) };
+        }
+      } catch (e) { selPacing = null; /* sin esta lectura el pacing queda del total */ }
+    }
     let customers = null;
     try {
       const o = { ...FP.customersView.optsOf(state), channel: ch === 'total' ? null : ch };
@@ -883,7 +900,7 @@
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
-      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, selection: monthOn ? { periodType: 'month', periodKey: monthSel } : null,
+      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, selPacing, selection: monthOn ? { periodType: dxs.periodType, periodKey: monthSel } : null,
       focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
       product: monthOn && productByLevel ? productByLevel.category : pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
