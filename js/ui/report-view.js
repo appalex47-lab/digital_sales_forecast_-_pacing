@@ -173,8 +173,10 @@
     return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t"><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
       <tbody>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
-  const notesHtml = (p) => (p.notes && p.notes.length ? `<ul class="rp-notes">${p.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '');
-  const callout = (txt, tone = 'info', title = '') => `<div class="rp-callout rp-callout--${tone}">${title ? `<strong>${esc(title)}</strong> ` : ''}${esc(txt)}</div>`;
+  let NOANNEX = false;   // se fija en docHtml: si el anexo no va en el PDF, no se remite a él
+  const dx = (t) => (NOANNEX ? String(t == null ? '' : t).replace(/\s*\((?:detalle|ver)[^)]*anexo[^)]*\)/i, '').replace(/\s*El detalle de cada método está en el anexo\.?/i, '').replace(/\s*Ver anexo técnico\.?/i, '').trim() : t);
+  const notesHtml = (p) => (p.notes && p.notes.length ? `<ul class="rp-notes">${p.notes.map((n) => `<li>${esc(dx(n))}</li>`).join('')}</ul>` : '');
+  const callout = (txt, tone = 'info', title = '') => `<div class="rp-callout rp-callout--${tone}">${title ? `<strong>${esc(title)}</strong> ` : ''}${esc(dx(txt))}</div>`;
 
   /* Alcance: solo se imprime lo que cambia la lectura (filtro activo, período parcial); el resto va en el encabezado de la lámina. */
   const scopeNote = (p) => { const sc = p.scope || {}; const bits = [sc.filter ? `Filtro: ${sc.filter}` : null, sc.partial ? 'Incluye un período parcial.' : null].filter(Boolean); return bits.length ? `<p class="rp-scope">${esc(bits.join(' · '))}</p>` : ''; };
@@ -183,11 +185,20 @@
   const moverRow = (i, pos) => `<div class="rp-mv__r"><span class="rp-mv__tp rp-mv__tp--${TYPECLS[i.type] || 'o'}">${esc(i.type)}</span><div class="rp-mv__n"><b>${esc(i.name)}</b>${i.evidence ? `<small>${esc(i.evidence)}</small>` : ''}</div><div class="rp-mv__v ${pos ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', i.value))}<span class="rp-mv__bar"><i class="${pos ? 'pos' : 'neg'}" style="width:${Math.max(4, Math.round((i.weight || 0) * 100))}%"></i></span></div></div>`;
   const moversStrip = (m) => `<div class="rp-strip"><div class="rp-strip__g rp-strip__g--m"><span class="rp-strip__t">Lo que más resta</span>${m.minus.map((i) => `<div class="rp-chip rp-chip--m"><i>${esc(i.type.toUpperCase())}</i><b>${esc(fmt('smoney', i.value))}</b><span>${esc(i.name)}</span></div>`).join('') || '<div class="rp-chip rp-chip--e"><span>Nada resta de forma medible</span></div>'}</div>
     <div class="rp-strip__g rp-strip__g--p"><span class="rp-strip__t">Lo que más suma</span>${m.plus.map((i) => `<div class="rp-chip rp-chip--p"><i>${esc(i.type.toUpperCase())}</i><b>${esc(fmt('smoney', i.value))}</b><span>${esc(i.name)}</span></div>`).join('') || '<div class="rp-chip rp-chip--e"><span>Nada suma de forma medible</span></div>'}</div></div>`;
+
+  /* Tabla «Por canal» del pacing con una mini-barra de brecha por fila (la longitud es relativa a la mayor brecha). */
+  function chanTable(t) {
+    if (t.id !== 'by-channel' || !t.rows || !t.rows.length) return tableHtml(t);
+    const mx = Math.max(...t.rows.filter((r) => !r._total).map((r) => (isNum(r.gap) ? Math.abs(r.gap) : 0)), 1);
+    const bar = (r) => (isNum(r.gap) && !r._total ? `<span class="rp-gb"><i class="${r.gap >= 0 ? 'pos' : 'neg'}" style="width:${Math.max(3, Math.round(Math.abs(r.gap) / mx * 100))}%"></i></span>` : '');
+    const tone = (v) => (isNum(v) ? (v > 0 ? ' rp-pos' : v < 0 ? ' rp-neg' : '') : '');
+    return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t rp-t--ch"><thead><tr><th>Canal</th><th class="num">Real</th><th class="num">Plan esperado</th><th class="num">Brecha</th><th></th><th class="num">%</th></tr></thead><tbody>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}><td>${esc(r.channel)}</td><td class="num">${esc(fmt('moneyC', r.real))}</td><td class="num">${esc(fmt('moneyC', r.plan))}</td><td class="num${tone(r.gap)}">${esc(fmt('smoney', r.gap))}</td><td class="rp-gbc">${bar(r)}</td><td class="num${tone(r.gapPct)}">${esc(fmt('spct', r.gapPct))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
   const BODY = {
-    movers: (p) => `<div class="rp-mv"><section class="rp-mv__c rp-mv__c--m"><h3 class="rp-mv__h">Lo que resta</h3>${p.minus.map((i) => moverRow(i, false)).join('') || '<p class="rp-empty">Nada resta de forma medible en este período.</p>'}</section>
-      <section class="rp-mv__c rp-mv__c--p"><h3 class="rp-mv__h">Lo que suma</h3>${p.plus.map((i) => moverRow(i, true)).join('') || '<p class="rp-empty">Nada suma de forma medible en este período.</p>'}</section></div>${notesHtml(p)}`,
-    pacing: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>
-      ${p.caveat ? callout(p.caveat, 'warn') : ''}${p.reconciliation ? callout(p.notes[0], 'warn') : ''}<ul class="rp-notes">${p.notes.filter((n, i) => !(p.reconciliation && i === 0)).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`,
+    movers: (p) => `<div class="rp-mv"><section class="rp-mv__c rp-mv__c--m"><h3 class="rp-mv__h">Lo que resta${p.channelSums && isNum(p.channelSums.minus) ? `<span class="rp-neg">${esc(fmt('smoney', p.channelSums.minus))}</span>` : ''}</h3>${p.minus.map((i) => moverRow(i, false)).join('') || '<p class="rp-empty">Nada resta de forma medible en este período.</p>'}</section>
+      <section class="rp-mv__c rp-mv__c--p"><h3 class="rp-mv__h">Lo que suma${p.channelSums && isNum(p.channelSums.plus) ? `<span class="rp-pos">${esc(fmt('smoney', p.channelSums.plus))}</span>` : ''}</h3>${p.plus.map((i) => moverRow(i, true)).join('') || '<p class="rp-empty">Nada suma de forma medible en este período.</p>'}</section></div>${p.channelSums && (isNum(p.channelSums.minus) || isNum(p.channelSums.plus)) ? `<p class="rp-scope">Los totales de cada lado suman solo los canales${p.totals ? ` (resultado frente a ${esc(p.totals.ref)}: ${esc(fmt('smoney', p.totals.gap))})` : ''}.</p>` : ''}${notesHtml(p)}`,
+    pacing: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(chanTable).join('')}</div></div>
+      ${p.caveat ? callout(p.caveat, 'warn') : ''}${p.reconciliation ? callout(p.notes[0], 'warn') : ''}<ul class="rp-notes">${p.notes.filter((n, i) => !(p.reconciliation && i === 0)).map((n) => `<li>${esc(dx(n))}</li>`).join('')}</ul>`,
     reliability: (p, x) => {
       const s = p.suficiencia || {};
       return `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a">${p.charts.map(chartHtml).join('') || '<p class="rp-empty">No hay otros métodos con datos suficientes para contrastar.</p>'}</div>
@@ -197,8 +208,8 @@
           ${s.reasons && s.reasons.length ? `<p class="rp-small">${esc(s.reasons.join(' · '))}</p>` : ''}</div></div></div>
         ${p.warning ? callout(p.notes[0], 'warn', 'Advertencia') : ''}<ul class="rp-notes">${p.notes.filter((n, i) => !(p.warning && i === 0)).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
     },
-    drivers: (p, x) => `<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>${notesHtml(p)}`,
-    trends: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row">${p.tables.filter((t) => t.rows && t.rows.length).map((t) => `<div class="rp-col-h">${tableHtml(t)}</div>`).join('')}</div>${p.tables.some((t) => !(t.rows && t.rows.length)) ? `<p class="rp-scope">${esc(p.tables.filter((t) => !(t.rows && t.rows.length)).map((t) => `${t.title}: ninguna entidad en este período.`).join(' '))}</p>` : ''}
+    drivers: (p, x) => driversBody(p, x),
+    trends: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-stack">${p.tables.filter((t) => t.rows && t.rows.length).map((t) => tableHtml(t)).join('')}</div>${p.tables.some((t) => !(t.rows && t.rows.length)) ? `<p class="rp-scope">${esc(p.tables.filter((t) => !(t.rows && t.rows.length)).map((t) => `${t.title}: ninguna entidad en este período.`).join(' '))}</p>` : ''}
       ${scopeNote(p)}${notesHtml(p)}`,
     categories: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>
       ${scopeNote(p)}${notesHtml(p)}`,
@@ -214,6 +225,22 @@
     seasonality: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('') || '<p class="rp-empty">No hay años completos para calcular estacionalidad.</p>'}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>${notesHtml(p)}`
   };
 
+
+
+  /* ================= Brecha: barras divergentes por palanca (reemplaza la cascada) ================= */
+  const GLOSS = { trafficVolume: 'Más o menos visitas y contactos', conversionRate: 'Qué parte de ellas termina en pedido', aov: 'Cuánto vale cada pedido' };
+  function driversBody(p, x) {
+    const t0 = p.tables[0] || { rows: [] }, rows = t0.rows || [], t1 = p.tables.find((t) => t.id === 'channels');
+    if (!rows.length) return notesHtml(p);
+    const net = rows.reduce((a, r) => a + (isNum(r.contribution) ? r.contribution : 0), 0), mx = Math.max(...rows.map((r) => Math.abs(r.contribution)), Math.abs(net), 1);
+    const bar = (v, navy) => { const w = Math.max(1.5, Math.abs(v) / mx * 34); const cls = navy ? 'nv' : v >= 0 ? 'pos' : 'neg'; return `<div class="rp-dv__t"><i class="rp-dv__ax"></i><i class="rp-dv__b rp-dv__b--${cls}" style="${v >= 0 ? `left:50%` : `right:50%`};width:${w.toFixed(1)}%"></i><span class="rp-dv__v ${v >= 0 ? 'rp-pos' : 'rp-neg'}" style="${v >= 0 ? `left:calc(${(50 + w).toFixed(1)}% + 6px)` : `right:calc(${(50 + w).toFixed(1)}% + 6px)`}">${esc(fmt('smoney', v))}</span></div>`; };
+    const short = { trafficVolume: 'Volumen', conversionRate: 'CR', aov: 'AOV' };
+    const left = rows.map((r) => `<div class="rp-dv__r"><span class="rp-dv__l">${esc(short[r._kind] || r.driver)}</span>${bar(r.contribution)}</div>`).join('') + `<div class="rp-dv__r rp-dv__r--net"><span class="rp-dv__l">Resultado neto</span>${bar(net, true)}</div>`;
+    const right = rows.map((r) => `<div class="rp-dv2"><div class="rp-dv2__n"><b>${esc(short[r._kind] || r.driver)}</b><small>${esc(GLOSS[r._kind] || '')}</small><em>${isNum(r.deltaPct) ? `${esc(fmt('spct', r.deltaPct))} frente a la referencia` : ''}</em></div><div class="rp-dv2__v ${r.contribution >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', r.contribution))}</div></div>`).join('');
+    const ch = t1 && t1.rows && t1.rows.length ? `<div class="rp-dv__h">Mayor componente por canal</div>${t1.rows.map((r) => `<div class="rp-dv3"><b>${esc(r.channel)}</b><span class="${r.gap >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', r.gap))}</span><small>${esc(r.main)}</small></div>`).join('')}` : '';
+    return `<div class="rp-row rp-dvrow"><div class="rp-col-a"><div class="rp-dv__h">Aporte de cada componente a la brecha</div><div class="rp-dv">${left}</div></div>
+      <div class="rp-col-b"><div class="rp-dv__h">Contribución de cada componente</div>${right}${ch}</div></div>${notesHtml(p)}`;
+  }
 
   /* ================= Tráfico y conversión (panorama) y Campañas ================= */
   const rich = (t) => esc(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');   // «**cifra**» → negrita (texto ya escapado)
@@ -233,7 +260,8 @@
   function mixBlock(m) {
     const up = [...m.rows].sort((a, b) => (b.share - b.baseShare) - (a.share - a.baseShare))[0], d = up ? up.share - up.baseShare : 0;
     const note = up && Math.abs(d) >= 0.005 ? `${esc(up.label)} ${d > 0 ? 'gana' : 'pierde'} ${(Math.abs(d) * 100).toFixed(1)} pp` : 'sin cambio de mezcla';
-    return `<div class="rp-mix"><div class="rp-mix__h"><b>${esc(m.label)}</b><span>${note}</span></div><div class="rp-mix__bar">${m.rows.map((r, i) => `<i style="width:${(r.share * 100).toFixed(1)}%;background:${MIXC[i % 4]}">${r.share >= 0.16 ? `${esc(cut(r.label, 16))} ${(r.share * 100).toFixed(0)}%` : ''}</i>`).join('')}</div></div>`;
+    return `<div class="rp-mix"><div class="rp-mix__h"><b>${esc(m.label)}</b><span>${note}</span></div><div class="rp-mix__bar">${m.rows.map((r, i) => `<i style="width:${(r.share * 100).toFixed(1)}%;background:${MIXC[i % 4]}"></i>`).join('')}</div>
+      <div class="rp-mix__lg">${[...m.rows].map((r, i) => ({ r, i })).filter((o) => o.r.share >= 0.03).slice(0, 4).map((o) => `<span><i style="background:${MIXC[o.i % 4]}"></i>${esc(cut(o.r.label, 18))} <b>${(o.r.share * 100).toFixed(0)} %</b></span>`).join('')}</div></div>`;
   }
   function trafficBody(p, x) {
     const o = p.overview, t = o.totals, tone = (v) => (isNum(v) ? (v > 0 ? ' rp-pos' : v < 0 ? ' rp-neg' : '') : '');
@@ -243,7 +271,7 @@
     return `<div class="rp-kpis">${kp('Sesiones', esc(fmt('int', t.traffic)), isNum(t.trafficChg) ? `${esc(fmt('spct', t.trafficChg))} vs. referencia` : '', tone(t.trafficChg), true)}${kp('Conversión', esc(fmt('pct2', t.cr)), pp, tone(t.crDiffPp))}${kp('Pedidos', esc(fmt('int', t.orders)), isNum(t.ordersChg) ? esc(fmt('spct', t.ordersChg)) : '', tone(t.ordersChg))}${kp('Ticket promedio', isNum(t.aov) ? esc(fmt('money', t.aov)) : NA, '')}</div>
       <div class="rp-row rp-tv"><div class="rp-tv__a">${o.weekly.length ? `<div class="rp-panel__t"><span>Tráfico diario promedio (barras) y conversión (línea) por semana</span></div>${chartWeekly(o.weekly)}` : ''}</div>
       <div class="rp-tv__b"><div class="rp-panel__t"><span>De dónde viene el tráfico</span></div>${o.mix.map(mixBlock).join('')}</div></div>
-      ${readingHtml(p, x)}<p class="rp-scope">${esc([p.scope.period, p.scope.comparison].filter(Boolean).join(' · '))}${notes.length ? ' · ' + esc(notes.join(' ')) : ''}</p>`;
+      ${o.atypical ? `<div class="rp-callout rp-callout--warn"><strong>Validar cobertura.</strong> La variación de sesiones o de conversión es extrema; revisa que el archivo de Segmentos cubra igual el período actual y el anterior.</div>` : ''}${readingHtml(p, x)}<p class="rp-scope">${esc([p.scope.period, p.scope.comparison].filter(Boolean).join(' · '))}${notes.length ? ' · ' + esc(notes.join(' ')) : ''}</p>`;
   }
   const QN = { star: 'Estrella', conversion: 'Convertir mejor', scale: 'Escalar tráfico', review: 'Revisar', low: 'Poco volumen' };
   function campaignsBody(p, x) {
@@ -268,12 +296,19 @@
     const shown = p.focus ? p.items.filter((i) => i.page !== 'focus') : p.items;   // con la banda del foco, su tarjeta sería repetir lo mismo
     const cards = shown.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
     const band = p.focus ? `<div class="rp-since">${p.focus.spark ? `<div class="rp-since__g">${focusSpark(p.focus.spark)}<div class="rp-since__k"><i class="k1"></i>${esc(p.focus.entity)} <i class="k2"></i>Resto del negocio</div></div>` : ''}<div class="rp-since__t">${esc(p.focus.text)}</div></div>` : '';
-    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${p.filterStrip ? `<p class="rp-yr rp-yr--f">${esc(p.filterStrip)}</p>` : ''}${p.movers ? moversStrip(p.movers) : ''}${band}<ol class="rp-finds rp-finds--${shown.length}">${cards}</ol>
+    const boldNum = (t) => esc(t).replace(/(\$[\d.,]+[MK]?|[+−-]?\d+(?:\.\d+)? ?%)/g, '<b>$1</b>');
+    const mv = p.movers ? movCard(p.movers) : '';
+    return `<div class="rp-sm"><div class="rp-sm__l">${p.narrative ? `<p class="rp-lead">${boldNum(p.narrative)}</p>` : ''}${band}${p.filterStrip ? `<p class="rp-yr rp-yr--f">${esc(p.filterStrip)}</p>` : ''}</div>
+      <div class="rp-sm__r"><ol class="rp-finds rp-finds--stack">${cards}</ol>${mv}</div></div>
+      ${p.yearStrip ? `<p class="rp-yr rp-yr--bottom"><span>En el año</span>${esc(p.yearStrip.replace(/^En el año \d{4}: ?/, ''))}</p>` : ''}
       ${p.review ? `<div class="rp-callout rp-callout--info"><strong>Qué revisar primero.</strong> ${esc(p.review.text)}</div>` : ''}`;
   }
+  const movCard = (m) => { const col = (arr, tone, ttl) => `<div class="rp-mc__c"><div class="rp-mc__t rp-mc__t--${tone}">${ttl}</div>${arr.map((i) => `<div class="rp-mc__r"><span><em>${esc(i.type)}</em> ${esc(i.name)}</span><b class="${tone === 'p' ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', i.value))}</b></div>`).join('') || '<div class="rp-mc__e">Nada medible</div>'}</div>`;
+    return `<div class="rp-mc">${col(m.plus, 'p', 'Qué suma')}${col(m.minus, 'm', 'Qué resta')}</div>`; };
 
-  function closingBody(p) {
-    return `<div class="rp-close">${p.blocks.map((b, i) => `<section class="rp-cl rp-cl--${i + 1}"><h3 class="rp-cl__t">${esc(b.title)}</h3>${b.big ? `<div class="rp-cl__big">${esc(b.big)}</div><div class="rp-cl__u">${esc(b.unit)}</div>` : ''}${b.list ? `<ul class="rp-cl__list">${b.list.map((i) => `<li><span><em>${esc(i.type)}</em> ${esc(i.name)}</span><b class="${i.value < 0 ? 'rp-neg' : 'rp-pos'}">${esc(fmt('smoney', i.value))}</b></li>`).join('')}</ul>` : ''}${b.text ? `<p class="rp-cl__x">${esc(b.text)}</p>` : ''}</section>`).join('')}</div>`;
+  function closingBody(p, x) {
+    const tx = dx;
+    return `<div class="rp-close">${p.blocks.map((b, i) => `<section class="rp-cl rp-cl--${i + 1}"><h3 class="rp-cl__t">${esc(b.title)}</h3>${b.big ? `<div class="rp-cl__big">${esc(b.big)}</div><div class="rp-cl__u">${esc(b.unit)}</div>` : ''}${b.list ? `<ul class="rp-cl__list">${b.list.map((i) => `<li><span><em>${esc(i.type)}</em> ${esc(i.name)}</span><b class="${i.value < 0 ? 'rp-neg' : 'rp-pos'}">${esc(fmt('smoney', i.value))}</b></li>`).join('')}</ul>` : ''}${b.text ? `<p class="rp-cl__x">${esc(tx(b.text))}</p>` : ''}</section>`).join('')}</div>`;
   }
 
   function relBlock(r) {
@@ -323,10 +358,10 @@
     if (u.id === 'cover') {
       const per = (x.units.find((q) => q.id === 'cover').page.facts.find((f) => f.id === 'period') || {}).value || '';
       return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>
-        <h1 class="rp-cover__title">${esc(p.headline)}</h1><div class="rp-cover__rule"></div>${p.businessName ? `<p class="rp-cover__sub">${esc(p.businessName)}</p>` : ''}
+        <div class="rp-cover__eyebrow">Reporte ejecutivo</div><h1 class="rp-cover__title">${esc(p.headline)}</h1><div class="rp-cover__rule"></div><p class="rp-cover__sub">${esc([per, p.businessName].filter(Boolean).join(' · '))}</p>
         <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
     }
-    const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
+    const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p, x) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
     const concl = u.id === 'annex' || !FP.reportCopy ? null : FP.reportCopy.title(p, x.report);   // título con conclusión si los datos la permiten; si no, el neutro
     const title = u.id === 'annex' ? u.title : (concl || (u.id === 'pacing' && p.selection ? 'Venta de la selección contra su periodo de referencia' : (TITLES[u.id] || p.title)));
     const q = u.id === 'annex' ? '' : u.id === 'closing' ? '' : (p.question || '');
@@ -335,7 +370,7 @@
       <div class="rp-body">${body}</div>${foot}</section>`;
   }
   function docHtml(report, opts = {}) {
-    const us = units(report, opts.exclude), cover = report.pages.find((p) => p.id === 'cover');
+    const us = units(report, opts.exclude); NOANNEX = !us.some((q) => q.id === 'annex'); const cover = report.pages.find((p) => p.id === 'cover');
     const sel = cover && cover.facts ? (cover.facts.find((f) => f.id === 'selection') || {}).value : '';
     const x = { report, tags: opts.tags === undefined ? report.options.showTags === true : Boolean(opts.tags), units: us, total: us.length, omitted: report.omitted.length, omittedList: report.omitted, gapsPage: (report.pages.find((q) => q.id === 'recovery' && q.status === 'included') || {}).gaps ? report.pages.find((q) => q.id === 'recovery') : null, relPage: report.pages.find((q) => q.id === 'reliability' && q.status === 'included') || null, channelLabel: report.context.channel === 'total' || !report.context.channel ? 'Total digital' : ({ ecommerce: 'Ecommerce', app: 'App', whatsapp: 'WhatsApp', llamadas: 'Llamadas' }[report.context.channel] || report.context.channel), cutoff: report.context.cutoff ? dateOf(report.context.cutoff) : NA,
       selection: sel && !/^Sin filtros/.test(sel) ? cut(sel, 60) : 'Sin filtros' };
@@ -372,6 +407,18 @@
           note.textContent = `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${x.rows.length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
         }
         if (tables.every((x) => x.rows.length === +x.dataset.total)) note.remove(); else pg.setAttribute('data-trimmed', '1');
+      }
+      // Brecha: si los textos largos no caben, se quitan los canales de menor peso de la lista lateral (la lámina lo dice).
+      if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'drivers') {
+        const rs = [...b.querySelectorAll('.rp-dv3')], tot = rs.length; let k = rs.length;
+        while (b.scrollHeight > b.clientHeight + 1 && k > 1) { rs[--k].remove(); }
+        if (k < tot) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = `Por espacio, la lectura por canal muestra ${k} de ${tot} canales.`; b.appendChild(n); pg.setAttribute('data-trimmed', '1'); }
+      }
+      // Suma/resta: sin tablas, se quitan las filas de menor peso de la columna más larga y la lámina lo dice.
+      if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'movers') {
+        const cols = [...b.querySelectorAll('.rp-mv__c')], tot = cols.map((c) => c.querySelectorAll('.rp-mv__r').length); let guard = 40;
+        while (b.scrollHeight > b.clientHeight + 1 && guard-- > 0) { const c = cols.sort((a, d) => d.querySelectorAll('.rp-mv__r').length - a.querySelectorAll('.rp-mv__r').length)[0], rs = c.querySelectorAll('.rp-mv__r'); if (rs.length <= 1) break; rs[rs.length - 1].remove(); }
+        if (cols.some((c, i) => true) && b.querySelectorAll('.rp-mv__r').length < tot.reduce((a, c) => a + c, 0)) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = 'Por espacio, esta lámina muestra solo las filas de mayor peso de cada lado.'; b.appendChild(n); pg.setAttribute('data-trimmed', '1'); }
       }
       if (b.scrollHeight > b.clientHeight + 1) { pg.setAttribute('data-overflow', '1'); bad.push(pg.getAttribute('data-page')); }
     });

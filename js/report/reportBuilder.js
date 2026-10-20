@@ -99,8 +99,13 @@
   function pageCover(s) {
     const run = s.run, q = s.quality;
     const filters = (s.filters || []).filter((f) => f && f.label);
+    // Título editorial según canal y período: mes cerrado → resultados; mes abierto → avance y cierre estimado; semana; año acumulado.
+    const sm = selMonth(s), subj = s.channel === 'total' || !s.channel ? 'Ventas digitales' : `Ventas de ${chLabel(s.channel)}`;
+    const cutoff = run && run.cutoff, mEnd = sm && !isWeekKey(sm) ? periodEnd({ type: 'month', key: sm }) : null;
+    const headline = sm ? (isWeekKey(sm) ? `${subj}: lectura de ${periodLow(sm)}` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: avance de ${periodLow(sm)} y cierre estimado` : `${subj}: resultados y lectura de ${periodLow(sm)}`))
+      : (run && run.year ? `${subj}: acumulado ${run.year} y cierre estimado` : `${subj}: resultados y lectura del período`);
     return page('cover', 'Portada', {
-      headline: 'Reporte ejecutivo de ventas digitales',
+      headline,
       scope: s.channel === 'total' || !s.channel ? 'Total digital · Ecommerce, App, WhatsApp y Llamadas' : chLabel(s.channel),
       filterLabel: s.reportFilter || null,
       filterNote: s.reportFilter ? 'El filtro aplica a las láminas de categorías, evolución y clientes; el resto muestra el total del negocio.' : null,
@@ -478,7 +483,8 @@
     mix.forEach((m) => { m.label = ({ medium: 'Canal de adquisición', device: 'Dispositivo', customer_type: 'Nuevos y recurrentes' })[m.id] || m.label; });
     // semanas de 1-2 días (corte a mitad de semana) ensucian la tendencia: se descartan
     const wk = Array.isArray(weekly) ? weekly.filter((w) => w && isNum(w.traffic) && w.traffic > 0 && w.days >= 3).map((w) => ({ from: w.from, to: w.to, days: w.days, perDay: w.traffic / w.days, cr: isNum(w.orders) ? w.orders / w.traffic : null })) : [];
-    return { totals: { traffic: cT, orders: cO, cr: cO / cT, aov: cO > 0 ? cV / cO : null, trafficChg: cT / bT - 1, ordersChg: bO > 0 ? cO / bO - 1 : null, crDiffPp: bO > 0 ? cO / cT - bO / bT : null, crChg: bO > 0 ? (cO / cT) / (bO / bT) - 1 : null }, mix, weekly: wk.length >= 2 ? wk : [] };
+    const atypical = (cT / bT - 1) <= -0.5 || (cT / bT - 1) >= 1 || mix.some((m) => m.rows.some((r) => r.share >= 0.05 && isNum(r.crChg) && Math.abs(r.crChg) >= 0.9));   // caída/alza extrema o canal que se va a cero: casi siempre es cobertura incompleta del archivo
+    return { atypical, totals: { traffic: cT, orders: cO, cr: cO / cT, aov: cO > 0 ? cV / cO : null, trafficChg: cT / bT - 1, ordersChg: bO > 0 ? cO / bO - 1 : null, crDiffPp: bO > 0 ? cO / cT - bO / bT : null, crChg: bO > 0 ? (cO / cT) / (bO / bT) - 1 : null }, mix, weekly: wk.length >= 2 ? wk : [] };
   }
   const wilson = (o, n) => { const z = 1.96, pp = o / n, d = 1 + z * z / n, c = pp + z * z / (2 * n), m = z * Math.sqrt(pp * (1 - pp) / n + z * z / (4 * n * n)); return { lo: (c - m) / d, hi: (c + m) / d }; };   // misma regla que la pantalla de segmentos
   const SEG_MIN_SESSIONS = 500, SEG_MIN_SHARE = 0.01;
@@ -764,6 +770,7 @@
       ctx: [per, s.reportFilter ? `Filtro: ${s.reportFilter}` : null].filter(Boolean).join(' · ') || 'Período elegido',
       question: '¿Qué está moviendo la venta hacia abajo y hacia arriba, y cuánto pesa cada cosa?',
       headline: head, minus: M.minus, plus: M.plus, types: M.types,
+      channelSums: { minus: M.minus.some((i) => i.type === 'Canal') ? minusSum : null, plus: M.plus.some((i) => i.type === 'Canal') ? plusSum : null },
       totals: tot && isNum(tot.gap) ? { gap: tot.gap, ref: sel ? 'la referencia' : 'el plan' } : null,
       notes: ['Cada fila es un ángulo distinto del mismo resultado: no se suman entre sí y la barra compara dentro de cada tipo. Son contribuciones descriptivas; no demuestran la causa.', s.reportFilter ? 'Con filtro, las palancas del diagnóstico se omiten porque son del total del negocio.' : null].filter(Boolean),
       sources: ['Pacing, diagnóstico, categorías y evolución'], tags: [TAG.calc]
