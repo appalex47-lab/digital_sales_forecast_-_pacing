@@ -99,6 +99,10 @@
 .rp-find__w { margin:0; font-size:15px; line-height:1.35; color:#2a3750; }
 .rp-find__n { margin:6px 0 0; font-size:13.4px; color:var(--grey); font-style:italic; }
 
+.rp-since { display:flex; gap:18px; align-items:center; background:#fff; border:1px solid var(--navy); border-left:6px solid var(--red); border-radius:8px; padding:8px 14px; flex:none; }
+.rp-since__g { flex:none; } .rp-since__k { display:flex; gap:6px; align-items:center; font-size:13.4px; color:var(--grey); margin-top:-2px; }
+.rp-since__k i { display:inline-block; width:18px; height:0; border-top:3px solid var(--red); } .rp-since__k i.k2 { border-top:2px dashed var(--grey); margin-left:8px; }
+.rp-since__t { font-size:15px; line-height:1.4; color:#2a3750; }
 /* ---------- cierre ---------- */
 .rp-close { display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:16px; flex:1 1 auto; min-height:0; }
 .rp-cl { background:var(--soft); border-radius:10px; padding:14px 22px; border-left:6px solid var(--blue); min-width:0; }
