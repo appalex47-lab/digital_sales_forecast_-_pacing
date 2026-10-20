@@ -74,12 +74,20 @@
 
   /* ---------------- período seleccionado (mes): todo el reporte gira en torno a él; el año queda como una línea de contexto ---------------- */
   const MONTH_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const monthName = (key) => { const m = /^(\d{4})-(\d{2})$/.exec(key || ''); return m ? `${MONTH_FULL[+m[2] - 1][0].toUpperCase()}${MONTH_FULL[+m[2] - 1].slice(1)} ${m[1]}` : null; };
-  /** Clave 'AAAA-MM' del mes seleccionado si el forecast lo cubre; si no (año, semana, día o mes fuera del año del forecast), null y el reporte usa la lectura anual. */
+  const monthName = (key) => {
+    let m = /^(\d{4})-(\d{2})$/.exec(key || ''); if (m) return `${MONTH_FULL[+m[2] - 1][0].toUpperCase()}${MONTH_FULL[+m[2] - 1].slice(1)} ${m[1]}`;
+    m = /^(\d{4})-W(\d{2})$/.exec(key || ''); return m ? `Semana ${+m[2]} de ${m[1]}` : null;
+  };
+  const isWeekKey = (k) => /^\d{4}-W\d{2}$/.test(k || '');
+  /** «septiembre» / «la semana 41»: cómo se nombra el período dentro de una frase. */
+  const periodLow = (key) => (isWeekKey(key) ? `la semana ${+key.slice(6)}` : (monthName(key) || '').split(' ')[0].toLowerCase());
+  /** Clave del mes (AAAA-MM) o la semana (AAAA-Wnn) seleccionada si el forecast la cubre; si no (año o fuera del año del forecast), null y el reporte usa la lectura anual. */
   function selMonth(s) {
     const sel = s.selection, S = series(s.run, s.channel);
-    if (!sel || sel.periodType !== 'month' || !/^\d{4}-\d{2}$/.test(sel.periodKey || '') || !S || !Array.isArray(S.months)) return null;
-    return S.months.some((m) => m.key === sel.periodKey) ? sel.periodKey : null;
+    if (!sel || !S) return null;
+    const coll = sel.periodType === 'month' && /^\d{4}-\d{2}$/.test(sel.periodKey || '') ? 'months' : sel.periodType === 'week' && isWeekKey(sel.periodKey) ? 'weeks' : null;
+    if (!coll || !Array.isArray(S[coll])) return null;
+    return S[coll].some((m) => m.key === sel.periodKey) ? sel.periodKey : null;
   }
   function yearLine(s) {
     const S = series(s.run, s.channel), A = S && S.annual; if (!A) return null;
@@ -126,13 +134,14 @@
   }
 
   function pageMonthPacing(s, S, mk) {
-    const M = S.months.find((m) => m.key === mk), name = monthName(mk), cutIso = s.run.cutoff;
+    const wk = isWeekKey(mk), coll = wk ? 'weeks' : 'months', lw = periodLow(mk), uDel = wk ? 'de la semana' : 'del mes';
+    const M = S[coll].find((m) => m.key === mk), name = monthName(mk), cutIso = s.run.cutoff;
     const tr = M.toDate && M.toDate.revenue, fg = M.forecastGap && M.forecastGap.revenue;
     if (!tr || !isNum(tr.actual) || !(M.countedDays > 0)) return omit('pacing', 'Pacing y forecast', `${name} todavía no tiene días contados con venta real hasta la fecha de corte.`);
     const hasPlan = isNum(tr.plan), closed = M.status === 'closed' || (M.lastDate && cutIso && M.lastDate <= cutIso);
     const fcM = M.forecast && isNum(M.forecast.revenue) ? M.forecast.revenue : null, planM = M.plan && isNum(M.plan.revenue) ? M.plan.revenue : null;
     // acumulado diario del mes: real (días contados), plan y forecast
-    const days = (S.days || []).filter((d) => d.month === mk).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const days = (S.days || []).filter((d) => (wk ? d.weekKey : d.month) === mk).sort((a, b) => (a.date < b.date ? -1 : 1));
     const labels = days.map((d) => String(+d.date.slice(8, 10))); let p = 0, a = 0, f = 0, pOk = true, aOk = true, fOk = true, cut = -1; const plan = [], actual = [], fc = [];
     days.forEach((d, i) => {
       const pv = d.plan && d.plan.revenue, av = d.actual && d.actual.revenue, fv = d.forecast && d.forecast.revenue;
@@ -141,34 +150,70 @@
       if (isNum(fv)) f += fv; else fOk = false;
       plan.push(pOk ? p : null); fc.push(fOk ? f : null); actual.push(aOk && i <= cut ? a : null);
     });
-    const rows = [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]].filter(([, x]) => x && x.months).map(([c, x]) => {
-      const m = x.months.find((q) => q.key === mk), t = m && m.toDate && m.toDate.revenue;
+    const rows = [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]].filter(([, x]) => x && x[coll]).map(([c, x]) => {
+      const m = x[coll].find((q) => q.key === mk), t = m && m.toDate && m.toDate.revenue;
       return { channel: chLabel(c), real: t ? t.actual : null, plan: t ? t.plan : null, gap: t ? t.gap : null, gapPct: t ? t.gapPct : null, days: m ? m.countedDays : null, _total: c === 'total' };
     }).filter((r) => r.real !== null);
     const state = !hasPlan ? null : Math.abs(tr.gapPct) < 0.005 ? 'en línea con el plan' : tr.gap < 0 ? `${pct(Math.abs(tr.gapPct))} por debajo del plan` : `${pct(Math.abs(tr.gapPct))} por encima del plan`;
     const headline = !hasPlan ? `${name}: venta real a la fecha ${moneyC(tr.actual)}; no hay plan comparable para medir el avance.`
-      : `${name} va ${state} a la fecha (${smoney(tr.gap)})${fcM !== null && planM !== null ? `; cierre estimado del mes ${moneyC(fcM)} frente a un plan de ${moneyC(planM)}.` : '.'}`;
+      : `${name} va ${state} a la fecha (${smoney(tr.gap)})${fcM !== null && planM !== null ? `; cierre estimado ${uDel} ${moneyC(fcM)} frente a un plan de ${moneyC(planM)}.` : '.'}`;
     const recon = s.channel === 'total' && FP.methodAdvisor ? FP.methodAdvisor.totalReconciliation(s.run) : null;
     const notes = [];
     if (!hasPlan) notes.push('Sin plan comparable no se calculan brecha ni cumplimiento; se muestra solo el real.');
-    notes.push(`Plan esperado: plan de los mismos ${M.countedDays} días con venta real cargada de ${name.toLowerCase()}. El cierre estimado del mes no es un compromiso ni una meta.`);
+    notes.push(`Plan esperado: plan de los mismos ${M.countedDays} días con venta real cargada de ${name.toLowerCase()}. El cierre estimado ${uDel} no es un compromiso ni una meta.`);
     return page('pacing', 'Pacing y forecast', {
-      ctx: `${name} · ${M.countedDays} días contados${cutIso && cutIso.slice(0, 7) === mk ? ` al ${dateLabel(cutIso)}` : ''}`,
-      question: `¿Cómo va ${name.toLowerCase()} contra su plan y dónde cerraría el mes?`, headline, monthKey: mk, monthLabel: name, year: yearLine(s),
+      ctx: `${name} · ${M.countedDays} días contados${cutIso && M.firstDate && M.lastDate && cutIso >= M.firstDate && cutIso < M.lastDate ? ` al ${dateLabel(cutIso)}` : ''}`,
+      question: `¿Cómo va ${lw} contra su plan y dónde cerraría ${wk ? 'la semana' : 'el mes'}?`, headline, monthKey: mk, monthLabel: name, year: yearLine(s),
       kpis: [
-        kpi('real', `Venta real de ${name.split(' ')[0].toLowerCase()} a la fecha`, tr.actual, 'moneyC', TAG.obs, { sub: `${M.countedDays} días contados` }),
+        kpi('real', `Venta real de ${lw} a la fecha`, tr.actual, 'moneyC', TAG.obs, { sub: `${M.countedDays} días contados` }),
         kpi('plan', 'Plan esperado al corte', hasPlan ? tr.plan : null, 'moneyC', TAG.calc, { sub: 'mismos días contados' }),
-        kpi('compliance', 'Cumplimiento del mes', hasPlan ? tr.compliance : null, 'pct', TAG.calc, { tone: hasPlan ? toneOfGap(tr.gap) : 'neutral', sub: hasPlan ? `Brecha ${smoney(tr.gap)}` : null }),
-        kpi('forecast', `Cierre estimado de ${name.split(' ')[0].toLowerCase()}`, fcM, 'moneyC', TAG.est, { sub: isNum(fg && fg.gap) ? `vs. plan del mes ${smoney(fg.gap)}` : (planM !== null ? `plan del mes ${moneyC(planM)}` : `Método ${s.run.method ? s.run.method.id : '—'}`) })
+        kpi('compliance', wk ? 'Cumplimiento de la semana' : 'Cumplimiento del mes', hasPlan ? tr.compliance : null, 'pct', TAG.calc, { tone: hasPlan ? toneOfGap(tr.gap) : 'neutral', sub: hasPlan ? `Brecha ${smoney(tr.gap)}` : null }),
+        kpi('forecast', `Cierre estimado de ${lw}`, fcM, 'moneyC', TAG.est, { sub: isNum(fg && fg.gap) ? `vs. plan ${uDel} ${smoney(fg.gap)}` : (planM !== null ? `plan ${uDel} ${moneyC(planM)}` : `Método ${s.run.method ? s.run.method.id : '—'}`) })
       ],
-      charts: [{ type: 'cumulative', id: 'cum', title: `Venta acumulada de ${name.split(' ')[0].toLowerCase()} por día: real, plan y cierre estimado`, labels, plan, actual, forecast: fc, cutIndex: cut }],
-      tables: [{ id: 'by-channel', title: `Por canal (${name.split(' ')[0].toLowerCase()} a la fecha)`, columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'real', label: 'Real', kind: 'moneyC', num: true }, { key: 'plan', label: 'Plan esperado', kind: 'moneyC', num: true }, { key: 'gap', label: 'Brecha', kind: 'smoney', num: true, tone: true }, { key: 'gapPct', label: 'Brecha %', kind: 'spct', num: true, tone: true }, { key: 'days', label: 'Días', kind: 'int', num: true }], rows }],
+      charts: [{ type: 'cumulative', id: 'cum', title: `Venta acumulada de ${lw} por día: real, plan y cierre estimado`, labels, plan, actual, forecast: fc, cutIndex: cut }],
+      tables: [{ id: 'by-channel', title: `Por canal (${lw} a la fecha)`, columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'real', label: 'Real', kind: 'moneyC', num: true }, { key: 'plan', label: 'Plan esperado', kind: 'moneyC', num: true }, { key: 'gap', label: 'Brecha', kind: 'smoney', num: true, tone: true }, { key: 'gapPct', label: 'Brecha %', kind: 'spct', num: true, tone: true }, { key: 'days', label: 'Días', kind: 'int', num: true }], rows }],
       reconciliation: null, caveat: null, closedMonth: Boolean(closed),
       notes, sources: ['Pacing y forecast (motor de forecast)'], tags: [TAG.obs, TAG.calc, TAG.est]
     });
   }
 
+
+  /* ---------------- con filtro: la selección contra su periodo anterior (no hay plan por producto ni sucursal) ---------------- */
+  function pageSelectionPacing(s) {
+    const SP = s.selPacing, flt = s.reportFilter || 'la selección';
+    const sum = (k) => { const v = SP.channels.map((c) => c[k]).filter(isNum); return v.length ? v.reduce((a, b) => a + b, 0) : null; };
+    const cur = sum('cur'), prev = sum('prev');
+    if (!isNum(cur)) return omit('pacing', 'Venta de la selección', 'La selección no tiene venta en el período elegido.');
+    const delta = isNum(prev) ? cur - prev : null, dpct = isNum(prev) && prev > 0 ? delta / prev : null;
+    const pname = s.selection && s.selection.periodKey ? monthName(s.selection.periodKey) : (SP.from && SP.to ? `${dShort(SP.from)} – ${dShort(SP.to)}` : 'el período');
+    const baseLabel = SP.base && SP.base.label ? SP.base.label : 'periodo anterior', baseRef = `${/^semana/.test(baseLabel) ? 'la' : 'el'} ${baseLabel}`;
+    const state = !isNum(dpct) ? null : Math.abs(dpct) < 0.005 ? 'se mantiene sin cambio' : dpct < 0 ? `cae ${pct(Math.abs(dpct))}` : `crece ${pct(Math.abs(dpct))}`;
+    const cum = (arr, n) => { let a = 0; const out = []; for (let i = 0; i < n; i++) { const v = arr[i]; a += isNum(v) ? v : 0; out.push(i < arr.length ? a : null); } return out; };
+    const dayVals = (daily, from, n) => { const m = new Map(daily); const out = []; for (let i = 0; i < n; i++) out.push(m.has(addDay(from, i)) ? m.get(addDay(from, i)) : 0); return out; };
+    const n = SP.from && SP.to ? Math.min(Math.max(1, Math.round((Date.parse(SP.to) - Date.parse(SP.from)) / 86400000) + 1), 400) : 0;
+    const labels = Array.from({ length: n }, (_, i) => String(+addDay(SP.from, i).slice(8, 10)));
+    const curC = n ? cum(dayVals(SP.curDaily || [], SP.from, n), n) : [], prevC = n && SP.base ? cum(dayVals(SP.prevDaily || [], SP.base.from, n), n) : [];
+    const rows = SP.channels.map((c) => ({ channel: chLabel(c.key), real: c.cur, plan: c.prev, gap: isNum(c.cur) && isNum(c.prev) ? c.cur - c.prev : null, gapPct: isNum(c.cur) && isNum(c.prev) && c.prev > 0 ? (c.cur - c.prev) / c.prev : null })).filter((r) => isNum(r.real) || isNum(r.plan));
+    if (rows.length > 1) rows.push({ channel: 'Total', real: cur, plan: prev, gap: delta, gapPct: dpct, _total: true });
+    return page('pacing', 'Venta de la selección', {
+      ctx: `${pname} vs. ${baseLabel}`, selection: true, periodLabel: pname, baseLabel, baseRef, filterLabel: flt,
+      question: `¿Cómo va la venta de la selección contra ${baseRef}?`,
+      headline: `${flt}: ${moneyC(cur)} en ${pname}${isNum(prev) ? `, ${state} frente a ${baseRef} (${smoney(delta)})` : '; no hay venta en el periodo de referencia'}.`,
+      kpis: [
+        kpi('real', 'Venta de la selección', cur, 'moneyC', TAG.obs, { sub: pname }),
+        kpi('prev', 'Periodo de referencia', prev, 'moneyC', TAG.obs, { sub: baseLabel }),
+        kpi('change', 'Cambio vs. referencia', dpct, 'spct', TAG.calc, { tone: isNum(delta) ? toneOfGap(delta) : 'neutral', sub: isNum(delta) ? `Diferencia ${smoney(delta)}` : null })
+      ],
+      charts: n > 1 ? [{ type: 'cumulative', id: 'cum', title: 'Venta acumulada por día: período elegido vs. referencia', labels, plan: prevC, actual: curC, forecast: curC.map(() => null), cutIndex: n - 1, noCut: true, legend: ['Período elegido', baseLabel, null] }] : [],
+      tables: [{ id: 'by-channel', title: 'Por canal', columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'real', label: 'Selección', kind: 'moneyC', num: true }, { key: 'plan', label: 'Referencia', kind: 'moneyC', num: true }, { key: 'gap', label: 'Cambio', kind: 'smoney', num: true, tone: true }, { key: 'gapPct', label: 'Cambio %', kind: 'spct', num: true, tone: true }], rows }],
+      reconciliation: null, caveat: null,
+      notes: ['No hay plan por producto ni por sucursal: esta lámina compara contra el periodo de referencia, no mide cumplimiento del plan.', 'El diagnóstico y la recuperación siguen siendo del total del negocio.'],
+      sources: ['Ventas por producto'], tags: [TAG.obs, TAG.calc]
+    });
+  }
+
   function pagePacing(s) {
+    if (s.selPacing && s.reportFilter) return pageSelectionPacing(s);
     const S = series(s.run, s.channel);
     const mk = selMonth(s); if (S && S.annual && mk) return pageMonthPacing(s, S, mk);
     if (!S || !S.annual) return omit('pacing', 'Pacing y forecast', 'No hay forecast calculado: falta el plan o la venta real del año.');
@@ -360,7 +405,7 @@
   function pageCustomers(s) {
     const c = s.customers && s.customers.result;
     if (!c || c.status !== 'ok' || !c.summary || !(c.summary.customers > 0)) return omit('customers', 'Clientes, recurrencia y LTV', 'No hay libro de clientes: carga venta con ID de pedido e ID de cliente.');
-    const mkC = selMonth(s), months = (c.monthly || []).filter((m) => !mkC || m.key <= mkC).slice(-6);
+    const mkP = selMonth(s), wkRow = mkP && isWeekKey(mkP) ? ((series(s.run, s.channel) || {}).weeks || []).find((w) => w.key === mkP) : null, mkC = wkRow && wkRow.lastDate ? wkRow.lastDate.slice(0, 7) : mkP, months = (c.monthly || []).filter((m) => !mkC || m.key <= mkC).slice(-6);
     if (!months.length) return omit('customers', 'Clientes, recurrencia y LTV', 'No hay meses con clientes identificados.');
     const reliableNew = months.every((m) => m.reliableNew);
     const last = months[months.length - 1];
@@ -411,7 +456,7 @@
     const mk = selMonth(s), mname = mk ? monthName(mk) : null;
     const rf = mk ? s.rfMonth : s.rf, R = rf ? (s.channel === 'total' ? rf.total : (rf.channels || {})[s.channel]) : null;
     const h = R && R.horizon;
-    if (mk && (!h || h.type !== 'month' || h.key !== mk)) return omit('recovery', 'Recuperación y plan de acción', `La recuperación se calcula solo para el mes en curso; ${mname} no es el mes abierto a la fecha de corte.`);
+    if (mk && (!h || h.type !== 'month' || h.key !== mk)) return omit('recovery', 'Recuperación y plan de acción', (isWeekKey(mk) ? `La recuperación se calcula contra el mes en curso o el año, no contra una semana; ${mname} se lee sin esa lámina.` : `La recuperación se calcula solo para el mes en curso; ${mname} no es el mes abierto a la fecha de corte.`));
     if (!h || !isNum(h.target)) return omit('recovery', 'Recuperación y plan de acción', 'No hay meta que cubra el horizonte: sin meta no hay brecha pendiente ni requerimiento diario.');
     const hs = R.horizonSummary || {};
     const pr = hs.pressure && hs.pressure.revenue ? hs.pressure.revenue : null;
@@ -433,10 +478,10 @@
     return page('recovery', 'Recuperación y plan de acción', {
       ctx: `Horizonte ${hz || 'resto del año'} · ${int(days)} días restantes`,
       gaps: gapsRows, gapsNote: 'Las brechas responden preguntas distintas (otro período y otra referencia): no se suman ni tienen por qué coincidir.',
-      question: mk ? `¿Qué tendría que pasar de aquí al cierre de ${mname.split(' ')[0].toLowerCase()} para cumplir su plan?` : '¿Qué tendría que pasar de aquí al cierre para cumplir la meta?',
-      headline: met ? `La meta del horizonte ya está cubierta (excedente ${money(h.surplus)}).` : `Faltan ${moneyC(h.remaining)} para ${mk ? `el plan de ${mname.split(' ')[0].toLowerCase()}` : 'la meta'}; en ${int(days)} días restantes se requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.`,
+      question: mk ? `¿Qué tendría que pasar de aquí al cierre de ${periodLow(mk)} para cumplir su plan?` : '¿Qué tendría que pasar de aquí al cierre para cumplir la meta?',
+      headline: met ? `La meta del horizonte ya está cubierta (excedente ${money(h.surplus)}).` : `Faltan ${moneyC(h.remaining)} para ${mk ? `el plan de ${periodLow(mk)}` : 'la meta'}; en ${int(days)} días restantes se requieren ${moneyC(reqDaily)} por día${pr && isNum(pr.pressure) ? ` (${spct(pr.pressure)} vs. el plan diario restante)` : ''}.`,
       kpis: [
-        kpi('target', mk ? `Plan de ${mname.split(' ')[0].toLowerCase()}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc), kpi('remaining', 'Brecha pendiente a la meta', h.remaining, 'moneyC', TAG.calc, { tone: h.remaining > 0 ? 'neg' : 'pos', sub: isNum(h.actualToDate) ? `meta − real ${moneyC(h.actualToDate)}` : null }),
+        kpi('target', mk ? `Plan de ${periodLow(mk)}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc), kpi('remaining', 'Brecha pendiente a la meta', h.remaining, 'moneyC', TAG.calc, { tone: h.remaining > 0 ? 'neg' : 'pos', sub: isNum(h.actualToDate) ? `meta − real ${moneyC(h.actualToDate)}` : null }),
         kpi('days', 'Días restantes', days, 'int', TAG.calc), kpi('daily', 'Requerimiento diario', reqDaily, 'moneyC', TAG.est, { sub: isNum(planDaily) ? `plan diario ${moneyC(planDaily)}` : null })
       ],
       scenarios: scen.map((x) => ({ name: x.name, type: x.type || null, impact: x.impact, tag: TAG.est })),
@@ -526,8 +571,9 @@
     out.material = Boolean(by.reliability && by.reliability.warning);
     const rc = by.recovery;
     out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
+    out.sel = pc && pc.selection ? { real: (kp(pc, 'real') || {}).value, prev: (kp(pc, 'prev') || {}).value, pct: (kp(pc, 'change') || {}).value, period: pc.periodLabel, base: pc.baseLabel, baseRef: pc.baseRef, filter: pc.filterLabel } : null;
     out.cutoff = s.run && s.run.cutoff ? dateLabel(s.run.cutoff) : null;
-    out.mk = selMonth(s); out.mname = out.mk ? monthName(out.mk) : null; out.mlow = out.mname ? out.mname.split(' ')[0].toLowerCase() : null; out.year = out.mk ? yearLine(s) : null;
+    out.mk = selMonth(s); out.mname = out.mk ? monthName(out.mk) : null; out.mlow = out.mk ? periodLow(out.mk) : null; out.year = out.mk ? yearLine(s) : null;
     out.scopeWord = out.mk ? out.mlow : 'año';
     out.focus = focusInsight(s);
     out.driverMain = (() => { const dv = by.drivers; const rows = dv && dv.tables[0] ? dv.tables[0].rows.filter((r) => isNum(r.contribution)) : []; const m = rows.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))[0]; return m ? { name: m.driver, value: m.contribution } : null; })();
@@ -553,7 +599,10 @@
     // Hasta 3 hallazgos, por criterio fijo: 1) dónde estamos contra el plan (incluye el cierre estimado si existe), 2) qué lo explica
     // aritméticamente, 3) lo que falta para la meta; si no hay recuperación, la señal de evolución y luego categorías.
     const pc = by.pacing;
-    if (pc) {
+    if (pc && R.sel) {
+      const x = R.sel, d = isNum(x.real) && isNum(x.prev) ? x.real - x.prev : null;
+      items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Venta de la selección', limit: 'Se compara contra el periodo de referencia, no contra el plan.', page: 'pacing', title: `${x.filter}: ${isNum(x.pct) ? (x.pct < 0 ? 'cae' : 'crece') : 'venta'} frente ${x.baseRef.startsWith('el ') ? `al ${x.baseRef.slice(3)}` : `a ${x.baseRef}`}`, figure: isNum(x.pct) ? spct(x.pct) : moneyC(x.real), figureLabel: `${x.period} vs. ${x.base}`, why: `${moneyC(x.real)} frente a ${moneyC(x.prev)}${d !== null ? ` (${smoney(d)})` : ''}.`, note: 'No hay plan por producto ni sucursal.' });
+    } else if (pc) {
       const comp = pc.kpis.find((k) => k.id === 'compliance');
       const f = R.pc && isNum(R.pc.forecast) ? `Cierre estimado de ${R.scopeWord === 'año' ? 'l año' : R.mlow}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : null;
       items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Pacing y forecast', limit: comp && comp.value === null ? 'Sin plan comparable.' : (by.reliability && by.reliability.warning ? 'El cierre estimado depende del método; los alternativos difieren de forma material.' : 'El cierre estimado depende del método elegido.'), page: 'pacing',
@@ -565,17 +614,18 @@
       const where = focusWhere(FO);
       items.push({ tag: TAG.calc, certainty: 'Cálculo', text: `${FO.entity} concentra ${pct(FO.share, 0)} de la caída (${smoney(FO.loss)}).`, source: 'Pág. Categorías y evolución', limit: 'Lectura descriptiva, no causal.', page: 'focus', title: `${FO.entity} concentra ${pct(FO.share, 0)} de lo que se pierde`, figure: smoney(FO.loss), figureLabel: `${FO.level} ${FO.entity}${FO.comparison ? ` · ${FO.comparison}` : ''}`,
         why: [focusSince(FO) ? `${FO.entity} ${focusSince(FO)}.` : null, where.length ? `Dentro de ella pesan ${where.slice(0, 2).join(' y ')}.` : null].filter(Boolean).join(' ') || `Es la ${FO.level} que más arrastra en el período.`, note: 'Es una lectura descriptiva; no demuestra la causa.' });
-    } else if (dv) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoney(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
+    } else if (dv && !R.sel) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoney(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
     const rv = by.recovery;
-    if (rv) items.push({ tag: TAG.est, certainty: 'Requerimiento aritmético', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: R.mk ? `Lo que falta para cumplir ${R.mlow}` : 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: R.mk ? `brecha pendiente al plan de ${R.mlow}` : 'brecha pendiente a la meta', why: rv.headline, note: 'El ritmo diario es lo que se requiere, no una proyección.' });
+    if (rv && !R.sel) items.push({ tag: TAG.est, certainty: 'Requerimiento aritmético', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: R.mk ? `Lo que falta para cumplir ${R.mlow}` : 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: R.mk ? `brecha pendiente al plan de ${R.mlow}` : 'brecha pendiente a la meta', why: rv.headline, note: 'El ritmo diario es lo que se requiere, no una proyección.' });
     if (by.trends) items.push({ tag: TAG.calc, certainty: 'Señal calculada', text: by.trends.headline, source: 'Pág. Evolución y patrones', limit: by.trends.scope && by.trends.scope.partial ? 'Incluye un período parcial.' : 'Patrones descriptivos.', page: 'trends', title: 'Qué cae y qué compensa', figure: '', figureLabel: '', why: by.trends.headline, note: null });
     if (by.categories) items.push({ tag: TAG.calc, certainty: 'Cálculo', text: by.categories.headline, source: 'Pág. Categorías y productos', limit: null, page: 'categories', title: 'Dónde se concentra la venta', figure: '', figureLabel: '', why: by.categories.headline, note: null });
     const out = items.filter((i) => clean(i.text)).slice(0, 3).map((i, k) => ({ ...i, n: k + 1 }));
     if (!out.length) return omit('summary', 'Resumen ejecutivo', 'Todavía no hay cálculos válidos que resumir.');
     // Introducción narrativa: estado contra plan → qué sobresale → área de atención → implicación para el cierre. Cada frase solo si hay dato.
     const sent = [];
-    if (R.state) sent.push(`Al corte del ${R.cutoff}, ${R.mk ? R.mname : 'el negocio'} ${phrasePlan(R)}: ${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados.`);
-    else if (R.pc && isNum(R.pc.real)) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
+    if (R.sel) sent.push(`En ${R.sel.period}, ${R.sel.filter} vende ${moneyC(R.sel.real)}${isNum(R.sel.pct) ? `, ${Math.abs(R.sel.pct) < 0.005 ? 'sin cambio' : R.sel.pct < 0 ? `${pct(Math.abs(R.sel.pct))} menos` : `${pct(R.sel.pct)} más`} que ${R.sel.baseRef}` : ''}.`);
+    else if (R.state) sent.push(`Al corte del ${R.cutoff}, ${R.mk ? R.mname : 'el negocio'} ${phrasePlan(R)}: ${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados.`);
+    else if (R.pc && isNum(R.pc.real) && !R.sel) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
     if (R.best) sent.push(`${R.best.channel} es el canal que más sobresale (${smoney(R.best.gap)} frente al plan).`);
     if (R.focus) sent.push(`Lo que más pesa en la caída es ${R.focus.entity}: concentra el ${pct(R.focus.share, 0)} de lo que se pierde${R.focus.sinceLabel ? ` y ${focusSince(R.focus).replace('cae desde', 'cae desde')}` : ''}.`);
     else if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} en el período comparado.`);
@@ -584,22 +634,23 @@
     else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} faltan ${moneyC(R.rec.remaining)}.`);
     const yp = yearPhrase(R);
     const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
-    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
+    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. ${R.sel ? 'Venta, categorías, evolución y clientes muestran solo esa selección (la venta contra el periodo de referencia, no contra el plan); el diagnóstico y la recuperación son del total del negocio.' : 'Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.'}` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
   }
 
   /* ---------------- 13 · Cierre ejecutivo ---------------- */
   function pageClosing(s, pages) {
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
     const R = readout(s, by); if (!R.pc) return omit('closing', 'Cierre ejecutivo', 'Sin resultados de pacing no hay base para un cierre.');
-    const where = R.state ? { title: 'Dónde estamos', big: pct(R.pc.compliance), unit: R.mk ? `de cumplimiento de ${R.mlow}` : 'de cumplimiento al corte', text: `${R.mk ? `${R.mname}: ` : ''}${moneyC(R.pc.real)} de venta real contra ${moneyC(R.pc.plan)} del plan comparable (${smoney(R.pc.gap)}). ${isNum(R.pc.forecast) ? `Cierre estimado de${R.mk ? ` ${R.mlow}` : 'l año'}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : ''} ${yearPhrase(R) || ''}`.replace(/\s+/g, ' ').trim() }
+    const where = R.sel ? { title: 'Dónde estamos', big: isNum(R.sel.pct) ? spct(R.sel.pct) : moneyC(R.sel.real), unit: `${R.sel.period} vs. ${R.sel.base}`, text: `${R.sel.filter}: ${moneyC(R.sel.real)} frente a ${moneyC(R.sel.prev)}${isNum(R.sel.real) && isNum(R.sel.prev) ? ` (${smoney(R.sel.real - R.sel.prev)})` : ''}. No hay plan por producto ni sucursal: se compara contra el periodo de referencia.` }
+      : R.state ? { title: 'Dónde estamos', big: pct(R.pc.compliance), unit: R.mk ? `de cumplimiento de ${R.mlow}` : 'de cumplimiento al corte', text: `${R.mk ? `${R.mname}: ` : ''}${moneyC(R.pc.real)} de venta real contra ${moneyC(R.pc.plan)} del plan comparable (${smoney(R.pc.gap)}). ${isNum(R.pc.forecast) ? `Cierre estimado de${R.mk ? ` ${R.mlow}` : 'l año'}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : ''} ${yearPhrase(R) || ''}`.replace(/\s+/g, ' ').trim() }
       : { title: 'Dónde estamos', big: moneyC(R.pc.real), unit: 'venta real acumulada', text: 'No hay plan comparable: no es posible medir el cumplimiento del período.' };
-    const stand = R.best ? { title: 'Qué sobresalió', big: smoney(R.best.gap), unit: `${R.best.channel} frente al plan`, text: `${R.best.channel} es el canal con mayor avance sobre el plan comparable.` }
+    const stand = R.best ? { title: 'Qué sobresalió', big: smoney(R.best.gap), unit: `${R.best.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.best.channel} es el canal con mayor avance sobre ${R.sel ? 'el periodo de referencia' : 'el plan comparable'}.` }
       : (by.categories && by.categories.headline ? { title: 'Qué sobresalió', big: '', unit: '', text: by.categories.headline } : { title: 'Qué sobresalió', big: '', unit: '', text: 'Ningún canal supera su plan comparable al corte.' });
     const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
     const F = R.focus, fw = F ? focusWhere(F) : [];
     const move = F ? { title: 'Qué debemos mover', big: smoney(F.loss), unit: `${F.entity}${F.sinceLabel ? ` · cae desde ${F.sinceLabel}` : ' · mayor arrastre'}`, text: `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${F.sinceLabel ? ` y lleva ${F.periods} períodos sin recuperarse` : ''}.${fw.length ? ` Revisar primero ${fw.join(', ')}.` : ''} ${actionsOn(R, F)}` }
       : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída del período comparado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
-      : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente al plan`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+      : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
       : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
     const watch = [];
     if (R.material) watch.push('El cierre estimado cambia de forma material según el método de proyección.');
