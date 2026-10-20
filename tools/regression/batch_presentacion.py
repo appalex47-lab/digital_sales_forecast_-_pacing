@@ -130,6 +130,11 @@ async def main():
         await f.click('[data-action="rp-generate"]'); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
         r20 = await f.evaluate("(()=>{const r=FP.app.state.rp.report,pc=r.pages.find(p=>p.id==='pacing'),sm=r.pages.find(p=>p.id==='summary');return {mk:pc&&pc.monthKey,n:pc&&pc.charts[0].labels.length,narr:sm&&sm.narrative}})()")
         chk('PR-20 con una semana seleccionada, el pacing y el resumen son de esa semana', r20['mk'] == '2026-W39' and (r20['n'] or 0) == 7 and 'Semana 39' in (r20['narr'] or ''), r20)
+        # 21 · el corte del reporte lo da su propio selector de periodo; la fecha de referencia de la app no cambia
+        await f.evaluate("(()=>{const s=FP.app.state.dx.settings;s.periodType='month';s.periodKey='2026-09';FP.app.state.dx.run=null;window.__ref0=FP.app.state.fc.run.cutoff})()")
+        await f.click('[data-action="rp-generate"]'); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
+        r21 = await f.evaluate("(()=>{const m=JSON.stringify(FP.app.state.rp.report.pages).match(/Fecha de corte.{0,40}/);return {cut:m&&m[0],app:FP.app.state.fc.run.cutoff,ref0:window.__ref0,set:FP.app.state.fc.settings.referenceDate||null}})()")
+        chk('PR-21 con un mes cerrado el corte del reporte es el fin de ese mes y la fecha de la app no cambia', '30 sep 2026' in (r21['cut'] or '') and r21['app'] == r21['ref0'] and r21['set'] is None, r21)
         # móvil
         m = await new_page(b, 375, 800); await m.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})"); await load_products(m, U)
         await m.goto(U + '#presentacion'); await m.wait_for_selector('#view-presentacion:not([hidden])'); await m.wait_for_timeout(500)
