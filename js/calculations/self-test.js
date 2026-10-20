@@ -1019,8 +1019,11 @@
       const iso = (fn) => () => {
         const keep = { dims: { branches: PG.dims.branches.slice(), branchKey: new Map(PG.dims.branchKey), cities: PG.dims.cities.slice(), cityKey: new Map(PG.dims.cityKey) },
           geo: { regions: PG.geo.regions.slice(), regionKey: new Map(PG.geo.regionKey), votes: JSON.parse(JSON.stringify(PG.geo.votes)) } };
+        const keepLoaded = PG.meta.branches;   // lista de sucursales con venta de la carga real: no debe condicionar la geografía de prueba
+        PG.meta.branches = [];
         PG._resetCatalog();
         try { return fn(); } finally {
+          PG.meta.branches = keepLoaded;
           PG.catalog.list = saved.list; PG.catalog.bySku = saved.bySku;
           Object.assign(PG.dims, keep.dims); Object.assign(PG.geo, keep.geo); PG.deriveGeo();
         }
