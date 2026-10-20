@@ -150,7 +150,7 @@ t('14 · factores mensuales solo con 12 valores válidos', pg(RB.build(base({ pr
 // 15 · resumen determinista y sin «null»
 rep = RB.build(base({ trend, product, rf: rfMk({ target: 1200, remaining: 345, surplus: 0, requiredTotal: 345, futureDays: 85 }, { required: 345, plan: 300, delta: 45, pressure: 0.15 }) }));
 const sm = pg(rep, 'summary');
-t('15 · resumen: entre 3 y 5 conclusiones, cada una con certeza, fuente y etiqueta', sm.status === 'included' && sm.items.length >= 3 && sm.items.length <= 5 && sm.items.every((i) => i.certainty && i.source && i.tag), sm.items.length);
+t('15 · resumen: hasta 3 hallazgos, cada una con certeza, fuente y etiqueta', sm.status === 'included' && sm.items.length >= 1 && sm.items.length <= 3 && sm.items.every((i) => i.certainty && i.source && i.tag), sm.items.length);
 t('15 · resumen: «qué revisar» solo con respaldo de un cálculo', sm.review && /Prod A/.test(sm.review.text) && /no es una recomendación causal/.test(sm.review.basis));
 const strs = []; const walk = (v, k) => { if (typeof v === 'string') strs.push(v); else if (Array.isArray(v)) v.forEach((x) => walk(x)); else if (v && typeof v === 'object') Object.entries(v).forEach(([kk, x]) => walk(x, kk)); }; walk(rep.pages.map((p) => [p.headline, p.notes, p.items, p.facts, p.kpis, p.tables]));
 const badStr = strs.find((x) => /\b(null|undefined|NaN)\b/.test(x)); t('15 · ningún texto contiene null/undefined/NaN', !badStr, badStr);
@@ -168,4 +168,52 @@ t('17 · anexo: backtest no calculado se dice, no se inventa', /no se había cal
 const withBt = pg(RB.build(base({ run: mkRun(), channel: 'ecommerce', backtest: { byChannel: { ecommerce: { B: { 7: { status: 'evaluated', wape: 0.08, planWape: 0.1 } } } } } })), 'annex');
 t('17 · anexo: backtest calculado se muestra con su advertencia de comparabilidad', withBt.backtest.length === 1 && withBt.backtest[0].wape === 0.08 && /pueden no ser comparables/.test(withBt.backtestNote), withBt.backtest);
 t('17 · definiciones y límites incluyen no-causalidad y generación local', an.definitions.length >= 8 && an.limits.some((l) => /no envía datos/.test(l)) && an.limits.some((l) => /no establecen causas/.test(l)));
+
+// 18 · período y alcance por lámina (cada página dice qué período cubre; el corte no se confunde con el período)
+const rfOk = rfMk({ type: 'year', key: '2026', target: 1200, actualToDate: 855, remaining: 345, surplus: 0, requiredTotal: 345, futureDays: 85, countedDays: 270 }, { required: 345, plan: 300, delta: 45, pressure: 0.15 });
+rep = RB.build(base({ trend, product, rf: rfOk, customers: cust, projection: proj }));
+t('18 · pacing declara el año acumulado y el corte', /1 ene – 30 sep 2026/.test(pg(rep, 'pacing').ctx) && /270 días contados/.test(pg(rep, 'pacing').ctx), pg(rep, 'pacing').ctx);
+t('18 · pacing separa real acumulado, plan esperado y cierre estimado del año', ['Venta real acumulada al corte', 'Plan esperado al corte', 'Cierre estimado 2026'].every((l) => pg(rep, 'pacing').kpis.some((k) => k.label === l)));
+t('18 · confiabilidad: la meta es la anual y la brecha es cierre − meta', pg(rep, 'reliability').kpis.some((k) => k.label === 'Meta anual 2026') && pg(rep, 'reliability').kpis.some((k) => /Cierre estimado − meta anual/.test(k.label)));
+t('18 · drivers, evolución, categorías, clientes y recuperación declaran su período', ['drivers', 'trends', 'categories', 'customers', 'recovery'].every((id) => pg(rep, id).ctx && pg(rep, id).ctx.length > 8), ['drivers', 'trends', 'categories', 'customers', 'recovery'].map((id) => pg(rep, id).ctx));
+t('18 · evolución y categorías muestran períodos distintos sin mezclarse', /Sep 2026 vs\. Ago 2026/.test(pg(rep, 'trends').ctx) && /01 sep – 30 sep 2026 vs\. Mes anterior/.test(pg(rep, 'categories').ctx), [pg(rep, 'trends').ctx, pg(rep, 'categories').ctx]);
+// 19 · período seleccionado vs fecha de corte (datos parciales)
+const dgP = diagOk(); dgP.period = { type: 'month', key: '2026-10', label: 'Octubre 2026' }; dgP.coverage = { unpaired: 0, currentRange: ['2026-10-01', '2026-10-20'], baselineRange: ['2026-10-01', '2026-10-20'] };
+const drP = pg(RB.build(base({ diag: dgP })), 'drivers');
+t('19 · octubre 1–31 con datos al 20: la lámina dice el período y los días observados', /Octubre 2026 \(datos 01 oct – 20 oct 2026\)/.test(drP.ctx) && drP.notes.some((n) => /Período seleccionado: Octubre 2026\. Solo hay datos observados/.test(n) && /mismos días de la referencia/.test(n)), [drP.ctx, drP.notes]);
+t('19 · período completo: no se agrega la nota de parcialidad', !pg(RB.build(base({ diag: { ...diagOk(), period: { type: 'month', key: '2026-09', label: 'Septiembre 2026' }, coverage: { unpaired: 0, currentRange: ['2026-09-01', '2026-09-30'] } } })), 'drivers').notes.some((n) => /Solo hay datos observados/.test(n)));
+const custP = JSON.parse(JSON.stringify(cust)); custP.result.monthly[custP.result.monthly.length - 1].key = '2026-09';
+t('19 · el mes en curso de clientes se avisa como no comparable con meses completos', /en curso/.test(pg(RB.build(base({ customers: custP, run: mkRun({ cutoff: '2026-09-17' }) })), 'customers').ctx) && pg(RB.build(base({ customers: custP, run: mkRun({ cutoff: '2026-09-17' }) })), 'customers').notes.some((n) => /no son comparables con meses completos/.test(n)));
+t('19 · con el mes cerrado no hay aviso de mes en curso', !/en curso/.test(pg(RB.build(base({ customers: custP, run: mkRun({ cutoff: '2026-09-30' }) })), 'customers').ctx));
+// 20 · conciliación de brechas: cada cifra viene de su fuente y no se fuerza a coincidir
+const rcl = pg(rep, 'recovery'), gp = Object.fromEntries(rcl.gaps.map((g) => [g.name, g]));
+t('20 · cuatro brechas con su definición y período', rcl.gaps.length === 4 && rcl.gaps.every((g) => g.what && g.period && g.tag), rcl.gaps.map((g) => g.name));
+t('20 · brecha a la fecha = real − plan esperado (fuente: pacing)', gp['Brecha a la fecha (pacing)'].value === 855 - 900 && gp['Brecha a la fecha (pacing)'].tag === 'Calculado');
+t('20 · brecha del diagnóstico = la del motor de diagnóstico', gp['Brecha del diagnóstico'].value === -45 && /Septiembre 2026/.test(gp['Brecha del diagnóstico'].period));
+t('20 · brecha proyectada es Estimado y viene del forecast (cierre − meta)', gp['Brecha proyectada al cierre'].tag === 'Estimado' && gp['Brecha proyectada al cierre'].value === 1150 - 1200 || gp['Brecha proyectada al cierre'].value === 1140 - 1200, gp['Brecha proyectada al cierre']);
+t('20 · brecha pendiente = lo que reporta el reforecast (meta − real acumulado)', gp['Brecha pendiente (recuperación)'].value === 345 && /01 oct – 31 dic 2026|oct – 31 dic 2026/.test(gp['Brecha pendiente (recuperación)'].period), gp['Brecha pendiente (recuperación)'].period);
+t('20 · la lámina advierte que son brechas distintas que no se suman', rcl.notes.some((n) => /no se suman ni tienen por qué coincidir/.test(n)));
+t('20 · sin diagnóstico no se inventa esa brecha', !pg(RB.build(base({ rf: rfOk, diag: null })), 'recovery').gaps.some((g) => g.name === 'Brecha del diagnóstico'));
+t('20 · la meta anual no se presenta como pronóstico', rcl.kpis.find((k) => k.id === 'target').label === 'Meta anual 2026' && rcl.kpis.find((k) => k.id === 'target').tag === 'Calculado' && /no es el pronóstico/.test(rcl.notes.join(' ')));
+// 21 · resumen: hasta 3 hallazgos con criterio fijo
+t('21 · resumen: exactamente 3 hallazgos en el orden pacing → drivers → recuperación', sm.items.length === 3 && sm.items.map((i) => i.page).join() === 'pacing,drivers,recovery', sm.items.map((i) => i.page));
+t('21 · resumen: el hallazgo de pacing no repite el cierre en un 2.º hallazgo', sm.items.filter((i) => /cierre estimado/.test(i.text)).length === 1);
+// 22 · meta 2027 vs proyección por ritmo reciente: la meta no es pronóstico
+const spj = pg(RB.build(base({ projection: proj })), 'seasonality');
+t('22 · estacionalidad: la meta propuesta se declara supuesto de planeación, no pronóstico', /supuesto de planeación, no un pronóstico/.test(spj.headline) && spj.kpis.some((k) => k.label === 'Proyección por ritmo reciente') && spj.ctx === 'Base 2026 → 2027', [spj.headline, spj.ctx]);
+// 23 · robustez de volumen y texto
+const longName = 'Complejo vitamínico multimineral con ginseng, ácido fólico y hierro quelado 120 tabletas edición familiar';
+const many = Array.from({ length: 60 }, (_, i) => ({ entity: `${longName} ${i}`, impact: -(60 - i) * 10, relativeChange: -0.1, pattern: 'decline_sustained', consecutivePeriods: 3 }));
+const trendMany = JSON.parse(JSON.stringify(trend)); trendMany.priorities.drag = many; trendMany.priorities.compensate = many.map((x) => ({ ...x, impact: -x.impact }));
+const tm = pg(RB.build(base({ trend: trendMany })), 'trends');
+t('23 · 60 filas: la lámina muestra las 5 mayores y no recorta el nombre', tm.tables[0].rows.length === 5 && tm.tables[0].rows[0].entity === `${longName} 0` && tm.tables[0].rows[0].impact === -600);
+const prodMany = JSON.parse(JSON.stringify(product)); prodMany.rows = Array.from({ length: 80 }, (_, i) => ({ key: `${longName} ${i}`, revenue: { current: 1000 - i, baseline: 900, delta: 100 - i, deltaPct: 0.1 }, share: 0.01, contribution: 0.01 }));
+const cm = pg(RB.build(base({ product: prodMany })), 'categories');
+t('23 · 80 grupos: tabla de 6 y gráfica de 6, con nombres completos', cm.tables[0].rows.length === 6 && cm.charts[0].items.length === 6 && cm.charts[0].items[0].label.startsWith(longName));
+// 24 · valores no finitos nunca llegan al texto
+const dgBad = diagOk(); dgBad.gap = { abs: Infinity, pct: NaN, current: 855, baseline: 900 };
+const repBad = RB.build(base({ diag: dgBad, rf: rfMk({ type: 'year', key: '2026', target: 1200, actualToDate: NaN, remaining: undefined, surplus: 0, requiredTotal: Infinity, futureDays: 85 }, { pressure: NaN, plan: NaN }), trend: { priorities: { status: 'available', drag: [{ entity: 'X', impact: NaN, relativeChange: Infinity, pattern: 'stable' }], compensate: [], totals: { drag: NaN, compensate: undefined, balance: null }, comparison: {} }, rows: [], context: {} } }));
+const sBad = []; const w2 = (v) => { if (typeof v === 'string') sBad.push(v); else if (Array.isArray(v)) v.forEach(w2); else if (v && typeof v === 'object') Object.values(v).forEach(w2); }; w2(repBad.pages.map((p) => [p.headline, p.notes, p.items, p.facts, p.ctx, p.gaps]));
+const bs = sBad.find((x) => /\b(null|undefined|NaN|Infinity)\b/.test(x)); t('24 · valores NaN/Infinity/undefined no aparecen en titulares, notas ni etiquetas', !bs, bs);
+t('24 · una brecha infinita no entra a la descomposición', pg(repBad, 'drivers').status === 'omitted');
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);

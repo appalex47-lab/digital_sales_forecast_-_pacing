@@ -1,6 +1,7 @@
 """Presentación (PDF ejecutivo) y Datos → Exportar datos (paquete .zip). Corre: python3 batch_presentacion.py <raíz>"""
 import sys, asyncio, re
 from an_common import *
+from recovery_state import prepare
 U = f'http://127.0.0.1:{port}/index.html'
 async def main():
     async with async_playwright() as p:
@@ -44,12 +45,46 @@ async def main():
         await q.goto(U + '#paquete'); await q.wait_for_timeout(900)
         inside = await q.evaluate("!!document.querySelector('#view-datos #package-view') && !document.getElementById('view-paquete')")
         chk('PR-11 el paquete .zip vive dentro de Datos y #paquete abre esa sección', inside, inside)
+
+        # ---- escenario completo (plan anual, recuperación con escenario y acción) + textos largos y muchas filas ----
+        f = await new_page(b, 1280, 900); await f.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})")
+        await load_products(f, U); pr = await prepare(f, U); chk('PR-14 escenario completo preparado (plan, escenario y acción de recuperación)', pr == 'ok', pr)
+        await f.goto(U + '#presentacion'); await f.wait_for_selector('[data-action="rp-generate"]'); await f.click('[data-action="rp-generate"]')
+        await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
+        OVL = """(()=>{const out=[];document.querySelectorAll('#rp-print-host .rp-page').forEach(pg=>{const b=pg.querySelector('.rp-body');if(!b)return;const kids=[...b.children].filter(k=>k.getBoundingClientRect().height>0);const bb=b.getBoundingClientRect();
+          kids.forEach((k,i)=>{const r=k.getBoundingClientRect();if(i<kids.length-1&&r.bottom>kids[i+1].getBoundingClientRect().top+1)out.push(pg.dataset.page+':solape');if(r.bottom>bb.bottom+1)out.push(pg.dataset.page+':fuera');});
+          const foot=pg.querySelector('.rp-foot').getBoundingClientRect();if(bb.bottom>foot.top+1)out.push(pg.dataset.page+':pie');});return out})()"""
+        async def mount(page_):
+            await page_.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[],tags:true})"); await page_.emulate_media(media='print')
+            return await page_.evaluate("(()=>{const h=document.getElementById('rp-print-host');Object.assign(h.style,{display:'block',position:'absolute',left:'-99999px',top:'0'});return 1})()")
+        await mount(f)
+        full = await f.evaluate("({ids:FP.app.state.rp.report.included, n:document.querySelectorAll('#rp-print-host .rp-page').length, bad:FP.reportView.fitPages(document.getElementById('rp-print-host'))})")
+        chk('PR-14 con recuperación la presentación incluye la lámina de Recuperación y todas caben', 'recovery' in full['ids'] and full['bad'] == [], full)
+        chk('PR-14 la lámina de recuperación muestra las cuatro brechas con su período', await f.evaluate("document.querySelector('#rp-print-host [data-page=\"recovery\"]').innerText.includes('Brecha pendiente (recuperación)') && document.querySelector('#rp-print-host [data-page=\"recovery\"]').innerText.includes('no se suman ni tienen por qué coincidir')"))
+        chk('PR-14 sin solapes entre bloques, ni invasión del pie (escenario completo)', (await f.evaluate(OVL)) == [], await f.evaluate(OVL))
+        hov = await f.evaluate("(()=>{const out=[];document.querySelectorAll('#rp-print-host .rp-page').forEach(pg=>{const pr=pg.getBoundingClientRect();pg.querySelectorAll('.rp-body *').forEach(e=>{const r=e.getBoundingClientRect();if(r.width>0&&(r.right>pr.right-20||r.left<pr.left+20)&&!e.closest('svg'))out.push(pg.dataset.page+':'+e.tagName+':'+(e.textContent||'').trim().slice(0,20));});});return out.slice(0,6)})()")
+        chk('PR-14 ningún elemento de ninguna lámina se sale del ancho imprimible (columnas de tablas incluidas)', hov == [], hov)
+        # textos largos + muchas filas inyectados en el reporte ya armado (el armador ya limita filas: se verifica el diseño, no el cálculo)
+        await f.evaluate("""(()=>{const L='Complejo vitamínico multimineral con ginseng, ácido fólico y hierro quelado 120 tabletas edición familiar';const r=FP.app.state.rp.report;
+          const tr=r.pages.find(p=>p.id==='trends'); if(tr&&tr.status==='included'){tr.tables.forEach(t=>{t.rows=Array.from({length:5},(_,i)=>({...(t.rows[0]||{entity:'',impact:-1,relative:-0.1,pattern:'Caída sostenida · 6 períodos',_spark:null}),entity:L+' '+i}));}); tr.notes.push('Nota metodológica extensa. '.repeat(12));}
+          const ca=r.pages.find(p=>p.id==='categories'); if(ca&&ca.status==='included'){ca.tables[0].rows=Array.from({length:6},(_,i)=>({...ca.tables[0].rows[0],key:L+' '+i}));ca.charts[0].items=ca.charts[0].items.slice(0,1);}
+          const rc=r.pages.find(p=>p.id==='recovery'); if(rc&&rc.status==='included'){rc.actions=Array.from({length:3},(_,i)=>({title:L+' '+i,owner:'Responsable con nombre muy largo '+i,start:'2026-09-01',end:'2026-09-22'}));rc.notes.push('Texto largo. '.repeat(15));}
+          const dr=r.pages.find(p=>p.id==='drivers'); if(dr&&dr.status==='included'){dr.notes.push('Limitación extensa del diagnóstico. '.repeat(10));}})()""")
+        await f.evaluate("document.getElementById('rp-print-host')&&document.getElementById('rp-print-host').remove()"); await mount(f)
+        lg = await f.evaluate("({bad:FP.reportView.fitPages(document.getElementById('rp-print-host'))})"); ov = await f.evaluate(OVL)
+        trimmed = await f.evaluate("[...document.querySelectorAll('#rp-print-host .rp-page[data-trimmed]')].map(p=>[p.dataset.page,!!p.querySelector('.rp-trim')&&p.querySelector('.rp-trim').textContent])")
+        chk('PR-15 textos largos y filas con nombres largos: todo cabe sin solapes; si se recortan filas, la lámina lo dice', ov == [] and lg['bad'] == [] and all(t[1] for t in trimmed) and len(trimmed) >= 1, [ov, lg, trimmed])
+        chk('PR-15 los nombres largos no se recortan con puntos suspensivos', await f.evaluate("![...document.querySelectorAll('#rp-print-host td')].some(td=>td.textContent.includes('Complejo vitam')&&(getComputedStyle(td).textOverflow==='ellipsis'||td.scrollWidth>td.clientWidth+1))"))
+        await f.pdf(path='/tmp/rp_full.pdf', prefer_css_page_size=True, print_background=True)
+        import subprocess; t2 = subprocess.run(['pdftotext', '/tmp/rp_full.pdf', '-'], capture_output=True, text=True).stdout
+        chk('PR-16 el PDF completo no imprime null/undefined/NaN/Infinity', not re.search(r'\b(null|undefined|NaN|Infinity)\b', t2))
+        chk('PR-16 el PDF completo conserva la etiqueta de cada tipo de cifra', all(w in t2 for w in ('Observado', 'Calculado', 'Estimado')))
         # móvil
         m = await new_page(b, 375, 800); await m.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})"); await load_products(m, U)
         await m.goto(U + '#presentacion'); await m.wait_for_selector('#view-presentacion:not([hidden])'); await m.wait_for_timeout(500)
         sw = await m.evaluate("document.documentElement.scrollWidth - window.innerWidth")
         chk('PR-12 en móvil (375 px) la vista no genera scroll horizontal de página', sw <= 1, sw)
-        chk('PR-13 sin errores de consola', not q._errs and not m._errs, (q._errs + m._errs)[:3])
+        chk('PR-13 sin errores de consola', not q._errs and not m._errs and not f._errs, (q._errs + m._errs + f._errs)[:3])
         await b.close()
 asyncio.run(main())
 print(f'\n{len(passed)} ok / {len(fails)} fallos'); sys.exit(1 if fails else 0)
