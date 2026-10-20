@@ -351,12 +351,16 @@
     const PF = FP.productFilter, PS = FP.productStore;
     if (!PF || !PS || !PS.available || !PS.available()) return '';
     const cur = PF.active(state.rp.filter || {});
-    let o = {}; try { o = PF.options(cur, PF.KEYS); } catch (e) { return ''; }
-    const sel = (k) => (o[k] && o[k].length ? `<div class="field rp-f"><label class="field__label" for="rp-f-${k}">${esc(PF.LABEL[k])}</label>
-      <select class="select" id="rp-f-${k}" data-action="rp-filter" data-key="${k}"><option value="">Todas</option>${o[k].map((v) => `<option value="${esc(v)}"${cur[k] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>` : '');
+    const KEYS = ['category', 'subcategory', 'product', 'state', 'city', 'branch'], LBL = { ...PF.LABEL, branch: 'Nombre de sucursal' };
+    let o = {}, names = {}; try { o = PF.options(cur, KEYS); const g = PS.geoOptions({ state: cur.state || undefined, city: cur.city || undefined }); (g.branches || []).forEach((b) => { names[b.code] = b.name || b.code; }); } catch (e) { return ''; }
+    // sucursal: se muestra el nombre (con el código solo si dos sucursales comparten nombre); el filtro sigue usando el código
+    const dup = new Set(); const seen = new Set(); (o.branch || []).forEach((c) => { const n = names[c] || c; if (seen.has(n)) dup.add(n); seen.add(n); });
+    const text = (k, v) => (k === 'branch' ? ((names[v] || v) + (dup.has(names[v] || v) ? ` (${v})` : '')) : v);
+    const sel = (k) => (o[k] && o[k].length ? `<div class="field rp-f"><label class="field__label" for="rp-f-${k}">${esc(LBL[k])}</label>
+      <select class="select" id="rp-f-${k}" data-action="rp-filter" data-key="${k}"><option value="">Todas</option>${o[k].map((v) => ({ v, t: text(k, v) })).sort((a, b) => String(a.t).localeCompare(String(b.t), 'es')).map(({ v, t }) => `<option value="${esc(v)}"${cur[k] === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>` : '');
     const any = PF.isActive(cur);
     return `<div class="rp-filters"><div class="rp-filters__head"><h3 class="panel__title">Filtros de la presentación</h3>${any ? '<button type="button" class="btn btn--ghost" data-action="rp-filter-clear">Limpiar filtros</button>' : ''}</div>
-      <div class="rp-filters__grid">${PF.KEYS.map(sel).join('')}</div>
+      <div class="rp-filters__grid">${KEYS.map(sel).join('')}</div>
       <p class="field__hint">Se pueden combinar. Aplican a las láminas de categorías, evolución y clientes; pacing, forecast, diagnóstico y recuperación siguen siendo del total del negocio porque el plan no está por producto ni por sucursal (cada una lo indica en su encabezado).</p></div>`;
   }
   function render(state) {

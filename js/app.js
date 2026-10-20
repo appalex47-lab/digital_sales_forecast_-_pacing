@@ -877,7 +877,7 @@
     let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run }); } catch (e) { /* sin proyección */ }
     const an = state.an, pa = state.pa;
     const desc = (f) => (FP.productFilter && f ? FP.productFilter.describe(FP.productFilter.active(f)) : '');
-    const rpLabel = rpF ? FP.productFilter.describe(rpF) : '';
+    const rpLabel = (() => { if (!rpF) return ''; let f = rpF; try { if (f.branch) { const b = (FP.productStore.geoOptions({}).branches || []).find((x) => x.code === f.branch); if (b && b.name) f = { ...f, branch: b.name }; } } catch (e) { /* se deja el código */ } return FP.productFilter.describe(f); })();
     const filters = [{ page: 'Evolución', label: rpF ? rpLabel : desc(an.filter) }, { page: 'Productos', label: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : '') }, { page: 'Clientes', label: rpF ? rpLabel : (customers && customers.result && customers.result.filtered ? desc(state.cu.opts.filter) : '') }].filter((f) => f.label);
     const rcA = state.rc.analysis, store = state.rc.scenarioStore;
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
