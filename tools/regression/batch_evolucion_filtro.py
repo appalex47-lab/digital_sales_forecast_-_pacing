@@ -27,7 +27,7 @@ async def run(b, w, h, tag):
     br = await q.evaluate("FP.app.state.an.bridge && FP.app.state.an.bridge.status")
     chk(f'{tag}3 el Puente al plan queda N/A con filtro', br == 'not_applicable', br)
     chk(f'{tag}4 el contexto muestra «Selección»', await q.evaluate("document.querySelector('.analysis-context').innerText.includes('Selección')"), None)
-    await q.click('[data-action=fs-clear][data-fs-page=an].btn--ghost.btn--small')
+    await q.evaluate("document.querySelector('.fshell__bar [data-action=fs-clear]').click()")
     await q.wait_for_function("!FP.app.state.an.loading && FP.app.state.an.rows.length>0 && !Object.keys(FP.app.state.an.filter).length", timeout=90000)
     await q.wait_for_timeout(400)
     back = await q.evaluate("(FP.app.state.an.share&&FP.app.state.an.share.totalSeries||[]).map(x=>x.value)")

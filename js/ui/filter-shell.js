@@ -15,7 +15,7 @@
   function html(o) {
     const n = o.chips.length, id = `fs-${o.page}`, open = Boolean(o.open);
     const chips = o.chips.map((c) => `<button type="button" class="chip fshell__chip" data-action="fs-chip" data-fs-page="${esc(o.page)}" data-fs-key="${esc(c.key)}" aria-label="Quitar ${esc(c.text)}">${esc(c.text)} <span aria-hidden="true">✕</span></button>`).join('');
-    const groups = o.groups.filter((g) => g.html && g.html.trim()).map((g) => `<section class="fshell__group"><h4 class="fshell__title">${esc(g.title)}</h4><div class="settings-grid">${g.html}</div></section>`).join('');
+    const groups = o.groups.filter((g) => g.html && g.html.trim()).map((g) => `<section class="fshell__group"><p class="fshell__title">${esc(g.title)}</p><div class="settings-grid">${g.html}</div></section>`).join('');
     return `<div class="fshell" data-fshell="${esc(o.page)}"${open ? ' data-open="1"' : ''}>
       ${o.primary ? `<div class="fshell__primary settings-grid">${o.primary}</div>` : ''}
       <div class="fshell__bar">
