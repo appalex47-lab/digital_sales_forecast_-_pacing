@@ -1,7 +1,7 @@
 /* report.css — Presentación (PDF). Láminas 16:9 (297 × 167 mm ≈ 1122 × 630 px a 96 dpi). Letra mínima 13.4 px ≈ 10 pt.
    Sistema editorial: una paleta con significado fijo (navy = dato observado y títulos; azul = calculado; naranja = estimado/advertencia;
    verde/rojo solo acompañan a un signo ▲▼ o +/−), escala tipográfica de 5 tamaños (32 · 17 · 26/34 · 14 · 13.4) y espaciado de 6 · 10 · 14 px. */
-.rp-doc, .rp-preview { --navy:#0B2A4A; --blue:#2F6DB5; --sky:#E7EFF9; --teal:#0E8F80; --green:#17724A; --orange:#A35F00; --red:#B42318; --grey:#55606F; --line:#DCE3EC; --soft:#F4F7FB; --ink:#172033; --amber:#FFF4E0; }
+.rp-doc, .rp-preview { --navy:#0B1F3A; --blue:#1F5FD6; --sky:#EEF3FB; --teal:#0E8F80; --green:#0B7A59; --orange:#A35F00; --red:#C0392B; --grey:#56667D; --faint:#7D8AA0; --line:#DCE3EE; --soft:#F6F8FC; --ink:#0F1B2D; --amber:#FFF4E0; }
 .rp-preview { display:flex; flex-direction:column; gap:18px; margin-top:8px; }
 .rp-frame { width:100%; overflow-x:auto; border:1px solid var(--line); border-radius:6px; background:#fff; box-shadow:0 1px 4px rgba(11,42,74,.12); }
 .rp-frame .rp-page { zoom:var(--rp-s,1); }
@@ -10,7 +10,7 @@
 .rp-pagelist__off { grid-column:1/-1; color:var(--grey,#5B6776); font-size:.9rem; }
 
 /* ---------- lámina ---------- */
-.rp-page { box-sizing:border-box; width:1122px; height:630px; padding:16px 36px 0; background:#fff; color:var(--ink); font-family:"Segoe UI",Arial,Helvetica,sans-serif; font-size:16px; line-height:1.3; position:relative; overflow:hidden; display:flex; flex-direction:column; break-after:page; page-break-after:always; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.rp-page { box-sizing:border-box; width:1122px; height:630px; padding:16px 36px 0; background:#fff; color:var(--ink); font-family:Inter,"Segoe UI",Arial,Helvetica,sans-serif; font-size:16px; line-height:1.3; position:relative; overflow:hidden; display:flex; flex-direction:column; break-after:page; page-break-after:always; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 .rp-page * { box-sizing:border-box; }
 .rp-top { display:flex; justify-content:space-between; align-items:center; font-size:13.4px; color:var(--grey); height:22px; flex:none; }
 .rp-brand { display:flex; align-items:center; gap:8px; font-weight:700; color:var(--navy); font-size:14px; }
@@ -169,3 +169,75 @@
 .rp-lean .rp-since__g{display:none}.rp-lean .rp-since{padding:4px 12px}
 /* hasta 8 filas por lado: filas más bajas cuando la lámina va apretada */
 .rp-tight .rp-mv__r{padding:1px 0}.rp-tight .rp-mv__n small{line-height:1.15}.rp-tight .rp-mv__bar{height:6px;margin-top:1px}.rp-tight .rp-mv__h{margin-bottom:2px}
+
+
+/* =====================================================================================================
+   Sistema visual v2 (diseño ejecutivo). Solo capa visual: no cambia datos, cálculos ni estructura del reporte.
+   Paleta: azul marino (títulos y cifras), azul de marca (énfasis), verde/coral solo para positivo/negativo.
+   Jerarquía: eyebrow de sección · título · pregunta · cifras sin tarjeta · gráfico/tabla · notas discretas.
+   ===================================================================================================== */
+.rp-page { padding:16px 44px 0; }
+.rp-top { height:24px; }
+.rp-eyebrow { font-size:13.4px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--blue); }
+.rp-per { font-size:13.4px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); }
+.rp-title { font-size:30px; font-weight:750; letter-spacing:-.015em; line-height:1.12; }
+.rp-q { color:var(--grey); }
+.rp-ctx { background:none; padding:0; color:var(--faint); font-weight:600; }
+.rp-headline { background:var(--sky); border-left:0; border-radius:10px; padding:8px 14px; font-weight:600; font-size:16.5px; }
+.rp-foot { border-top:0; color:var(--faint); height:28px; align-items:flex-end; padding-bottom:6px; }
+.rp-pgno { font-variant-numeric:tabular-nums; font-weight:600; }
+
+/* cifras: sin tarjeta, con filete superior */
+.rp-kpis { gap:18px; }
+.rp-kpi { background:none; border-radius:0; border-top:3px solid var(--line); padding:6px 8px 0 0; }
+.rp-kpi--hero { background:none; border:0; border-top:3px solid var(--blue); flex:1.2 1 0; }
+.rp-kpi--hero .rp-kpi__v { color:var(--blue); }
+.rp-kpi__v { font-weight:780; letter-spacing:-.02em; }
+.rp-kpi__l, .rp-kpi__s { color:var(--grey); }
+
+/* tablas y paneles: sin fondos, solo filetes */
+.rp-panel { background:none; padding:0; border-radius:0; }
+.rp-tbl__t, .rp-panel__t, .rp-fig figcaption { font-size:13.4px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+.rp-t th { border-bottom:1px solid var(--line); color:var(--faint); font-weight:650; }
+.rp-t td { border-bottom:1px solid #EAEFF6; }
+.rp-panel .rp-t td { border-bottom-color:#EAEFF6; }
+.rp-t .rp-total td { background:var(--soft); border-top:1px solid var(--line); }
+.rp-pos { color:var(--green); } .rp-neg { color:var(--red); }
+.rp-box { background:var(--soft); }
+.rp-callout { border-left:0; border-radius:10px; background:var(--soft); }
+.rp-callout--warn { background:var(--amber); }
+.rp-notes { color:var(--grey); }
+
+/* resumen */
+.rp-lead { border-left:0; padding:0; font-size:21px; font-weight:450; color:var(--ink); }
+.rp-lead b { color:var(--navy); font-weight:700; }
+.rp-find { background:var(--sky); border-top:0; border-radius:14px; }
+.rp-find--lead { background:var(--sky); border:0; }
+.rp-find__fig { font-weight:780; letter-spacing:-.02em; }
+.rp-yr, .rp-yr--f { background:var(--navy); color:#DCE8FF; border-radius:10px; padding:7px 14px; }
+.rp-since { border:0; border-radius:12px; background:var(--soft); }
+
+/* qué resta y qué suma: el tipo es texto, no una caja de color */
+.rp-mv__c { background:none; border-top:3px solid var(--red); border-radius:0; padding:8px 14px 6px 0; }
+.rp-mv__c--p { border-top-color:var(--green); padding:8px 0 6px 14px; }
+.rp-mv__tp { background:none !important; color:var(--faint); text-align:left; padding:0; font-weight:650; }
+.rp-mv__h { text-transform:uppercase; letter-spacing:.08em; font-size:14px; }
+.rp-chip { background:none; }
+
+/* cierre */
+.rp-cl { background:var(--sky); border-left:0; border-radius:14px; }
+.rp-cl--1 { background:var(--navy); color:#fff; } .rp-cl--1 .rp-cl__t, .rp-cl--1 .rp-cl__u { color:#9DB8E8; } .rp-cl--1 .rp-cl__big, .rp-cl--1 .rp-cl__x { color:#fff; }
+.rp-cl--3 .rp-cl__t { color:var(--red); } .rp-cl--2 .rp-cl__t { color:var(--green); }
+.rp-cl__t { letter-spacing:.1em; }
+
+/* portada */
+.rp-page--cover { background:radial-gradient(760px 420px at 88% 6%,rgba(31,95,214,.55),transparent 62%),radial-gradient(620px 420px at 0% 108%,rgba(31,95,214,.28),transparent 62%),#0B1F3A; }
+.rp-cover__title { font-weight:780; letter-spacing:-.025em; }
+.rp-cover__rule { background:#5B93FF; }
+.rp-page--cover { padding:0; }
+.rp-find__fig:empty { display:none; }
+.rp-chip { border-radius:10px; }
+.rp-kpi--hero.rp-kpi--neg .rp-kpi__v, .rp-kpi--neg .rp-kpi__v { color:var(--red); } .rp-kpi--hero.rp-kpi--pos .rp-kpi__v, .rp-kpi--pos .rp-kpi__v { color:var(--green); }
+.rp-mv__r { padding:2px 0; gap:8px; grid-template-columns:70px 1fr 96px; }
+.rp-mv__n small { line-height:1.15; } .rp-mv__bar { height:6px; margin-top:1px; }
+.rp-mv__h { margin-bottom:2px; }

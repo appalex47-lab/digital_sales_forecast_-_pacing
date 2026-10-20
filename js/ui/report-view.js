@@ -12,7 +12,7 @@
   const NA = 'No disponible';
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const esc = (v) => String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const C = { navy: '#0B2A4A', blue: '#2F6DB5', teal: '#0E8F80', green: '#1B7F4D', orange: '#B86A00', red: '#B42318', grey: '#5B6776', light: '#E4EAF1', ink: '#1A2433' };
+  const C = { navy: '#0B1F3A', blue: '#1F5FD6', teal: '#0E8F80', green: '#0B7A59', orange: '#B86A00', red: '#C0392B', grey: '#56667D', light: '#E4EAF1', ink: '#0F1B2D' };
   const PW = 1122, PH = 630;   // 297 × 167 mm a 96 dpi (16:9)
   const MO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -260,7 +260,8 @@
   /* ================= páginas, numeración e impresión ================= */
   function units(report, exclude) {
     const ex = new Set(exclude || []), out = [];
-    report.pages.filter((p) => p.status === 'included' && !p.annex && !ex.has(p.id)).forEach((p) => {
+    const ORDER = ['cover', 'summary', 'pacing', 'drivers', 'movers', 'trends', 'categories', 'customers', 'traffic', 'seasonality', 'recovery', 'closing', 'reliability', 'annex'], rank = (id) => { const i = ORDER.indexOf(id); return i < 0 ? ORDER.length : i; };   // solo el orden de lectura de la presentación; el reporte conserva el suyo
+    report.pages.filter((p) => p.status === 'included' && !p.annex && !ex.has(p.id)).map((p, i) => ({ p, i })).sort((a, b) => rank(a.p.id) - rank(b.p.id) || a.i - b.i).map((o) => o.p).forEach((p) => {
       if (p.id === 'annex') [['Anexo técnico A · Calidad de datos y brechas', 1], ['Anexo técnico B · Métodos, backtest y confiabilidad', 2], ['Anexo técnico C · Definiciones y límites', 3]].forEach(([t, s]) => out.push({ id: 'annex', sub: s, title: t, page: p }));
       else out.push({ id: p.id, title: p.title, page: p });
     });
@@ -269,14 +270,16 @@
   }
   const dateOf = (iso) => fmt('date', iso);
   const TITLES = { movers: 'Qué resta y qué suma', summary: 'Resumen ejecutivo', pacing: 'Desempeño contra el plan y proyección de cierre', drivers: 'Qué explica la diferencia: tráfico, conversión y ticket', trends: 'Evolución: qué cae y qué compensa', categories: 'Categorías y productos: dónde se concentra el cambio', customers: 'Clientes, recurrencia y valor', traffic: 'Tráfico y conversión por segmento', recovery: 'Recuperación: lo que falta para la meta', seasonality: 'Estacionalidad y meta del siguiente año', closing: 'Cierre ejecutivo | Qué nos llevamos de este periodo' };
+  const SECTION = { summary: 'Resumen ejecutivo', pacing: 'Desempeño comercial', drivers: 'Qué explica la diferencia', movers: 'Qué suma y qué resta', trends: 'Evolución y movimientos', categories: 'Categorías y productos', customers: 'Clientes y recurrencia', traffic: 'Tráfico y conversión', recovery: 'Recuperación y prioridades', closing: 'Cierre ejecutivo', reliability: 'Método y confiabilidad', seasonality: 'Estacionalidad' };
   const DECO = '<svg class="rp-deco" width="640" height="420" viewBox="0 0 640 420" aria-hidden="true"><g fill="#fff" opacity=".10"><rect x="330" y="250" width="34" height="170"/><rect x="380" y="210" width="34" height="210"/><rect x="430" y="165" width="34" height="255"/><rect x="480" y="120" width="34" height="300"/><rect x="530" y="70" width="34" height="350"/><rect x="580" y="20" width="34" height="400"/></g><g fill="none" stroke="#8DB6E8" stroke-width="2.5" opacity=".55"><path d="M0 330 L90 290 L180 308 L270 230 L360 250 L450 160 L540 150 L640 60"/></g><circle cx="640" cy="60" r="7" fill="#8DB6E8" opacity=".8"/></svg>';
   function pageHtml(u, x) {
     const p = u.page;
     const fl = ((x.units.find((q) => q.id === 'cover') || {}).page || {}).filterLabel || '';
     const scopeTag = !fl ? null : (['categories', 'trends', 'customers'].includes(u.id) || (u.id === 'pacing' && p.selection)) ? `Filtro: ${fl}` : (['drivers', 'recovery'].includes(u.id) || (u.id === 'pacing' && !p.selection)) ? 'Total del negocio (el plan no tiene este filtro)' : null;
     const ctxLine = [x.channelLabel === 'Total digital' ? null : x.channelLabel, scopeTag, p.ctx || null].filter(Boolean).join(' · ');
-    const foot = `<div class="rp-foot"><span>Reporte ejecutivo de ventas digitales · Corte ${esc(x.cutoff)}</span><span>${x.tags && p.sources && p.sources.length ? `Fuente: ${esc(p.sources.join(', '))}${p.tags && p.tags.length ? ` · ${esc(p.tags.join(' / '))}` : ''}` : ''}</span></div>`;
-    const no = `<span class="rp-pgno">${u.number} de ${x.total}</span>`;
+    const per = ((x.units.find((q) => q.id === 'cover') || {}).page.facts.find((f) => f.id === 'period') || {}).value || '';
+    const foot = `<div class="rp-foot"><span>RevNavigator · ${esc(x.channelLabel)}${x.tags && p.sources && p.sources.length ? ` · Fuente: ${esc(p.sources.join(', '))}${p.tags && p.tags.length ? ` · ${esc(p.tags.join(' / '))}` : ''}` : ''}</span><span class="rp-pgno">${u.number}</span></div>`;
+    const eyebrow = u.id === 'annex' ? 'Anexo técnico' : (SECTION[u.id] || p.title);
     if (u.id === 'cover') {
       const per = (x.units.find((q) => q.id === 'cover').page.facts.find((f) => f.id === 'period') || {}).value || '';
       return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>
@@ -284,16 +287,17 @@
         <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
     }
     const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
-    const title = u.id === 'annex' ? u.title : (u.id === 'pacing' && p.selection ? 'Venta de la selección contra su periodo de referencia' : (TITLES[u.id] || p.title));
+    const concl = u.id === 'annex' || !FP.reportCopy ? null : FP.reportCopy.title(p, x.report);   // título con conclusión si los datos la permiten; si no, el neutro
+    const title = u.id === 'annex' ? u.title : (concl || (u.id === 'pacing' && p.selection ? 'Venta de la selección contra su periodo de referencia' : (TITLES[u.id] || p.title)));
     const q = u.id === 'annex' ? '' : u.id === 'closing' ? '' : (p.question || '');
-    return `<section class="rp-page" data-page="${esc(u.id)}${u.sub ? `-${u.sub}` : ''}"><div class="rp-top"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>${no}</div>
+    return `<section class="rp-page" data-page="${esc(u.id)}${u.sub ? `-${u.sub}` : ''}"><div class="rp-top"><span class="rp-eyebrow">${esc(eyebrow)}</span><span class="rp-per">${esc(per)}</span></div>
       <h2 class="rp-title">${esc(title)}</h2><div class="rp-sub"><p class="rp-q">${esc(q)}</p>${ctxLine ? `<div class="rp-ctx">${esc(ctxLine)}</div>` : ''}</div>${!['summary', 'annex', 'closing'].includes(u.id) && p.headline ? `<p class="rp-headline">${esc(p.headline)}</p>` : ''}
       <div class="rp-body">${body}</div>${foot}</section>`;
   }
   function docHtml(report, opts = {}) {
     const us = units(report, opts.exclude), cover = report.pages.find((p) => p.id === 'cover');
     const sel = cover && cover.facts ? (cover.facts.find((f) => f.id === 'selection') || {}).value : '';
-    const x = { tags: opts.tags === undefined ? report.options.showTags === true : Boolean(opts.tags), units: us, total: us.length, omitted: report.omitted.length, omittedList: report.omitted, gapsPage: (report.pages.find((q) => q.id === 'recovery' && q.status === 'included') || {}).gaps ? report.pages.find((q) => q.id === 'recovery') : null, relPage: report.pages.find((q) => q.id === 'reliability' && q.status === 'included') || null, channelLabel: report.context.channel === 'total' || !report.context.channel ? 'Total digital' : ({ ecommerce: 'Ecommerce', app: 'App', whatsapp: 'WhatsApp', llamadas: 'Llamadas' }[report.context.channel] || report.context.channel), cutoff: report.context.cutoff ? dateOf(report.context.cutoff) : NA,
+    const x = { report, tags: opts.tags === undefined ? report.options.showTags === true : Boolean(opts.tags), units: us, total: us.length, omitted: report.omitted.length, omittedList: report.omitted, gapsPage: (report.pages.find((q) => q.id === 'recovery' && q.status === 'included') || {}).gaps ? report.pages.find((q) => q.id === 'recovery') : null, relPage: report.pages.find((q) => q.id === 'reliability' && q.status === 'included') || null, channelLabel: report.context.channel === 'total' || !report.context.channel ? 'Total digital' : ({ ecommerce: 'Ecommerce', app: 'App', whatsapp: 'WhatsApp', llamadas: 'Llamadas' }[report.context.channel] || report.context.channel), cutoff: report.context.cutoff ? dateOf(report.context.cutoff) : NA,
       selection: sel && !/^Sin filtros/.test(sel) ? cut(sel, 60) : 'Sin filtros' };
     const parts = us.map((u) => pageHtml(u, x).replace(/<(th|dt)(\s|>)/g, '<$1 data-helped="1"$2'));   // sin íconos de ayuda de la app dentro del reporte
     return { html: parts.join(''), parts, units: us, total: us.length };
