@@ -1713,8 +1713,8 @@
       else {
         try {
           // Canal + categoría / subcategoría / producto / SKU / geografía: se cuentan los clientes que compraron ESA selección en cada mes.
-          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan, ...(wholeScope ? {} : { filter }) }); if (!mine()) return;
-          if (ca && ca.status === 'ok') customers = { status: 'ok', filtered: !wholeScope, byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan, ...(wholeScope ? {} : { filter, scope: state.an.cuScope === 'selection' ? 'selection' : 'company' }) }); if (!mine()) return;
+          if (ca && ca.status === 'ok') customers = { status: 'ok', filtered: !wholeScope, scope: ca.scope || 'company', byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
           else if (ca && ca.status === 'filter_unavailable') customers = { status: 'filter_unavailable', note: ca.reason === 'no_matcher' ? 'No se pudo aplicar el filtro de productos a los clientes.' : `Para ver los clientes de esta selección (categoría, producto o sucursal) hay que volver a cargar y guardar ${ca.missingFiles && ca.missingFiles.length ? `el archivo de ventas (${ca.missingFiles.slice(0, 3).join(', ')}${ca.missingFiles.length > 3 ? '…' : ''})` : 'tus archivos de ventas'}: los guardados antes no traen el detalle por producto de cada pedido. No se borra nada; al recargarlo se reemplazan sus pedidos.` };
           else customers = { status: 'none', note: 'Para ver clientes nuevos, recurrentes y reactivados carga un archivo de ventas con id de cliente y de pedido.' };
         } catch (e) { customers = { status: 'none', note: 'No se pudo leer el libro de clientes.' }; }
@@ -2236,6 +2236,8 @@
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
     'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
     'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
+    'an-cu-scope'(el) { state.an.cuScope = el.value === 'selection' ? 'selection' : 'company'; const d = state.an.drill; if (d) { d.loading = true; loadDrill(); } render(); },
     'an-drill-down'(el) { const d = state.an.drill; if (!d) return; d.path = [...d.path, { level: el.dataset.level, key: el.dataset.key }]; d.loading = true; loadDrill(); render(); },
     'an-drill-up'(el) { const d = state.an.drill; if (!d) return; const i = Number(el.dataset.index); d.path = d.path.slice(0, i + 1); d.loading = true; loadDrill(); render(); },
     'an-drill-retry'() { const d = state.an.drill; if (!d) return; d.loading = true; loadDrill(); render(); },
@@ -3983,6 +3985,12 @@
   function bind() {
     document.addEventListener('change', async (e) => {
       const tt = e.target;
+      if (tt && tt.getAttribute && tt.getAttribute('data-cu-f')) {
+        const k = tt.getAttribute('data-cu-f'), f = state.cu.opts.filter = state.cu.opts.filter || {};
+        f[k] = tt.value || undefined;
+        if (k === 'category') { f.subcategory = undefined; f.product = undefined; } else if (k === 'subcategory') f.product = undefined; else if (k === 'state') f.branch = undefined;
+        state.cu.status = 'idle'; render(); return;
+      }
       if (tt && tt.getAttribute && tt.getAttribute('data-cu')) {
         const k = tt.getAttribute('data-cu');
         state.cu.opts[k] = k === 'channel' ? tt.value : Number(tt.value); state.cu.status = 'idle'; render(); return;

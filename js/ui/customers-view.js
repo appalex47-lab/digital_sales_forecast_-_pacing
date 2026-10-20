@@ -17,7 +17,22 @@
   const SEG = [['new', 'Nuevos', 'cus-seg--new'], ['recurrent', 'Recurrentes', 'cus-seg--rec'], ['reactivated', 'Reactivados', 'cus-seg--rea']];
   const REACT = [90, 180, 365];
 
-  const optsOf = (state) => { const o = state.cu.opts; return { reactivationDays: o.reactivationDays, warmupDays: o.warmupDays, channel: o.channel === 'total' ? null : o.channel }; };
+  const FKEYS = ['category', 'subcategory', 'product', 'state', 'branch'];
+  const activeFilter = (o) => { const f = {}; FKEYS.forEach((k) => { if (o.filter && o.filter[k]) f[k] = o.filter[k]; }); return f; };
+  /* Con selección (categoría, producto, sucursal…), nuevo / cohorte / LTV se miden con las compras de esa selección. */
+  const optsOf = (state) => { const o = state.cu.opts, f = activeFilter(o); const base = { reactivationDays: o.reactivationDays, warmupDays: o.warmupDays, channel: o.channel === 'total' ? null : o.channel };
+    return Object.keys(f).length ? { ...base, filter: f, scope: 'selection' } : base; };
+
+  /** Opciones en cascada (categoría → subcategoría → producto; estado → sucursal) con el catálogo y la geografía ya cargados. */
+  function filterOptions(o) {
+    const PS = FP.productStore, f = o.filter || {}, cat = PS && PS.catalog ? PS.catalog.list : [];
+    const uniq = (xs) => [...new Set(xs.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'es'));
+    const inCat = cat.filter((c) => (!f.category || c.category === f.category) && (!f.subcategory || c.subcategory === f.subcategory));
+    let geo = { states: [], branches: [] };
+    try { geo = PS.geoOptions({ state: f.state || undefined }); } catch (e) { /* sin geografía */ }
+    return { category: uniq(cat.map((c) => c.category)), subcategory: uniq(cat.filter((c) => !f.category || c.category === f.category).map((c) => c.subcategory)),
+      product: uniq(inCat.map((c) => c.product || c.sku)), state: geo.states || [], branch: (geo.branches || []).map((b) => b.code) };
+  }
 
   function kpi(label, value, sub, help) {
     const esc = H().esc;
@@ -72,6 +87,14 @@
     return `<div class="table-wrap"><table class="table ds-table"><thead><tr><th>Canal del primer pedido</th><th class="num">Clientes</th><th class="num">Repite en 90 d</th><th class="num">LTV 90 d</th><th class="num">LTV 180 d</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
+  const FLABEL = { category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', state: 'Estado', branch: 'Sucursal' };
+  function filtersHtml(state) {
+    const esc = H().esc, o = state.cu.opts, opts = filterOptions(o);
+    if (!opts.category.length && !opts.state.length) return '';
+    const sel = (k) => `<label class="field"><span class="field__label">${FLABEL[k]}</span><select data-cu-f="${k}"><option value="">Todas</option>${opts[k].map((v) => `<option value="${esc(v)}"${o.filter && o.filter[k] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>`;
+    return `<div class="cus-controls cus-filters" data-cus-filters="1">${FKEYS.map(sel).join('')}${Object.keys(activeFilter(o)).length ? '<button type="button" class="btn" data-action="cu-clear-filter">Quitar filtros</button>' : ''}</div>`;
+  }
+
   function render(state) {
     const el = $('cus-body'); if (!el) return;
     const esc = H().esc, cu = state.cu;
@@ -88,6 +111,13 @@
     if (cu.status === 'loading') { el.innerHTML = '<p class="note" role="status">Calculando clientes…</p>'; return; }
     if (cu.status === 'error') { el.innerHTML = `<p class="note note--warn">No pude leer el libro de clientes (${esc(cu.error || '')}).</p>`; return; }
     const r = cu.result;
+    const hasF = Object.keys(activeFilter(cu.opts)).length > 0;
+    if (hasF && r && (r.status === 'filter_unavailable' || r.reason === 'empty_selection')) {
+      el.innerHTML = `${filtersHtml(state)}<div class="note note--warn" role="status" data-cus-unavailable="1">${r.status === 'filter_unavailable'
+        ? `Para ver los clientes de esta selección hay que volver a cargar y guardar ${r.missingFiles && r.missingFiles.length ? `el archivo de ventas (${esc(r.missingFiles.slice(0, 3).join(', '))})` : 'tus archivos de ventas'}: los guardados antes no traen el detalle por producto de cada pedido. No se borra nada; al recargarlo se reemplazan sus pedidos.`
+        : 'Ningún cliente compró esta combinación (canal y selección). Cambia o quita algún filtro.'}</div>`;
+      return;
+    }
     if (!r || r.status !== 'ok') {
       el.innerHTML = `<div class="empty"><strong>Todavía no hay clientes cargados</strong>
         Carga el archivo de <em>Productos · venta</em> con dos columnas más: <code>id_pedido</code> e <code>id_cliente</code> (el ID debe venir anonimizado desde tu sistema; nunca nombre, correo ni teléfono).
@@ -97,12 +127,14 @@
       return;
     }
     const s = r.summary, o = cu.opts;
+    const selNote = hasF ? `<p class="note" data-cus-selection="1"><strong>Clientes de esta selección${o.channel !== 'total' ? ` en ${esc(CH(o.channel))}` : ''}.</strong> Aquí cada cliente se mide solo con sus compras de esta selección: «nuevo» es su primera compra de ella, la cohorte es el mes de esa primera compra y el LTV es la venta de la selección por cliente. Para saber si ya era cliente de la empresa, quita los filtros.</p>` : '';
     const chOpts = ['total', ...r.channelsAvailable].map((c) => `<option value="${esc(c)}"${o.channel === c ? ' selected' : ''}>${c === 'total' ? 'Todos los canales' : esc(CH(c))}</option>`).join('');
     const rea = REACT.map((d) => `<option value="${d}"${o.reactivationDays === d ? ' selected' : ''}>${d} días</option>`).join('');
     const warm = r.monthly.filter((m) => !m.reliableNew).length;
     const t = cohortTables(r);
     el.innerHTML = `
       <p class="field__hint">Datos de ${esc(mlabel(r.minDay))} a ${esc(r.maxDay)} · ${esc(F().integer(s.orders))} pedidos de ${esc(F().integer(s.customers))} clientes. El ID de cliente (anonimizado) viaja con los productos a la nube de tu equipo, comprimido.</p>
+      ${filtersHtml(state)}${selNote}
       <div class="cus-controls">
         <label class="field"><span class="field__label">Canal</span><select data-cu="channel">${chOpts}</select></label>
         <label class="field"><span class="field__label">Reactivado = vuelve tras más de</span><select data-cu="reactivationDays">${rea}</select></label>

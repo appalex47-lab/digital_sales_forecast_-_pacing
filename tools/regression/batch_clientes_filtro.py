@@ -62,6 +62,12 @@ async def main():
         hd = await q.evaluate("""[...document.querySelectorAll('#an-drill table[aria-label="Detalle por período"] th')].map(t=>t.innerText.trim())""")
         note = await q.evaluate("(document.querySelector('[data-customers-context]')||{}).innerText||''")
         chk('F5 el Detalle temporal de la categoría muestra los clientes de ESA selección y lo explica', 'Clientes nuevos' in hd and 'Clientes de esta selección' in note, [hd[:8], note[:120]])
+        newsum = """[...document.querySelectorAll('#an-drill table[aria-label="Detalle por período"] tbody tr')].reduce((s,tr)=>s+(parseInt(((tr.children[4]||{}).innerText||'').replace(/[^0-9]/g,''))||0),0)"""
+        n_co = await q.evaluate(newsum)
+        await q.select_option('#an-drill select[data-action="an-cu-scope"]', 'selection'); await q.wait_for_function("FP.app.state.an.drill && FP.app.state.an.drill.data && FP.app.state.an.drill.data.customers && FP.app.state.an.drill.data.customers.scope==='selection' && !FP.app.state.an.drill.pending", timeout=60000)
+        await q.evaluate("document.querySelectorAll('#an-drill details.drill-fold').forEach(d=>d.open=true)")
+        n_se = await q.evaluate(newsum)
+        chk(f'F5b «nuevo en esta selección» cuenta distinto que «nuevo en la empresa» ({n_co} → {n_se})', n_co > 0 and n_se > n_co, [n_co, n_se])
         # libro anterior (sin líneas): se avisa qué recargar y no se inventa
         await q.evaluate("async()=>{const L=await FP.customerStore.load(); L.lines=null; }")   # como un libro guardado antes de esta versión
         await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null,drill:null})}", dict(channel='app'))
