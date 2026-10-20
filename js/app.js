@@ -993,7 +993,8 @@
     // Accesibilidad de tablas: encabezados con alcance (solo atributos; no cambia el contenido)
     document.querySelectorAll('table thead th:not([scope])').forEach((th) => th.setAttribute('scope', 'col'));
     document.querySelectorAll('table tbody th:not([scope])').forEach((th) => th.setAttribute('scope', 'row'));
-    const status = FP.contextEngine.collectStatus(state);
+    let status = FP.contextEngine.collectStatus(state);
+    if (state.view === 'inicio' && FP.homeView && FP.homeView.periodStatus) { try { status = FP.homeView.periodStatus(state, status); } catch (e) { /* si falla, se queda el estado anual */ } }
     FP.navigation.renderContextBar(state, status);
     if (FP.attentionView) FP.attentionView.renderOrigin(state, status);
     if (FP.navigation && FP.navigation.markRoute) FP.navigation.markRoute(state);
@@ -1711,9 +1712,10 @@
       else if (!FP.customerStore) customers = { status: 'none', note: 'No hay libro de clientes cargado.' };
       else {
         try {
-          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan }); if (!mine()) return;
-          // En un producto, categoría o geografía el libro (por pedido, sin producto) no se puede partir: se muestran los clientes del canal como contexto, rotulados así.
-          if (ca && ca.status === 'ok') customers = { status: 'ok', contextOnly: !wholeScope, byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          // Canal + categoría / subcategoría / producto / SKU / geografía: se cuentan los clientes que compraron ESA selección en cada mes.
+          const ca = await FP.customerStore.analyze({ channel: chan === 'total' ? null : chan, ...(wholeScope ? {} : { filter }) }); if (!mine()) return;
+          if (ca && ca.status === 'ok') customers = { status: 'ok', filtered: !wholeScope, byMonth: Object.fromEntries(ca.monthly.map((m) => [m.key, m])), warmupDays: ca.options.warmupDays, reactivationDays: ca.options.reactivationDays };
+          else if (ca && ca.status === 'filter_unavailable') customers = { status: 'filter_unavailable', note: ca.reason === 'no_matcher' ? 'No se pudo aplicar el filtro de productos a los clientes.' : `Para ver los clientes de esta selección (categoría, producto o sucursal) hay que volver a cargar y guardar ${ca.missingFiles && ca.missingFiles.length ? `el archivo de ventas (${ca.missingFiles.slice(0, 3).join(', ')}${ca.missingFiles.length > 3 ? '…' : ''})` : 'tus archivos de ventas'}: los guardados antes no traen el detalle por producto de cada pedido. No se borra nada; al recargarlo se reemplazan sus pedidos.` };
           else customers = { status: 'none', note: 'Para ver clientes nuevos, recurrentes y reactivados carga un archivo de ventas con id de cliente y de pedido.' };
         } catch (e) { customers = { status: 'none', note: 'No se pudo leer el libro de clientes.' }; }
       }
