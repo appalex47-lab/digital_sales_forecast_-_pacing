@@ -103,7 +103,9 @@ async def main():
           for (const m of await FP.idb.getAll(db, 'meta')) if (/^product/.test(m.key)) await FP.idb.del(db, 'meta', m.key); await FP.productStore.init(FP.app.repo); })()""")
         z = await q.evaluate("FP.productStore.counts()")
         chk('P9 tras borrar lo local no quedan productos', z['salesRows'] == 0, z)
-        await q.click('[data-action="cloud-download"]'); await q.wait_for_timeout(9000)
+        await q.click('[data-action="cloud-download"]')
+        try: await q.wait_for_function("/restaurada|No pude|error/i.test((document.getElementById('cloud-msg')||{innerText:''}).innerText)", timeout=120000)
+        except Exception: pass
         msg = await q.inner_text('#cloud-msg')
         chk('P10 restaura y lo dice', 'restaurada' in msg and 'Productos:' in msg, msg)
         after = await q.evaluate("""(async()=>{ const c = await FP.productStore.counts(); const a = await FP.productStore.aggregate({ from: '2026-08-01', to: '2026-08-20', groupBy: 'channel' });
