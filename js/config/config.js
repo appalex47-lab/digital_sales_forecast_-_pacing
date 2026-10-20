@@ -160,9 +160,9 @@
     app: {
       name: 'RevNavigator',
       subtitle: 'Planeación, pacing y reforecast de ventas digitales',
-      version: '0.14.0',
+      version: '0.16.6',
       phase: 9,
-      phaseLabel: 'Fase 9.1.x · Propósito y acción por vista'
+      phaseLabel: 'Fase 15'
     },
 
     /** Versión del contrato de datos. Cambiarla exige nota en ARCHITECTURE.md §9. */

@@ -1,0 +1,55 @@
+"""Presentación (PDF ejecutivo) y Datos → Exportar datos (paquete .zip). Corre: python3 batch_presentacion.py <raíz>"""
+import sys, asyncio, re
+from an_common import *
+U = f'http://127.0.0.1:{port}/index.html'
+async def main():
+    async with async_playwright() as p:
+        b = await p.chromium.launch(); q = await new_page(b, 1280, 900)
+        # sin datos: la vista no inventa nada
+        await q.goto(U + '#presentacion'); await q.wait_for_selector('#view-presentacion:not([hidden])')
+        gen = await q.evaluate("(()=>{const b=document.querySelector('[data-action=\"rp-generate\"]');return b?{dis:b.disabled}:null})()")
+        chk('PR-1 sin datos la vista carga y no rompe (generar existe o hay aviso)', gen is not None or (await q.inner_text('#view-presentacion')).strip() != '', gen)
+        await load_products(q, U)
+        await q.goto(U + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
+        await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1500)
+        await q.goto(U + '#presentacion'); await q.wait_for_selector('[data-action="rp-generate"]'); await q.click('[data-action="rp-generate"]')
+        await q.wait_for_function("FP.app.state.rp.status==='ready'||FP.app.state.rp.status==='error'", timeout=120000)
+        st = await q.evaluate("({s:FP.app.state.rp.status,ids:FP.app.state.rp.report.pages.map(p=>p.id),om:FP.app.state.rp.report.omitted.map(o=>[o.id,!!o.reason]),n:document.querySelectorAll('#view-presentacion .rp-page').length})")
+        chk('PR-2 genera el reporte: portada, resumen, pacing, confiabilidad y anexo', st['s'] == 'ready' and st['ids'][:2] == ['cover', 'summary'] and 'reliability' in st['ids'] and 'annex' in st['ids'], st)
+        chk('PR-3 toda página omitida trae su motivo', all(r for _, r in st['om']), st['om'])
+        chk('PR-4 la vista previa dibuja las páginas del reporte', st['n'] >= 5, st)
+        # desborde y tamaño mínimo de letra en cada página
+        await q.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[],tags:true})"); await q.emulate_media(media='print')
+        ov = await q.evaluate("[...document.querySelectorAll('#rp-print-host .rp-page')].map((p,i)=>{const b=p.querySelector('.rp-body');return b&&b.scrollHeight>b.clientHeight+1?i+1:0}).filter(Boolean)")
+        chk('PR-5 ninguna página desborda su cuerpo', ov == [], ov)
+        fs = await q.evaluate("Math.min(...[...document.querySelectorAll('#rp-print-host .rp-page *')].filter(e=>e.childNodes.length&&[...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())).map(e=>parseFloat(getComputedStyle(e).fontSize)))")
+        chk('PR-6 letra mínima ≥ 13 px (≈10 pt) en el PDF', fs >= 13, fs)
+        await q.pdf(path='/tmp/rp_test.pdf', prefer_css_page_size=True, print_background=True)
+        import subprocess; info = subprocess.run(['pdfinfo', '/tmp/rp_test.pdf'], capture_output=True, text=True).stdout
+        pg = re.search(r'Pages:\s+(\d+)', info); sz = re.search(r'Page size:\s+([\d.]+) x ([\d.]+)', info)
+        chk('PR-7 el PDF real sale en 16:9 con una hoja por página del reporte', bool(pg and sz) and int(pg.group(1)) == st['n'] and abs(float(sz.group(1)) / float(sz.group(2)) - 16 / 9) < 0.01, [pg and pg.group(1), sz and sz.groups(), st['n']])
+        txt = subprocess.run(['pdftotext', '/tmp/rp_test.pdf', '-'], capture_output=True, text=True).stdout
+        chk('PR-8 el PDF no imprime «null», «undefined» ni «NaN»', not re.search(r'\b(null|undefined|NaN)\b', txt), re.findall(r'.{20}\b(?:null|undefined|NaN)\b.{20}', txt)[:3])
+        await q.emulate_media(media='screen')
+        # excluir una página
+        await q.evaluate("document.getElementById('rp-print-host')&&document.getElementById('rp-print-host').remove()")
+        await q.click('[data-action="rp-toggle-page"][data-id="categories"]') if await q.query_selector('[data-action="rp-toggle-page"][data-id="categories"]') else None
+        await q.wait_for_timeout(300)
+        n2 = await q.evaluate("document.querySelectorAll('#view-presentacion .rp-page').length")
+        chk('PR-9 desmarcar una página la quita de la vista previa', n2 == st['n'] - 1, [n2, st['n']])
+        # privacidad
+        html = await q.evaluate("document.getElementById('view-presentacion').innerText")
+        chk('PR-10 sin credenciales ni claves en la presentación', not re.search(r'sk-|api[_ ]?key|cohere', html, re.I), html[:100])
+        # Datos → Exportar datos
+        await q.goto(U + '#paquete'); await q.wait_for_timeout(900)
+        inside = await q.evaluate("!!document.querySelector('#view-datos #package-view') && !document.getElementById('view-paquete')")
+        chk('PR-11 el paquete .zip vive dentro de Datos y #paquete abre esa sección', inside, inside)
+        # móvil
+        m = await new_page(b, 375, 800); await m.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})"); await load_products(m, U)
+        await m.goto(U + '#presentacion'); await m.wait_for_selector('#view-presentacion:not([hidden])'); await m.wait_for_timeout(500)
+        sw = await m.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+        chk('PR-12 en móvil (375 px) la vista no genera scroll horizontal de página', sw <= 1, sw)
+        chk('PR-13 sin errores de consola', not q._errs and not m._errs, (q._errs + m._errs)[:3])
+        await b.close()
+asyncio.run(main())
+print(f'\n{len(passed)} ok / {len(fails)} fallos'); sys.exit(1 if fails else 0)

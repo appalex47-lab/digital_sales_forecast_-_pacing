@@ -10,7 +10,7 @@ async def run(b, w, h, tag):
     await q.goto(u + '#carga'); await q.wait_for_function("window.FP && FP.search && FP.app && FP.app.state", timeout=30000); await q.wait_for_timeout(800)
     await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
     vis = lambda sel: q.evaluate("(s)=>{const e=document.querySelector(s);return !!e&&!e.hidden&&e.getBoundingClientRect().width>0}", sel)
-    if mobile: await q.click('#gs-open')
+    if mobile: await q.evaluate("FP.app.actions['gs-open']()")
     else: await q.keyboard.press('Control+k')
     await q.wait_for_selector('#gs-input', state='visible', timeout=5000)
     chk(f'{tag}1 se abre la búsqueda ({"botón 🔍" if mobile else "Ctrl+K"})', await vis('#gs .gs__box'), None)

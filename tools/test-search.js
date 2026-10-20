@@ -8,7 +8,7 @@ const items = [
   { type: 'go', id: 'v-diag', title: 'Diagnóstico', desc: 'Brecha de venta y su explicación', view: 'diagnostico' },
   { type: 'go', id: 'v-an', title: 'Evolución y patrones', desc: 'Detecta desde cuándo crece o cae', view: 'analisis' },
   { type: 'go', id: 'v-carga', title: 'Carga de datos', desc: 'Importar histórico', view: 'carga' },
-  { type: 'action', id: 'a-pk', title: 'Exportar el paquete de análisis', desc: 'Descarga todo en un .zip', keywords: 'descargar zip', view: 'paquete', needsData: true },
+  { type: 'action', id: 'a-pk', title: 'Exportar el paquete de análisis', desc: 'Descarga todo en un .zip', keywords: 'descargar zip', view: 'datos', needsData: true },
   { type: 'concept', id: 'c-gap', title: 'Gap (brecha)', desc: 'Real − plan de los días contados', help: 'gap' },
   { type: 'concept', id: 'c-cut', title: 'Cutoff (fecha de corte)', desc: 'Último día con real', help: 'cutoff' },
   { type: 'concept', id: 'c-aov', title: 'AOV', desc: 'Ticket promedio: venta ÷ pedidos', help: 'aov' }];

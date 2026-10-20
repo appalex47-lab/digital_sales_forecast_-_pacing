@@ -2027,7 +2027,7 @@ tr.is-evidence { outline-offset: -3px; }
 
 /* Búsqueda global (paleta) */
 .gs-open{display:none}
-@media (max-width:1024px){.gs-open{display:inline-flex}}
+@media (min-width:601px) and (max-width:1024px){.gs-open{display:inline-flex}}
 .gs{position:fixed;inset:0;z-index:200}
 .gs[hidden]{display:none}
 .gs__backdrop{position:absolute;inset:0;background:rgba(10,20,40,.45)}

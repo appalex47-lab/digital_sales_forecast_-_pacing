@@ -68,7 +68,7 @@ async def main():
             try: await q.click(f'[data-action="{a}"]', timeout=2000); await q.wait_for_timeout(800)
             except Exception: pass
         await q.goto(u + '#paquete'); await q.wait_for_timeout(900)
-        has = await q.evaluate("[!!document.getElementById('pkg-key'), !!document.getElementById('pkg-ch'), document.querySelectorAll('#view-paquete [data-action=\"pkg-context\"][data-key=\"periodType\"]').length, document.getElementById('pkg-key').value]")
+        has = await q.evaluate("[!!document.getElementById('pkg-key'), !!document.getElementById('pkg-ch'), document.querySelectorAll('#package-view [data-action=\"pkg-context\"][data-key=\"periodType\"]').length, document.getElementById('pkg-key').value]")
         chk('P-3 la página del paquete trae periodo, «Cuál» y «Canal», y arranca en el último mes con venta real', has == [True, True, 3, '2026-09'], has)
         await q.select_option('#pkg-ch', 'app'); await q.wait_for_timeout(600)
         await q.select_option('#pkg-key', '2026-08'); await q.wait_for_timeout(800)
@@ -80,7 +80,7 @@ async def main():
         idx = json.loads(z.read('indice.json')); files = {f['key']: f['file'] for f in idx['files']}
         chk('P-3 el zip sale con esa selección: Diagnóstico, Recovery y Narrativa de agosto en App', files['analysis'] == 'analysis_export_2026-08_app.json' and files['actionPlan'] == 'action_plan_export_2026-08.json' and files['narrative'] == 'narrative_export_2026-08_app.json', files)
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(600)
-        chk('P-3 al volver a Diagnóstico la selección es la misma (App, agosto)', await q.evaluate("[document.getElementById('dx-ch').value, document.getElementById('dx-key').value]") == ['app', '2026-08'])
+        _v = await q.evaluate("[document.getElementById('dx-ch').value, document.getElementById('dx-key').value, FP.app.state.dx.settings.channel, FP.app.state.dx.settings.periodKey]"); chk('P-3 al volver a Diagnóstico la selección es la misma (App, agosto)', _v[:2] == ['app', '2026-08'], _v)
         await c.close()
         chk('Sin errores de página', not errs, errs[:2])
         await b.close()

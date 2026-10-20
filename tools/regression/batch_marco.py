@@ -21,7 +21,7 @@ async def main():
         for v in ['inicio', 'pacing', 'diagnostico', 'recovery', 'carga']:
             await q.goto(u + '#' + v); await q.wait_for_timeout(700)
             n = await q.evaluate("document.querySelectorAll('.phase-tag, [data-bind=\"app-phase\"]').length"); chk(f'M1 {v}: ya no hay distintivo de fase en el encabezado', n == 0, n)
-        foot = await q.evaluate("document.getElementById('app-footer').textContent"); chk('M2 la fase sigue visible en el pie (el dato no se pierde)', 'Fase 9.1.x' in foot and 'versión' in foot, foot)
+        foot = await q.evaluate("document.getElementById('app-footer').textContent"); chk('M2 la fase (Alfa) y la versión siguen visibles en el pie (el dato no se pierde)', 'versión Alfa v0.16.6' in foot and 'Fase 15' in foot, foot)
         await q.goto(u + '#pacing'); await q.wait_for_timeout(900)
         ns = await q.evaluate("(()=>{const e=document.querySelector('.ux-context .next-step'); if(!e) return null; return {label:e.querySelector('strong').textContent.trim(), view:e.querySelector('button').dataset.view}})()")
         ok = ns is None or (ns['view'] != 'pacing' and (ns['label'] != 'Monitorear' or ns['view'] == 'pacing'))

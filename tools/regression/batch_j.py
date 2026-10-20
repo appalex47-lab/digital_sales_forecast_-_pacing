@@ -12,7 +12,7 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda','ajustes']
+VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda','ajustes']
 SEL = "document.querySelector('.app-main:not([hidden]) .next-step strong, #view-inicio .next-step strong, .home .next-step__title')"
 async def nextstep(q):
     return await q.evaluate("""()=>{const s=FP.contextEngine.getNextStep(FP.contextEngine.collectStatus(FP.app.state));return [s.id,s.label,s.view,s.reason]}""")

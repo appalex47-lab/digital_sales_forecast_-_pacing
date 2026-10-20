@@ -21,7 +21,7 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'paquete', 'segmentos', 'proyeccion', 'cambios', 'clientes'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
@@ -83,6 +83,7 @@
     },
     // Fase 8.1: Categoría → Producto (resultados en memoria; datos en IndexedDB)
     pkg: { busy: false, last: null },
+    rp: { status: 'idle', report: null, error: null, exclude: [], options: { showTags: true, showBusinessName: false }, sig: null, at: null },   // «Presentación (PDF)»
     pa: { from: null, to: null, comparison: 'previous', channel: 'total', viewBy: 'category', drill: [], next: null, geo: {}, topN: 20, page: 1, result: null, loading: false, key: null,
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
@@ -797,6 +798,42 @@
     return out;
   }
 
+
+  /** Presentación (PDF) · reúne lo ya calculado (sin recalcular nada propio) y arma las páginas con FP.reportBuilder. */
+  async function buildExecutiveReport() {
+    const ch = state.dx.settings.channel || 'total';
+    let run = null, rf = null, diag = null;
+    try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
+    const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
+    if (hasProducts) {
+      try { if (!state.pa.result) await ensureProductAnalysis(); } catch (e) { /* página omitida con motivo */ }
+      try { await ensureTrendAnalysis(); } catch (e) { /* página omitida con motivo */ }
+    }
+    let customers = null;
+    try {
+      const o = { ...FP.customersView.optsOf(state), channel: ch === 'total' ? null : ch };
+      const res = await FP.customerStore.analyze(o);
+      customers = { result: res, scopeLabel: o.filter ? `Selección: ${FP.productFilter.describe(o.filter)}` : 'Toda la empresa' };
+    } catch (e) { /* sin libro de clientes la página se omite */ }
+    let profiles = null; try { profiles = ensureProfiles(); } catch (e) { /* sin historia */ }
+    let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run }); } catch (e) { /* sin proyección */ }
+    const an = state.an, pa = state.pa;
+    const desc = (f) => (FP.productFilter && f ? FP.productFilter.describe(FP.productFilter.active(f)) : '');
+    const filters = [{ page: 'Evolución', label: desc(an.filter) }, { page: 'Productos', label: pa.result && pa.result.filter ? desc(pa.result.filter) : '' }, { page: 'Clientes', label: customers && customers.result && customers.result.filtered ? desc(state.cu.opts.filter) : '' }].filter((f) => f.label);
+    const rcA = state.rc.analysis, store = state.rc.scenarioStore;
+    const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
+    const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
+    return FP.reportBuilder.build({
+      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, diag,
+      trend: { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: desc(an.filter),
+      product: pa.result, productFilterLabel: pa.result && pa.result.filter ? desc(pa.result.filter) : '', customers, projection, profiles,
+      backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
+      quality: FP.coverage.summarize(state.store), filters, recovery,
+      options: { showTags: state.rp.options.showTags, showBusinessName: state.rp.options.showBusinessName },
+      businessName: state.rp.options.showBusinessName && C.business ? C.business.name : null
+    });
+  }
+
   /** Fase 10 · arma el paquete: los 7 exports (con datos o vacíos con aviso) + índice + LEEME. */
   async function buildAnalysisPackage() {
     // Todo se calcula ANTES de armar los archivos: el export de Producto incluye el diagnóstico y el de Diagnóstico incluye los productos,
@@ -1040,7 +1077,14 @@
       if (tools && !tools.dataset.auto && (!state.dataset || !Object.keys(state.dataset.records).length)) { tools.open = true; tools.dataset.auto = '1'; }
     } else if (state.view === 'carga') FP.importView.render(state);
     else if (state.view === 'calidad') FP.qualityView.render(state);
-    else if (state.view === 'datos') FP.dataView.render(state);
+    else if (state.view === 'datos') {
+      FP.dataView.render(state);
+      // la vista previa del paquete arma los 7 exports: se recalcula solo si cambió lo que la afecta (no en cada cambio de página de la tabla)
+      const pk = JSON.stringify([state.year, state.fc.run && state.fc.run.generatedAt, state.dx.settings, state.pa.result ? 1 : 0, state.store.actual.records.length, state.planning.current ? 1 : 0, state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions.length : 0]);
+      if (state.pkg.previewKey !== pk || !state.pkg.preview) { state.pkg.preview = previewPackage(); state.pkg.previewKey = pk; }
+      FP.packageView.render(state, state.pkg.preview);
+      if (state.datosSection) { const el = document.getElementById('t-pkg'); state.datosSection = null; if (el) { try { el.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } }   // llegada desde #paquete
+    }
     else if (state.view === 'estacionalidad') { ensureProfiles(); FP.seasonalityView.render(state); }
     else if (state.view === 'plan') { resolveCurrentPlan(); FP.planningView.render(state); }
     else if (state.view === 'configuracion') FP.planningConfigView.render(state);
@@ -1060,7 +1104,7 @@
     else if (state.view === 'cambios') { ensureForecast(); FP.changesView.render(state); }
     else if (state.view === 'medir') FP.measureView.render(state);
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
-    else if (state.view === 'paquete') FP.packageView.render(state, previewPackage());
+    else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
     else if (state.view === 'analisis') { FP.trendView.render(state); ensureTrendAnalysis(); }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
@@ -3486,8 +3530,8 @@
     'pkg-context'(el) {
       const k = el.dataset.key, v = el.dataset.value || el.value;
       const dx = state.dx.settings, rc = state.rc.settings, pa = state.pa;
-      if (k === 'periodType') { dx.periodType = v; dx.periodKey = null; rc.periodType = v; rc.periodKey = null; }
-      else if (k === 'periodKey') { dx.periodKey = v; rc.periodKey = v; }
+      if (k === 'periodType') { dx.periodType = v; dx.periodKey = null; rc.periodType = v; rc.periodKey = null; state.ux.ctx.periodType = v; state.ux.ctx.periodKey = null; }
+      else if (k === 'periodKey') { dx.periodKey = v; rc.periodKey = v; state.ux.ctx.periodKey = v; }
       else if (k === 'channel') { dx.channel = v; rc.channel = v; pa.channel = v; state.ux.ctx.channel = v; }
       state.dx.run = null;
       saveDiagnosticSettings(); saveRecoverySettings();
@@ -3498,6 +3542,16 @@
       pa.result = null; pa.note = null;
       render();
     },
+    async 'rp-generate'() {
+      const rp = state.rp; if (rp.status === 'busy') return;
+      rp.status = 'busy'; rp.error = null; FP.reportView.render(state);
+      try { rp.report = await buildExecutiveReport(); rp.sig = FP.reportView.signature(state); rp.at = new Date().toISOString(); rp.status = 'ready'; FP.ui.toast(`Presentación lista: ${rp.report.total} página${rp.report.total === 1 ? '' : 's'}${rp.report.omitted.length ? `, ${rp.report.omitted.length} sin datos suficientes (ver anexo)` : ''}.`); }
+      catch (e) { rp.status = 'error'; rp.error = e && e.message ? e.message : String(e); }
+      render();
+    },
+    'rp-print'() { const rp = state.rp; if (rp.report) FP.reportView.print(rp.report, { exclude: rp.exclude, tags: rp.options.showTags }); },
+    'rp-toggle-page'(el) { const rp = state.rp, id = el.dataset.id; rp.exclude = rp.exclude.includes(id) ? rp.exclude.filter((x) => x !== id) : [...rp.exclude, id]; render(); },
+    'rp-option'(el) { state.rp.options[el.dataset.key] = Boolean(el.checked); render(); },
     async 'pkg-download'() {
       const pkg = FP.packageView.setBusy(true);
       try {
@@ -4004,6 +4058,8 @@
     let v = (root.location.hash || '').replace('#', '');
     // «Negocio» (Business Setup) vive ahora dentro de Configuración de RevNavigator: el enlace #negocio abre esa sección
     if (v === 'negocio') { v = 'ajustes'; state.ajustesSection = 'negocio'; try { root.history.replaceState(null, '', '#ajustes'); } catch (e) { /* file:// */ } }
+    // El paquete de análisis (.zip) vive ahora en Datos → Exportar datos: el enlace #paquete abre esa sección
+    if (v === 'paquete') { v = 'datos'; state.datosSection = 'paquete'; try { root.history.replaceState(null, '', '#datos'); } catch (e) { /* file:// */ } }
     state.view = VIEWS.includes(v) ? v : 'inicio';
   }
 

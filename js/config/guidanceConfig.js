@@ -37,7 +37,7 @@
     { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
       description: 'Reforecast, escenarios y plan de acción.', views: ['reforecast', 'recovery'] },
     { id: 'medir', question: '¿Funcionó?', label: 'Medir y aprender', verb: 'Mide',
-      description: 'Seguimiento, baseline vs escenario vs observado, trazabilidad, aprendizajes, narrativa ejecutiva y paquete de análisis.', views: ['medir', 'narrativa', 'paquete'] }
+      description: 'Seguimiento, baseline vs escenario vs observado, trazabilidad, aprendizajes, narrativa ejecutiva y presentación en PDF.', views: ['medir', 'narrativa', 'presentacion'] }
   ];
 
   /** Metadatos de vista: título, grupo, propósito, entradas de ayuda relacionadas y requisitos. */
@@ -121,9 +121,9 @@
     segmentos: { title: 'Tráfico y conversión', group: 'diagnosticar', purpose: 'Tráfico, CR y AOV por dispositivo, fuente y medio, campaña, landing o tipo de cliente.',
       action: 'Elige dimensión, periodo y canal y revisa qué segmentos ganan o pierden tráfico y conversión.',
       produces: 'Una lectura por segmento, contra el periodo anterior, con los mismos datos que el Nivel 2 del Diagnóstico.', help: [] },
-    paquete: { title: 'Paquete de análisis', group: 'medir', purpose: 'Todo lo que la herramienta ya calculó, en un solo archivo .zip para guardar o compartir.',
-      action: 'Revisa qué export trae datos y descarga el paquete con su índice.',
-      produces: 'Un .zip con los 7 exports y un índice (fecha de corte, plan, método, calidad y qué falta), sin API key, preferencias ni datos de Negocio.', help: [] },
+    presentacion: { title: 'Presentación (PDF)', group: 'medir', purpose: 'Un reporte ejecutivo en 16:9 con lo que la herramienta ya calculó: resultado, brecha, forecast, qué mirar y qué decidir, y un anexo para auditar.',
+      action: 'Elige periodo y canal, genera la vista previa, quita las páginas que no quieras y guarda el PDF.',
+      produces: 'Un PDF de 16:9 con cada cifra etiquetada como Observado, Calculado o Estimado; las páginas sin datos suficientes se omiten y quedan en el anexo.', help: [] },
     narrativa: { title: 'Narrativa ejecutiva', group: 'medir', purpose: 'Lo ya calculado, convertido en una explicación clara: qué pasó, por qué importa, qué lo explica, dónde investigar y qué sigue.',
       action: 'Lee el resumen ejecutivo, ordenado por nivel de certeza, con la fuente de cada afirmación.',
       produces: 'Una explicación trazable, lista para compartir o exportar, sin recalcular nada.',
