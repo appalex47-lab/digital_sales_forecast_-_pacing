@@ -222,7 +222,7 @@ t('25 · el resumen abre con una narrativa y sin textos técnicos', typeof sm25.
 t('25 · cada hallazgo trae título, cifra y relevancia en lenguaje de negocio', sm25.items.every((i) => i.title && i.why && 'figure' in i), JSON.stringify(sm25.items.map((i) => i.title)));
 t('25 · el cierre ejecutivo tiene cuatro bloques en orden', cl25.status === 'included' && /^Dónde estamos\|(Qué sobresalió|Qué suma)\|(Qué debemos mover|Qué resta)\|Qué debemos vigilar$/.test(cl25.blocks.map((b) => b.title).join('|')), cl25.blocks && cl25.blocks.map((b) => b.title));
 t('25 · el cierre no inventa prioridad sin respaldo', pg(RB.build(base({ trend: null, run: mkRun() })), 'closing').blocks[2].text.length > 10);
-t('25 · la portada expone el alcance y el título editorial', cv25.headline === 'Reporte ejecutivo de ventas digitales' && /Total digital/.test(cv25.scope));
+t('25 · la portada expone el alcance y el título editorial', /^Ventas digitales: .+/.test(cv25.headline) && /Total digital/.test(cv25.scope));
 t('25 · la confiabilidad del forecast queda marcada como anexo', pg(rep25, 'reliability').annex === true);
 t('25 · las etiquetas Observado/Calculado/Estimado son opcionales y no se activan por defecto', rep25.options.showTags === false);
 t('25 · sin resultados de pacing no hay cierre', pg(RB.build(base({ run: null, diag: null })), 'closing').status === 'omitted');

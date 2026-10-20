@@ -8,7 +8,15 @@
   const FP = root.FP = root.FP || {};
   const RB = () => FP.reportBuilder;
   const fin = (v) => typeof v === 'number' && isFinite(v);
-  const cut = (s, n) => { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+  // Nombres largos: se corta en límite de palabra, sin puntos suspensivos ni dosis/medidas sueltas al final («MOUNJARO KWIKPEN MULTIDOSIS 1…» → «MOUNJARO KWIKPEN MULTIDOSIS»).
+  // Un nombre técnico sin espacios no se corta (se deja entero).
+  const cut = (s, n) => {
+    s = String(s == null ? '' : s).trim(); if (s.length <= n) return s;
+    if (!/\s/.test(s)) return s.length <= 48 ? s : s.slice(0, n - 1) + '…';
+    let w = s.split(/\s+/), out = []; for (const t of w) { if ((out.concat(t).join(' ')).length > n) break; out.push(t); }
+    while (out.length > 1 && /^[\d.,/%()+-]+[A-Za-zµ]{0,4}$|^(de|del|la|el|con|y|c\/\d*)$/i.test(out[out.length - 1])) out.pop();
+    return out.length ? out.join(' ') : s.slice(0, n);
+  };
   const page = (rep, id) => (rep.pages || []).find((p) => p.id === id && p.status === 'included') || null;
   const kpi = (p, id) => { const k = p && (p.kpis || []).find((x) => x.id === id); return k && fin(k.value) ? k.value : null; };
   const lower1 = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -82,6 +90,7 @@
     },
     traffic(p) {
       const o = p.overview && p.overview.totals;
+      if (p.overview && p.overview.atypical) return 'Tráfico y conversión cambian de forma atípica; conviene validar la cobertura de datos antes de leerlo';
       if (o && fin(o.trafficChg) && fin(o.crChg)) {
         const ref = p.scope && /anterior/i.test(p.scope.comparison || '') ? 'frente al período anterior' : 'frente a la referencia';
         if (Math.abs(o.trafficChg) < 0.005 && Math.abs(o.crChg) < 0.005) return `El tráfico y la conversión se mantienen estables ${ref}`;
@@ -128,7 +137,8 @@
       const t = o.totals, per = periodOf(rep), out = [];
       out.push(`${per ? 'En ' + per.toLowerCase() : 'En el período'} llegaron **${RB().fmt('int', t.traffic)}** sesiones (${sg(t.trafficChg)}) y la conversión fue de **${RB().fmt('pct2', t.cr)}**${fin(t.crDiffPp) ? ` (${t.crDiffPp < 0 ? '−' : '+'}${(Math.abs(t.crDiffPp) * 100).toFixed(2)} pp)` : ''}.`);
       const mix = (id) => (o.mix || []).find((m) => m.id === id);
-      const ch = mix('medium'), bw = ch && bestWorst(ch.rows);
+      const ch = mix('medium'), bw = o.atypical ? null : (ch && bestWorst(ch.rows));
+      if (o.atypical) out.push('La variación es atípica (caída o alza extrema, o un canal que llega a cero): suele indicar que el archivo de Segmentos cubre distinto el período actual y el anterior. Valídalo antes de sacar conclusiones por canal.');
       if (bw) out.push(`Por canal, la conversión ${bw.b.crChg > 0 ? 'subió más' : 'cayó menos'} en **${bw.b.label}** (${sg(bw.b.crChg)}) y ${bw.w.crChg < 0 ? 'cayó más' : 'subió menos'} en **${bw.w.label}** (${sg(bw.w.crChg)}).`);
       const dv = mix('device');
       if (dv && dv.rows.length > 1) {
