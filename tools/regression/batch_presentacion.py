@@ -49,7 +49,9 @@ async def main():
         # ---- escenario completo (plan anual, recuperación con escenario y acción) + textos largos y muchas filas ----
         f = await new_page(b, 1280, 900); await f.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})")
         await load_products(f, U); pr = await prepare(f, U); chk('PR-14 escenario completo preparado (plan, escenario y acción de recuperación)', pr == 'ok', pr)
-        await f.goto(U + '#presentacion'); await f.wait_for_selector('[data-action="rp-generate"]'); await f.click('[data-action="rp-generate"]')
+        await f.goto(U + '#presentacion'); await f.wait_for_selector('[data-action="rp-generate"]')
+        await f.evaluate("Object.assign(FP.app.state.dx.settings,{periodType:'year',periodKey:String(FP.app.state.year)}); FP.app.state.dx.run=null")  # lectura anual: la recuperación anual aplica
+        await f.click('[data-action="rp-generate"]')
         await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
         OVL = """(()=>{const out=[];document.querySelectorAll('#rp-print-host .rp-page').forEach(pg=>{const b=pg.querySelector('.rp-body');if(!b)return;const kids=[...b.children].filter(k=>k.getBoundingClientRect().height>0);const bb=b.getBoundingClientRect();
           kids.forEach((k,i)=>{const r=k.getBoundingClientRect();if(i<kids.length-1&&r.bottom>kids[i+1].getBoundingClientRect().top+1)out.push(pg.dataset.page+':solape');if(r.bottom>bb.bottom+1)out.push(pg.dataset.page+':fuera');});
@@ -103,6 +105,13 @@ async def main():
         await f.select_option('#rp-filter', value='')
         await f.click('[data-action="rp-generate"]'); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
         chk('PR-18 sin filtro la portada no menciona filtros', not (await f.evaluate("FP.app.state.rp.report.pages[0].filterLabel")))
+        # 19 · el reporte gira en torno al mes seleccionado (mes cerrado distinto del abierto)
+        await f.evaluate("(()=>{const s=FP.app.state.dx.settings;const c=FP.app.state.fc.run.cutoff;const d=new Date(c.slice(0,7)+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()-1);s.periodType='month';s.periodKey=d.toISOString().slice(0,7);FP.app.state.dx.run=null})")
+        await f.click('[data-action="rp-generate"]'); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
+        r19 = await f.evaluate("(()=>{const r=FP.app.state.rp.report,pc=r.pages.find(p=>p.id==='pacing'),sm=r.pages.find(p=>p.id==='summary');return {mk:pc&&pc.monthKey,label:pc&&pc.monthLabel,n:pc&&pc.charts[0].labels.length,narr:sm&&sm.narrative,yr:sm&&sm.yearStrip,rec:(r.omitted.find(o=>o.id==='recovery')||{}).reason||null,sel:FP.app.state.dx.settings.periodKey}})()")
+        chk('PR-19 con un mes seleccionado, pacing es de ese mes y su gráfica es diaria', r19['mk'] == r19['sel'] and (r19['n'] or 0) >= 28, r19)
+        chk('PR-19 el resumen habla del mes y trae una línea del año', (r19['label'] or '??') in (r19['narr'] or '') and 'En el año' in (r19['yr'] or ''), r19)
+        chk('PR-19 la recuperación de un mes que no es el abierto se omite con su motivo', 'mes en curso' in (r19['rec'] or ''), r19)
         # móvil
         m = await new_page(b, 375, 800); await m.add_init_script("document.addEventListener('DOMContentLoaded',()=>{const s=document.createElement('style');s.textContent='#tour-offer{display:none!important}';document.head.appendChild(s)})"); await load_products(m, U)
         await m.goto(U + '#presentacion'); await m.wait_for_selector('#view-presentacion:not([hidden])'); await m.wait_for_timeout(500)

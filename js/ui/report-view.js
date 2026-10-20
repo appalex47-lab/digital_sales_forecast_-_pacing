@@ -43,19 +43,20 @@
     const all = [...c.plan, ...c.actual, ...c.forecast].filter(isNum);
     if (!all.length) return empty(W, H, 'Sin serie para graficar');
     const tk = ticks(Math.max(...all)), ymax = tk[tk.length - 1];
-    const X = (i) => L + i * (W - L - R) / 11, Y = (v) => T + (H - T - B) * (1 - v / ymax);
+    const N = c.labels.length, LAST = Math.max(N - 1, 1), daily = N > 14;
+    const X = (i) => L + i * (W - L - R) / LAST, Y = (v) => T + (H - T - B) * (1 - v / ymax);
     let g = tk.map((v) => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.light}"/>${svgT(L - 6, Y(v) + 4, fmt('moneyC', v), { anchor: 'end' })}`).join('');
-    g += c.labels.map((m, i) => svgT(X(i), H - 8, m, { anchor: 'middle' })).join('');
+    g += c.labels.map((m, i) => (!daily || i === 0 || i === LAST || (+m) % 5 === 0 ? svgT(X(i), H - 8, m, { anchor: 'middle' }) : '')).join('');
     const from = Math.max(c.cutIndex, 0);
-    segs(c.plan, X, Y, 0, 11).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.grey}" stroke-width="2.2" stroke-dasharray="2 4" stroke-linecap="round"/>`; });
-    segs(c.forecast, X, Y, from, 11).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.teal}" stroke-width="2.6" stroke-dasharray="9 5"/>`; });
+    segs(c.plan, X, Y, 0, LAST).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.grey}" stroke-width="2.2" stroke-dasharray="2 4" stroke-linecap="round"/>`; });
+    segs(c.forecast, X, Y, from, LAST).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.teal}" stroke-width="2.6" stroke-dasharray="9 5"/>`; });
     if (c.cutIndex >= 0) {
       segs(c.actual, X, Y, 0, c.cutIndex).forEach((d) => { g += `<path d="${d}" fill="none" stroke="${C.navy}" stroke-width="3.2"/>`; });
-      c.actual.forEach((v, i) => { if (isNum(v) && i <= c.cutIndex) g += `<circle cx="${X(i)}" cy="${Y(v)}" r="3.6" fill="${C.navy}"/>`; });
+      c.actual.forEach((v, i) => { if (!daily && isNum(v) && i <= c.cutIndex) g += `<circle cx="${X(i)}" cy="${Y(v)}" r="3.6" fill="${C.navy}"/>`; });
       g += `<line x1="${X(c.cutIndex)}" x2="${X(c.cutIndex)}" y1="${T}" y2="${H - B}" stroke="${C.orange}" stroke-width="1.5" stroke-dasharray="4 3"/>${svgT(X(c.cutIndex) + 4, T + 12, 'Corte', { fill: C.orange, weight: 600 })}`;
     }
-    const lastF = c.forecast[11];
-    if (isNum(lastF)) g += svgT(X(11), Y(lastF) - 7, fmt('moneyC', lastF), { anchor: 'end', fill: C.teal, weight: 700 });
+    const lastF = c.forecast[LAST];
+    if (isNum(lastF)) g += svgT(X(LAST), Y(lastF) - 7, fmt('moneyC', lastF), { anchor: 'end', fill: C.teal, weight: 700 });
     const lg = [[C.navy, '', 'Real (Observado)', 3.2], [C.grey, '2 4', 'Plan', 2.2], [C.teal, '9 5', 'Forecast (Estimado)', 2.6]];
     let lx = L;
     lg.forEach(([col, dash, txt, w]) => { g += `<line x1="${lx}" x2="${lx + 26}" y1="14" y2="14" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>${svgT(lx + 31, 19, txt)}`; lx += 40 + txt.length * 7; });
@@ -219,7 +220,7 @@
   function summaryBody(p, x) {
     const cards = p.items.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
     const band = p.focus ? `<div class="rp-since">${p.focus.spark ? `<div class="rp-since__g">${focusSpark(p.focus.spark)}<div class="rp-since__k"><i class="k1"></i>${esc(p.focus.entity)} <i class="k2"></i>Resto del negocio</div></div>` : ''}<div class="rp-since__t">${esc(p.focus.text)}</div></div>` : '';
-    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
+    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${p.yearStrip ? `<p class="rp-yr">${esc(p.yearStrip)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
       ${p.review ? `<div class="rp-callout rp-callout--info"><strong>Qué revisar primero.</strong> ${esc(p.review.text)}</div>` : ''}`;
   }
 

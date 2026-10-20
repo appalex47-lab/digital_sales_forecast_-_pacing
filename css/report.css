@@ -133,3 +133,6 @@
   #rp-print-host .rp-page { zoom:1 !important; margin:0; }
   #rp-print-host .rp-page:last-child { break-after:auto; page-break-after:auto; }
 }
+
+/* línea de contexto del año en el resumen (el reporte gira en torno al mes seleccionado) */
+.rp-yr{margin:2px 0 8px;padding:5px 10px;font-size:13.4px;line-height:1.35;color:#475569;background:#f1f5f9;border-radius:6px}
