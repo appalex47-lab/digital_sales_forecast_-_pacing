@@ -235,4 +235,9 @@ const c26 = pg(RB.build(base({ product: catRes, productByLevel: { category: catR
 t('26 · la gráfica de cambio sigue por categoría', /categoría/.test(c26.charts[0].title) && !/^Sub /.test(c26.charts[0].items[0].label), c26.charts[0].title);
 t('26 · la tabla de participación va por subcategoría', /Subcategoría/.test(c26.tables[0].title) && c26.tables[0].columns[0].label === 'Subcategoría' && /^Sub /.test(c26.tables[0].rows[0].key), c26.tables[0].title);
 t('26 · sin análisis por nivel, la lámina conserva su comportamiento anterior', /Participación en venta/.test(pg(RB.build(base({ product })), 'categories').tables[0].title));
+// 27 · orden y filtro único de la presentación
+const r27 = RB.build(base({ reportFilter: 'Subcategoría Estatinas' })), ids27 = r27.pages.map((p) => p.id);
+t('27 · Categorías y productos va antes de Evolución', ids27.indexOf('categories') < ids27.indexOf('trends'), ids27.join());
+t('27 · con filtro, la portada lo declara y aclara qué láminas filtra', pg(r27, 'cover').filterLabel === 'Subcategoría Estatinas' && /categorías, evolución y clientes/.test(pg(r27, 'cover').filterNote));
+t('27 · sin filtro, la portada no menciona filtros', !pg(RB.build(base()), 'cover').filterLabel && !pg(RB.build(base()), 'cover').filterNote);
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);
