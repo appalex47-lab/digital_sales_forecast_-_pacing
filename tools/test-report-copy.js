@@ -46,4 +46,17 @@ t('cierre: cumplimiento + atención', T(cl, rep(pac(0.999), cl)) === 'Septiembre
 t('nombres largos se acortan', T(inc('categories', { charts: [{ items: [{ label: 'x'.repeat(80), value: -5 }] }] }), rep()).length < 70);
 t('datos rotos (undefined/NaN) → null, nunca texto roto', T(inc('drivers', { kpis: [{ id: 'gap', value: NaN }], tables: [] }), rep()) === null && T(inc('movers'), rep()) === null && T(null, rep()) === null);
 t('lámina sin regla (anexo/estacionalidad) → null', T(inc('annex'), rep()) === null && T(inc('seasonality'), rep()) === null);
+
+const ov = { totals: { traffic: 100000, cr: 0.022, trafficChg: -0.01, crChg: 0.029, crDiffPp: 0.0006 }, mix: [{ id: 'medium', rows: [{ label: 'Orgánico', crChg: 0.06, share: 0.5, baseShare: 0.5, cr: 0.026 }, { label: 'Pago (cpc)', crChg: -0.02, share: 0.5, baseShare: 0.5, cr: 0.018 }] }, { id: 'device', rows: [{ label: 'Escritorio', share: 0.52, baseShare: 0.5, cr: 0.025 }, { label: 'Móvil', share: 0.48, baseShare: 0.5, cr: 0.019 }] }] };
+const tfo = inc('traffic', { overview: ov, scope: { comparison: 'Actual vs periodo anterior' } });
+t('tráfico con panorama: título con tráfico y conversión', T(tfo, rep(tfo)) === 'El tráfico baja 1.0 % y la conversión sube 2.9 % frente al período anterior', T(tfo, rep(tfo)));
+const rd = RC.reading(tfo, rep(tfo));
+t('lectura de tráfico menciona canal y dispositivo', /Por canal/.test(rd) && /En dispositivo/.test(rd) && /\*\*Orgánico\*\*/.test(rd) && /\*\*Escritorio\*\*/.test(rd), rd);
+const tfs = inc('traffic', { overview: { ...ov, totals: { ...ov.totals, trafficChg: 0.001, crChg: -0.002 } }, scope: {} }); t('tráfico estable', /^El tráfico y la conversión se mantienen estables frente a la referencia$/.test(T(tfs, rep(tfs)) || ''), T(tfs, rep(tfs)));
+const cmp = inc('campaigns', { campaigns: { rows: [{ name: 'alfa', quadrant: 'star' }, { name: 'beta', quadrant: 'review' }], opportunity: [] } });
+t('campañas: estrella y sin oportunidad concluyente', T(cmp, rep(cmp)) === 'alfa lidera en tráfico y convierte sobre el total' && /no son concluyentes/.test(RC.reading(cmp, rep(cmp))), RC.reading(cmp, rep(cmp)));
+const cmo = inc('campaigns', { campaigns: { rows: [{ name: 'beta', quadrant: 'conversion' }], opportunity: [{ name: 'beta', value: 250000 }] } });
+t('campañas: oportunidad concluyente', /^beta concentra la mayor oportunidad/.test(T(cmo, rep(cmo))) && /\$250K/.test(RC.reading(cmo, rep(cmo))), RC.reading(cmo, rep(cmo)));
+t('lectura sin datos → null', RC.reading(inc('traffic'), rep()) === null && RC.reading(inc('campaigns'), rep()) === null);
+
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);

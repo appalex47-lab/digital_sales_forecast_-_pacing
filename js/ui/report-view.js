@@ -205,13 +205,53 @@
     customers: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('')}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}
       ${p.lapsed ? `<div class="rp-box"><div class="rp-box__t">Compraron el mes anterior y no regresaron en ${esc(p.lapsed.month)}</div><div class="rp-box__v">${esc(fmt('int', p.lapsed.count))} de ${esc(fmt('int', p.lapsed.base))}</div></div>` : ''}</div></div>
       ${p.scope && p.scope.label && !/^Toda la empresa$/i.test(p.scope.label) ? `<p class="rp-scope">Alcance: ${esc(p.scope.label)}</p>` : ''}${notesHtml(p)}`,
-    traffic: (p, x) => `${p.tables.map(tableHtml).join('')}<p class="rp-scope">${esc([p.scope.dimension, p.scope.comparison, p.scope.denominator].filter(Boolean).join(' · '))}</p>${notesHtml(p)}`,
+    traffic: (p, x) => p.overview ? trafficBody(p, x) : `${p.tables.map(tableHtml).join('')}<p class="rp-scope">${esc([p.scope.dimension, p.scope.comparison, p.scope.denominator].filter(Boolean).join(' · '))}</p>${notesHtml(p)}`,
     recovery: (p, x) => `${kpisHtml(p, x.tags)}${p.progress ? `<div class="rp-panel"><div class="rp-panel__t"><span>Avance hacia la meta anual</span><span>${esc(fmt('pct', p.progress.pct))} · ${esc(fmt('moneyC', p.progress.real))} de ${esc(fmt('moneyC', p.progress.target))}</span></div><div class="rp-bar" role="img" aria-label="Avance ${esc(fmt('pct', p.progress.pct))}"><i style="width:${Math.max(0, Math.min(100, p.progress.pct * 100)).toFixed(1)}%"></i></div></div>` : ''}<div class="rp-row"><div class="rp-col-h"><div class="rp-tbl__t">Escenarios guardados</div>${p.scenarios.length
         ? `<table class="rp-t"><thead><tr><th>Escenario</th><th>Tipo</th></tr></thead><tbody>${p.scenarios.slice(0, 3).map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(fmt('text', s.type))}</td></tr>`).join('')}</tbody></table>` : '<p class="rp-empty">No hay escenarios guardados.</p>'}</div>
       <div class="rp-col-h"><div class="rp-tbl__t">Acciones registradas</div>${p.actions.length
         ? `<table class="rp-t"><thead><tr><th>Acción</th><th>Responsable</th><th>Fechas</th></tr></thead><tbody>${p.actions.slice(0, 3).map((a) => `<tr><td>${esc(a.title)}</td><td>${esc(fmt('text', a.owner))}</td><td>${esc(a.start ? `${fmt('date', a.start)} – ${a.end ? fmt('date', a.end) : '…'}` : NA)}</td></tr>`).join('')}</tbody></table>` : '<p class="rp-empty">No hay acciones registradas en el plan de acción.</p>'}</div></div>${notesHtml(p)}`,
+    campaigns: (p, x) => campaignsBody(p, x),
     seasonality: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('') || '<p class="rp-empty">No hay años completos para calcular estacionalidad.</p>'}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>${notesHtml(p)}`
   };
+
+
+  /* ================= Tráfico y conversión (panorama) y Campañas ================= */
+  const rich = (t) => esc(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');   // «**cifra**» → negrita (texto ya escapado)
+  const readingHtml = (p, x) => { const t = FP.reportCopy && FP.reportCopy.reading ? FP.reportCopy.reading(p, x.report) : null; return t ? `<div class="rp-read"><span class="rp-read__t">Lectura</span><span>${rich(t)}</span></div>` : ''; };
+  const wkLabel = (w) => { const m = (iso) => MO[+iso.slice(5, 7) - 1].toLowerCase(); return `${+w.from.slice(8)}–${+w.to.slice(8)} ${m(w.to)}`; };
+  function chartWeekly(wk) {
+    const W = 560, H = 196, L = 46, R = 50, T = 14, B = 30, n = wk.length, gx = (W - L - R) / n, bw = Math.min(64, gx * 0.55), ih = H - T - B;
+    const mt = Math.max(...wk.map((w) => w.perDay)) * 1.1, crs = wk.map((w) => w.cr).filter(isNum), c0 = crs.length ? Math.min(...crs) * 0.96 : 0, c1 = crs.length ? Math.max(...crs) * 1.04 : 1;
+    const yb = (v) => T + ih - v / mt * ih, yc = (v) => T + ih - (v - c0) / ((c1 - c0) || 1) * ih, cx = (i) => L + gx * i + gx / 2;
+    let g = [0, 0.5, 1].map((f) => `<line x1="${L}" x2="${W - R}" y1="${T + ih - f * ih}" y2="${T + ih - f * ih}" stroke="${C.light}"/>${svgT(L - 6, T + ih - f * ih + 4, fmt('int', Math.round(mt * f / 1000)) + 'K', { anchor: 'end' })}${crs.length ? svgT(W - R + 6, T + ih - f * ih + 4, ((c0 + (c1 - c0) * f) * 100).toFixed(2) + '%', { fill: C.blue }) : ''}`).join('');
+    wk.forEach((w, i) => { g += `<rect x="${cx(i) - bw / 2}" y="${yb(w.perDay)}" width="${bw}" height="${T + ih - yb(w.perDay)}" rx="3" fill="#DCE6F8"/>${svgT(cx(i), T + ih - 6, fmt('int', Math.round(w.perDay / 1000)) + 'K', { anchor: 'middle' })}${svgT(cx(i), H - 8, wkLabel(w), { anchor: 'middle' })}`; });
+    const pts = wk.map((w, i) => (isNum(w.cr) ? [cx(i), yc(w.cr), w.cr] : null));
+    g += `<path d="${segs(wk.map((w) => w.cr), (i) => cx(i), yc, 0, n - 1).join('')}" fill="none" stroke="${C.blue}" stroke-width="3"/>` + pts.map((q) => (q ? `<circle cx="${q[0]}" cy="${q[1]}" r="4.5" fill="${C.blue}" stroke="#fff" stroke-width="2"/>${svgT(q[0], q[1] - 10, (q[2] * 100).toFixed(2) + '%', { anchor: 'middle', fill: C.blue, weight: 700 })}` : '')).join('');
+    return wrap(W, H, g, 'Tráfico diario promedio y conversión por semana');
+  }
+  const MIXC = ['#1F5FD6', '#0B1F3A', '#8FB0EE', '#9AA9C0'];
+  function mixBlock(m) {
+    const up = [...m.rows].sort((a, b) => (b.share - b.baseShare) - (a.share - a.baseShare))[0], d = up ? up.share - up.baseShare : 0;
+    const note = up && Math.abs(d) >= 0.005 ? `${esc(up.label)} ${d > 0 ? 'gana' : 'pierde'} ${(Math.abs(d) * 100).toFixed(1)} pp` : 'sin cambio de mezcla';
+    return `<div class="rp-mix"><div class="rp-mix__h"><b>${esc(m.label)}</b><span>${note}</span></div><div class="rp-mix__bar">${m.rows.map((r, i) => `<i style="width:${(r.share * 100).toFixed(1)}%;background:${MIXC[i % 4]}">${r.share >= 0.16 ? `${esc(cut(r.label, 16))} ${(r.share * 100).toFixed(0)}%` : ''}</i>`).join('')}</div></div>`;
+  }
+  function trafficBody(p, x) {
+    const o = p.overview, t = o.totals, tone = (v) => (isNum(v) ? (v > 0 ? ' rp-pos' : v < 0 ? ' rp-neg' : '') : '');
+    const pp = isNum(t.crDiffPp) ? `${t.crDiffPp < 0 ? '−' : '+'}${(Math.abs(t.crDiffPp) * 100).toFixed(2)} pp` : '';
+    const kp = (l, v, sub, cls = '', hero = false) => `<div class="rp-kpi${hero ? ' rp-kpi--hero' : ''}"><div class="rp-kpi__l">${l}</div><div class="rp-kpi__v">${v}</div><div class="rp-kpi__s${cls}">${sub || '&nbsp;'}</div></div>`;
+    const notes = (p.notes || []).filter((n) => !/CAC|promedios de tasas/.test(n));
+    return `<div class="rp-kpis">${kp('Sesiones', esc(fmt('int', t.traffic)), isNum(t.trafficChg) ? `${esc(fmt('spct', t.trafficChg))} vs. referencia` : '', tone(t.trafficChg), true)}${kp('Conversión', esc(fmt('pct2', t.cr)), pp, tone(t.crDiffPp))}${kp('Pedidos', esc(fmt('int', t.orders)), isNum(t.ordersChg) ? esc(fmt('spct', t.ordersChg)) : '', tone(t.ordersChg))}${kp('Ticket promedio', isNum(t.aov) ? esc(fmt('money', t.aov)) : NA, '')}</div>
+      <div class="rp-row rp-tv"><div class="rp-tv__a">${o.weekly.length ? `<div class="rp-panel__t"><span>Tráfico diario promedio (barras) y conversión (línea) por semana</span></div>${chartWeekly(o.weekly)}` : ''}</div>
+      <div class="rp-tv__b"><div class="rp-panel__t"><span>De dónde viene el tráfico</span></div>${o.mix.map(mixBlock).join('')}</div></div>
+      ${readingHtml(p, x)}<p class="rp-scope">${esc([p.scope.period, p.scope.comparison].filter(Boolean).join(' · '))}${notes.length ? ' · ' + esc(notes.join(' ')) : ''}</p>`;
+  }
+  const QN = { star: 'Estrella', conversion: 'Convertir mejor', scale: 'Escalar tráfico', review: 'Revisar', low: 'Poco volumen' };
+  function campaignsBody(p, x) {
+    const c = p.campaigns, any = c.rows.some((r) => r.opportunity);
+    const row = (r) => `<tr><td class="rp-tv__n">${esc(cut(r.name, 30))}</td><td><span class="rp-qd rp-qd--${r.quadrant}">${QN[r.quadrant]}</span></td><td class="num">${esc(fmt('int', r.traffic))}</td><td class="num">${esc(fmt('pct', r.share, 0))}</td><td class="num">${esc(fmt('int', r.orders))}</td><td class="num">${esc(fmt('pct2', r.cr))}</td><td class="num${isNum(r.crChg) ? (r.crChg < 0 ? ' rp-neg' : ' rp-pos') : ''}">${isNum(r.crChg) ? esc(fmt('spct', r.crChg)) : NA}</td><td class="num">${isNum(r.aov) ? esc(fmt('money', r.aov)) : NA}</td><td class="num"><b>${isNum(r.revenue) ? esc(fmt('moneyC', r.revenue)) : NA}</b></td><td class="num">${isNum(r.revenuePerSession) ? '$' + r.revenuePerSession.toFixed(2) : NA}</td>${any ? `<td class="num">${r.opportunity ? `<b class="rp-neg">${esc(fmt('moneyC', r.opportunity))}</b>` : '—'}</td>` : ''}</tr>`;
+    return `${readingHtml(p, x)}<div class="rp-panel"><div class="rp-panel__t"><span>${c.shown < c.all ? `Las ${c.shown} campañas con más tráfico (de ${esc(fmt('int', c.all))})` : 'Campañas por tráfico'}</span></div>
+      <table class="rp-t"><thead><tr><th>Campaña</th><th>Cuadrante</th><th class="num">Sesiones</th><th class="num">% tráfico</th><th class="num">Pedidos</th><th class="num">Conv.</th><th class="num">Cambio</th><th class="num">Ticket</th><th class="num">Venta</th><th class="num">Venta/ses.</th>${any ? '<th class="num">Oportunidad</th>' : ''}</tr></thead><tbody>${c.rows.map(row).join('')}</tbody></table></div>${notesHtml(p)}`;
+  }
 
   /** Entidad que concentra la caída contra el resto del negocio (índice 100 = primer período); la línea punteada es el resto. */
   function focusSpark(sp) {
@@ -260,7 +300,7 @@
   /* ================= páginas, numeración e impresión ================= */
   function units(report, exclude) {
     const ex = new Set(exclude || []), out = [];
-    const ORDER = ['cover', 'summary', 'pacing', 'drivers', 'movers', 'trends', 'categories', 'customers', 'traffic', 'seasonality', 'recovery', 'closing', 'reliability', 'annex'], rank = (id) => { const i = ORDER.indexOf(id); return i < 0 ? ORDER.length : i; };   // solo el orden de lectura de la presentación; el reporte conserva el suyo
+    const ORDER = ['cover', 'summary', 'pacing', 'drivers', 'movers', 'trends', 'categories', 'customers', 'traffic', 'campaigns', 'seasonality', 'recovery', 'closing', 'reliability', 'annex'], rank = (id) => { const i = ORDER.indexOf(id); return i < 0 ? ORDER.length : i; };   // solo el orden de lectura de la presentación; el reporte conserva el suyo
     report.pages.filter((p) => p.status === 'included' && !p.annex && !ex.has(p.id)).map((p, i) => ({ p, i })).sort((a, b) => rank(a.p.id) - rank(b.p.id) || a.i - b.i).map((o) => o.p).forEach((p) => {
       if (p.id === 'annex') [['Anexo técnico A · Calidad de datos y brechas', 1], ['Anexo técnico B · Métodos, backtest y confiabilidad', 2], ['Anexo técnico C · Definiciones y límites', 3]].forEach(([t, s]) => out.push({ id: 'annex', sub: s, title: t, page: p }));
       else out.push({ id: p.id, title: p.title, page: p });
@@ -270,7 +310,7 @@
   }
   const dateOf = (iso) => fmt('date', iso);
   const TITLES = { movers: 'Qué resta y qué suma', summary: 'Resumen ejecutivo', pacing: 'Desempeño contra el plan y proyección de cierre', drivers: 'Qué explica la diferencia: tráfico, conversión y ticket', trends: 'Evolución: qué cae y qué compensa', categories: 'Categorías y productos: dónde se concentra el cambio', customers: 'Clientes, recurrencia y valor', traffic: 'Tráfico y conversión por segmento', recovery: 'Recuperación: lo que falta para la meta', seasonality: 'Estacionalidad y meta del siguiente año', closing: 'Cierre ejecutivo | Qué nos llevamos de este periodo' };
-  const SECTION = { summary: 'Resumen ejecutivo', pacing: 'Desempeño comercial', drivers: 'Qué explica la diferencia', movers: 'Qué suma y qué resta', trends: 'Evolución y movimientos', categories: 'Categorías y productos', customers: 'Clientes y recurrencia', traffic: 'Tráfico y conversión', recovery: 'Recuperación y prioridades', closing: 'Cierre ejecutivo', reliability: 'Método y confiabilidad', seasonality: 'Estacionalidad' };
+  const SECTION = { summary: 'Resumen ejecutivo', pacing: 'Desempeño comercial', drivers: 'Qué explica la diferencia', movers: 'Qué suma y qué resta', trends: 'Evolución y movimientos', categories: 'Categorías y productos', customers: 'Clientes y recurrencia', traffic: 'Tráfico y conversión', campaigns: 'Campañas', recovery: 'Recuperación y prioridades', closing: 'Cierre ejecutivo', reliability: 'Método y confiabilidad', seasonality: 'Estacionalidad' };
   const DECO = '<svg class="rp-deco" width="640" height="420" viewBox="0 0 640 420" aria-hidden="true"><g fill="#fff" opacity=".10"><rect x="330" y="250" width="34" height="170"/><rect x="380" y="210" width="34" height="210"/><rect x="430" y="165" width="34" height="255"/><rect x="480" y="120" width="34" height="300"/><rect x="530" y="70" width="34" height="350"/><rect x="580" y="20" width="34" height="400"/></g><g fill="none" stroke="#8DB6E8" stroke-width="2.5" opacity=".55"><path d="M0 330 L90 290 L180 308 L270 230 L360 250 L450 160 L540 150 L640 60"/></g><circle cx="640" cy="60" r="7" fill="#8DB6E8" opacity=".8"/></svg>';
   function pageHtml(u, x) {
     const p = u.page;
@@ -291,7 +331,7 @@
     const title = u.id === 'annex' ? u.title : (concl || (u.id === 'pacing' && p.selection ? 'Venta de la selección contra su periodo de referencia' : (TITLES[u.id] || p.title)));
     const q = u.id === 'annex' ? '' : u.id === 'closing' ? '' : (p.question || '');
     return `<section class="rp-page" data-page="${esc(u.id)}${u.sub ? `-${u.sub}` : ''}"><div class="rp-top"><span class="rp-eyebrow">${esc(eyebrow)}</span><span class="rp-per">${esc(per)}</span></div>
-      <h2 class="rp-title">${esc(title)}</h2><div class="rp-sub"><p class="rp-q">${esc(q)}</p>${ctxLine ? `<div class="rp-ctx">${esc(ctxLine)}</div>` : ''}</div>${!['summary', 'annex', 'closing'].includes(u.id) && p.headline ? `<p class="rp-headline">${esc(p.headline)}</p>` : ''}
+      <h2 class="rp-title">${esc(title)}</h2><div class="rp-sub"><p class="rp-q">${esc(q)}</p>${ctxLine ? `<div class="rp-ctx">${esc(ctxLine)}</div>` : ''}</div>${!['summary', 'annex', 'closing', 'campaigns'].includes(u.id) && !(u.id === 'traffic' && p.overview) && p.headline ? `<p class="rp-headline">${esc(p.headline)}</p>` : ''}
       <div class="rp-body">${body}</div>${foot}</section>`;
   }
   function docHtml(report, opts = {}) {

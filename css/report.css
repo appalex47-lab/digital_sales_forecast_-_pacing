@@ -241,3 +241,15 @@
 .rp-mv__r { padding:2px 0; gap:8px; grid-template-columns:70px 1fr 96px; }
 .rp-mv__n small { line-height:1.15; } .rp-mv__bar { height:6px; margin-top:1px; }
 .rp-mv__h { margin-bottom:2px; }
+
+/* ---------- Tráfico y conversión (panorama) y Campañas ---------- */
+.rp-tv { gap:26px; align-items:flex-start; }
+.rp-tv__a { flex:0 0 580px; } .rp-tv__b { flex:1 1 0; min-width:0; }
+.rp-mix { margin-bottom:12px; } .rp-mix__h { display:flex; justify-content:space-between; gap:8px; font-size:13.4px; color:var(--grey); margin-bottom:4px; } .rp-mix__h b { color:var(--navy); }
+.rp-mix__bar { display:flex; height:26px; border-radius:6px; overflow:hidden; } .rp-mix__bar i { font-style:normal; color:#fff; font-size:13.4px; font-weight:650; display:flex; align-items:center; padding-left:7px; white-space:nowrap; overflow:hidden; }
+.rp-read { display:flex; gap:14px; align-items:flex-start; background:var(--sky); border-radius:12px; padding:9px 16px; font-size:15px; line-height:1.45; color:var(--ink); flex:none; }
+.rp-read b { color:var(--navy); } .rp-read__t { font-size:13.4px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--blue); padding-top:2px; flex:none; }
+.rp-qd--star, .rp-qd--conversion, .rp-qd--scale, .rp-qd--review, .rp-qd--low { display:inline-block; font-size:13.4px; font-weight:650; border-radius:999px; padding:1px 9px; white-space:nowrap; }
+.rp-qd--star { background:#E3F5EE; color:#0B7A59; } .rp-qd--conversion { background:#FFF3DC; color:#8A5A00; } .rp-qd--scale { background:#E8F0FE; color:#1F5FD6; } .rp-qd--review { background:#FBEAE6; color:#C0392B; } .rp-qd--low { background:#EDF1F7; color:#56667D; }
+.rp-tv__n { font-weight:650; color:var(--navy); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+[data-page="campaigns"] .rp-t td { padding:9px 6px; } [data-page="campaigns"] .rp-body { gap:16px; }

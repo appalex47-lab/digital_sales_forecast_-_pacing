@@ -444,13 +444,66 @@
     }).filter((r) => isNum(r.traffic) || isNum(r.revenue)).sort((a, b) => (b.traffic || 0) - (a.traffic || 0)).slice(0, 6);
     if (!rows.length) return omit('traffic', 'Tráfico y conversión', 'Los segmentos del período no traen tráfico ni venta observados.');
     const best = [...rows].filter((r) => isNum(r.crChg)).sort((a, b) => b.crChg - a.crChg)[0], worst = [...rows].filter((r) => isNum(r.crChg)).sort((a, b) => a.crChg - b.crChg)[0];
+    const overview = trafficOverview(dims, s.trafficWeekly);
     return page('traffic', 'Tráfico y conversión', {
+      overview,
       ctx: `${d.period && d.period.label ? d.period.label : 'Período del diagnóstico'} · ${d.comparison && d.comparison.label ? d.comparison.label : 'vs. referencia'}`,
-      question: '¿En qué segmento ganó o perdió tráfico y conversión?',
+      question: overview ? '¿Cómo se movieron el tráfico y la conversión, y de dónde viene el cambio?' : '¿En qué segmento ganó o perdió tráfico y conversión?',
       headline: best && worst && best !== worst ? `Por ${dim.label.toLowerCase()}, el CR cambió más en ${best.segment} (${spct(best.crChg)}) y menos en ${worst.segment} (${spct(worst.crChg)}).` : `Tráfico y conversión por ${dim.label.toLowerCase()} en el período del diagnóstico.`,
       tables: [{ id: 'segments', title: `Segmentos · ${dim.label}`, columns: [{ key: 'segment', label: 'Segmento', kind: 'text' }, { key: 'traffic', label: 'Tráfico', kind: 'int', num: true }, { key: 'trafficChg', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'cr', label: 'CR', kind: 'pct2', num: true }, { key: 'crChg', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'aov', label: 'AOV', kind: 'money', num: true }, { key: 'revChg', label: 'Venta', kind: 'spct', num: true, tone: true }], rows }],
       scope: { dimension: dim.label, period: d.period && d.period.label, comparison: d.comparison && d.comparison.label, denominator: 'CR = pedidos ÷ tráfico del segmento; AOV = venta ÷ pedidos' },
       notes: [...(alt ? ['El plan no tiene segmentos y el export no trae el mismo periodo del año anterior: esta lámina compara contra el periodo anterior, no contra el plan.'] : []), 'Descriptivo: las diferencias entre segmentos no demuestran causa ni rentabilidad publicitaria.', 'CR y AOV vienen de sumas del segmento, no de promedios de tasas diarias.', 'La herramienta no incluye inversión publicitaria; no hay CAC ni ROAS.'],
+      sources: ['Diagnóstico · segmentos de tráfico'], tags: [TAG.obs, TAG.calc]
+    });
+  }
+
+
+  /* Tráfico y conversión: panorama (totales contra la referencia, mezcla por canal / dispositivo / tipo de cliente y semanas) y campañas.
+     Solo reordena lo que el diagnóstico ya calculó por segmento (current, baseline, metrics): no hay fórmulas nuevas. */
+  const MEDIUM_NAME = { '(none)': 'Directo', '(direct)': 'Directo', cpc: 'Pago (cpc)', organic: 'Orgánico', referral: 'Referido', email: 'Correo' };
+  const mixRows = (dim, nameMap) => {
+    const g = dim.groups.filter((x) => x.current && isNum(x.current.trafficVolume) && x.baseline && isNum(x.baseline.trafficVolume));
+    const T = g.reduce((a, x) => a + x.current.trafficVolume, 0), B = g.reduce((a, x) => a + x.baseline.trafficVolume, 0);
+    if (!g.length || !(T > 0) || !(B > 0)) return null;
+    return { id: dim.dimension, label: dim.label, rows: g.map((x) => ({ label: nameMap && nameMap[x.label] ? nameMap[x.label] : x.label, traffic: x.current.trafficVolume, share: x.current.trafficVolume / T, baseShare: x.baseline.trafficVolume / B, cr: x.current.conversionRate, crChg: x.metrics && x.metrics.conversionRate ? x.metrics.conversionRate.deltaPct : null, trafficChg: x.metrics && x.metrics.trafficVolume ? x.metrics.trafficVolume.deltaPct : null, aov: x.current.aov, revenue: x.current.revenue })).sort((a, b) => b.traffic - a.traffic) };
+  };
+  function trafficOverview(dims, weekly) {
+    const by = Object.fromEntries(dims.map((d) => [d.dimension, d]));
+    const base = ['device', 'medium', 'customer_type', 'campaign'].map((k) => by[k]).find((d) => d && d.groups.length);
+    if (!base) return null;
+    const sum = (side, k) => base.groups.reduce((a, g) => a + (g[side] && isNum(g[side][k]) ? g[side][k] : 0), 0);
+    const cT = sum('current', 'trafficVolume'), cO = sum('current', 'orders'), cV = sum('current', 'revenue'), bT = sum('baseline', 'trafficVolume'), bO = sum('baseline', 'orders');
+    if (!(cT > 0) || !(bT > 0)) return null;
+    const mix = [['medium', MEDIUM_NAME, 'Canal de adquisición'], ['device', null, 'Dispositivo'], ['customer_type', null, 'Nuevos y recurrentes']].map(([k, m, lbl]) => (by[k] ? mixRows(by[k], m) : null)).filter(Boolean);
+    mix.forEach((m) => { m.label = ({ medium: 'Canal de adquisición', device: 'Dispositivo', customer_type: 'Nuevos y recurrentes' })[m.id] || m.label; });
+    // semanas de 1-2 días (corte a mitad de semana) ensucian la tendencia: se descartan
+    const wk = Array.isArray(weekly) ? weekly.filter((w) => w && isNum(w.traffic) && w.traffic > 0 && w.days >= 3).map((w) => ({ from: w.from, to: w.to, days: w.days, perDay: w.traffic / w.days, cr: isNum(w.orders) ? w.orders / w.traffic : null })) : [];
+    return { totals: { traffic: cT, orders: cO, cr: cO / cT, aov: cO > 0 ? cV / cO : null, trafficChg: cT / bT - 1, ordersChg: bO > 0 ? cO / bO - 1 : null, crDiffPp: bO > 0 ? cO / cT - bO / bT : null, crChg: bO > 0 ? (cO / cT) / (bO / bT) - 1 : null }, mix, weekly: wk.length >= 2 ? wk : [] };
+  }
+  const wilson = (o, n) => { const z = 1.96, pp = o / n, d = 1 + z * z / n, c = pp + z * z / (2 * n), m = z * Math.sqrt(pp * (1 - pp) / n + z * z / (4 * n * n)); return { lo: (c - m) / d, hi: (c + m) / d }; };   // misma regla que la pantalla de segmentos
+  const SEG_MIN_SESSIONS = 500, SEG_MIN_SHARE = 0.01;
+  function pageCampaigns(s) {
+    const hasSeg = (x) => x && x.level2 && x.level2.some((l) => l.source !== 'core' && l.groups && l.groups.length);
+    const d = hasSeg(s.diag) ? s.diag : (hasSeg(s.trafficDiag) ? s.trafficDiag : null);
+    const dim = d && d.level2.find((x) => x.dimension === 'campaign' && x.groups && x.groups.length);
+    if (!dim) return omit('campaigns', 'Campañas', 'No hay campañas con tráfico en el período (archivo de Segmentos).');
+    const g = dim.groups.filter((x) => x.current && isNum(x.current.trafficVolume) && x.current.trafficVolume > 0);
+    const T = g.reduce((a, x) => a + x.current.trafficVolume, 0), O = g.reduce((a, x) => a + (isNum(x.current.orders) ? x.current.orders : 0), 0), V = g.reduce((a, x) => a + (isNum(x.current.revenue) ? x.current.revenue : 0), 0);
+    if (!(T > 0) || !(O > 0)) return omit('campaigns', 'Campañas', 'Las campañas del período no traen tráfico y pedidos observados.');
+    const crT = O / T, aovT = V / O, thr = Math.max(SEG_MIN_SESSIONS, Math.ceil(SEG_MIN_SHARE * T)), relN = g.filter((x) => x.current.trafficVolume >= thr).length, avgSh = relN ? 1 / relN : 1;
+    const all = g.map((x) => { const c = x.current, sh = c.trafficVolume / T, w = wilson(c.orders, c.trafficVolume), conclusive = crT < w.lo || crT > w.hi, relevant = c.trafficVolume >= thr;
+      const q = !relevant ? 'low' : (sh >= avgSh ? (c.conversionRate >= crT ? 'star' : 'conversion') : (c.conversionRate >= crT ? 'scale' : 'review'));
+      return { name: x.label, quadrant: q, traffic: c.trafficVolume, share: sh, trafficChg: x.metrics && x.metrics.trafficVolume ? x.metrics.trafficVolume.deltaPct : null, orders: c.orders, cr: c.conversionRate, crChg: x.metrics && x.metrics.conversionRate ? x.metrics.conversionRate.deltaPct : null, aov: c.aov, revenue: c.revenue, revenuePerSession: isNum(c.revenue) ? c.revenue / c.trafficVolume : null, conclusive, opportunity: conclusive && relevant && c.conversionRate < crT ? c.trafficVolume * (crT - c.conversionRate) * aovT : null }; })
+      .sort((a, b) => b.traffic - a.traffic);
+    const rows = all.slice(0, 5), counts = ['star', 'scale', 'conversion', 'review', 'low'].map((k) => ({ quadrant: k, n: all.filter((r) => r.quadrant === k).length }));
+    const opp = all.filter((r) => r.opportunity).sort((a, b) => b.opportunity - a.opportunity);
+    return page('campaigns', 'Campañas', {
+      ctx: `${d.period && d.period.label ? d.period.label : 'Período del diagnóstico'} · ${d.comparison && d.comparison.label ? d.comparison.label : 'vs. referencia'}`,
+      question: '¿Qué campañas concentran el tráfico, cuáles convierten mejor y dónde hay venta por recuperar?',
+      headline: opp.length ? `${opp[0].name} concentra la mayor oportunidad de conversión.` : `Las diferencias de conversión entre campañas no son concluyentes (${all.filter((r) => !r.conclusive).length} de ${all.length}).`,
+      tables: [{ id: 'campaigns', title: 'Campañas con más tráfico', columns: [], rows }],
+      campaigns: { rows, all: all.length, counts, threshold: thr, crTotal: crT, opportunity: opp.slice(0, 3).map((r) => ({ name: r.name, value: r.opportunity })), shown: rows.length },
+      notes: ['Cuadrantes: estrella (mucho tráfico y conversión sobre el total), convertir mejor (mucho tráfico y conversión bajo el total), escalar (poco tráfico y conversión alta), revisar (poco tráfico y conversión baja).', 'La oportunidad solo se calcula cuando la diferencia de conversión es estadísticamente clara. Descriptivo, no causal.'],
       sources: ['Diagnóstico · segmentos de tráfico'], tags: [TAG.obs, TAG.calc]
     });
   }
@@ -749,13 +802,13 @@
   }
 
   /* ---------------- ensamblado ---------------- */
-  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'categories', 'trends', 'movers', 'customers', 'traffic', 'recovery', 'seasonality', 'closing', 'annex'];
+  const ORDER = ['cover', 'summary', 'pacing', 'reliability', 'drivers', 'categories', 'trends', 'movers', 'customers', 'traffic', 'campaigns', 'recovery', 'seasonality', 'closing', 'annex'];
   function build(src) {
     const s = { channel: 'total', options: {}, filters: [], ...src };
     s.options = { includeAnnex: true, showTags: false, showBusinessName: false, ...(s.options || {}) };
     const adv = advise(s);
     const head6 = [pageCover(s), pagePacing(s), pageReliability(s, adv), pageDrivers(s), pageCategories(s), pageTrends(s)];
-    const core = [...head6, pageMovers(s, head6), pageCustomers(s), pageTraffic(s), pageRecovery(s), pageSeasonality(s)];
+    const core = [...head6, pageMovers(s, head6), pageCustomers(s), pageTraffic(s), pageCampaigns(s), pageRecovery(s), pageSeasonality(s)];
     const all = [core[0], pageSummary(s, core), ...core.slice(1)];
     const rel = all.find((p) => p.id === 'reliability'), pac = all.find((p) => p.id === 'pacing');
     if (rel && rel.status === 'included' && rel.warning && pac && pac.status === 'included') pac.caveat = 'El cierre estimado depende del método de proyección: los métodos con datos suficientes difieren de forma material (detalle en el anexo técnico).';
