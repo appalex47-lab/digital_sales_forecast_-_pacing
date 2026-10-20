@@ -346,7 +346,8 @@
     if (!P || P.status !== 'available') return omit('trends', 'Evolución y patrones', 'No hay análisis de evolución: carga venta por producto con historia de al menos 6 períodos.');
     const ctx = t.context || {};
     const rowBy = new Map((t.rows || []).map((r) => [r.entity, r]));
-    const mapRow = (x) => ({ entity: x.entity, impact: x.impact, relative: x.relativeChange, pattern: patternText(x.pattern, x.consecutivePeriods), _spark: (rowBy.get(x.entity) || {}).series || null });
+    const bn = (e) => (ctx.level === 'branch' && s.branchNames && s.branchNames[e]) || e;   // sucursal: nombre_sucursal, no el código
+    const mapRow = (x) => ({ entity: bn(x.entity), impact: x.impact, relative: x.relativeChange, pattern: patternText(x.pattern, x.consecutivePeriods), _spark: (rowBy.get(x.entity) || {}).series || null });
     const drag = (P.drag || []).filter((x) => isNum(x.impact)).slice(0, 5).map(mapRow), comp = (P.compensate || []).filter((x) => isNum(x.impact)).slice(0, 5).map(mapRow);
     if (!drag.length && !comp.length) return omit('trends', 'Evolución y patrones', 'El análisis no encontró entidades con cambio medible en el período.');
     const cmp = P.comparison || {};
@@ -431,7 +432,9 @@
   /* ---------------- 9 · Tráfico y conversión ---------------- */
   const SEG_DIMS = ['device', 'sourceMedium', 'campaign', 'landingPage', 'source', 'medium'];
   function pageTraffic(s) {
-    const d = s.diag;
+    const hasSeg = (x) => x && x.level2 && x.level2.some((l) => l.source !== 'core' && l.groups && l.groups.length);
+    const alt = !hasSeg(s.diag) && hasSeg(s.trafficDiag);
+    const d = alt ? s.trafficDiag : s.diag;
     const dims = d && d.level2 ? d.level2.filter((x) => x.source !== 'core' && x.groups && x.groups.length) : [];
     if (!dims.length) return omit('traffic', 'Tráfico y conversión', (String((d && d.availability && d.availability.segmentsNote) || '').slice(0, 230) || 'No hay segmentos de tráfico (GA4 o archivo de Segmentos) para el período.'));
     const dim = dims[0];
@@ -447,7 +450,7 @@
       headline: best && worst && best !== worst ? `Por ${dim.label.toLowerCase()}, el CR cambió más en ${best.segment} (${spct(best.crChg)}) y menos en ${worst.segment} (${spct(worst.crChg)}).` : `Tráfico y conversión por ${dim.label.toLowerCase()} en el período del diagnóstico.`,
       tables: [{ id: 'segments', title: `Segmentos · ${dim.label}`, columns: [{ key: 'segment', label: 'Segmento', kind: 'text' }, { key: 'traffic', label: 'Tráfico', kind: 'int', num: true }, { key: 'trafficChg', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'cr', label: 'CR', kind: 'pct2', num: true }, { key: 'crChg', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'aov', label: 'AOV', kind: 'money', num: true }, { key: 'revChg', label: 'Venta', kind: 'spct', num: true, tone: true }], rows }],
       scope: { dimension: dim.label, period: d.period && d.period.label, comparison: d.comparison && d.comparison.label, denominator: 'CR = pedidos ÷ tráfico del segmento; AOV = venta ÷ pedidos' },
-      notes: ['Descriptivo: las diferencias entre segmentos no demuestran causa ni rentabilidad publicitaria.', 'CR y AOV vienen de sumas del segmento, no de promedios de tasas diarias.', 'La herramienta no incluye inversión publicitaria; no hay CAC ni ROAS.'],
+      notes: [...(alt ? ['El plan no tiene segmentos y el export no trae el mismo periodo del año anterior: esta lámina compara contra el periodo anterior, no contra el plan.'] : []), 'Descriptivo: las diferencias entre segmentos no demuestran causa ni rentabilidad publicitaria.', 'CR y AOV vienen de sumas del segmento, no de promedios de tasas diarias.', 'La herramienta no incluye inversión publicitaria; no hay CAC ni ROAS.'],
       sources: ['Diagnóstico · segmentos de tráfico'], tags: [TAG.obs, TAG.calc]
     });
   }
@@ -549,7 +552,7 @@
     // dónde: farmacias (sucursales), estados y entrega, lo que más cae
     const ev = (top.evidenceBreakdown || []);
     const named = (r) => r && r.name && !/^\s*(\(?sin (dato|definir|asignar)\)?|n\/a|null|undefined|-+)\s*$/i.test(String(r.name));
-    const pick = (dim) => { const d = ev.find((x) => x.dimension === dim); return d ? d.rows.filter((r) => named(r) && isNum(r.delta) && r.delta < 0).slice(0, 2) : []; };
+    const pick = (dim) => { const d = ev.find((x) => x.dimension === dim); return d ? d.rows.filter((r) => named(r) && isNum(r.delta) && r.delta < 0).slice(0, 2).map((r) => (dim === 'branch' && s.branchNames && s.branchNames[r.name] ? { ...r, name: s.branchNames[r.name] } : r)) : []; };
     const branches = pick('branch'), deliveries = (F.delivery || []).filter((r) => named(r) && r.delta < 0).slice(0, 1);
     const comp = (P.compensate || []).filter((x) => isNum(x.impact) && x.impact > 0)[0] || null;
     return { level: lvl, entity: top.entity, loss: top.impact, share, totalDrag, periods: row.consecutivePeriods || null, since, sinceLabel: periodLabel(since), pattern: row.pattern || null, yoy, spark, restChange, sub, branches, deliveries, compensate: comp ? { entity: comp.entity, impact: comp.impact } : null, comparison: (P.comparison || {}).currentPeriod || null };

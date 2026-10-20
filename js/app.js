@@ -804,6 +804,17 @@
     const ch = state.dx.settings.channel || 'total';
     let run = null, rf = null, diag = null;
     try { run = ensureForecast(); if (run && run.plan.source !== 'none') { rf = ensureReforecast(); diag = ensureDiagnostic(); try { ensureRecovery(); } catch (e) { /* sin Recovery la página se omite */ } } } catch (e) { /* cada página reporta su motivo */ }
+    // Tráfico: contra el plan los segmentos solo se comparan con el mismo periodo del año anterior; si el export de GA4 no llega tan atrás
+    // (o el diagnóstico no trae segmentos), la lámina se lee contra el periodo anterior y lo dice en su encabezado.
+    let trafficDiag = null;
+    try {
+      const noSeg = (d) => !d || !(d.level2 || []).some((x) => x.source !== 'core' && x.groups && x.groups.length);
+      const sx = state.dx.settings;
+      if (diag && noSeg(diag) && diag.comparison && diag.comparison.id !== 'actual_vs_previous' && FP.dataStore.latestList(state.store, 'segments').length) {
+        const alt = FP.diagnosticEngine.runDiagnostic({ comparison: 'actual_vs_previous', period: { type: sx.periodType, key: sx.periodKey }, channel: sx.channel, metric: sx.metric, method: sx.method, run, rf, store: state.store, quality: state.quality });
+        if (alt && !noSeg(alt)) trafficDiag = alt;
+      }
+    } catch (e) { /* la lámina se omite con su motivo */ }
     const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
     let productByLevel = null, trendSnap = null;
     // Período y canal seleccionados (Diagnóstico): si es un mes, Productos y Evolución se leen sobre ESE mes y canal.
@@ -905,8 +916,8 @@
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
-      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, selPacing, selection: monthOn ? { periodType: dxs.periodType, periodKey: monthSel } : null,
-      focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
+      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, trafficDiag, selPacing, selection: monthOn ? { periodType: dxs.periodType, periodKey: monthSel } : null,
+      focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel, branchNames: (() => { const o = {}; try { (FP.productStore.geoOptions({}).branches || []).forEach((b) => { if (b.name && b.name !== b.code) o[b.code] = b.name; }); } catch (e) { /* sin nombres */ } return o; })(),
       product: monthOn && productByLevel ? productByLevel.category : pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
       quality: FP.coverage.summarize(state.store), filters, recovery,
@@ -2974,6 +2985,7 @@
         if (!up.ok) return cloudNote(up.error, 'bad');
         cloudProg('Verificando la copia', 92);
         const v = await FP.cloud.verify(up, {});
+        if (!v.ok && !Array.isArray(v.diffs)) { state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: false }; return cloudNote(`Se subió la copia (${up.keys.length} bloques), pero no pude verificarla al leerla de vuelta: ${v.error || 'sin detalle'}. Revisa la copia con «Restaurar» o vuelve a subir.`, 'bad'); }
         cloudProg('Limpiando trozos viejos', 97);
         const pr = await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {});
         state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
