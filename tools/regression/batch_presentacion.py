@@ -95,6 +95,7 @@ async def main():
         chk('PR-18 orden: Categorías y productos va antes de Evolución', ids18.index('categories') < ids18.index('trends'), ids18)
         ids_f = await f.evaluate("[...document.querySelectorAll('select[data-action=\"rp-filter\"]')].map(e=>e.dataset.key)")
         chk('PR-18 filtros separados: categoría, subcategoría y producto (y los de ubicación que tengan opciones)', ids_f[:3] == ['category', 'subcategory', 'product'], ids_f)
+        chk('PR-18 no hay filtro de tipo de entrega y la sucursal se llama «Nombre de sucursal»', 'delivery' not in ids_f and (('branch' not in ids_f) or 'Nombre de sucursal' in await f.evaluate("document.querySelector('label[for=rp-f-branch]').innerText")), ids_f)
         an_before = await f.evaluate("JSON.stringify(FP.app.state.an.filter||{})")
         cat = await f.evaluate("document.querySelector('#rp-f-category option:nth-child(2)').value")
         await f.select_option('#rp-f-category', value=cat)
