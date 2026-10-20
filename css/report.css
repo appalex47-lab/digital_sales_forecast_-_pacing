@@ -303,3 +303,9 @@
 .rp-dv__b { max-width:34%; } .rp-dv__l { width:118px; }
 .rp-sm__l .rp-lead { font-size:20px; }
 [data-page="campaigns"] .rp-t td { padding:13px 6px; }
+.rp-rt__h { font-size:13.4px; color:var(--grey); margin:6px 0 4px; } .rp-rts { display:flex; flex-wrap:wrap; gap:6px; }
+.rp-rt { display:flex; gap:6px; align-items:baseline; background:#fff; border:1px solid var(--line); border-radius:8px; padding:2px 8px; font-size:13.4px; } .rp-rt em { font-style:normal; color:var(--grey); } .rp-rt b { color:var(--navy); } .rp-rt--p { border-style:dashed; }
+.rp-rt__h { margin:2px 0 3px; }
+.rp-col-b .rp-box { padding:8px 14px; } .rp-col-b .rp-box__v { font-size:22px; }
+.rp-box__v small { font-size:13.4px; font-weight:500; color:var(--grey); } .rp-rts { align-items:center; } .rp-rts .rp-rt__h { margin:0 4px 0 0; }
+.rp-rts { gap:4px; } .rp-rt { padding:1px 6px; gap:4px; }
