@@ -52,10 +52,12 @@
   }
 
   /** Arma todo lo que se va a subir (ya comprimido). Devuelve { items: Map(key → sobre), bytes, rows } o { empty:true } o { tooBig:true, bytes }. */
-  async function build(repo, { maxBytes = MAX_BYTES } = {}) {
+  async function build(repo, { maxBytes = MAX_BYTES, onProgress } = {}) {
     if (!repo || !repo.ready) return { empty: true };
     const at = new Date().toISOString(), pl = await plan(repo), items = new Map(), man = { version: 1, at, stores: {}, keys: [] };
-    let bytes = 0, rows = 0;
+    let bytes = 0, rows = 0, done = 0;
+    const totalChunks = STORES.reduce((a, st) => a + pl[st].length, 0) + 1;
+    const tick = () => { done++; if (onProgress) onProgress(done, totalChunks); };
     const put = (key, data) => { items.set(key, envelope(data, at)); man.keys.push(key); bytes += data.z.length; };
     for (const store of STORES) {
       man.stores[store] = { chunks: pl[store].length, rows: pl[store].reduce((a, g) => a + g.rows, 0) };
@@ -64,7 +66,7 @@
         const g = pl[store][i]; let recs;
         if (g.all) recs = g.all;
         else { recs = []; for (const k of g.keys) { const r = await IDB().get(repo.db, store, k); if (r) recs.push(r); } }
-        put(`${PREFIX}:${store}:${i}`, { store, n: recs.length, z: await pack(recs) });
+        put(`${PREFIX}:${store}:${i}`, { store, n: recs.length, z: await pack(recs) }); tick();
         if (bytes > maxBytes) return { tooBig: true, bytes };
       }
     }

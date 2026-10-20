@@ -2967,12 +2967,14 @@
     'cloud-upload'() {
       return cloudRun(async () => {
         await repo.flush();
-        cloudNote('Preparando productos…'); render();
-        const bundle = await FP.productSync.build(repo);
+        cloudNote('Preparando productos…'); cloudProg('Preparando productos', 2);
+        const bundle = await FP.productSync.build(repo, { onProgress: (d, n) => cloudProg(`Preparando productos (${d} de ${n})`, 2 + Math.round(33 * d / n)) });
         if (bundle.tooBig) return cloudNote(`Los productos pesan ${fmtKb(bundle.bytes)} ya comprimidos y rebasan el tope de ${fmtKb(FP.productSync.MAX_BYTES)} (el plan gratuito de Supabase tiene 500 MB en total). No se subió nada; reduce el rango de fechas de productos o pide ampliar el plan.`, 'bad');
-        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), {});
+        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), { onProgress: (o) => cloudProg(`Subiendo bloque ${o.index} de ${o.of}`, 35 + Math.round(55 * o.index / o.of)) });
         if (!up.ok) return cloudNote(up.error, 'bad');
+        cloudProg('Verificando la copia', 92);
         const v = await FP.cloud.verify(up, {});
+        cloudProg('Limpiando trozos viejos', 97);
         const pr = await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {});
         state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
         const prod = bundle.items ? ` Productos: ${(bundle.rows || 0).toLocaleString('es-MX')} renglones de venta (${fmtKb(bundle.bytes)} comprimidos).` : ' Sin productos cargados.';
@@ -4541,11 +4543,19 @@
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
   function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s && !s.anonymous && s.team_id ? { userId: s.user_id, email: s.email || null, teamId: s.team_id, teamName: s.team_name || null } : null; }
   const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  /** Avance de la subida: actualiza la barra en sitio (sin redibujar toda la pantalla); si aún no existe, dibuja. */
+  function cloudProg(label, pct) {
+    state.cloud.progress = { label, pct };
+    const el = document.getElementById('cloud-progress');
+    if (!el) { render(); return; }
+    const t = el.querySelector('[data-prog-label]'), b = el.querySelector('i');
+    if (t) t.textContent = `${label} · ${pct} %`; if (b) b.style.width = `${pct}%`; el.setAttribute('aria-valuenow', String(pct));
+  }
   async function cloudRun(fn) {
     if (state.cloud.busy) return;
     state.cloud.busy = true; cloudNote('Trabajando…'); render();
     try { await fn(); } catch (e) { cloudNote(`Falló: ${e && e.message || e}`, 'bad'); }
-    state.cloud.busy = false; cloudRefreshSession(); render();
+    state.cloud.busy = false; state.cloud.progress = null; cloudRefreshSession(); render();
   }
 
   FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };

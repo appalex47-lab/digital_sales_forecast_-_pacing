@@ -199,8 +199,9 @@
     const sIdx = sel.state ? dims.states.indexOf(sel.state) : 0;
     const cities = dims.cities.map((c, i) => ({ c, i })).filter(({ c, i }) => i > 0 && (!sIdx || c.stateIdx === sIdx) && (!sel.region || regionOf(c.stateIdx) === sel.region)).map(({ i }) => cityLabel(i)).sort();
     const cIdx = sel.city ? dims.cities.findIndex((x, i) => i > 0 && cityLabel(i) === sel.city) : 0;
-    const branches = dims.branches.map((b, i) => ({ b, i })).filter(({ i }) => {
-      if (i === 0) return false;
+    const inData = new Set((meta.branches || []).map(String));   // solo sucursales con venta cargada (el catálogo guardado puede traer restos)
+    const branches = dims.branches.map((b, i) => ({ b, i })).filter(({ b, i }) => {
+      if (i === 0 || (inData.size && !inData.has(String(b)))) return false;
       const info = geo.branchInfo[i] || {};
       if (cIdx > 0 && info.cityIdx !== cIdx) return false;
       if (sIdx > 0 && info.stateIdx !== sIdx) return false;
@@ -1167,6 +1168,9 @@
     get meta() { return meta; },
     get repo() { return repo; },
     reset() { catalog.list = []; catalog.bySku = new Map(); meta = emptyMeta(); resetDims(); },
-    _resetCatalog() { catalog.list = []; catalog.bySku = new Map(); resetDims(); }
+    _resetCatalog() { catalog.list = []; catalog.bySku = new Map(); resetDims(); },
+    /** Foto de dimensiones y geografía (resetDims las reemplaza, no las modifica): las pruebas del motor la usan para no dejar rastro en el catálogo real. */
+    _snapshot() { return { dims: { ...dims }, geo: { ...geo } }; },
+    _restore(sn) { if (sn) { Object.assign(dims, sn.dims); Object.assign(geo, sn.geo); } }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

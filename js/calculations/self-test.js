@@ -797,7 +797,7 @@
     if (FP.productStore && FP.productAnalysis) {
       const PSx = FP.productStore, PA = FP.productAnalysis;
       const savedCat = { list: PSx.catalog.list, bySku: PSx.catalog.bySku };
-      const withCatalog = (fn) => () => { PSx._resetCatalog(); try { return fn(); } finally { PSx.catalog.list = savedCat.list; PSx.catalog.bySku = savedCat.bySku; } };
+      const withCatalog = (fn) => () => { const snap = PSx._snapshot ? PSx._snapshot() : null; PSx._resetCatalog(); try { return fn(); } finally { PSx.catalog.list = savedCat.list; PSx.catalog.bySku = savedCat.bySku; if (snap) PSx._restore(snap); } };
       const HS = ['fecha', 'canal', 'categoria', 'subcategoria', 'producto', 'sku', 'estado', 'sucursal', 'tipo_entrega', 'fuente', 'venta', 'pedidos', 'unidades'];
       const HF = ['fecha', 'canal', 'sku', 'vistas_ficha', 'agregados_carrito', 'inicio_checkout', 'compras_ga4'];
       const draftOf = (rows, kind = 'sales', headers = kind === 'sales' ? HS : HF) => { const m = PSx.suggestMapping(headers, kind); const d = PSx.createDraft(headers, m, { kind }); rows.forEach((r, i) => d.addRow(i + 2, r)); return d; };
