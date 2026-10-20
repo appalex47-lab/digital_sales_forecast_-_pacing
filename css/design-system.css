@@ -2024,3 +2024,25 @@ tr.is-evidence { outline-offset: -3px; }
   .fshell:not([data-open]) .fshell__foot{display:none}
   .fshell__foot .btn{flex:1}
 }
+
+/* Búsqueda global (paleta) */
+.gs-open{display:none}
+@media (max-width:1024px){.gs-open{display:inline-flex}}
+.gs{position:fixed;inset:0;z-index:200}
+.gs[hidden]{display:none}
+.gs__backdrop{position:absolute;inset:0;background:rgba(10,20,40,.45)}
+.gs__box{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:min(620px,calc(100vw - 24px));max-height:calc(100vh - 100px);display:flex;flex-direction:column;background:var(--surface,#fff);color:var(--text,#1d2433);border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.3);overflow:hidden}
+.gs__bar{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border,#e3e7ee)}
+.gs__bar input{flex:1;height:38px;border:1px solid var(--border,#c4ccd9);border-radius:8px;padding:0 10px;font-size:1rem;background:var(--surface,#fff);color:inherit}
+.gs__back{display:none;border:0;background:none;font-size:1.3rem;cursor:pointer;color:inherit}
+.gs__k{font-size:.7rem;border:1px solid var(--border,#c4ccd9);border-radius:5px;padding:1px 6px;opacity:.7}
+.gs__list{overflow:auto;padding:6px 8px}
+.gs__grp{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;opacity:.65;margin:10px 6px 4px}
+.gs__row{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:8px;cursor:pointer;color:inherit;font:inherit}
+.gs__row.is-on,.gs__row:hover{background:rgba(37,99,235,.12)}
+.gs__t{display:flex;flex-direction:column;gap:2px}.gs__t small{opacity:.7;font-size:.8rem}.gs__need{opacity:.7;font-size:.8rem}
+.gs__chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 6px}
+.gs__hint{font-size:.85rem;opacity:.75;padding:8px 10px}
+.gs__foot{font-size:.75rem;opacity:.65;padding:8px 14px;border-top:1px solid var(--border,#e3e7ee)}
+body.gs-lock{overflow:hidden}
+@media (max-width:760px){.gs__box{top:0;left:0;transform:none;width:100vw;height:100vh;max-height:none;border-radius:0}.gs__back{display:inline-block}.gs__k,.gs__foot{display:none}}
