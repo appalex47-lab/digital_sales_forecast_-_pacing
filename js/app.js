@@ -831,6 +831,26 @@
         if (alt && !noSeg(alt)) trafficDiag = alt;
       }
     } catch (e) { /* la lámina se omite con su motivo */ }
+    // Tráfico por semana del período (solo presentación): suma de las sesiones y compras de una dimensión completa del archivo de segmentos.
+    // No calcula nada nuevo: agrupa por bloques de 7 días lo que ya está cargado, con el mismo rango y canales que usa el diagnóstico.
+    let trafficWeekly = null;
+    try {
+      const dg = trafficDiag || diag, rg = dg && dg.coverage && dg.coverage.currentRange;
+      if (rg && rg[0] && rg[1] && FP.dataStore.latestList(state.store, 'segments').length) {
+        const recs = FP.dataStore.latestList(state.store, 'segments'), chOk = (c) => ch === 'total' || c === ch;
+        const dimId = ['device', 'medium', 'customer_type', 'campaign'].find((d) => recs.some((r) => r.dimension === d && r.date >= rg[0] && r.date <= rg[1] && chOk(r.channel)));
+        if (dimId) {
+          const byDate = new Map();
+          recs.filter((r) => r.dimension === dimId && r.date >= rg[0] && r.date <= rg[1] && chOk(r.channel)).forEach((r) => {
+            const t = r.metrics && r.metrics.trafficVolume, o = r.metrics && r.metrics.orders; if (!t || !isFinite(t.value)) return;
+            const a = byDate.get(r.date) || { traffic: 0, orders: 0 }; a.traffic += t.value; a.orders += o && isFinite(o.value) ? o.value : 0; byDate.set(r.date, a);
+          });
+          const dates = [...byDate.keys()].sort(), start = Date.parse(rg[0] + 'T00:00:00Z'), W = new Map();
+          dates.forEach((d) => { const k = Math.floor((Date.parse(d + 'T00:00:00Z') - start) / 864e5 / 7), a = W.get(k) || { traffic: 0, orders: 0, dates: [] }; a.traffic += byDate.get(d).traffic; a.orders += byDate.get(d).orders; a.dates.push(d); W.set(k, a); });
+          trafficWeekly = [...W.entries()].sort((a, b) => a[0] - b[0]).map(([, a]) => ({ from: a.dates[0], to: a.dates[a.dates.length - 1], days: a.dates.length, traffic: a.traffic, orders: a.orders }));
+        }
+      }
+    } catch (e) { trafficWeekly = null; }
     const hasProducts = FP.productStore.available() && (FP.productStore.meta || {}).batches;
     let productByLevel = null, trendSnap = null;
     // Período y canal seleccionados (Diagnóstico): si es un mes, Productos y Evolución se leen sobre ESE mes y canal.
@@ -932,7 +952,7 @@
     const linked = rcA && store ? store.scenarios.filter((s) => (rcA.scenarios || []).some((x) => x.scenarioId === s.scenarioId)) : [];
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
-      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, trafficDiag, selPacing, selection: monthOn ? { periodType: dxs.periodType, periodKey: monthSel } : null,
+      app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, rfMonth, diag, trafficDiag, trafficWeekly, selPacing, selection: monthOn ? { periodType: dxs.periodType, periodKey: monthSel } : null,
       focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel, branchNames: (() => { const o = {}; try { (FP.productStore.geoOptions({}).branches || []).forEach((b) => { if (b.name && b.name !== b.code) o[b.code] = b.name; }); } catch (e) { /* sin nombres */ } return o; })(),
       product: monthOn && productByLevel ? productByLevel.category : pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,

@@ -81,6 +81,13 @@
       const n = kpi(p, 'customers'); return fin(n) ? `${RB().fmt('int', n)} clientes identificados compran en el período` : null;
     },
     traffic(p) {
+      const o = p.overview && p.overview.totals;
+      if (o && fin(o.trafficChg) && fin(o.crChg)) {
+        const ref = p.scope && /anterior/i.test(p.scope.comparison || '') ? 'frente al período anterior' : 'frente a la referencia';
+        if (Math.abs(o.trafficChg) < 0.005 && Math.abs(o.crChg) < 0.005) return `El tráfico y la conversión se mantienen estables ${ref}`;
+        const mv = (v, what) => (Math.abs(v) < 0.005 ? `${what} casi no cambia` : `${what} ${v > 0 ? 'sube' : 'baja'} ${(Math.abs(v) * 100).toFixed(1)} %`);
+        return `${mv(o.trafficChg, 'El tráfico')} y ${mv(o.crChg, 'la conversión').replace(/^La conversión/, 'la conversión')} ${ref}`;
+      }
       const t = (p.tables || [])[0], dim = p.scope && p.scope.dimension ? String(p.scope.dimension).toLowerCase() : null;
       const rows = t ? t.rows.filter((r) => fin(r.crChg)) : [];
       if (rows.length < 2) return dim ? `Tráfico y conversión por ${dim}` : null;
@@ -88,6 +95,13 @@
       if (best === worst || best.crChg === worst.crChg) return null;
       if (String(best.segment).length > 24 || String(worst.segment).length > 24) return dim ? `Tráfico y conversión por ${dim}` : null;   // nombres técnicos largos: título neutro, el detalle va en la tabla
       return `La conversión ${best.crChg > 0 ? 'sube más' : 'cae menos'} en ${best.segment} y ${worst.crChg < 0 ? 'cae más' : 'sube menos'} en ${worst.segment}`;
+    },
+    campaigns(p) {
+      const c = p.campaigns; if (!c || !c.rows || !c.rows.length) return null;
+      if (c.opportunity && c.opportunity.length) return `${cut(c.opportunity[0].name, 34)} concentra la mayor oportunidad de conversión`;
+      const star = c.rows.filter((r) => r.quadrant === 'star');
+      if (star.length) return `${cut(star[0].name, 34)} lidera en tráfico y convierte sobre el total`;
+      return 'Las campañas convierten a un ritmo parecido; ninguna destaca';
     },
     recovery(p) {
       const rem = kpi(p, 'remaining'), days = kpi(p, 'days'), daily = kpi(p, 'daily');
@@ -105,6 +119,35 @@
     }
   };
 
+  const sg = (v, d) => (v < 0 ? '−' : '+') + (Math.abs(v) * 100).toFixed(d == null ? 1 : d) + ' %';
+  const bestWorst = (rows) => { const r = rows.filter((x) => fin(x.crChg)); if (r.length < 2) return null; const b = [...r].sort((x, y) => y.crChg - x.crChg)[0], w = [...r].sort((x, y) => x.crChg - y.crChg)[0]; return b === w ? null : { b, w }; };
+  const READ = {
+    /** Párrafo de lectura: dónde se movió el tráfico y la conversión (canal y dispositivo siempre que haya datos). «**x**» marca negritas. */
+    traffic(p, rep) {
+      const o = p.overview; if (!o || !o.totals || !fin(o.totals.trafficChg)) return null;
+      const t = o.totals, per = periodOf(rep), out = [];
+      out.push(`${per ? 'En ' + per.toLowerCase() : 'En el período'} llegaron **${RB().fmt('int', t.traffic)}** sesiones (${sg(t.trafficChg)}) y la conversión fue de **${RB().fmt('pct2', t.cr)}**${fin(t.crDiffPp) ? ` (${t.crDiffPp < 0 ? '−' : '+'}${(Math.abs(t.crDiffPp) * 100).toFixed(2)} pp)` : ''}.`);
+      const mix = (id) => (o.mix || []).find((m) => m.id === id);
+      const ch = mix('medium'), bw = ch && bestWorst(ch.rows);
+      if (bw) out.push(`Por canal, la conversión ${bw.b.crChg > 0 ? 'subió más' : 'cayó menos'} en **${bw.b.label}** (${sg(bw.b.crChg)}) y ${bw.w.crChg < 0 ? 'cayó más' : 'subió menos'} en **${bw.w.label}** (${sg(bw.w.crChg)}).`);
+      const dv = mix('device');
+      if (dv && dv.rows.length > 1) {
+        const up = [...dv.rows].sort((a, b) => (b.share - b.baseShare) - (a.share - a.baseShare))[0], d = up.share - up.baseShare;
+        out.push(Math.abs(d) >= 0.005 && fin(up.cr) && fin(t.cr) ? `En dispositivo, el tráfico se inclinó hacia **${up.label}** (${d > 0 ? '+' : '−'}${(Math.abs(d) * 100).toFixed(1)} pp de participación), que convierte ${up.cr >= t.cr ? 'por encima' : 'por debajo'} del total.` : 'La mezcla por dispositivo casi no cambió.');
+      }
+      return out.join(' ');
+    },
+    campaigns(p) {
+      const c = p.campaigns; if (!c || !c.rows || !c.rows.length) return null;
+      const star = c.rows.filter((r) => r.quadrant === 'star'), opp = c.opportunity || [];
+      const a = star.length ? `**${star.map((r) => cut(r.name, 30)).join(', ')}** ${star.length > 1 ? 'son estrella: concentran' : 'es estrella: concentra'} tráfico y ${star.length > 1 ? 'convierten' : 'convierte'} sobre el total.` : 'Ninguna campaña combina mucho tráfico con conversión por encima del total.';
+      const b = opp.length ? `La mayor oportunidad está en **${cut(opp[0].name, 30)}**: igualar la conversión del total valdría cerca de **${RB().fmt('moneyC', opp[0].value)}**.` : `Las diferencias de conversión entre campañas son pequeñas y **no son concluyentes**: ninguna justifica una acción por sí sola.`;
+      return `${a} ${b}`;
+    }
+  };
+  /** @returns {string|null} texto de lectura de la lámina (puede traer «**negritas**»), o null. */
+  function reading(p, report) { try { const f = READ[p && p.id]; const s = f && report ? f(p, report) : null; return s && !/undefined|NaN|null|\[object/.test(s) ? s : null; } catch (e) { return null; } }
+
   /** @returns {string|null} título con conclusión para la lámina, o null (la vista usa el título neutro). */
   function title(p, report) {
     try {
@@ -113,5 +156,5 @@
       return s && typeof s === 'string' && !/undefined|NaN|null|\[object/.test(s) ? s : null;
     } catch (e) { return null; }
   }
-  FP.reportCopy = { title, standing };
+  FP.reportCopy = { title, reading, standing };
 })(typeof window !== 'undefined' ? window : globalThis);

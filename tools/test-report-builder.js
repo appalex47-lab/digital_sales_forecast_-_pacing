@@ -292,4 +292,21 @@ t('32 · en el nivel Sucursal la evolución y «Qué resta y qué suma» muestra
 const tfAlt = pg(RB.build(base({ diag: diagOk(), trafficDiag: diagSeg })), 'traffic');
 t('33 · sin segmentos contra el plan, el tráfico se lee contra el periodo anterior y lo dice', tfAlt.status === 'included' && tfAlt.notes[0].includes('periodo anterior'), tfAlt.status);
 t('33 · sin segmentos en ninguna comparación, el tráfico se omite con motivo', pg(RB.build(base({ diag: diagOk(), trafficDiag: diagOk() })), 'traffic').status === 'omitted');
+
+/* 34 · tráfico: panorama (totales, mezcla, semanas) y campañas con cuadrantes y oportunidad */
+const grp = (label, tr, ord, rev, btr, bord, brev) => ({ label, observations: 20, current: { trafficVolume: tr, orders: ord, revenue: rev, conversionRate: ord / tr, aov: rev / ord }, baseline: { trafficVolume: btr, orders: bord, revenue: brev, conversionRate: bord / btr, aov: brev / bord }, metrics: { trafficVolume: { deltaPct: tr / btr - 1 }, conversionRate: { deltaPct: (ord / tr) / (bord / btr) - 1 }, revenue: { deltaPct: rev / brev - 1 }, orders: { deltaPct: ord / bord - 1 } } });
+const diag34 = diagOk(); diag34.level2 = [
+  { dimension: 'device', label: 'Dispositivo', source: 'segments', groups: [grp('Móvil', 60000, 1200, 480000, 50000, 1000, 400000), grp('Escritorio', 40000, 1000, 520000, 50000, 1250, 650000)] },
+  { dimension: 'medium', label: 'Medio', source: 'segments', groups: [grp('cpc', 50000, 900, 360000, 50000, 1000, 400000), grp('organic', 50000, 1300, 640000, 50000, 1250, 650000)] },
+  { dimension: 'campaign', label: 'Campaña', source: 'segments', groups: [grp('alfa', 60000, 1500, 750000, 55000, 1400, 700000), grp('beta', 30000, 400, 150000, 30000, 500, 200000), grp('gamma', 10000, 300, 100000, 15000, 350, 150000)] }];
+const wk34 = [{ from: '2026-09-01', to: '2026-09-07', days: 7, traffic: 25000, orders: 550 }, { from: '2026-09-08', to: '2026-09-14', days: 7, traffic: 24000, orders: 560 }, { from: '2026-09-15', to: '2026-09-21', days: 7, traffic: 26000, orders: 580 }, { from: '2026-09-22', to: '2026-09-22', days: 1, traffic: 1000, orders: 20 }];
+const r34 = RB.build(base({ diag: diag34, trafficWeekly: wk34 })), tf34 = pg(r34, 'traffic'), cm34 = pg(r34, 'campaigns');
+t('34 · el panorama trae totales, mezcla por canal/dispositivo y semanas (sin semanas de 1 día)', tf34.overview && Math.round(tf34.overview.totals.traffic) === 100000 && tf34.overview.mix.map((m) => m.id).join() === 'medium,device' && tf34.overview.weekly.length === 3, tf34.overview && [tf34.overview.totals, tf34.overview.mix.length, tf34.overview.weekly.length]);
+t('34 · la mezcla suma 100 % y la conversión total es pedidos ÷ sesiones', Math.abs(tf34.overview.mix[1].rows.reduce((a, r) => a + r.share, 0) - 1) < 1e-9 && Math.abs(tf34.overview.totals.cr - 2200 / 100000) < 1e-9, tf34.overview.totals.cr);
+t('34 · sin archivo semanal el panorama sigue y la lista de semanas queda vacía', pg(RB.build(base({ diag: diag34 })), 'traffic').overview.weekly.length === 0);
+t('34 · la lámina de campañas ordena por tráfico y asigna cuadrante', cm34.status === 'included' && cm34.campaigns.rows[0].name === 'alfa' && ['star', 'conversion', 'scale', 'review', 'low'].includes(cm34.campaigns.rows[0].quadrant), cm34.campaigns && cm34.campaigns.rows.map((r) => [r.name, r.quadrant]));
+const lowC = cm34.campaigns.rows.find((r) => r.name === 'beta');
+t('34 · la oportunidad solo aparece cuando la diferencia de conversión es concluyente y por debajo del total', lowC.opportunity === null || (lowC.conclusive && lowC.cr < cm34.campaigns.crTotal), lowC);
+t('34 · sin campañas la lámina se omite con motivo', (() => { const d = diagOk(); d.level2 = [diag34.level2[0]]; const o = pg(RB.build(base({ diag: d })), 'campaigns'); return o.status === 'omitted' && !!o.reason; })());
+
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);
