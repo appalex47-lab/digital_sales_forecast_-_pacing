@@ -184,7 +184,7 @@ async def main():
         await q.goto(u + '#pacing'); await q.wait_for_timeout(600)
         hd = await q.evaluate("""()=>{const r=e=>{const b=e.getBoundingClientRect();return [Math.round(b.left),Math.round(b.right)]};
           const top=document.querySelector('.topbar'),kids=[...top.children].map(c=>c.className.split(' ')[0]);
-          const st=document.getElementById('topbar-status'),sr=r(document.querySelector('.topbar__search')),bell=r(document.querySelector('.topbar__actions .icon-btn'));
+          const st=document.getElementById('topbar-status'),sr=r(document.querySelector('.topbar__search')),bell=r(document.querySelector('.topbar__actions .icon-btn[aria-label^="Notificaciones"]'));
           const items=[...st.children].map(e=>({tag:e.tagName,text:(e.innerText||'').trim(),name:e.getAttribute('aria-label')||'',href:e.getAttribute('href'),sec:e.dataset.section||'',cls:(e.querySelector('.pill')||{className:''}).className,h:Math.round(e.getBoundingClientRect().height)}));
           const yr=document.querySelector('#topbar-year');
           return {kids,order:r(st)[0]>=sr[1]&&r(st)[1]<=bell[0],items,yearOpts:yr?[...yr.options].map(o=>o.value):[],yearSel:yr?yr.value:null,yearName:yr?yr.getAttribute('aria-label'):null,
@@ -247,7 +247,7 @@ async def main():
         wide = []
         for w in (1920, 1440, 1280, 1100, 1025, 900):
             m3 = await b.new_page(viewport={'width': w, 'height': 800}); await prepare(m3, u); await m3.goto(u + '#pacing'); await m3.wait_for_timeout(400)
-            r3 = await m3.evaluate("""()=>{const r=e=>e.getBoundingClientRect();const st=r(document.getElementById('topbar-status')),bell=r(document.querySelector('.topbar__actions .icon-btn')),br=r(document.querySelector('.topbar__brand'));
+            r3 = await m3.evaluate("""()=>{const r=e=>e.getBoundingClientRect();const st=r(document.getElementById('topbar-status')),bell=r(document.querySelector('.topbar__actions .icon-btn[aria-label^="Notificaciones"]')),br=r(document.querySelector('.topbar__brand'));
               return {sw:document.documentElement.scrollWidth-innerWidth,noOverlap:st.right<=bell.left+0.5&&st.left>=br.right-0.5,h:Math.round(r(document.querySelector('.app-header')).height)}}""")
             if not (r3['sw'] <= 0 and r3['noOverlap'] and r3['h'] == 56): wide.append((w, r3))
             await m3.close()

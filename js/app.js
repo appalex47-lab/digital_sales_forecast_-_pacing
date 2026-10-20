@@ -2244,6 +2244,7 @@
     'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
     'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
     'an-filter'(el) { const k = el.dataset.fkey; if (!k || !FP.productFilter) return; resetAnalysis({ filter: FP.productFilter.cascade(state.an.filter, k, el.value) }); state.an.reopen = null; render(); },
+    'gs-open'() { if (FP.search) FP.search.open(''); },
     'fs-toggle'(el) { const pg = el.dataset.fsPage; if (!pg) return; state.fs = { ...(state.fs || {}), [pg]: !(state.fs && state.fs[pg]) }; render(); },
     'fs-chip'(el) {
       const pg = el.dataset.fsPage, k = el.dataset.fsKey || '';

@@ -81,9 +81,9 @@ async def main():
             ov = await q.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth + 2")
             chk(f'CT-4 [{wd}px] sin desborde horizontal al terminar el recorrido', ov is False)
             if wd == 1280:
-                fut = await q.evaluate("""(()=>{const s=document.querySelector('input[type=search][disabled]');const n=[...document.querySelectorAll('button[disabled]')].find(b=>/Notificaciones/.test(b.getAttribute('aria-label')||''));
-                  return {search:s&&s.getAttribute('aria-label'),notif:n&&n.getAttribute('aria-label')}})()""")
-                chk('CT-5 búsqueda global y notificaciones están deshabilitadas y marcadas «próximamente»', fut['search'] and 'próximamente' in fut['search'] and fut['notif'] and 'próximamente' in fut['notif'], fut)
+                fut = await q.evaluate("""(()=>{const s=document.querySelector('.topbar__search input');const n=[...document.querySelectorAll('button[disabled]')].find(b=>/Notificaciones/.test(b.getAttribute('aria-label')||''));
+                  return {search:s&&{label:s.getAttribute('aria-label'),disabled:s.disabled,action:s.dataset.action},notif:n&&n.getAttribute('aria-label')}})()""")
+                chk('CT-5 la búsqueda global está activa (Ctrl K) y las notificaciones siguen deshabilitadas y marcadas «próximamente»', fut['search'] and fut['search']['disabled'] is False and fut['search']['action'] == 'gs-open' and 'Ctrl K' in fut['search']['label'] and fut['notif'] and 'próximamente' in fut['notif'], fut)
         chk('CT-6 sin errores de consola ni de página', not errs, errs[:5])
         await b.close()
     print('RESULTADO batch_controles:', 'OK' if not fails else 'FALLAS: ' + ', '.join(fails))

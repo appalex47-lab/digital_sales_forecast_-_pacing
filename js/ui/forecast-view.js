@@ -70,6 +70,34 @@
       `${C().metrics[k].label} × ${ix.value === null ? 'sin datos (usa 1)' : F().percent(ix.value, 1)} (${ix.windowLabel})`).join('; ');
   }
 
+  const LIGHT = { green: ['ok', 'Usable'], yellow: ['warning', 'Con reservas'], red: ['error', 'Falta información'] };
+  function lightCell(m, suggested) {
+    const esc = H().esc, l = LIGHT[m.light] || LIGHT.yellow;
+    return `${H().pill(l[0], l[1])}${suggested ? ' <span class="chip">Sugerido</span>' : ''}<span class="cell-sub">${esc((m.reasons || []).join(' '))}</span>`;
+  }
+  const money = (v) => (Number.isFinite(v) ? F().metric('revenue', v) : '—');
+  /** Sugerencia explicable (no cambia el método en uso), rango de cierre y, en el Total, la conciliación por días excluidos. */
+  function advisorBlock(adv, run, ch, k) {
+    if (!adv) return '';
+    const esc = H().esc, sg = adv.suggestion, cur = run.method.id;
+    const ruleTitle = { few_days: 'Pocos días contados', backtest: 'Mejor error en la prueba histórica', divergence: 'B y C se separaron', stable: 'Acumulado estable', default: 'Sin método ajustado claro' }[sg.rule] || '';
+    const label = (id) => `${id} · ${run.settings.methods[id].label}`;
+    const head = sg.differsFromCurrent
+      ? `<strong>Método en uso: ${esc(label(cur))}.</strong> Sugerencia (no aplicada): <strong>${esc(label(sg.method))}</strong> — ${esc(ruleTitle)}.`
+      : `<strong>Método en uso: ${esc(label(cur))}.</strong> Coincide con la sugerencia (${esc(ruleTitle)}).`;
+    const apply = sg.differsFromCurrent ? `<button type="button" class="btn btn--small" data-action="fc-setting" data-key="method" value="${esc(sg.method)}">Usar el método ${esc(sg.method)}</button> <span class="cell-sub">Al cambiar de método se crea una versión nueva del forecast; las anteriores no se borran.</span>` : '';
+    const rg = adv.range ? `<p class="field__hint">Rango de cierre entre los métodos utilizables: <strong>${esc(money(adv.range.min))} (${esc(adv.range.minMethod)}) – ${esc(money(adv.range.max))} (${esc(adv.range.maxMethod)})</strong>${Number.isFinite(adv.range.spreadPct) ? ` · diferencia ${esc((adv.range.spreadPct * 100).toFixed(1))} % de la meta` : ''}. Solo venta; los métodos en rojo no cuentan.</p>` : '';
+    const rc = adv.reconciliation && adv.reconciliation.excludedDays ? (() => {
+      const r = adv.reconciliation, d = (iso) => `${+iso.slice(8, 10)}/${+iso.slice(5, 7)}`;
+      const lines = Object.entries(r.byChannel).map(([c, rs]) => `${esc(PV().chLabel(c))}: ${rs.map(([a, b]) => (a === b ? d(a) : `${d(a)}–${d(b)}`)).join(', ')}`).join(' · ');
+      return `<div class="note note--warning"><strong>El Total excluye ${r.excludedDays} día(s) porque falta el real de algún canal.</strong> ${lines}.
+        ${Number.isFinite(r.sumChannelsGap) && Number.isFinite(r.totalGap) ? `Gap a la fecha: suma de canales ${esc(money(r.sumChannelsGap))} · Total estricto ${esc(money(r.totalGap))} · diferencia por días excluidos ${esc(money(r.difference))}.` : ''}
+        <span class="cell-sub">Regla del Total: un día cuenta solo si todos los canales tienen real; el forecast del Total sí suma los canales día por día.</span></div>`;
+    })() : '';
+    return `<div class="note advisor"><p>${head}</p><ul>${sg.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${apply ? `<p>${apply}</p>` : ''}
+      <details class="disclosure"><summary>Reglas de la sugerencia</summary><div class="panel__body"><p>En este orden: (1) pocos días contados → A · (2) un método ajustado con error en la prueba histórica ≤ 90 % del error del plan → ese método (solo por canal; calcula el error histórico abajo) · (3) B y C difieren ≥ 2 % de la meta → C, revisando ambos · (4) acumulado con días suficientes → B · (5) si no → A. Es una lectura, no una decisión: tú eliges el método.</p></div></details></div>${rg}${rc}`;
+  }
+
   function renderMethods(state) {
     const esc = H().esc;
     const run = state.fc.run;
@@ -77,6 +105,8 @@
     const k = state.fc.metric;
     const cmp = ch === 'total' ? run.comparison.total : run.comparison.byChannel[ch];
     const plan = PV().seriesOf(run, ch).annual.plan;
+    const bt = state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null;
+    const adv = FP.methodAdvisor ? FP.methodAdvisor.advise({ run, channel: ch, metric: k, backtest: bt }) : null;
     const rows = Object.keys(run.settings.methods).map((id) => {
       const m = cmp[id];
       const fc = ch === 'total' ? m.forecast : m.annual && m.annual.forecast;
@@ -89,12 +119,14 @@
         <td class="wrap"><span class="cell-sub">${esc(assumptions)}</span>${m.fallbackDays ? `<span class="cell-sub">${m.fallbackDays} días con índice sin datos (usan plan)</span>` : ''}</td>
         <td class="num">${PV().cellVal(k, fc && fc[k], mReason)}</td>
         <td class="num">${PV().cellSigned(k, g && g.gap, mReason)}<span class="cell-sub">${esc(F().signedPercent(g && g.gapPct, 1))}</span></td>
-        <td>${histPill(m.historyAdequacy)}</td></tr>`;
+        <td>${histPill(m.historyAdequacy)}</td>
+        ${adv ? `<td class="wrap">${lightCell(adv.methods[id], adv.suggestion.method === id)}</td>` : ''}</tr>`;
     }).join('');
     $('fc-methods').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Comparación de métodos · ${esc(PV().chLabel(ch))}</h3></div>
+      ${advisorBlock(adv, run, ch, k)}
       <div class="table-wrap"><table class="table ds-table">
-        <thead><tr><th>Método</th><th>Supuestos</th><th class="num" data-state="forecast">Forecast anual</th><th class="num">Diferencia vs plan (${esc(F().metric(k, plan[k]))})</th><th>Histórico comparable</th></tr></thead>
+        <thead><tr><th>Método</th><th>Supuestos</th><th class="num" data-state="forecast">Forecast anual</th><th class="num">Diferencia vs plan (${esc(F().metric(k, plan[k]))})</th><th>Histórico comparable</th>${adv ? '<th>Semáforo</th>' : ''}</tr></thead>
         <tbody>${rows}</tbody></table></div>
       <p class="field__hint">«Histórico comparable» indica si hay días suficientes para calcular los índices; no mide qué tan preciso es el pronóstico (ver «Calidad del pronóstico»).</p>
       <p class="field__hint">Todos conservan el patrón diario del plan (nunca "restante ÷ días restantes"). En D los índices se aplican solo a volumen, CR y AOV; pedidos y venta se derivan, sin doble conteo.

@@ -23,7 +23,7 @@ async def main():
         th = await q.evaluate("[...document.querySelectorAll('#fc-methods thead th')].map(e=>e.textContent.trim())")
         chk('C1 la tabla de métodos ya no dice «Confianza»: dice «Histórico comparable»', 'Histórico comparable' in th and 'Confianza' not in th, th)
         pills = await q.evaluate("[...document.querySelectorAll('#fc-methods tbody .pill')].map(e=>e.textContent.trim())")
-        chk('C2 las etiquetas hablan de histórico (suficiente/limitado/insuficiente) o «No aplica», nunca «Excelente»', pills and all(x in ('Histórico suficiente', 'Histórico limitado', 'Histórico insuficiente', 'No aplica') for x in pills), pills)
+        chk('C2 las etiquetas hablan de histórico (suficiente/limitado/insuficiente) o «No aplica», nunca «Excelente»', pills and all(x in ('Histórico suficiente', 'Histórico limitado', 'Histórico insuficiente', 'No aplica', 'Usable', 'Falta información') for x in pills), pills)
         txt = await q.inner_text('#fc-methods')
         chk('C3 antes de calcular, la calidad medida aparece como «no evaluada»', 'no evaluada' in txt.lower() and 'Calcular error histórico' in txt)
         await q.click('[data-action=fc-backtest]'); await q.wait_for_timeout(900)
