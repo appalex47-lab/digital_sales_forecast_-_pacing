@@ -243,7 +243,7 @@
     const r = pa.result;
     if (!PS().available() || !(PS().meta || {}).batches) { ['pa-kpis', 'pa-table', 'pa-signals', 'pa-trace'].forEach((id) => { $(id).innerHTML = ''; });
       $('pa-kpis').innerHTML = '<div class="empty"><strong>Todavía no hay datos de productos</strong>Carga el archivo de venta (fecha, canal, SKU, estado, sucursal, tipo de entrega y al menos una métrica) y, si quieres CR y funnel, el archivo de funnel de GA4. <a class="btn btn--small btn--primary" href="#carga">Ir a Carga de datos</a></div>'; return; }
-    if (pa.loading || !r) { $('pa-kpis').innerHTML = '<p class="ds-loading" role="status">Calculando desde IndexedDB…</p>'; return; }
+    if (pa.loading || !r) { $('pa-kpis').innerHTML = FP.loader.html('Calculando desde los datos guardados en este navegador…', { key: 'productos' }); return; }
     const t = r.total;
     // Métrica del periodo: valor, referencia y variación. El estado del dato (Disponible / Parcial / Faltante…) sigue siendo un badge con texto.
     const kp = (k, label) => { const c = t.current[k], b = t.baseline[k]; const d = fin(c && c.value) && fin(b && b.value) && b.value !== 0 ? c.value / b.value - 1 : null;

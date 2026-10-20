@@ -47,6 +47,15 @@
     const pts = vals.map((x, i) => `${(i / Math.max(1, vals.length - 1)) * 100},${28 - ((x.value - min) / span) * 24}`).join(' ');
     return `<svg class="trend-spark" viewBox="0 0 100 30" role="img" aria-label="Evolución histórica"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
+  /** Selección de página: categoría, producto, sucursal… (se combina con el Canal y filtra TODA la página). */
+  function pageFilterRow(a) {
+    const PF = FP.productFilter; if (!PF) return '';
+    const f = PF.active(a.filter), opts = PF.options(f);
+    const sel = (k) => `<div class="field"><label for="an-f-${k}">${esc(PF.LABEL[k])}</label><select id="an-f-${k}" data-action="an-filter" data-fkey="${k}"><option value="">Todas</option>${(opts[k] || []).map((v) => `<option value="${esc(v)}" ${f[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`;
+    return `<details class="an-pagefilter" ${PF.isActive(f) ? 'open' : ''}><summary>Filtrar toda la página por producto o ubicación${PF.isActive(f) ? ` · <b>${esc(PF.describe(f))}</b>` : ''}</summary>
+      <div class="settings-grid">${PF.KEYS.map(sel).join('')}</div>
+      ${PF.isActive(f) ? '<div class="an-pagefilter__note">Todo lo de esta página (series, patrones, pronóstico, detalle, asistente) se calcula solo con esta selección, dentro del canal elegido. El Puente al plan no aplica: la meta existe por canal.</div><button type="button" class="btn btn--ghost" data-action="an-filter-clear">Quitar selección</button>' : ''}</details>`;
+  }
   function filters(state) {
     const a = state.an;
     const levels = Object.entries(LEVEL);
@@ -79,6 +88,7 @@
         <div class="field"><label for="an-comparison">Comparación principal</label><select id="an-comparison" data-action="an-comparison"><option value="previous" ${a.comparison!=='year_ago'?'selected':''}>Período anterior</option><option value="year_ago" ${a.comparison==='year_ago'?'selected':''}>Mismo periodo año anterior</option></select></div>
         <div class="field"><label for="an-level">Analizar por</label><select id="an-level" data-action="an-level">${levels.map(([v,l])=>`<option value="${v}" ${v===a.level?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
       </div>
+      ${pageFilterRow(a)}
       <div class="settings-grid analysis-filter-controls">
         <div class="field"><label for="an-state">Estado actual</label><select id="an-state" data-action="an-state">${STATE_ORDER.map(([v, l]) => `<option value="${v}" ${v === (a.stateFilter || 'all') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
         <div class="field"><label for="an-entity-query">Buscar</label><input id="an-entity-query" type="search" value="${esc(a.entityQuery || '')}" placeholder="Producto, categoría, SKU…" data-action="an-entity-query"></div>
@@ -98,7 +108,7 @@
     const c = a.context, ci = a.comparisonInfo;
     if (!c || !c.focus) return '';
     const cmp = ci && ci.text ? `${esc(ci.text)} <small>(${esc(ci.idLabel || '')}${ci.comparable ? '' : ' · N/A'})</small>` : 'N/A';
-    return `<div class="analysis-context" role="status" aria-label="Contexto del análisis"><span><b>Canal</b> ${esc(c.channelLabel)}</span><span><b>Período</b> ${esc(c.focus.label)}</span><span><b>Comparación</b> ${cmp}</span><span><b>Nivel</b> ${esc(LEVEL[a.level] || a.level)}</span><span><b>Métrica</b> ${esc(c.metricLabel)}</span></div>`;
+    return `<div class="analysis-context" role="status" aria-label="Contexto del análisis"><span><b>Canal</b> ${esc(c.channelLabel)}</span>${FP.productFilter && FP.productFilter.isActive(a.filter) ? `<span><b>Selección</b> ${esc(FP.productFilter.describe(a.filter))}</span>` : ''}<span><b>Período</b> ${esc(c.focus.label)}</span><span><b>Comparación</b> ${cmp}</span><span><b>Nivel</b> ${esc(LEVEL[a.level] || a.level)}</span><span><b>Métrica</b> ${esc(c.metricLabel)}</span></div>`;
   }
   function growthChart(series) {
     const vals = (Array.isArray(series) ? series : []).filter((x) => typeof x?.value === 'number' && Number.isFinite(x.value));
@@ -146,7 +156,7 @@
     const x = d.data;
     const head = `<div class="drill__head"><div><span class="analysis-layer-label">DETALLE Y TRAZABILIDAD</span></div><button type="button" class="btn btn--small btn--ghost" data-action="an-drill-close">Cerrar detalle</button></div>`;
     if (d.error) return `<section class="drill" id="an-drill">${head}<p class="note note--warning">No se pudo cargar el detalle: ${esc(d.error)} <button type="button" class="btn btn--small" data-action="an-drill-retry">Reintentar</button></p></section>`;
-    if (d.loading || !x) return `<section class="drill" id="an-drill">${head}<p class="ds-loading" role="status">Cargando detalle…${d.step ? ` <span class="cell-sub">${esc(d.step)}</span>` : ''}</p></section>`;
+    if (d.loading || !x) return `<section class="drill" id="an-drill">${head}${FP.loader.html('Cargando detalle…', { key: 'drill', detail: d.step })}</section>`;
     const c = x.context, sm = x.summary;
     const crumbs = [`<button type="button" class="btn btn--small btn--ghost" data-action="an-drill-up" data-index="-1">${d.scope === 'total' ? 'Total del análisis' : esc(d.entity)}</button>`,
       ...d.path.map((n, i) => `<span aria-hidden="true">›</span><button type="button" class="btn btn--small btn--ghost" data-action="an-drill-up" data-index="${i}">${esc(LEVEL[n.level] || n.level)}: ${esc(n.key)}</button>`)].join(' ');
@@ -178,7 +188,7 @@
     const rule = own ? `<div class="note drill__rule"><strong>Regla que lo señala:</strong> ${esc((PATTERN[own.pattern] || [0, own.pattern])[1])}${adv && adv.signal && adv.signal !== 'normal' ? ` · señal avanzada «${esc(adv.signal)}» (severidad ${esc(adv.severity)}, score ${esc(adv.score)}${adv.regimeChanges ? `, ${adv.regimeChanges} cambio(s) de régimen` : ''})` : ''}.<br><strong>Evidencia:</strong> ${own.consecutivePeriods || 0} período(s) consecutivos; ${own.periodsAnalyzed} períodos cerrados analizados (${esc(own.evidence && own.evidence.periods ? own.evidence.periods[0] + ' → ' + own.evidence.periods[own.evidence.periods.length - 1] : '—')}) en ${esc(c.channel)}; cambios período a período: ${esc(chg.map((x) => (typeof x === 'number' && Number.isFinite(x) ? (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + ' %' : 'N/A')).join(' · ') || 'N/A')}.${ra ? `<br><small>Umbrales usados: cambio relevante ≥ ${(ra.changePct * 100).toFixed(0)} %, estable < ${(ra.stablePct * 100).toFixed(0)} %, mínimo ${ra.minPeriods} períodos, anomalía z ≥ ${ra.anomalyZ}.</small>` : ''}</div>` : '';
     return `<section class="drill" id="an-drill" aria-label="Detalle y trazabilidad">${head}
       <div class="analysis-context analysis-context--drill"><span><b>Canal</b> ${esc(c.channel)}</span><span><b>Período</b> ${esc(c.period)}</span><span><b>Comparación</b> ${esc(c.comparison || 'N/A')}</span><span><b>Nivel</b> ${esc(c.level)}</span><span><b>Métrica</b> ${esc(c.metric)}</span></div>
-      <nav class="drill__crumbs" aria-label="Ruta del detalle">${crumbs}</nav>${rule}${summary}${chRows}${childRows}${periodRows}${rec}${d.pending ? `<p class="ds-loading" role="status">${esc(d.step || 'Calculando el detalle temporal y los registros fuente…')}</p>` : ''}</section>`;
+      <nav class="drill__crumbs" aria-label="Ruta del detalle">${crumbs}</nav>${rule}${summary}${chRows}${childRows}${periodRows}${rec}${d.pending ? `${FP.loader.html(d.step || 'Calculando el detalle temporal y los registros fuente…', { key: 'drill-b' })}` : ''}</section>`;
   }
   const DRILL_NEXT = { category: true, subcategory: true, product: true, region: true, state: true, city: true };
 
@@ -362,10 +372,10 @@
             ${PANORAMA_GROUPS.map((g, i) => `<button type="button" class="analysis-assistant__suggestion analysis-assistant__chip" data-action="an-assistant-group" data-group="${i}" aria-pressed="${String(as.group) === String(i)}">${esc(g.short)} ▾</button>`).join('')}
           </div>
           ${as.group !== undefined && as.group !== null && PANORAMA_GROUPS[as.group] ? `<div class="analysis-assistant__qs">${PANORAMA_GROUPS[as.group].questions.map(q => `<button type="button" class="analysis-assistant__suggestion" data-action="an-assistant-suggest" data-panorama="1" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}
-          ${as.pan ? panoramaCards(as.pan) : (as.panBusy ? '<p class="ds-loading" role="status">Armando el panorama por nivel…</p>' : '')}
+          ${as.pan ? panoramaCards(as.pan) : (as.panBusy ? FP.loader.html('Armando el panorama por nivel…', { key: 'panorama' }) : '')}
         </div>
         <div class="analysis-assistant__input"><label for="an-assistant-input">Tu pregunta</label><textarea id="an-assistant-input" rows="2" placeholder="Ej. ¿Qué productos llevan más tiempo cayendo?" data-action="an-assistant-question">${esc(as.question || '')}</textarea><div class="btn-row"><button type="button" class="btn btn--primary" data-action="an-assistant-ask" ${as.status === 'busy' || !configured ? 'disabled' : ''}>${as.status === 'busy' ? 'Consultando…' : 'Preguntar'}</button>${!configured ? '<span class="field__hint">Configura Cohere en Ajustes para usar el asistente.</span>' : '<span class="field__hint">La conexión es la misma que usa Diagnóstico y Narrativa.</span>'}</div></div>
-        ${as.status === 'busy' ? '<p class="ds-loading" role="status">Consultando la evidencia calculada…</p>' : ''}${error}${resultBlock}${history ? `<details class="analysis-assistant__history"><summary>Preguntas anteriores</summary>${history}</details>` : ''}
+        ${as.status === 'busy' ? FP.loader.html('Consultando la evidencia calculada…', { key: 'asist' }) : ''}${error}${resultBlock}${history ? `<details class="analysis-assistant__history"><summary>Preguntas anteriores</summary>${history}</details>` : ''}
       </section>` : ''}
     </aside>`;
   }

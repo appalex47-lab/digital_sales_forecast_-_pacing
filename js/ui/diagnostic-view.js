@@ -249,7 +249,7 @@
     const esc = H().esc;
     const ai = state.dx.ai;
     if (d.status !== 'ok') { $('dx-hyps').innerHTML = ''; return; }
-    const aiBlock = ai.status === 'busy' ? '<p class="ds-loading" role="status">Consultando a Cohere…</p>'
+    const aiBlock = ai.status === 'busy' ? FP.loader.html('Consultando a Cohere…', { key: 'diag-ai' })
       : ai.result && ai.result.ok ? `<h4>Redactadas con Cohere (${esc(ai.result.model)})</h4>${ai.result.hypotheses.map((h) => hypothesisCard(h, d)).join('')}
         ${ai.result.errors.length ? `<p class="field__hint">Validación: ${esc(ai.result.errors.join(' '))}</p>` : ''}`
       : ai.result ? `<p class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc(ai.result.errors.join(' '))} El diagnóstico matemático y las hipótesis por reglas siguen completos.</p>` : '';
@@ -363,7 +363,7 @@
       return;
     }
     if (p.error) { el.innerHTML = `${head}<div class="ds-alert ds-alert--danger" role="alert">No se pudo calcular el desglose de productos: ${esc(p.error)}</div>`; return; }
-    if (p.loading || !p.result) { el.innerHTML = `${head}<p class="ds-loading" role="status">Calculando venta por categoría, producto y región…</p>`; return; }
+    if (p.loading || !p.result) { el.innerHTML = `${head}${FP.loader.html('Calculando venta por categoría, producto y región…', { key: 'diag-prod' })}`; return; }
     const r = p.result;
     const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.currency(Math.abs(v || 0), 0);
     const pct = (v) => (v === null || v === undefined || !isFinite(v) ? '—' : `${(v * 100).toFixed(1)} %`);

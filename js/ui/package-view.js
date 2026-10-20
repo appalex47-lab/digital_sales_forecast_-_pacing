@@ -15,7 +15,7 @@
     const b = document.querySelector('[data-action="pkg-download"]');
     if (b) { b.disabled = v; b.setAttribute('aria-busy', String(v)); }
     const s = document.getElementById('pkg-status');
-    if (s) s.innerHTML = v ? '<p class="ds-loading" role="status">Generando el paquete…</p>' : '';
+    if (s) s.innerHTML = v ? FP.loader.html('Generando el paquete…', { key: 'paquete' }) : '';
   }
 
   function render(state, preview) {

@@ -108,7 +108,7 @@
         if (state.view === 'clientes') render(state);
       }).catch((e) => { cu.status = 'error'; cu.error = e.message; if (state.view === 'clientes') render(state); });
     }
-    if (cu.status === 'loading') { el.innerHTML = '<p class="note" role="status">Calculando clientes…</p>'; return; }
+    if (cu.status === 'loading') { el.innerHTML = FP.loader.html('Calculando clientes y LTV desde los datos guardados…', { key: 'clientes' }); return; }
     if (cu.status === 'error') { el.innerHTML = `<p class="note note--warn">No pude leer el libro de clientes (${esc(cu.error || '')}).</p>`; return; }
     const r = cu.result;
     const hasF = Object.keys(activeFilter(cu.opts)).length > 0;
