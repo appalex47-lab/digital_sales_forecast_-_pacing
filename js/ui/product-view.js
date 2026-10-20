@@ -206,30 +206,25 @@
         ? `<button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-index="${i}" title="${esc(levelName(d.level))}">${esc(displayKey(d.level, d.key))}</button>`
         : `<strong>${esc(displayKey(d.level, d.key))}</strong>`))];
     const geoLevel = ['region', 'state', 'city', 'branch', 'delivery'].includes(level) || geoActive || pa.drill.some((d) => ['region', 'state', 'city', 'branch', 'delivery'].includes(d.level));
-    $('pa-controls').innerHTML = `
-      <div class="filters">
-        <div class="field"><label for="pa-from" class="field__hint">Desde</label><input id="pa-from" type="date" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"></div>
-        <div class="field"><label for="pa-to" class="field__hint">Hasta</label><input id="pa-to" type="date" value="${esc(pa.to || '')}" data-action="pa-setting" data-key="to"></div>
-        <div class="field"><label for="pa-cmp" class="field__hint">Comparar contra</label>
+    const geoKeys = [['region', 'Región'], ['state', 'Estado'], ['city', 'Ciudad'], ['branch', locTerm()], ['delivery', 'Tipo de entrega']];
+    const paChips = geoKeys.filter(([k]) => pa.geo[k]).map(([k, l]) => ({ key: 'geo:' + k, text: `${l}: ${pa.geo[k]}` }));
+    const shell = FP.filterShell.html({ page: 'pa', open: Boolean(state.fs && state.fs.pa), chips: paChips,
+      primary: `<div class="field"><label for="pa-from" class="field__hint">Desde</label><input id="pa-from" type="date" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"></div><div class="field"><label for="pa-to" class="field__hint">Hasta</label><input id="pa-to" type="date" value="${esc(pa.to || '')}" data-action="pa-setting" data-key="to"></div><div class="field"><label for="pa-ch" class="field__hint">Canal</label>
+          <select id="pa-ch" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
+            `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`,
+      groups: [
+        { title: 'Comparación y vista', html: `<div class="field"><label for="pa-cmp" class="field__hint">Comparar contra</label>
           <select id="pa-cmp" data-action="pa-setting" data-key="comparison">
             <option value="previous" ${pa.comparison === 'previous' ? 'selected' : ''}>Periodo anterior (misma duración)</option>
-            <option value="yoy" ${pa.comparison === 'yoy' ? 'selected' : ''}>Mismo periodo del año anterior</option></select></div>
-        <div class="field"><label for="pa-ch" class="field__hint">Canal</label>
-          <select id="pa-ch" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
-            `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-        <div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
-          <select id="pa-viewby" data-action="pa-viewby">${roots.map(([v, l]) => `<option value="${v}" ${pa.viewBy === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-        <div class="field"><label for="pa-top" class="field__hint">Mostrar (solo visual)</label>
-          <select id="pa-top" data-action="pa-setting" data-key="topN">${C().products.topN.map((n) => `<option value="${n}" ${String(pa.topN) === String(n) ? 'selected' : ''}>${n ? `Top ${n}` : 'Todos (paginado)'}</option>`).join('')}</select></div>
-        <div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--small" data-action="pa-from-dx" ${state.dx && state.dx.run ? '' : 'disabled'}>Usar periodo y canal del diagnóstico</button></div>
-      </div>
-      ${av.region || av.state || av.city || av.branch || av.delivery ? `
-      <fieldset class="filters geo-filters"><legend class="field__hint">Geografía y operación (solo análisis de productos)</legend>
-        ${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}
+            <option value="yoy" ${pa.comparison === 'yoy' ? 'selected' : ''}>Mismo periodo del año anterior</option></select></div><div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
+          <select id="pa-viewby" data-action="pa-viewby">${roots.map(([v, l]) => `<option value="${v}" ${pa.viewBy === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div><div class="field"><label for="pa-top" class="field__hint">Mostrar (solo visual)</label>
+          <select id="pa-top" data-action="pa-setting" data-key="topN">${C().products.topN.map((n) => `<option value="${n}" ${String(pa.topN) === String(n) ? 'selected' : ''}>${n ? `Top ${n}` : 'Todos (paginado)'}</option>`).join('')}</select></div><div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--small" data-action="pa-from-dx" ${state.dx && state.dx.run ? '' : 'disabled'}>Usar periodo y canal del diagnóstico</button></div>` },
+        { title: 'Geografía y operación (solo análisis de productos)', html: (av.region || av.state || av.city || av.branch || av.delivery) ? `${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}
         ${sel('branch', locTerm(), opts.branches, (b) => b.code, (b) => (b.name !== b.code ? `${b.name} (${b.code})` : b.code))}
-        ${sel('delivery', 'Tipo de entrega', opts.deliveries)}
-        ${geoActive ? '<div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--ghost btn--small" data-action="pa-geo-clear">Quitar filtros de geografía</button></div>' : ''}
-      </fieldset>` : ''}
+        ${sel('delivery', 'Tipo de entrega', opts.deliveries)}` : '' }
+      ] });
+    $('pa-controls').innerHTML = `
+      ${shell}
       <nav class="breadcrumbs" aria-label="Ruta del análisis">${crumbs.join(' › ')}
         ${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}
         ${choices.length && level ? `<span class="breadcrumbs__next"><label for="pa-next" class="field__hint">Desglosar por</label>

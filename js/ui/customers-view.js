@@ -92,7 +92,10 @@
     const esc = H().esc, o = state.cu.opts, opts = filterOptions(o);
     if (!opts.category.length && !opts.state.length) return '';
     const sel = (k) => `<label class="field"><span class="field__label">${FLABEL[k]}</span><select data-cu-f="${k}"><option value="">Todas</option>${opts[k].map((v) => `<option value="${esc(v)}"${o.filter && o.filter[k] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></label>`;
-    return `<div class="cus-controls cus-filters" data-cus-filters="1">${FKEYS.map(sel).join('')}${Object.keys(activeFilter(o)).length ? '<button type="button" class="btn" data-action="cu-clear-filter">Quitar filtros</button>' : ''}</div>`;
+    const act = activeFilter(o), chips = Object.keys(act).map((k) => ({ key: 'cu:' + k, text: `${FLABEL[k]}: ${act[k]}` }));
+    return `<div class="cus-filters" data-cus-filters="1">${FP.filterShell.html({ page: 'cu', open: Boolean(state.fs && state.fs.cu), chips, primary: '', groups: [
+      { title: 'Producto', html: ['category', 'subcategory', 'product'].filter((k) => FKEYS.includes(k)).map(sel).join('') },
+      { title: 'Ubicación', html: FKEYS.filter((k) => !['category', 'subcategory', 'product'].includes(k)).map(sel).join('') }] })}</div>`;
   }
 
   function render(state) {

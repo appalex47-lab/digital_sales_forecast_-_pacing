@@ -30,7 +30,7 @@ async def main():
                 await q.wait_for_timeout(1000)
                 if await q.evaluate("FP.app.state.staging.items.length") == 0: break
             await q.wait_for_timeout(2500)
-            await q.goto(U + '#clientes'); await q.wait_for_selector('#cus-body [data-cu-f="category"]', timeout=30000)
+            await q.goto(U + '#clientes'); await q.wait_for_selector('#cus-body .fshell__toggle', timeout=30000); await q.click('#cus-body .fshell__toggle'); await q.wait_for_selector('#cus-body [data-cu-f="category"]', timeout=30000)
             tot = await q.evaluate("document.querySelector('#cus-body .metric-card__value').innerText")
             cats = await q.evaluate("[...document.querySelectorAll('select[data-cu-f=category] option')].map(o=>o.value).filter(Boolean)")
             chk(f'L1 [{tag}] aparecen los filtros de categoría, subcategoría, producto, estado y sucursal', cats and await q.locator('#cus-body [data-cu-f]').count() == 5, cats[:3])
@@ -52,7 +52,7 @@ async def main():
                 t3 = await q.evaluate("document.querySelector('#cus-body .metric-card__value').innerText")
                 n3 = await q.evaluate(mon); chk(f'L4 [{tag}] categoría + producto + canal reduce todavía más ({n2} → {n3})', 0 < n3 < n2, [n2, n3])
             ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'L5 [{tag}] sin desborde horizontal ({ov}px)', ov <= 1, ov)
-            await q.click('[data-action="cu-clear-filter"]'); await q.wait_for_timeout(1500)
+            await q.evaluate("document.querySelector('[data-fshell=cu] [data-action=fs-clear]').click()"); await q.wait_for_timeout(1500)
             t4 = await q.evaluate("document.querySelector('#cus-body .metric-card__value').innerText")
             chk(f'L6 [{tag}] quitar filtros vuelve al total del canal', await q.locator('[data-cus-selection]').count() == 0, t4)
             # libro anterior sin líneas
