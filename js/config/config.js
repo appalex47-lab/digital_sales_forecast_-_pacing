@@ -162,7 +162,7 @@
       subtitle: 'Planeación, pacing y reforecast de ventas digitales',
       version: '0.16.6',
       phase: 9,
-      phaseLabel: 'Alfa'
+      phaseLabel: 'Fase 15'
     },
 
     /** Versión del contrato de datos. Cambiarla exige nota en ARCHITECTURE.md §9. */
