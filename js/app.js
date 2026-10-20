@@ -826,6 +826,34 @@
         }
       } catch (e) { productByLevel = null; /* se usa el nivel que tenga el análisis */ }
     }
+    // Foco de la caída: la categoría que más arrastra, su subcategoría y dónde (farmacias, entrega). Se analiza a nivel de categoría/subcategoría
+    // con 14 períodos (para comparar con el mismo mes del año anterior) y la vista de Evolución queda tal como estaba.
+    let focusData = null;
+    if (hasProducts && !rpF) {
+      const trendAt = async (level, filter) => {
+        const snap = { ...state.an }; Object.assign(state.an, { level, filter: filter || {}, periodCount: 14 });
+        try { await ensureTrendAnalysis(); const an = state.an; return an.priorities && an.priorities.status === 'available' ? { priorities: an.priorities, rows: an.rows, context: an.context } : null; }
+        catch (e) { return null; } finally { Object.assign(state.an, snap); }
+      };
+      try {
+        const cat = await trendAt('category');
+        const top = cat && (cat.priorities.drag || []).find((x) => Number.isFinite(x.impact) && x.impact < 0);
+        if (top) {
+          const sub = await trendAt('subcategory', { category: top.entity });
+          let delivery = null;
+          try {
+            const cmp = cat.context && cat.context.comparison, chan = cat.context && cat.context.channel;
+            if (cmp && cmp.available && cmp.current && cmp.baseline) {
+              const q = (r) => FP.productStore.aggregate({ from: r.from, to: r.to, channel: chan, groupBy: 'delivery', filter: { category: top.entity } });
+              const [cm, bm] = await Promise.all([q(cmp.current), q(cmp.baseline)]);
+              const rows = []; new Set([...cm.keys(), ...bm.keys()]).forEach((k) => { const cv = (FP.productStore.finalize(cm.get(k), null) || {}).revenue, bv = (FP.productStore.finalize(bm.get(k), null) || {}).revenue; const c = cv && Number.isFinite(cv.value) ? cv.value : 0, b = bv && Number.isFinite(bv.value) ? bv.value : 0; rows.push({ name: k, delta: c - b }); });
+              delivery = rows.sort((a, b) => a.delta - b.delta);
+            }
+          } catch (e) { delivery = null; }
+          focusData = { category: cat, subcategory: sub, delivery };
+        }
+      } catch (e) { focusData = null; /* sin foco: el resumen usa la lectura de siempre */ }
+    }
     let customers = null;
     try {
       const o = { ...FP.customersView.optsOf(state), channel: ch === 'total' ? null : ch };
@@ -844,7 +872,7 @@
     const recovery = { actions: state.rc.plan && state.rc.plan.actions ? state.rc.plan.actions : [], scenarios: linked.map((s) => ({ name: s.name, type: s.type, impact: s.expectedImpact ? s.expectedImpact.incrementalValue : null })) };
     return FP.reportBuilder.build({
       app: { name: C.app.name, version: C.app.version }, generatedAt: new Date().toISOString(), channel: ch, run, rf, diag,
-      trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
+      focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel,
       product: pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
       quality: FP.coverage.summarize(state.store), filters, recovery,

@@ -205,9 +205,21 @@
     seasonality: (p, x) => `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-a rp-col-a--m">${p.charts.map(chartHtml).join('') || '<p class="rp-empty">No hay años completos para calcular estacionalidad.</p>'}</div><div class="rp-col-b">${p.tables.map(tableHtml).join('')}</div></div>${notesHtml(p)}`
   };
 
+  /** Entidad que concentra la caída contra el resto del negocio (índice 100 = primer período); la línea punteada es el resto. */
+  function focusSpark(sp) {
+    const W = 270, H = 84, L = 6, R = 6, T = 10, B = 22, n = sp.periods.length, all = [...sp.entity, ...sp.rest], lo = Math.min(...all, 100) - 4, hi = Math.max(...all, 100) + 4;
+    const X = (i) => L + (W - L - R) * i / Math.max(1, n - 1), Y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    const path = (arr) => arr.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    const si = sp.since ? sp.periods.indexOf(sp.since) : -1;
+    const lab = (k) => { const m = /^(\d{4})-(\d{2})$/.exec(k); return m ? `${MO[+m[2] - 1].toLowerCase()} ${m[1].slice(2)}` : k; };
+    return wrap(W, H, `<line x1="${L}" x2="${W - R}" y1="${Y(100)}" y2="${Y(100)}" stroke="${C.light}"/><path d="${path(sp.rest)}" fill="none" stroke="${C.grey}" stroke-width="2" stroke-dasharray="5 4"/><path d="${path(sp.entity)}" fill="none" stroke="${C.red}" stroke-width="3"/>
+      ${si >= 0 ? `<circle cx="${X(si)}" cy="${Y(sp.entity[si])}" r="4.5" fill="${C.red}"/>${svgT(X(si), H - 6, lab(sp.since), { anchor: 'middle', fill: C.red, weight: 700 })}` : ''}${svgT(L, H - 6, lab(sp.periods[0]), { fill: C.grey })}${svgT(W - R, H - 6, lab(sp.periods[n - 1]), { anchor: 'end', fill: C.grey })}`, `${sp.periods.length} períodos de ${p0(sp)}`);
+  }
+  const p0 = () => 'la entidad contra el resto del negocio';
   function summaryBody(p, x) {
     const cards = p.items.map((i) => `<li class="rp-find${i.n === 1 ? ' rp-find--lead' : ''}"><div class="rp-find__fig">${esc(i.figure || '')}</div><div class="rp-find__lab">${esc(i.figureLabel || '')}</div><h3 class="rp-find__t">${esc(i.title || i.text)}</h3><p class="rp-find__w">${esc(i.why || i.text)}</p>${i.note ? `<p class="rp-find__n">${esc(i.note)}</p>` : ''}</li>`).join('');
-    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
+    const band = p.focus ? `<div class="rp-since">${p.focus.spark ? `<div class="rp-since__g">${focusSpark(p.focus.spark)}<div class="rp-since__k"><i class="k1"></i>${esc(p.focus.entity)} <i class="k2"></i>Resto del negocio</div></div>` : ''}<div class="rp-since__t">${esc(p.focus.text)}</div></div>` : '';
+    return `${p.narrative ? `<p class="rp-lead">${esc(p.narrative)}</p>` : ''}${band}<ol class="rp-finds rp-finds--${p.items.length}">${cards}</ol>
       ${p.review ? `<div class="rp-callout rp-callout--info"><strong>Qué revisar primero.</strong> ${esc(p.review.text)}</div>` : ''}`;
   }
 

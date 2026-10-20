@@ -406,6 +406,47 @@
     });
   }
 
+  /* ---------------- foco de la caída: qué categoría pesa más, desde cuándo, dónde ---------------- */
+  const periodLabel = (k) => { const m = /^(\d{4})-(\d{2})$/.exec(k || ''); return m ? `${MONTHS[+m[2] - 1].toLowerCase()} ${m[1]}` : (k || null); };
+  const MIN_FOCUS_SHARE = 0.25;   // una entidad es «el foco» solo si concentra al menos una cuarta parte de lo que cae
+  function focusInsight(s) {
+    const F = s.focusData, C = F && F.category;
+    if (!C || !C.priorities || C.priorities.status !== 'available') return null;
+    const P = C.priorities, dragAll = (P.drag || []).filter((x) => isNum(x.impact) && x.impact < 0);
+    const top = dragAll[0], totalDrag = P.totals && isNum(P.totals.drag) ? P.totals.drag : dragAll.reduce((a, x) => a + x.impact, 0);
+    if (!top || !(totalDrag < 0)) return null;
+    const share = top.impact / totalDrag;
+    if (!(share >= MIN_FOCUS_SHARE) || dragAll.length < 2 && share >= 0.999 && (C.rows || []).length < 2) return null;
+    const row = (C.rows || []).find((r) => r.entity === top.entity) || {};
+    const lvl = { category: 'categoría', subcategory: 'subcategoría' }[(C.context || {}).level] || 'categoría';
+    const declining = row.direction === 'decline' && isNum(row.consecutivePeriods) && row.consecutivePeriods >= 2;
+    const since = declining ? (row.patternStartPeriod || row.turningPoint || null) : null;
+    // mismo mes del año anterior (solo si la serie lo cubre): evita confundir temporada con deterioro
+    let yoy = null;
+    const ser = Array.isArray(row.series) ? row.series.filter((x) => x && isNum(x.value)) : [];
+    if (ser.length) { const last = ser[ser.length - 1], m = /^(\d{4})-(\d{2})$/.exec(last.period || ''); if (m) { const prev = ser.find((x) => x.period === `${+m[1] - 1}-${m[2]}`); if (prev && prev.value > 0) yoy = { pct: last.value / prev.value - 1, period: periodLabel(prev.period) }; } }
+    // índice 100 = primer período: la entidad contra el resto del negocio
+    let spark = null;
+    const periods = ser.map((x) => x.period), others = (C.rows || []).filter((r) => r.entity !== top.entity && Array.isArray(r.series));
+    if (ser.length >= 4 && others.length) {
+      const rest = periods.map((p) => others.reduce((a, r) => { const v = r.series.find((x) => x.period === p); return a + (v && isNum(v.value) ? v.value : 0); }, 0));
+      if (rest[0] > 0 && ser[0].value > 0) spark = { periods, entity: ser.map((x) => x.value / ser[0].value * 100), rest: rest.map((v) => v / rest[0] * 100), since };
+    }
+    const restChange = spark ? spark.rest[spark.rest.length - 1] / 100 - 1 : null;
+    // dentro de la entidad: subcategoría que más arrastra
+    const S = F.subcategory && F.subcategory.priorities && F.subcategory.priorities.status === 'available' ? F.subcategory.priorities : null;
+    const subDrag = S ? (S.drag || []).filter((x) => isNum(x.impact) && x.impact < 0) : [];
+    const subTotal = S && S.totals && isNum(S.totals.drag) ? S.totals.drag : null;
+    const sub = subDrag[0] ? { entity: subDrag[0].entity, impact: subDrag[0].impact, share: isNum(subTotal) && subTotal < 0 ? subDrag[0].impact / subTotal : null } : null;
+    // dónde: farmacias (sucursales), estados y entrega, lo que más cae
+    const ev = (top.evidenceBreakdown || []);
+    const named = (r) => r && r.name && !/^\s*(\(?sin (dato|definir|asignar)\)?|n\/a|null|undefined|-+)\s*$/i.test(String(r.name));
+    const pick = (dim) => { const d = ev.find((x) => x.dimension === dim); return d ? d.rows.filter((r) => named(r) && isNum(r.delta) && r.delta < 0).slice(0, 2) : []; };
+    const branches = pick('branch'), deliveries = (F.delivery || []).filter((r) => named(r) && r.delta < 0).slice(0, 1);
+    const comp = (P.compensate || []).filter((x) => isNum(x.impact) && x.impact > 0)[0] || null;
+    return { level: lvl, entity: top.entity, loss: top.impact, share, totalDrag, periods: row.consecutivePeriods || null, since, sinceLabel: periodLabel(since), pattern: row.pattern || null, yoy, spark, restChange, sub, branches, deliveries, compensate: comp ? { entity: comp.entity, impact: comp.impact } : null, comparison: (P.comparison || {}).currentPeriod || null };
+  }
+
   /* ---------------- lectura ejecutiva común (resumen y cierre): todo sale de las páginas ya calculadas ---------------- */
   function readout(s, by) {
     const out = {};
@@ -424,9 +465,17 @@
     const rc = by.recovery;
     out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
     out.cutoff = s.run && s.run.cutoff ? dateLabel(s.run.cutoff) : null;
+    out.focus = focusInsight(s);
+    out.driverMain = (() => { const dv = by.drivers; const rows = dv && dv.tables[0] ? dv.tables[0].rows.filter((r) => isNum(r.contribution)) : []; const m = rows.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))[0]; return m ? { name: m.driver, value: m.contribution } : null; })();
     return out;
   }
   const phrasePlan = (r) => (r.state === 'en línea' ? 'va en línea con el plan' : `va ${pct(Math.abs(1 - r.pc.compliance))} ${r.state} del plan`);
+
+  const focusWhere = (f) => [f.sub ? `la subcategoría ${f.sub.entity} (${smoney(f.sub.impact)})` : null, f.branches && f.branches.length ? `${f.branches.length === 1 ? 'la farmacia' : 'las farmacias'} ${f.branches.map((b) => `${b.name} (${smoney(b.delta)})`).join(' y ')}` : null, f.deliveries && f.deliveries.length ? `entregas ${f.deliveries[0].name} (${smoney(f.deliveries[0].delta)})` : null].filter(Boolean);
+  const focusSince = (f) => (f.sinceLabel ? `cae desde ${f.sinceLabel} (${f.periods} períodos seguidos)` : null);
+  const restPhrase = (f) => (!isNum(f.restChange) ? null : Math.abs(f.restChange) < 0.03 ? 'el resto del negocio se mantiene' : f.restChange > 0 ? `el resto del negocio crece ${pct(f.restChange, 0)}` : `el resto del negocio baja ${pct(Math.abs(f.restChange), 0)}`);
+  const yoyPhrase = (f) => (f.yoy ? `Frente a ${f.yoy.period}, ${f.yoy.pct < 0 ? 'cae' : 'crece'} ${pct(Math.abs(f.yoy.pct), 0)}.` : null);
+  const actionsOn = (R, f) => { const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : []; if (!acts.length) return 'No hay acciones registradas en el plan.'; const on = acts.filter((a) => String(a.title).toLowerCase().includes(String(f.entity).toLowerCase())); return on.length ? `Hay ${on.length} acción${on.length === 1 ? '' : 'es'} registrada${on.length === 1 ? '' : 's'} sobre ${f.entity}.` : (acts.length === 1 ? `La acción registrada en el plan no es sobre ${f.entity}.` : `Ninguna de las ${acts.length} acciones registradas en el plan es sobre ${f.entity}.`); };
 
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
   function pageSummary(s, pages) {
@@ -442,8 +491,12 @@
         title: R.state ? `El negocio ${phrasePlan(R)}` : 'Venta real acumulada al corte', figure: R.state ? pct(R.pc.compliance) : moneyC(R.pc && R.pc.real), figureLabel: R.state ? 'de cumplimiento al corte' : 'venta real',
         why: [R.state ? `${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados (${smoney(R.pc.gap)}).` : null, f].filter(Boolean).join(' '), note: R.material ? 'El cierre depende del método de proyección elegido; los alternativos difieren de forma material.' : null });
     }
-    const dv = by.drivers;
-    if (dv) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoney(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
+    const dv = by.drivers, FO = R.focus;
+    if (FO) {
+      const where = focusWhere(FO);
+      items.push({ tag: TAG.calc, certainty: 'Cálculo', text: `${FO.entity} concentra ${pct(FO.share, 0)} de la caída (${smoney(FO.loss)}).`, source: 'Pág. Categorías y evolución', limit: 'Lectura descriptiva, no causal.', page: 'focus', title: `${FO.entity} concentra ${pct(FO.share, 0)} de lo que se pierde`, figure: smoney(FO.loss), figureLabel: `${FO.level} ${FO.entity}${FO.comparison ? ` · ${FO.comparison}` : ''}`,
+        why: [focusSince(FO) ? `${FO.entity} ${focusSince(FO)}.` : null, where.length ? `Dentro de ella pesan ${where.slice(0, 2).join(' y ')}.` : null].filter(Boolean).join(' ') || `Es la ${FO.level} que más arrastra en el período.`, note: 'Es una lectura descriptiva; no demuestra la causa.' });
+    } else if (dv) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo aritmético', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Descomposición matemática, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoney(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
     const rv = by.recovery;
     if (rv) items.push({ tag: TAG.est, certainty: 'Requerimiento aritmético', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: 'brecha pendiente a la meta', why: rv.headline, note: 'El ritmo diario es lo que se requiere, no una proyección.' });
     if (by.trends) items.push({ tag: TAG.calc, certainty: 'Señal calculada', text: by.trends.headline, source: 'Pág. Evolución y patrones', limit: by.trends.scope && by.trends.scope.partial ? 'Incluye un período parcial.' : 'Patrones descriptivos.', page: 'trends', title: 'Qué cae y qué compensa', figure: '', figureLabel: '', why: by.trends.headline, note: null });
@@ -455,12 +508,14 @@
     if (R.state) sent.push(`Al corte del ${R.cutoff}, el negocio ${phrasePlan(R)}: ${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados.`);
     else if (R.pc && isNum(R.pc.real)) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
     if (R.best) sent.push(`${R.best.channel} es el canal que más sobresale (${smoney(R.best.gap)} frente al plan).`);
-    if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} en el período comparado.`);
+    if (R.focus) sent.push(`Lo que más pesa en la caída es ${R.focus.entity}: concentra el ${pct(R.focus.share, 0)} de lo que se pierde${R.focus.sinceLabel ? ` y ${focusSince(R.focus).replace('cae desde', 'cae desde')}` : ''}.`);
+    else if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} en el período comparado.`);
     else if (R.worst) sent.push(`La principal área de atención es ${R.worst.channel} (${smoney(R.worst.gap)} frente al plan).`);
     if (R.pc && isNum(R.pc.forecast)) sent.push(`Al ritmo actual, el año cerraría en ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}${R.material ? ', cifra que depende del método de proyección' : ''}.`);
     else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir la meta faltan ${moneyC(R.rec.remaining)}.`);
-    const review = R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
-    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
+    if (R.driverMain) sent.push(`Por palanca, la brecha del período se explica sobre todo por ${R.driverMain.name} (${smoney(R.driverMain.value)}).`);
+    const review = R.focus ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoney(R.drag.impact)}) en el período comparado.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
+    return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoney(R.focus.loss)} de los ${smoney(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
   }
 
   /* ---------------- 13 · Cierre ejecutivo ---------------- */
@@ -472,7 +527,9 @@
     const stand = R.best ? { title: 'Qué sobresalió', big: smoney(R.best.gap), unit: `${R.best.channel} frente al plan`, text: `${R.best.channel} es el canal con mayor avance sobre el plan comparable.` }
       : (by.categories && by.categories.headline ? { title: 'Qué sobresalió', big: '', unit: '', text: by.categories.headline } : { title: 'Qué sobresalió', big: '', unit: '', text: 'Ningún canal supera su plan comparable al corte.' });
     const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
-    const move = R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída del período comparado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+    const F = R.focus, fw = F ? focusWhere(F) : [];
+    const move = F ? { title: 'Qué debemos mover', big: smoney(F.loss), unit: `${F.entity}${F.sinceLabel ? ` · cae desde ${F.sinceLabel}` : ' · mayor arrastre'}`, text: `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${F.sinceLabel ? ` y lleva ${F.periods} períodos sin recuperarse` : ''}.${fw.length ? ` Revisar primero ${fw.join(', ')}.` : ''} ${actionsOn(R, F)}` }
+      : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída del período comparado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
       : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente al plan`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
       : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
     const watch = [];
