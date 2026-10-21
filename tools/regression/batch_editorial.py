@@ -5,7 +5,7 @@ from ed_common import *
 STR = """(()=>{const out=[];const walk=(v,p)=>{if(typeof v==='string'){out.push([p,v]);return}if(!v||typeof v!=='object')return;
   if(Array.isArray(v)){v.forEach((x,i)=>walk(x,p));return}Object.keys(v).forEach(k=>{if(k==='tags'||k==='dataUrl')return;walk(v[k],p+'.'+k)})};
   FP.app.state.rp.report.pages.forEach(pg=>walk(pg,pg.id));return out})()"""
-BAD = [r'matemáticamente', r'es aritmética, no demuestra', r'\(s\)', r'de l año', r'undefined', r'NaN', r'\[object', r'\bnull\b', r'  +', r'Historia insuficiente', r'\bPalanca', r'Lo que arrastra', r'Lo que compensa', r'\b1 días\b', r'\b1 productos\b']
+BAD = [r'matemáticamente', r'es aritmética, no demuestra', r'\(s\)', r'de l año', r'undefined', r'NaN', r'\[object', r'\bnull\b', r'  +', r'Historia insuficiente', r'\bPalanca', r'Lo que arrastra', r'Lo que compensa', r'grupo\(s\)', r'mayor palanca', r'[Cc]omponente', r'\bVolumen\b', r'\b1 días\b', r'\b1 productos\b']
 ok = bad = 0
 def chk(n, c, d=''):
     global ok, bad
@@ -67,6 +67,15 @@ async def main():
         c10 = await q.evaluate(MX, "const P=i.trend.priorities;(P.drag||[]).forEach(x=>{x.impact=-100});(P.compensate||[]).forEach(x=>{x.impact=100});")
         tt = ' '.join(v['h'] + ' ' + v['n'] for v in c10.values())
         chk('ED-20 empates de impacto: reconstruye sin textos rotos', c10['trends']['st'] == 'included' and not re.search(r'undefined|NaN|\[object|\(s\)', tt), tt[:100])
+
+        cA = await q.evaluate(MX, "const c={negative:-125015,positive:1350718,negativeCount:3,positiveCount:4,compensated:true,text:'a compensados por el crecimiento de b'};i.productByLevel.category.compensation=c;")
+        nA = cA['categories']['n']
+        chk('ED-21 compensación con cifras abreviadas y plurales', '3 grupos cayeron $125K' in nA and '4 grupos (+$1.35M)' in nA and 'grupo(s)' not in nA, nA)
+        cB = await q.evaluate(MX, "const c={negative:-5000,positive:3000,negativeCount:1,positiveCount:1,compensated:true,text:'1 grupo(s) crecieron +3,000, pero no alcanzaron a compensar'};i.productByLevel.category.compensation=c;")
+        nB = cB['categories']['n']
+        chk('ED-22 compensación insuficiente en singular', '1 grupo creció +$3.0K' in nB and 'no alcanza a compensar la caída de 1 grupo' in nB, nB)
+        cD = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=(P.drag||[]).slice(0,2);P.compensate=P.drag.map(x=>({...x,impact:Math.abs(x.impact)}));")
+        chk('ED-23 evolución: «otros N» cuando restan y suman', ' y otros ' in cD['trends']['h'], cD['trends']['h'])
         base = json.load(open('tools/regression/data/editorial_baseline.json'))
         for k in ('base', 'mes_anterior', 'excedente'):
             cur = nums[k]

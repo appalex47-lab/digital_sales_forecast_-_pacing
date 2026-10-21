@@ -33,6 +33,14 @@
   const nUnits = (n, w) => `${n} ${n === 1 ? w : plural(w)}`;
   /** «1 nuevo» / «2 nuevos»: cifra + palabra concordada (solo redacción). */
   const cnt = (n, one, many) => `${n} ${Number(String(n).replace(/[^\d-]/g, '')) === 1 ? one : many}`;
+  /** Texto de compensación desde las cifras del motor (misma lectura, redacción con plurales y cifras abreviadas). */
+  const compText = (c) => {
+    const n = c.negativeCount, p = c.positiveCount;
+    if (![n, p, c.negative, c.positive].every(isNum)) return c.text;
+    return /compensados por el crecimiento/.test(c.text || '')
+      ? `${nUnits(n, 'grupo')} ${n === 1 ? 'cayó' : 'cayeron'} ${moneyC(Math.abs(c.negative))}; el crecimiento de ${nUnits(p, 'grupo')} (${smoneyC(c.positive)}) ${n === 1 ? 'la compensa' : 'las compensa'}.`
+      : `${nUnits(p, 'grupo')} ${p === 1 ? 'creció' : 'crecieron'} ${smoneyC(c.positive)}, pero no alcanza${p === 1 ? '' : 'n'} a compensar la caída de ${nUnits(n, 'grupo')} (${smoneyC(c.negative)}).`;
+  };
   const capital = (w) => String(w).charAt(0).toUpperCase() + String(w).slice(1);
   const nfCache = new Map();
   const nf = (o) => { const k = JSON.stringify(o); if (!nfCache.has(k)) nfCache.set(k, new Intl.NumberFormat('es-MX', o)); return nfCache.get(k); };
@@ -314,8 +322,8 @@
     const ok = closes(L1.map((x) => x.contribution), d.gap.abs);
     if (!ok) return omit('drivers', 'Diagnóstico de motores y canales', 'La descomposición no cierra con la brecha del período; no se muestra una atribución que no concilia.');
     const main = [...L1].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))[0];
-    const steps = [{ label: d.result.baselineLabel || 'Referencia', value: d.gap.baseline, kind: 'total' }, ...L1.map((x) => ({ label: x.label, value: x.contribution, kind: 'delta' })), { label: d.result.currentLabel || 'Real', value: d.gap.current, kind: 'total' }];
-    const rows = L1.map((x) => ({ driver: x.label, baseline: x.baseline, current: x.current, deltaPct: x.deltaPct, contribution: x.contribution, _kind: x.driver }));
+    const steps = [{ label: d.result.baselineLabel || 'Referencia', value: d.gap.baseline, kind: 'total' }, ...L1.map((x) => ({ label: x.driver === 'trafficVolume' ? 'Tráfico' : x.label, value: x.contribution, kind: 'delta' })), { label: d.result.currentLabel || 'Real', value: d.gap.current, kind: 'total' }];
+    const rows = L1.map((x) => ({ driver: x.driver === 'trafficVolume' ? 'Tráfico' : x.label, baseline: x.baseline, current: x.current, deltaPct: x.deltaPct, contribution: x.contribution, _kind: x.driver }));
     const fmtK = (k) => (k === 'conversionRate' ? 'pct2' : k === 'aov' ? 'money' : 'int');
     const channelDim = (d.level2 || []).find((x) => x.dimension === 'channel');
     let chRows = null;
@@ -331,13 +339,13 @@
     return page('drivers', 'Diagnóstico de motores y canales', {
       ctx: `${d.period && d.period.label ? d.period.label : 'Período del diagnóstico'}${obsRange ? ` (datos ${obsRange})` : ''} · ${d.comparison && d.comparison.label ? d.comparison.label : 'vs. referencia'}`,
       question: '¿Qué factor pesa más en la brecha contra el plan?',
-      headline: `${d.period && d.period.label ? `${d.period.label}: l` : 'L'}a brecha es de ${smoneyC(d.gap.abs)} (${spct(d.gap.pct)}). Lo que más aporta a esa diferencia es ${({ trafficVolume: 'el volumen', conversionRate: 'la conversión (CR)', aov: 'el ticket promedio (AOV)' })[main.driver] || main.label} (${smoneyC(main.contribution)}). Es un reparto, no una causa.`,
+      headline: `${d.period && d.period.label ? `${d.period.label}: l` : 'L'}a brecha es de ${smoneyC(d.gap.abs)} (${spct(d.gap.pct)}). Lo que más aporta a esa diferencia es ${({ trafficVolume: 'el tráfico', conversionRate: 'la conversión (CR)', aov: 'el ticket promedio (AOV)' })[main.driver] || main.label} (${smoneyC(main.contribution)}). Es un reparto, no una causa.`,
       kpis: [
         kpi('gap', `Brecha del diagnóstico (${d.comparison && d.comparison.baseline ? `real − ${String(d.comparison.baseline).toLowerCase()}` : 'real − referencia'})`, d.gap.abs, 'smoney', TAG.calc, { tone: toneOfGap(d.gap.abs), sub: spct(d.gap.pct) }),
         kpi('cur', d.result.currentLabel || 'Real', d.gap.current, 'moneyC', TAG.obs),
         kpi('base', d.result.baselineLabel || 'Referencia', d.gap.baseline, 'moneyC', TAG.calc)
       ],
-      charts: [{ type: 'waterfall', id: 'wf', title: 'De la referencia al real, por palanca', steps }],
+      charts: [{ type: 'waterfall', id: 'wf', title: 'De la referencia al real, por factor', steps }],
       tables: [{ id: 'drivers', title: 'Aporte de cada factor', columns: [{ key: 'driver', label: 'Factor', kind: 'text' }, { key: 'baseline', label: 'Referencia', kindBy: '_kind', num: true }, { key: 'current', label: 'Real', kindBy: '_kind', num: true }, { key: 'deltaPct', label: 'Cambio', kind: 'spct', num: true, tone: true }, { key: 'contribution', label: 'Contribución', kind: 'smoney', num: true, tone: true }], rows, kindMap: { trafficVolume: 'int', conversionRate: 'pct2', aov: 'money' } },
         ...(chRows && chRows.length ? [{ id: 'channels', title: 'Lectura por canal', columns: [{ key: 'channel', label: 'Canal', kind: 'text' }, { key: 'gap', label: 'Brecha', kind: 'smoney', num: true, tone: true }, { key: 'main', label: 'Mayor contribución aritmética', kind: 'text' }], rows: chRows.slice(0, 4) }] : [])],
       method: { id: d.attributionMethod, label: d.attributionMethodLabel, closes: true, sum: L1.reduce((a, x) => a + x.contribution, 0), gap: d.gap.abs },
@@ -370,7 +378,7 @@
     return page('trends', 'Evolución y patrones', {
       ctx: `${cmp.currentPeriod || 'Período'} vs. ${cmp.baselinePeriod || 'anterior'}${partial ? ' (incluye período parcial)' : ''}`,
       question: `¿Qué ${plural(lvl)} restan, cuáles suman y desde cuándo?`,
-      headline: `${cmp.currentPeriod || 'El período'} vs. ${cmp.baselinePeriod || 'el anterior'}: ${(P.drag || []).length ? `${nUnits((P.drag || []).length, lvl)} ${(P.drag || []).length === 1 ? 'resta' : 'restan'} ${moneyC(P.totals && P.totals.dragAbs)}` : 'nada resta de forma medible'}${(P.compensate || []).length ? ` y ${nUnits((P.compensate || []).length, lvl)} ${(P.compensate || []).length === 1 ? 'suma' : 'suman'} ${moneyC(P.totals && P.totals.compensateAbs)}` : '; nada suma de forma medible'}.`,
+      headline: `${cmp.currentPeriod || 'El período'} vs. ${cmp.baselinePeriod || 'el anterior'}: ${(P.drag || []).length ? `${nUnits((P.drag || []).length, lvl)} ${(P.drag || []).length === 1 ? 'resta' : 'restan'} ${moneyC(P.totals && P.totals.dragAbs)}` : 'nada resta de forma medible'}${(P.compensate || []).length ? ` y ${(P.drag || []).length ? 'otros ' : ''}${nUnits((P.compensate || []).length, lvl)} ${(P.compensate || []).length === 1 ? 'suma' : 'suman'} ${moneyC(P.totals && P.totals.compensateAbs)}` : '; nada suma de forma medible'}.`,
       kpis: [
         kpi('drag', 'Lo que resta', P.totals ? P.totals.drag : null, 'smoney', TAG.calc, { tone: 'neg' }),
         kpi('comp', 'Lo que suma', P.totals ? P.totals.compensate : null, 'smoney', TAG.calc, { tone: 'pos' }),
@@ -411,7 +419,7 @@
       charts: [{ type: 'hbar', id: 'contrib', title: `Cambio de venta por ${level.toLowerCase()}`, unit: 'money', items: byDelta.slice(0, 6).map((x) => ({ label: x.key, value: x.revenue.delta })) }],
       tables: [{ id: 'share', title: `Participación en venta · ${levelT}`, columns: [{ key: 'key', label: levelT, kind: 'text' }, { key: 'current', label: 'Venta', kind: 'moneyC', num: true }, { key: 'share', label: 'Participación', kind: 'pct', num: true }, { key: 'delta', label: 'Cambio', kind: 'smoney', num: true, tone: true }, { key: 'contribution', label: 'Aporte al cambio', kind: 'pct', num: true }], rows: tbl }],
       scope: { period: r.period, baseline: r.baseline, channel: r.channel, level, filter: s.productFilterLabel || null },
-      notes: ['Participación = venta del grupo ÷ venta total. Aporte al cambio = cambio del grupo ÷ cambio total; son medidas distintas.', stable ? null : 'El cambio total es muy pequeño, así que el «aporte al cambio» no es estable y no se muestra.', r.compensation && clean(r.compensation.text) ? r.compensation.text : null].filter(Boolean),
+      notes: ['Participación = venta del grupo ÷ venta total. Aporte al cambio = cambio del grupo ÷ cambio total; son medidas distintas.', stable ? null : 'El cambio total es muy pequeño, así que el «aporte al cambio» no es estable y no se muestra.', r.compensation && clean(r.compensation.text) ? compText(r.compensation) : null].filter(Boolean),
       sources: ['Categoría → Producto'], tags: [TAG.obs, TAG.calc]
     });
   }
@@ -438,7 +446,7 @@
     return page('customers', 'Clientes, recurrencia y LTV', {
       ctx: `${monthName(last.key) || last.key}${inProgress ? ` (en curso, datos al ${dateLabel(cutIso)})` : ''} · últimos ${months.length} meses`,
       question: '¿Qué calidad tiene la base de clientes detrás de la venta?',
-      headline: `${cnt(int(c.summary.customers), 'cliente identificado', 'clientes identificados')}; en ${mLab(last.key)} ${cnt(int(last.customers.total), 'compró', 'compraron')} (${cnt(int(last.customers.new), 'nuevo', 'nuevos')}, ${cnt(int(last.customers.recurrent), 'recurrente', 'recurrentes')}, ${cnt(int(last.customers.reactivated), 'reactivado', 'reactivados')})${inProgress ? `; el mes va al ${Math.round(+cutIso.slice(8, 10) / new Date(Date.UTC(+last.key.slice(0, 4), +last.key.slice(5, 7), 0)).getUTCDate() * 100)} %` : ''}.`,
+      headline: `${cnt(int(c.summary.customers), 'cliente identificado', 'clientes identificados')}; en ${mLab(last.key)} ${cnt(int(last.customers.total), 'compró', 'compraron')} (${cnt(int(last.customers.new), 'nuevo', 'nuevos')}, ${cnt(int(last.customers.recurrent), 'recurrente', 'recurrentes')}, ${cnt(int(last.customers.reactivated), 'reactivado', 'reactivados')})${inProgress ? `; el mes va al ${Math.round(+cutIso.slice(8, 10) / new Date(Date.UTC(+last.key.slice(0, 4), +last.key.slice(5, 7), 0)).getUTCDate() * 100)}\u00a0%` : ''}.`,
       kpis: [kpi('customers', 'Clientes identificados', c.summary.customers, 'int', TAG.obs), kpi('repeat', 'Recompra (histórico)', c.summary.repeatRate, 'pct', TAG.calc), kpi('rpc', 'Venta por cliente', c.summary.revenuePerCustomer, 'moneyC', TAG.calc)],
       charts: [{ type: 'stacked', id: 'mix', title: 'Clientes por mes: nuevos, recurrentes y reactivados', labels: months.map((m) => m.key), series: [{ name: 'Nuevos', values: months.map((m) => m.customers.new) }, { name: 'Recurrentes', values: months.map((m) => m.customers.recurrent) }, { name: 'Reactivados', values: months.map((m) => m.customers.reactivated) }] }],
       tables: [{ id: 'retention', title: 'Recompra y LTV observado por ventana', columns: [{ key: 'window', label: 'Ventana', kind: 'text' }, { key: 'mature', label: 'Clientes', kind: 'int', num: true }, { key: 'repeat', label: 'Recompraron', kind: 'pct', num: true }, { key: 'ltv', label: 'LTV observado', kind: 'money', num: true }], rows: retention }],
@@ -730,7 +738,7 @@
     if (R.pc && isNum(R.pc.forecast)) sent.push(`Al ritmo actual, ${R.mk ? R.mlow : 'el año'} cerraría en ${moneyC(R.pc.forecast)}${R.pc.forecastSub && !R.mk ? ` (${R.pc.forecastSub})` : ''}${R.material ? ', cifra que depende del método de proyección' : ''}.`);
     else if (R.rec && isNum(R.rec.remaining)) sent.push(`Para cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} faltan ${moneyC(R.rec.remaining)}.`);
     const yp = yearPhrase(R);
-    const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la entidad que más arrastra (${smoneyC(R.drag.impact)}) ${trPer}.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
+    const review = R.focus || s.reportFilter ? null : R.drag ? `Revisar primero ${R.drag.entity}: es la que más resta (${smoneyC(R.drag.impact)}) ${trPer}.` : (R.rec && rv && rv.headline.includes('vs. el plan diario') ? 'Revisar si el ritmo diario requerido para cumplir la meta es alcanzable.' : null);
     return page('summary', 'Resumen ejecutivo', { question: '¿Qué debo saber si solo leo una página?', headline: 'Lo más importante, en una mirada', narrative: sent.length ? sent.join(' ') : null, yearStrip: yp || null, movers: R.movers && (R.movers.minus.length || R.movers.plus.length) ? { minus: [...R.movers.minus].sort((a, b) => a.rank - b.rank).slice(0, 2), plus: [...R.movers.plus].sort((a, b) => a.rank - b.rank).slice(0, 2) } : null, filterStrip: s.reportFilter ? `Filtro activo: ${s.reportFilter}. ${R.sel ? 'Venta, categorías, evolución y clientes muestran solo esa selección (la venta contra el periodo de referencia, no contra el plan); el diagnóstico y la recuperación son del total del negocio.' : 'Categorías, evolución y clientes muestran solo esa selección; el pacing y el forecast son del total del negocio.'}` : null, focus: R.focus ? { entity: R.focus.entity, spark: R.focus.spark, text: [R.focus.sinceLabel ? `${R.focus.entity} ${focusSince(R.focus)}${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.` : `${R.focus.entity} es la ${R.focus.level} que más arrastra${restPhrase(R.focus) ? `, mientras ${restPhrase(R.focus)}` : ''}.`, `Aporta ${smoneyC(R.focus.loss)} de los ${smoneyC(R.focus.totalDrag)} que caen las ${R.focus.level === 'categoría' ? 'categorías' : 'entidades'}.`, yoyPhrase(R.focus)].filter(Boolean).join(' ') } : null, items: out, review: review ? { text: review, basis: 'Regla determinista sobre los cálculos de las páginas siguientes; no es una recomendación causal.' } : null, sources: ['Cálculos de las páginas siguientes'], tags: [TAG.obs, TAG.calc, TAG.est] });
   }
 
@@ -771,7 +779,7 @@
     const ref = by.pacing && by.pacing.selection ? 'vs. referencia' : 'vs. plan';
     const dv = by.drivers, chMain = new Map(((dv && dv.tables.find((t) => t.id === 'channels') || {}).rows || []).map((r) => [r.channel, r.main]));
     const pc = by.pacing;
-    if (pc && pc.tables[0] && (!s.channel || s.channel === 'total')) pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)).forEach((r) => add('Canal', r.channel, r.gap, `${isNum(r.gapPct) ? `${spct(r.gapPct)} ${ref}` : ref}${chMain.get(r.channel) && !pc.selection ? ` · mayor palanca: ${chMain.get(r.channel)}` : ''}`, 'pacing'));
+    if (pc && pc.tables[0] && (!s.channel || s.channel === 'total')) pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)).forEach((r) => add('Canal', r.channel, r.gap, `${isNum(r.gapPct) ? `${spct(r.gapPct)} ${ref}` : ref}${chMain.get(r.channel) && !pc.selection ? ` · mayor factor: ${chMain.get(r.channel)}` : ''}`, 'pacing'));
     if (dv && !s.reportFilter) (dv.tables[0] ? dv.tables[0].rows : []).filter((r) => isNum(r.contribution)).forEach((r) => add('Factor', r.driver, r.contribution, isNum(r.deltaPct) ? `${spct(r.deltaPct)} vs. referencia` : null, 'drivers'));
     const ca = by.categories;
     if (ca && ca.charts[0]) ca.charts[0].items.forEach((i) => add('Categoría', i.label, i.value, null, 'categories'));
@@ -800,7 +808,7 @@
     const tot = pc && pc.tables[0] ? pc.tables[0].rows.find((r) => r._total) : null;
     const minusSum = M.minus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0), plusSum = M.plus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0);
     const lead = (i, dir) => (i && i.type === 'Canal' && /vs\. plan/.test(i.evidence || '') ? `${i.name} está ${moneyC(Math.abs(i.value))} ${dir === 'minus' ? 'por debajo' : 'por encima'} del plan y es el canal que más ${dir === 'minus' ? 'resta' : 'suma'}.` : null);
-    const list = (arr, lab, dir, none) => { if (!arr.length) return none; const l0 = lead(arr[0], dir), rest = l0 ? arr.slice(1, 3) : arr.slice(0, 3); return `${l0 ? l0 + (rest.length ? ' ' : '') : ''}${rest.length ? `${l0 ? 'También ' + (dir === 'minus' ? 'restan' : 'suman') : lab}: ${rest.map((i) => `${i.name} (${smoneyC(i.value)})`).join(', ')}.` : ''}`; };
+    const list = (arr, lab, dir, none) => { if (!arr.length) return none; const l0 = lead(arr[0], dir), rest = l0 ? arr.slice(1, 3) : arr.slice(0, 3); return `${l0 ? l0 + (rest.length ? ' ' : '') : ''}${rest.length ? `${l0 ? 'También ' + (dir === 'minus' ? 'restan' : 'suman') : lab}: ${rest.map((i) => `${i.type === 'Factor' ? 'el factor ' : i.type === 'Categoría' ? 'la categoría ' : ''}${i.name} (${smoneyC(i.value)})`).join(', ')}.` : ''}`; };
     const head = `${list(M.minus, 'Lo que más resta', 'minus', 'Nada resta de forma medible.')} ${list(M.plus, 'Lo que más suma', 'plus', 'Nada suma de forma medible.')}`;
     return page('movers', 'Qué resta y qué suma', {
       ctx: [per, s.reportFilter ? `Filtro: ${s.reportFilter}` : null].filter(Boolean).join(' · ') || 'Período elegido',

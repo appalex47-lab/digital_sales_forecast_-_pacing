@@ -277,9 +277,9 @@
     const short = { trafficVolume: 'Volumen', conversionRate: 'CR', aov: 'AOV' };
     const left = rows.map((r) => `<div class="rp-dv__r"><span class="rp-dv__l">${esc(short[r._kind] || r.driver)}</span>${bar(r.contribution)}</div>`).join('') + `<div class="rp-dv__r rp-dv__r--net"><span class="rp-dv__l">Resultado neto</span>${bar(net, true)}</div>`;
     const right = rows.map((r) => `<div class="rp-dv2"><div class="rp-dv2__n"><b>${esc(short[r._kind] || r.driver)}</b><small>${esc(GLOSS[r._kind] || '')}</small><em>${isNum(r.deltaPct) ? `${esc(fmt('spct', r.deltaPct))} frente a la referencia` : ''}</em></div><div class="rp-dv2__v ${r.contribution >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoneyC', r.contribution))}</div></div>`).join('');
-    const ch = t1 && t1.rows && t1.rows.length ? `<div class="rp-dv__h">Mayor componente por canal</div>${t1.rows.map((r) => `<div class="rp-dv3"><b>${esc(r.channel)}</b><span class="${r.gap >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoneyC', r.gap))}</span><small>${esc(r.main)}</small></div>`).join('')}` : '';
-    return `<div class="rp-row rp-dvrow"><div class="rp-col-a"><div class="rp-dv__h">Aporte de cada componente a la brecha</div><div class="rp-dv">${left}</div></div>
-      <div class="rp-col-b"><div class="rp-dv__h">Contribución de cada componente</div>${right}${ch}</div></div>${notesHtml(p)}`;
+    const ch = t1 && t1.rows && t1.rows.length ? `<div class="rp-dv__h">Mayor factor por canal</div>${t1.rows.map((r) => `<div class="rp-dv3"><b>${esc(r.channel)}</b><span class="${r.gap >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoneyC', r.gap))}</span><small>${esc(r.main)}</small></div>`).join('')}` : '';
+    return `<div class="rp-row rp-dvrow"><div class="rp-col-a"><div class="rp-dv__h">Aporte de cada factor a la brecha</div><div class="rp-dv">${left}</div></div>
+      <div class="rp-col-b"><div class="rp-dv__h">Aporte de cada factor</div>${right}${ch}</div></div>${notesHtml(p)}`;
   }
 
   /* ================= Tráfico y conversión (panorama) y Campañas ================= */
@@ -311,7 +311,7 @@
     return `<div class="rp-kpis">${kp('Sesiones', esc(fmt('int', t.traffic)), isNum(t.trafficChg) ? `${esc(fmt('spct', t.trafficChg))} vs. referencia` : '', tone(t.trafficChg), true)}${kp('Conversión', esc(fmt('pct2', t.cr)), pp, tone(t.crDiffPp))}${kp('Pedidos', esc(fmt('int', t.orders)), isNum(t.ordersChg) ? esc(fmt('spct', t.ordersChg)) : '', tone(t.ordersChg))}${kp('Ticket promedio', isNum(t.aov) ? esc(fmt('money', t.aov)) : NA, '')}</div>
       <div class="rp-row rp-tv"><div class="rp-tv__a">${o.weekly.length ? `<div class="rp-panel__t"><span>Tráfico diario promedio (barras) y conversión (línea) por semana</span></div>${chartWeekly(o.weekly)}` : ''}</div>
       <div class="rp-tv__b"><div class="rp-panel__t"><span>De dónde viene el tráfico</span></div>${o.mix.map(mixBlock).join('')}</div></div>
-      ${o.atypical ? `<div class="rp-callout rp-callout--warn"><strong>Validar cobertura.</strong> La variación de sesiones o de conversión es extrema; revisa que el archivo de Segmentos cubra igual el período actual y el anterior.</div>` : ''}${readingHtml(p, x)}<p class="rp-scope">${esc([p.scope.period, p.scope.comparison].filter(Boolean).join(' · '))}${notes.length ? ' · ' + esc(notes.join(' ')) : ''}</p>`;
+      ${o.atypical ? `<div class="rp-callout rp-callout--warn"><strong>Validar cobertura.</strong> La variación de sesiones o de conversión es extrema; revisa que el archivo de Segmentos cubra igual el período actual y el anterior.</div>` : ''}${readingHtml(p, x)}<p class="rp-scope">${notes.length ? esc(notes.join(' ')) : esc([p.scope.period, p.scope.comparison].filter(Boolean).join(' · '))}</p>`;
   }
   const QN = { star: 'Estrella', conversion: 'Convertir mejor', scale: 'Escalar tráfico', review: 'Revisar', low: 'Poco volumen' };
   function campaignsBody(p, x) {

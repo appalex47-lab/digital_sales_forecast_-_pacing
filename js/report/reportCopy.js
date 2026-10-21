@@ -60,14 +60,14 @@
     },
     drivers(p) {
       const gap = kpi(p, 'gap'), t = (p.tables || []).find((x) => x.id === 'drivers'); if (!fin(gap) || !t || !t.rows.length) return null;
-      const NAME = { Volumen: 'Volumen', CR: 'Conversión', AOV: 'Ticket' };
+      const NAME = { Volumen: 'Tráfico', 'Tráfico': 'Tráfico', CR: 'Conversión', AOV: 'Ticket' };
       const rows = t.rows.filter((r) => fin(r.contribution)).map((r) => ({ n: NAME[r.driver] || r.driver, v: r.contribution }));
       if (!rows.length) return null;
       const pos = rows.filter((r) => r.v > 0), neg = rows.filter((r) => r.v < 0);
       const join = (a, lc) => { const n = a.map((x) => (lc ? lower1(x.n) : x.n)); return n.length < 2 ? n[0] : n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1]; };
       if (pos.length && neg.length) return `${join(pos)} ${pos.length > 1 ? 'suman' : 'suma'} y ${join(neg, true)} ${neg.length > 1 ? 'restan' : 'resta'}; la brecha neta es ${money(gap)}`;
       const main = [...rows].sort((a, b) => Math.abs(b.v) - Math.abs(a.v))[0];
-      return `${main.n} es el componente que más pesa en la brecha de ${money(gap)}`;
+      return `${main.n} es el factor que más pesa en la brecha de ${money(gap)}`;
     },
     movers(p) {
       const top = (arr) => (arr || []).filter((i) => i && fin(i.value)).sort((a, b) => (a.type === 'Canal' ? 0 : 1) - (b.type === 'Canal' ? 0 : 1) || Math.abs(b.value) - Math.abs(a.value))[0];
@@ -79,9 +79,9 @@
     },
     trends(p) {
       const drag = kpi(p, 'drag'), comp = kpi(p, 'comp'), t0 = (p.tables || [])[0], ent = t0 && t0.rows && t0.rows[0] ? cut(t0.rows[0].entity, 30) : null;
-      if (!fin(drag) || drag >= 0) return fin(comp) && comp > 0 ? `Lo que compensa suma ${money(comp)} y nada cae de forma medible` : null;
-      const tail = fin(comp) && comp > 0 ? `; lo que compensa suma ${money(comp)}` : '; nada lo compensa';
-      return `${ent ? `${ent} concentra la mayor caída` : 'Lo que cae pesa'} (total ${money(drag)})${tail}`;
+      if (!fin(drag) || drag >= 0) return fin(comp) && comp > 0 ? `Lo que suma, ${money(comp)}; nada resta de forma medible` : null;
+      const tail = fin(comp) && comp > 0 ? `; lo que suma, ${money(comp)}` : '; nada suma de forma medible';
+      return `${ent ? `${ent} concentra la mayor caída` : 'Lo que resta'} (total ${money(drag)})${tail}`;
     },
     categories(p) {
       const it = ((p.charts || [])[0] || {}).items; if (!Array.isArray(it) || !it.length) return null;
