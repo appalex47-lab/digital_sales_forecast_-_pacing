@@ -125,10 +125,10 @@
       return 'Las campañas convierten a un ritmo parecido; ninguna destaca';
     },
     recovery(p) {
-      const rem = kpi(p, 'remaining'), days = kpi(p, 'days'), daily = kpi(p, 'daily');
+      const rem = kpi(p, 'remaining'), days = kpi(p, 'days') !== null ? kpi(p, 'days') : (fin(p.daysLeft) ? p.daysLeft : null), daily = kpi(p, 'daily');
       if (!fin(rem) || !fin(days)) return null;
       if (rem <= 0) return 'La meta del período ya está cubierta';
-      if (p.net && fin(p.net.gap) && fin(p.net.shortfall)) return `En neto faltan ${moneyC(p.net.gap)} a la meta; los canales rezagados necesitan ${moneyC(p.net.shortfall)}`;
+      if (p.net && fin(p.net.gap) && fin(p.net.shortfall)) return `Los canales rezagados necesitan ${moneyC(p.net.shortfall)}${fin(daily) ? `: ${moneyC(daily)} diarios en ${RB().fmt('int', days)} días` : ' para llegar a su plan'}`;
       return `Faltan ${moneyC(rem)} en ${RB().fmt('int', days)} días${fin(daily) ? `: se requieren ${moneyC(daily)} por día` : ''}`;
     },
     closing(p, rep) {

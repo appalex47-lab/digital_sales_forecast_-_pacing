@@ -320,3 +320,7 @@
 /* Ux lectura: columna de importes sin recorte (cifras completas de hasta 13 caracteres) */
 .rp-mv__r { grid-template-columns:70px minmax(0,1fr) max-content; } .rp-mv__v { min-width:104px; }
 .rp-mv__r > :last-child { min-width:0; } .rp-mv__bar { min-width:104px; }
+
+/* Recuperación: recuadros que explican (cómo leerlo, siguiente paso) */
+.rp-card { background:var(--sky); border-radius:10px; padding:7px 12px; font-size:14px; line-height:1.35; color:var(--ink); }
+.rp-card b { color:var(--navy); }
