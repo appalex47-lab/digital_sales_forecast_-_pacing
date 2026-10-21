@@ -326,3 +326,8 @@
 /* Recuperación: recuadros que explican (cómo leerlo, siguiente paso) */
 .rp-card { background:var(--sky); border-radius:10px; padding:7px 12px; font-size:14px; line-height:1.35; color:var(--ink); }
 .rp-card b { color:var(--navy); }
+
+/* ---------- marca: logo en portada y pie (solo cuando hay una marca guardada) ---------- */
+.rp-logo-l { height:60px; max-width:300px; object-fit:contain; background:#fff; border-radius:12px; padding:7px 10px; margin-right:14px; box-sizing:content-box; }
+.rp-logo-s { height:18px; max-width:90px; object-fit:contain; vertical-align:-4px; margin-right:8px; }
+.rp-page--cover .rp-brand { font-size:22px; }

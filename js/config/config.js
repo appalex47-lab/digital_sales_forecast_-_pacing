@@ -246,7 +246,7 @@
         // Fase 6 (scenarios y actionPlan por año)
         recoverySettings: 'recoverySettings', scenarios: 'scenarios', actionPlan: 'actionPlan', actionLibraryCustom: 'actionLibraryCustom',
         // Fase 7 (solo preferencias de navegación y guía)
-        uxSettings: 'uxSettings',
+        uxSettings: 'uxSettings', reportBrand: 'reportBrand',
         // Fase 8.1 (solo banderas y preferencias; los datos grandes viven en IndexedDB)
         storageMigration: 'storageMigration', productSettings: 'productSettings',
         // Fase 15 (enlaces de Google Sheets publicados; solo la URL, nunca claves)
