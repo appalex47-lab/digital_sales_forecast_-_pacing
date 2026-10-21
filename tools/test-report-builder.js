@@ -316,4 +316,16 @@ const lowC = cm34.campaigns.rows.find((r) => r.name === 'beta');
 t('34 · la oportunidad solo aparece cuando la diferencia de conversión es concluyente y por debajo del total', lowC.opportunity === null || (lowC.conclusive && lowC.cr < cm34.campaigns.crTotal), lowC);
 t('34 · sin campañas la lámina se omite con motivo', (() => { const d = diagOk(); d.level2 = [diag34.level2[0]]; const o = pg(RB.build(base({ diag: d })), 'campaigns'); return o.status === 'omitted' && !!o.reason; })());
 
+// Caracterización numérica: todas las hojas numéricas de las láminas (sin textos) deben permanecer idénticas.
+// CHAR=write node tools/test-report-builder.js  → guarda la línea base;  sin CHAR → compara.
+{
+  const leaves = (o, p, out) => { if (typeof o === 'number') out[p] = Math.round(o * 1e9) / 1e9; else if (Array.isArray(o)) o.forEach((v, i) => leaves(v, `${p}[${i}]`, out)); else if (o && typeof o === 'object') Object.keys(o).sort().forEach((k) => leaves(o[k], p ? `${p}.${k}` : k, out)); return out; };
+  const variants = { base: base(), net: base({ rf: rfMk({ target: 344, actualToDate: 333, remaining: 35.9, surplus: 24.9, requiredTotal: 35.9, futureDays: 73 }, { required: 35.9, plan: 84, delta: -48, pressure: -0.57 }) }), trend: base({ trend }), product: base({ product }), customers: base({ customers: cust }) };
+  const snap = {}; Object.keys(variants).forEach((k) => { const r = RB.build(variants[k]); snap[k] = {}; r.pages.forEach((p) => { snap[k][p.id] = leaves({ kpis: p.kpis, tables: p.tables, charts: p.charts, drivers: p.drivers, net: p.net, scenarios: p.scenarios, returns: p.returns, lapsed: p.lapsed, movers: p.movers, rows: p.rows }, '', {}); }); });
+  const file = 'tools/characterization/report-numbers.json';
+  if (process.env.CHAR === 'write') { fs.writeFileSync(file, JSON.stringify(snap, null, 1)); console.log('línea base escrita'); }
+  else if (fs.existsSync(file)) { const old = JSON.parse(fs.readFileSync(file, 'utf8')); const diff = []; Object.keys(old).forEach((k) => Object.keys(old[k]).forEach((pg2) => { const a = old[k][pg2], b = (snap[k] || {})[pg2] || {}; Object.keys(a).concat(Object.keys(b)).forEach((q) => { if (a[q] !== b[q]) diff.push(`${k}/${pg2}/${q}: ${a[q]} → ${b[q]}`); }); })); t('Caracterización numérica: valores de las láminas idénticos a la línea base', diff.length === 0, diff.slice(0, 5)); }
+}
+
 console.log(bad ? `\n${bad} FALLAS` : '\nTODO OK'); process.exit(bad ? 1 : 0);
+

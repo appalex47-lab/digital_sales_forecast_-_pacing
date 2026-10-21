@@ -22,15 +22,15 @@ const p1 = pac(1.0, [10, 20, 30], [null, null, 30.1], 1); t('pacing: período ab
 const p2 = pac(0.93, [10, 20, 30], [null, null, 25], 1); t('pacing: por debajo y cierre por debajo', /queda por debajo del plan comparable; el cierre estimado queda por debajo/.test(T(p2, rep(p2)) || ''), T(p2, rep(p2)));
 const dr = (c) => inc('drivers', { kpis: [{ id: 'gap', value: -13126 }], tables: [{ id: 'drivers', rows: c.map(([driver, contribution]) => ({ driver, contribution })) }] });
 let d = dr([['Volumen', 110172], ['CR', -49124], ['AOV', -74174]]);
-t('drivers: mezcla de signos', T(d, rep(d)) === 'Volumen suma y conversión y ticket restan; la brecha neta es −$13,126', T(d, rep(d)));
+t('drivers: mezcla de signos', T(d, rep(d)) === 'Volumen suma y conversión y ticket restan; la brecha neta es −$13.1K', T(d, rep(d)));
 d = dr([['Volumen', -1], ['CR', -5], ['AOV', -3]]); t('drivers: todos restan → el que más pesa', /^Conversión es el componente que más pesa/.test(T(d, rep(d)) || ''), T(d, rep(d)));
 let m = inc('movers', { minus: [{ type: 'Palanca', name: 'AOV', value: -74174 }, { type: 'Canal', name: 'Ecommerce', value: -38316 }], plus: [{ type: 'Canal', name: 'WhatsApp', value: 46337 }] });
 t('movers: prefiere canal', T(m, rep(m)) === 'Ecommerce es lo que más resta y WhatsApp lo que más suma', T(m, rep(m)));
 m = inc('movers', { minus: [], plus: [] }); t('movers vacío: neutro', T(m, rep(m)) === null);
 let tr = inc('trends', { kpis: [{ id: 'drag', value: -13239 }, { id: 'comp', value: 0 }], tables: [{ rows: [{ entity: 'Theta Cae' }] }] });
-t('evolución: caída sin compensación', T(tr, rep(tr)) === 'Theta Cae concentra la mayor caída (total −$13,239); nada lo compensa', T(tr, rep(tr)));
+t('evolución: caída sin compensación', T(tr, rep(tr)) === 'Theta Cae concentra la mayor caída (total −$13.2K); nada lo compensa', T(tr, rep(tr)));
 let ca = inc('categories', { charts: [{ items: [{ label: 'Cardio', value: -7840 }, { label: 'Diabetes', value: -3189 }] }] });
-t('categorías: mayor descenso', T(ca, rep(ca)) === 'Cardio concentra el mayor descenso (−$7,840)', T(ca, rep(ca)));
+t('categorías: mayor descenso', T(ca, rep(ca)) === 'Cardio concentra el mayor descenso (−$7.8K)', T(ca, rep(ca)));
 let cu = inc('customers', { lapsed: { count: 12, base: 50, month: '2026-09' } }); t('clientes: no regresaron', /^12 de 50 clientes del mes anterior/.test(T(cu, rep(cu)) || ''), T(cu, rep(cu)));
 cu = inc('customers', { lapsed: { count: 0, base: 50, month: '2026-09' } }); t('clientes: nadie dejó de comprar', T(cu, rep(cu)) === 'Ninguno de los 50 clientes del mes anterior dejó de comprar en 2026-09', T(cu, rep(cu)));
 cu = inc('customers', { kpis: [{ id: 'customers', value: 50 }] }); t('clientes: sin ventana usa el total', T(cu, rep(cu)) === '50 clientes identificados compran en el período');
@@ -60,7 +60,7 @@ t('campañas: oportunidad concluyente', /^beta concentra la mayor oportunidad/.t
 t('lectura sin datos → null', RC.reading(inc('traffic'), rep()) === null && RC.reading(inc('campaigns'), rep()) === null);
 
 { const o = inc('customers', { lapsed: { count: 6786, base: 8489, month: '2026-10', monthLabel: 'octubre', prevLabel: 'septiembre', inProgress: true, dayShare: 19 / 31 } });
-  t('clientes (mes abierto): título prudente', T(o, rep(o)) === '6,786 de 8,489 clientes de septiembre aún no vuelven a comprar (80 %)', T(o, rep(o)));
+  t('clientes (mes abierto): título prudente', T(o, rep(o)) === '8 de cada 10 clientes que compraron en septiembre todavía no han vuelto a comprar en octubre', T(o, rep(o)));
   const c2 = inc('customers', { lapsed: { count: 2000, base: 8000, month: '2026-09', monthLabel: 'septiembre', prevLabel: 'agosto', inProgress: false, dayShare: 1 } });
   t('clientes (mes cerrado): título con porcentaje', T(c2, rep(c2)) === '2,000 de 8,000 clientes de agosto no volvieron a comprar en septiembre (25 %)', T(c2, rep(c2))); }
 { const rn = inc('recovery', { kpis: [{ id: 'remaining', value: 35900000 }, { id: 'days', value: 73 }, { id: 'daily', value: 492000 }], net: { gap: 11000000, shortfall: 35900000, surplus: 24900000 } });
