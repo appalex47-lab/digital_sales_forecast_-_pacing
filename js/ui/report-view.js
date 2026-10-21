@@ -401,9 +401,9 @@
     const eyebrow = u.id === 'annex' ? 'Anexo técnico' : (SECTION[u.id] || p.title);
     if (u.id === 'cover') {
       const per = (x.units.find((q) => q.id === 'cover').page.facts.find((f) => f.id === 'period') || {}).value || '';
-      return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand">${brandMark(true)}${esc(brandName(p))}</div>
+      return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand">${brandMark(true)}${brandLogo() ? '' : 'RevNavigator'}</div>
         <div class="rp-cover__eyebrow">Reporte ejecutivo</div><h1 class="rp-cover__title">${esc(p.headline)}</h1><div class="rp-cover__rule"></div><p class="rp-cover__sub">${esc([per, p.businessName].filter(Boolean).join(' · '))}</p>
-        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div>${x.lastActual ? `<div><dt>Venta real hasta</dt><dd>${esc(x.lastActual)}</dd></div>` : ''}<div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
+        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div>${x.lastActual ? `<div><dt>Venta real hasta</dt><dd>${esc(x.lastActual)}</dd></div>` : ''}<div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div>${brandLogo() ? '<div class="rp-cover__by">RevNavigator</div>' : ''}</section>`;
     }
     const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p, x) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
     const concl = u.id === 'annex' || !FP.reportCopy ? null : FP.reportCopy.title(p, x.report);   // título con conclusión si los datos la permiten; si no, el neutro

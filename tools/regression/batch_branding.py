@@ -49,6 +49,8 @@ async def main():
           ov:[...h.querySelectorAll('.rp-page')].filter(p=>{const b=p.querySelector('.rp-body');return b&&b.scrollHeight>b.clientHeight+1}).map(p=>p.getAttribute('data-page')),
           blue:getComputedStyle(h.querySelector('.rp-page')).getPropertyValue('--blue').trim(),red:getComputedStyle(h.querySelector('.rp-page')).getPropertyValue('--red').trim()}})()""")
         chk('BR-9 portada con logo grande y cada lámina con logo pequeño en el pie', m['cover'] == 1 and m['foot'] == m['pages'] and m['pages'] > 3, m)
+        cv = await q.evaluate("(()=>{const c=document.querySelector('#rp-print-host [data-page=cover]');return {brand:c.querySelector('.rp-brand').innerText.trim(),by:(c.querySelector('.rp-cover__by')||{}).innerText||null,sub:c.querySelector('.rp-cover__sub').innerText}})()")
+        chk('BR-9b con logo, la portada no repite texto junto al logo y firma «RevNavigator» abajo a la izquierda', cv['brand'] == '' and cv['by'] == 'RevNavigator', cv)
         chk('BR-10 el color principal cambia y el rojo de «resta» sigue fijo', m['blue'].upper() != '#1F5FD6' and m['red'].upper() == '#C0392B', m)
         chk('BR-11 ninguna lámina desborda con el logo en el pie', m['ov'] == [], m['ov'])
         if SHOT:
