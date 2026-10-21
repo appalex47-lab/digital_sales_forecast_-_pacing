@@ -333,3 +333,5 @@
 .rp-page--cover .rp-brand { font-size:22px; }
 
 .rp-cover__by { position:absolute; left:60px; bottom:20px; font-size:13.4px; letter-spacing:.04em; color:#CFE0F5; opacity:.85; }
+
+.rp-page--cover svg.rp-deco--bg { position:absolute; inset:0; width:100%; height:100%; right:auto; bottom:auto; }
