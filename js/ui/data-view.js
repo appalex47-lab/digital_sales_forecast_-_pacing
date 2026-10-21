@@ -76,7 +76,8 @@
       <tbody>${slice.map((r) => {
         const ch = FP.dataModel.getChannel(r.channel);
         const [cls, txt] = STATUS[r.status] || ['na', r.status];
-        const extra = [r.event, r.holiday].filter(Boolean).join(', ');
+        // Optimización de rendimiento: evitar asignación de arreglo y encadenamiento (.filter.join) en cada fila del render
+        const extra = r.event && r.holiday ? `${r.event}, ${r.holiday}` : (r.event || r.holiday || '');
         return `<tr>
           <td class="num">${esc(r.date)}</td>
           <td><span class="channel-cell" style="--dot:${ch.color}">${esc(ch.label)}</span></td>
