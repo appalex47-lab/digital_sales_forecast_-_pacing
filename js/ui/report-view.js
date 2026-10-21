@@ -84,6 +84,8 @@
     return wrap(W, H, g, c.title);
   }
 
+  // Etiqueta de hasta dos líneas cortando por palabra; el nombre completo queda como <title> (no se pierde información).
+  const wrapLbl = (txt, n) => { const w = String(txt).split(/\s+/), l = ['']; w.forEach((t) => { const cur = l[l.length - 1]; if (!cur) l[l.length - 1] = t; else if ((cur + ' ' + t).length <= n) l[l.length - 1] = cur + ' ' + t; else l.push(t); }); if (l.length > 2) { l[1] = l.slice(1).join(' '); l.length = 2; } return l.map((x) => (x.length > n + 3 ? x.slice(0, n + 2) + '…' : x)); };
   function chartHbar(c) {
     const items = c.items.filter((i) => isNum(i.value)); if (!items.length) return empty(520, 120, 'Sin datos para graficar');
     const W = 520, rowH = 38, T = 6, H = T + items.length * rowH + 6, labW = 132;
@@ -92,7 +94,7 @@
     let g = `<line x1="${x0}" x2="${x0}" y1="${T}" y2="${H - 4}" stroke="${C.grey}"/>`;
     items.forEach((it, i) => {
       const y = T + i * rowH + 7, w = Math.abs(it.value) * sc, x = it.value >= 0 ? x0 : x0 - w, col = it.value >= 0 ? C.green : C.red;
-      g += svgT(labW, y + 17, cut(it.label, 17), { anchor: 'end', fill: C.ink }) + `<rect x="${x}" y="${y}" width="${Math.max(2, w)}" height="22" fill="${col}" rx="2"/>`;
+      const ln = wrapLbl(it.label, 19); g += `<g><title>${esc(it.label)}</title>${ln.length > 1 ? ln.map((t2, k) => svgT(labW, y + 10 + k * 14, t2, { anchor: 'end', fill: C.ink })).join('') : svgT(labW, y + 17, ln[0], { anchor: 'end', fill: C.ink })}</g>` + `<rect x="${x}" y="${y}" width="${Math.max(2, w)}" height="22" fill="${col}" rx="2"/>`;
       g += it.value >= 0 ? svgT(x + w + 5, y + 17, `▲ ${sMC(it.value)}`, { fill: col, weight: 700 }) : svgT(x - 5, y + 17, `▼ ${sMC(it.value)}`, { anchor: 'end', fill: col, weight: 700 });
     });
     return wrap(W, H, g, c.title);
@@ -249,7 +251,7 @@
     const t0 = p.tables[0] || { rows: [] }, rows = t0.rows || [], t1 = p.tables.find((t) => t.id === 'channels');
     if (!rows.length) return notesHtml(p);
     const net = rows.reduce((a, r) => a + (isNum(r.contribution) ? r.contribution : 0), 0), mx = Math.max(...rows.map((r) => Math.abs(r.contribution)), Math.abs(net), 1);
-    const bar = (v, navy) => { const w = Math.max(1.5, Math.abs(v) / mx * 34); const cls = navy ? 'nv' : v >= 0 ? 'pos' : 'neg'; return `<div class="rp-dv__t"><i class="rp-dv__ax"></i><i class="rp-dv__b rp-dv__b--${cls}" style="${v >= 0 ? `left:50%` : `right:50%`};width:${w.toFixed(1)}%"></i><span class="rp-dv__v ${v >= 0 ? 'rp-pos' : 'rp-neg'}" style="${v >= 0 ? `left:calc(${(50 + w).toFixed(1)}% + 6px)` : `right:calc(${(50 + w).toFixed(1)}% + 6px)`}">${esc(fmt('smoney', v))}</span></div>`; };
+    const bar = (v, navy) => { const w = Math.max(1.5, Math.abs(v) / mx * 24); const cls = navy ? 'nv' : v >= 0 ? 'pos' : 'neg'; return `<div class="rp-dv__t"><i class="rp-dv__ax"></i><i class="rp-dv__b rp-dv__b--${cls}" style="${v >= 0 ? `left:50%` : `right:50%`};width:${w.toFixed(1)}%"></i><span class="rp-dv__v ${v >= 0 ? 'rp-pos' : 'rp-neg'}" style="${v >= 0 ? `left:calc(${(50 + w).toFixed(1)}% + 6px)` : `right:calc(${(50 + w).toFixed(1)}% + 6px)`}">${esc(fmt('smoney', v))}</span></div>`; };
     const short = { trafficVolume: 'Volumen', conversionRate: 'CR', aov: 'AOV' };
     const left = rows.map((r) => `<div class="rp-dv__r"><span class="rp-dv__l">${esc(short[r._kind] || r.driver)}</span>${bar(r.contribution)}</div>`).join('') + `<div class="rp-dv__r rp-dv__r--net"><span class="rp-dv__l">Resultado neto</span>${bar(net, true)}</div>`;
     const right = rows.map((r) => `<div class="rp-dv2"><div class="rp-dv2__n"><b>${esc(short[r._kind] || r.driver)}</b><small>${esc(GLOSS[r._kind] || '')}</small><em>${isNum(r.deltaPct) ? `${esc(fmt('spct', r.deltaPct))} frente a la referencia` : ''}</em></div><div class="rp-dv2__v ${r.contribution >= 0 ? 'rp-pos' : 'rp-neg'}">${esc(fmt('smoney', r.contribution))}</div></div>`).join('');
@@ -439,8 +441,9 @@
       // Suma/resta: sin tablas, se quitan las filas de menor peso de la columna más larga y la lámina lo dice.
       if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'movers') {
         const cols = [...b.querySelectorAll('.rp-mv__c')], tot = cols.map((c) => c.querySelectorAll('.rp-mv__r').length); let guard = 40;
+        const trimNote = document.createElement('p'); trimNote.className = 'rp-scope rp-trim'; trimNote.textContent = 'Por espacio, esta lámina muestra solo las filas de mayor peso de cada lado.'; b.appendChild(trimNote); // se reserva su espacio antes de recortar
         while (b.scrollHeight > b.clientHeight + 1 && guard-- > 0) { const c = cols.sort((a, d) => d.querySelectorAll('.rp-mv__r').length - a.querySelectorAll('.rp-mv__r').length)[0], rs = c.querySelectorAll('.rp-mv__r'); if (rs.length <= 1) break; rs[rs.length - 1].remove(); }
-        if (cols.some((c, i) => true) && b.querySelectorAll('.rp-mv__r').length < tot.reduce((a, c) => a + c, 0)) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = 'Por espacio, esta lámina muestra solo las filas de mayor peso de cada lado.'; b.appendChild(n); pg.setAttribute('data-trimmed', '1'); }
+        if (b.querySelectorAll('.rp-mv__r').length < tot.reduce((a, c) => a + c, 0)) pg.setAttribute('data-trimmed', '1'); else trimNote.remove();
       }
       if (b.scrollHeight > b.clientHeight + 1) { pg.setAttribute('data-overflow', '1'); bad.push(pg.getAttribute('data-page')); }
     });

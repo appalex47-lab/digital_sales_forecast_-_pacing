@@ -20,7 +20,7 @@
   const page = (rep, id) => (rep.pages || []).find((p) => p.id === id && p.status === 'included') || null;
   const kpi = (p, id) => { const k = p && (p.kpis || []).find((x) => x.id === id); return k && fin(k.value) ? k.value : null; };
   const lower1 = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-  const money = (v) => RB().fmt('smoney', v), moneyC = (v) => RB().fmt('moneyC', v), pct = (v) => RB().fmt('pct', v);
+  const money = (v) => RB().fmt('smoneyC', v), moneyC = (v) => RB().fmt('moneyC', v), pct = (v) => RB().fmt('pct', v);
   const periodOf = (rep) => { const c = page(rep, 'cover'); const f = c && (c.facts || []).find((x) => x.id === 'period'); return f && f.value ? String(f.value) : null; };
 
   /** Cumplimiento (real a la fecha / plan comparable) → frase. Umbrales: ±2 % «en línea», −10 % «se aleja». */
@@ -49,7 +49,7 @@
       const ch = (p.charts || [])[0];
       if (ch && Array.isArray(ch.plan) && Array.isArray(ch.forecast) && fin(ch.cutIndex) && ch.cutIndex < ch.plan.length - 1) {
         const lp = ch.plan[ch.plan.length - 1], lf = ch.forecast[ch.forecast.length - 1];
-        if (fin(lp) && fin(lf) && lp > 0) { const r = lf / lp; tail = r >= 1.02 ? '; el cierre estimado supera el plan del mes' : r >= 0.98 ? '; el cierre estimado confirma el ritmo' : '; el cierre estimado queda por debajo del plan del mes'; }
+        if (fin(lp) && fin(lf) && lp > 0) { const r = lf / lp; const yr = /^Año\b/.test(per || ''); tail = r >= 1.02 ? `; el cierre estimado supera ${yr ? 'la meta anual' : 'el plan del mes'}` : r >= 0.98 ? '; el cierre estimado confirma el ritmo' : `; el cierre estimado queda por debajo ${yr ? 'de la meta anual' : 'del plan del mes'}`; }
       }
       return `${subj} ${verb} plan comparable${tail}`;
     },
@@ -88,6 +88,8 @@
       const L = p.lapsed;
       if (L && L.monthLabel && L.prevLabel && fin(L.count) && fin(L.base) && L.base > 0 && L.count > 0) {
         const pc = Math.round(L.count / L.base * 100), n = RB().fmt('int', L.count), b = RB().fmt('int', L.base);
+        const tenth = L.count / L.base * 10, kk = Math.round(tenth);
+        if (kk >= 1 && kk <= 9 && Math.abs(tenth - kk) <= 0.35) return L.inProgress ? `${kk} de cada 10 clientes que compraron en ${L.prevLabel} todavía no han vuelto a comprar en ${L.monthLabel}` : `${kk} de cada 10 clientes que compraron en ${L.prevLabel} no volvieron a comprar en ${L.monthLabel}`;
         return L.inProgress ? `${n} de ${b} clientes de ${L.prevLabel} aún no vuelven a comprar (${pc} %)` : `${n} de ${b} clientes de ${L.prevLabel} no volvieron a comprar en ${L.monthLabel} (${pc} %)`;
       }
       if (p.lapsed && fin(p.lapsed.count) && fin(p.lapsed.base) && p.lapsed.base > 0) return `${RB().fmt('int', p.lapsed.count)} de ${RB().fmt('int', p.lapsed.base)} clientes del mes anterior no volvieron a comprar en ${p.lapsed.month}`;
