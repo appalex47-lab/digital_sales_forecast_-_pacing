@@ -19,6 +19,7 @@ async def main():
         chk('NX-2 la vista carga sin errores de consola', not errs, errs[:3])
         chk('NX-3 siguen todos los bloques informativos (8 encabezados)', all(h in txt for h in HEADS), [h for h in HEADS if h not in txt])
         chk('NX-4 resumen ejecutivo, cobertura (6 chips) y nota de niveles siguen presentes', 'Resumen ejecutivo' in txt and await q.evaluate("document.querySelectorAll('#nx-summary .nx-cover .chip').length") == 6 and 'Los drivers son atribución matemática' in txt)
+        await q.evaluate("(()=>{const s=FP.app.state.nx.sigShown; s.pos=s.neg=s.neu=9999; FP.narrativeView.render(FP.app.state)})()")   # señales: las que no caben en el top 5 viven tras «Ver más»
         miss = await q.evaluate("(()=>{const n=FP.app.state.nx.narrative, dom=document.getElementById('nx-sections').textContent.replace(/\\s+/g,' '); return n.claims.filter(c=>!dom.includes(c.text.replace(/\\s+/g,' '))).map(c=>c.id+': '+c.text.slice(0,50))})()")
         chk('NX-5 toda afirmación (claim) de la narrativa sigue pintada, con su «¿Por qué dices eso?»', miss == [] and await q.evaluate("document.querySelectorAll('#nx-sections .claim').length") == await q.evaluate("document.querySelectorAll('#nx-sections .claim__why').length"), miss)
         # KPI: valores y procedencia = los mismos campos del forecast que cita la narrativa

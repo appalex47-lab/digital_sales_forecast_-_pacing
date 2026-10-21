@@ -141,7 +141,7 @@
     // Fase 9.2: narrativa ejecutiva. No tiene settings propios: narra el mismo canal/periodo/comparación
     // que Diagnóstico (state.dx.settings) — sin un segundo sistema de filtros.
     nx: {
-      narrative: null, key: null,
+      narrative: null, key: null, sigShown: { pos: 5, neg: 5, neu: 5 },
       ai: { status: null, result: null, errors: [] }
     }
   };
@@ -497,7 +497,7 @@
       const gm = FP.productStore.available() && FP.productStore.meta;
       const hasGeoData = Boolean(gm && ((gm.states || []).length > 1 || (gm.branches || []).length > 1));
       state.nx.narrative = FP.narrativeEngine.build({ run, rf, diag, pa, rcAnalysis, status, channel: diag ? diag.channel.id : state.dx.settings.channel, hasGeoData });
-      state.nx.ai = { status: null, result: null, errors: [] };
+      state.nx.ai = { status: null, result: null, errors: [] }; state.nx.sigShown = { pos: 5, neg: 5, neu: 5 };
       return state.nx.narrative;
     };
     const result = rebuild();
@@ -3410,6 +3410,12 @@
       state.nx.ai = result;
       render();
       FP.ui.toast(result.ok ? 'Cohere redactó la narrativa; se validó contra las cifras calculadas.' : 'Análisis con IA no disponible; la narrativa determinística sigue completa.');
+    },
+    'nx-sig-more'(el) {
+      const s = state.nx.sigShown || (state.nx.sigShown = { pos: 5, neg: 5, neu: 5 }), k = el.dataset.col;
+      if (!(k in s)) return;
+      s[k] = el.dataset.dir === 'less' ? 5 : s[k] + 5;
+      FP.narrativeView.render(state);
     },
     'nx-export'() {
       const e = EXPORT_BUILDERS.narrative();

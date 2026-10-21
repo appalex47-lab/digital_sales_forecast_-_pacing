@@ -139,7 +139,13 @@
     if (!diag || diag.status !== 'ok') return [];
     const order = { high: 0, medium: 1, low: 2 };
     return [...(diag.signals || [])].sort((a, b) => (order[a.relevance.priority] ?? 3) - (order[b.relevance.priority] ?? 3))
-      .map((s) => claim('senal', s.evidence, { module: 'signalEngine', field: 'evidence', signalId: s.id, priority: s.relevance.priority }));
+      .map((s) => {
+        const c = claim('senal', s.evidence, { module: 'signalEngine', field: 'evidence', signalId: s.id, priority: s.relevance.priority });
+        // Solo para presentar (agrupar a favor / en contra): copia campos que la señal ya trae; no calcula nada nuevo ni cambia el orden.
+        const L = (FP.signalEngine && FP.signalEngine.METRIC_LABEL) ? FP.signalEngine.METRIC_LABEL() : {};
+        c.meta = { kind: s.kind, direction: s.direction, deltaPct: s.deltaPct, metric: s.metric, metricLabel: L[s.metric] || s.metric, dimension: s.dimension, dimensionLabel: s.dimensionLabel, label: s.label };
+        return c;
+      });
   }
 
   function hypothesisSection(diag) {
