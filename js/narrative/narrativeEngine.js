@@ -62,6 +62,8 @@
   /** Construye una afirmación citable. `numbers` explícitos + los detectados en el texto. */
   function claim(level, text, source, numbers = []) {
     if (!LEVELS.includes(level)) throw new Error(`Nivel de certeza desconocido: ${level}`);
+    // Un dato faltante nunca se escribe como «null» en el texto (p. ej. «contra un plan de null»): se dice «no disponible». No cambia ningún cálculo.
+    text = String(text).replace(/\bnull\b/g, 'no disponible');
     return { id: `c${++seq}`, level, text, source: source || null, numbers: [...new Set([...numbers, ...numbersIn(text)])] };
   }
 

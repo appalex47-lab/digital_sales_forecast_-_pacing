@@ -51,16 +51,41 @@
     const n = state.nx.narrative;
     const s = state.dx.settings;
     $('nx-controls').innerHTML = `
-      <div class="subhead"><h3 class="panel__title">Narrativa ejecutiva</h3>
-        <span class="field__hint">Lo que ya calculó la app, convertido en una explicación. No es un motor nuevo: cada frase cita un cálculo ya hecho.</span></div>
-      <p class="field__hint">Se narra el mismo canal, periodo y comparación de <a href="#diagnostico">Diagnóstico</a>: <strong>${esc(FP.navigation.contextLabel({ channel: s.channel }))}</strong> ·
-        ${esc(n && n.period ? n.period.label : '')} · ${esc(n && n.comparison ? n.comparison.label : '')}. Para cambiarlos, ve a Diagnóstico, o cambia periodo y canal aquí mismo (es la misma selección).</p>
-      ${contextControls(state, 'nx', 'dx-setting', 'dx-period-type')}
-      <div class="btn-row">
-        <button type="button" class="btn btn--small" data-action="nx-ai" ${state.nx.ai.status === 'busy' ? 'disabled' : ''}>${state.nx.ai.status === 'busy' ? 'Redactando…' : 'Redactar con Cohere (opcional)'}</button>
-        <button type="button" class="btn btn--small" data-action="nx-export" ${n ? '' : 'disabled'}>Exportar narrative_export.json</button>
-      </div>
-      <p class="field__hint">Cohere usa la API key configurada en Configuración de RevNavigator. Solo redacta: no calcula, no agrega cifras nuevas y se valida antes de mostrarse.</p>`;
+      <div class="nx-head">
+        <div class="subhead"><h3 class="panel__title">Narrativa ejecutiva</h3>
+          <span class="field__hint">Lo que ya calculó la app, convertido en una explicación. No es un motor nuevo: cada frase cita un cálculo ya hecho.</span></div>
+        <p class="field__hint nx-head__ctx">Se narra el mismo canal, periodo y comparación de <a href="#diagnostico">Diagnóstico</a>: <strong>${esc(FP.navigation.contextLabel({ channel: s.channel }))}</strong> ·
+          ${esc(n && n.period ? n.period.label : '')} · ${esc(n && n.comparison ? n.comparison.label : '')}. Para cambiarlos, ve a Diagnóstico, o cambia periodo y canal aquí mismo (es la misma selección).</p>
+        <div class="nx-head__bar">
+          ${contextControls(state, 'nx', 'dx-setting', 'dx-period-type')}
+          <div class="btn-row nx-head__btns">
+            <button type="button" class="btn btn--small" data-action="nx-ai" ${state.nx.ai.status === 'busy' ? 'disabled' : ''}>${state.nx.ai.status === 'busy' ? 'Redactando…' : 'Redactar con Cohere (opcional)'}</button>
+            <button type="button" class="btn btn--small" data-action="nx-export" ${n ? '' : 'disabled'}>Exportar narrative_export.json</button>
+          </div>
+        </div>
+        <p class="field__hint">Cohere usa la API key configurada en Configuración de RevNavigator. Solo redacta: no calcula, no agrega cifras nuevas y se valida antes de mostrarse.</p>
+      </div>`;
+  }
+
+  /** Indicadores clave de la primera zona de lectura. No calculan nada: leen los mismos campos del forecast
+   * que ya cita la narrativa (performanceSection: forecastEngine · annual) y los formatean con FP.format. */
+  function kpiStrip(state, esc) {
+    const n = state.nx.narrative, run = state.fc && state.fc.run;
+    if (!n || !n.readyToNarrate || !n.readyToNarrate.performance || !run) return '';
+    const id = n.channel && n.channel.id, S = id === 'total' || !id ? run.total : (run.channels || {})[id], a = S && S.annual;
+    if (!a) return '';
+    const F = FP.format, fin = (v) => typeof v === 'number' && Number.isFinite(v);
+    const money = (v) => (fin(v) ? F.currency(v, 0) : null), pct = (v) => (fin(v) ? F.percent(v, 1) : null), spc = (v) => (fin(v) ? F.signedPercent(v, 1) : null);
+    const td = a.toDate && a.toDate.revenue, fg = a.forecastGap && a.forecastGap.revenue;
+    const tile = (label, level, value, sub, tone) => `<div class="nx-kpi${tone ? ` nx-kpi--${tone}` : ''}"><div class="nx-kpi__l">${esc(label)} <span class="ds-badge ds-badge--chain ${LEVEL[level][0]}">${esc(LEVEL[level][1])}</span></div>
+      <div class="nx-kpi__v">${value === null ? '<span class="nx-kpi__na">No disponible</span>' : esc(value)}</div>${sub ? `<div class="nx-kpi__s">${esc(sub)}</div>` : ''}</div>`;
+    const gap = td ? td.gap : null;
+    return `<div class="nx-kpis" aria-label="Indicadores del resultado">
+      ${tile('Venta observada', 'hecho', money(a.actualToDate ? a.actualToDate.revenue : null), fin(a.plan && a.plan.revenue) ? `plan anual ${money(a.plan.revenue)}` : null)}
+      ${tile('Cumplimiento a la fecha', 'calculo', pct(td ? td.compliance : null), 'contra el plan de los mismos días', fin(td && td.compliance) ? (td.compliance >= 1 ? 'pos' : 'neg') : null)}
+      ${tile('Brecha contra el plan', 'calculo', money(gap), fin(td && td.gapPct) ? `${spc(td.gapPct)} frente al plan de los mismos días` : null, fin(gap) ? (gap >= 0 ? 'pos' : 'neg') : null)}
+      ${tile('Forecast de cierre', 'calculo', money(a.forecast ? a.forecast.revenue : null), fg && fin(fg.gap) ? `${fg.gap >= 0 ? 'por encima' : 'por debajo'} de la meta por ${money(Math.abs(fg.gap))}` : null)}
+    </div>`;
   }
 
   function renderSummary(state) {
@@ -70,10 +95,11 @@
     const r = n.readyToNarrate;
     const badge = (ok, label) => `<span class="chip ${ok ? '' : 'chip--soft'}">${ok ? '✓' : '—'} ${esc(label)}</span>`;
     $('nx-summary').innerHTML = `
-      <h3 class="panel__title" id="nx-summary-title">Resumen ejecutivo</h3>
+      <div class="nx-sumhead"><h3 class="panel__title" id="nx-summary-title">Resumen ejecutivo</h3>
+        <p class="nx-cover" aria-label="Cobertura de información">${[badge(r.performance, 'Desempeño'), badge(r.diagnosis, 'Diagnóstico'), badge(r.signals, 'Señales'), badge(r.hypotheses, 'Hipótesis'),
+        badge(r.productAnalysis, 'Producto'), badge(r.recovery, 'Recuperación')].join(' ')}</p></div>
+      ${kpiStrip(state, esc)}
       <p class="narrative-summary">${esc(n.executiveSummary.text)}</p>
-      <p class="field__hint">${[badge(r.performance, 'Desempeño'), badge(r.diagnosis, 'Diagnóstico'), badge(r.signals, 'Señales'), badge(r.hypotheses, 'Hipótesis'),
-        badge(r.productAnalysis, 'Producto'), badge(r.recovery, 'Recuperación')].join(' ')}</p>
       <p class="field__hint">${esc(n.note)}</p>`;
   }
 
@@ -104,10 +130,10 @@
     return parts.length ? `<p class="scope-banner">${parts.join(' · ')}</p>` : '';
   }
 
-  function block(title, claims, esc, { analystOnly = false, scopeHtml = '' } = {}) {
+  function block(title, claims, esc, { analystOnly = false, scopeHtml = '', cls = '' } = {}) {
     if (!claims.length) return '';
     return `<section class="narrative-block"${analystOnly ? ' data-analyst' : ''}>${title ? `<h4>${esc(title)}</h4>` : ''}${scopeHtml}
-      <ul class="claims">${claims.map((c) => renderClaim(c, esc)).join('')}</ul></section>`;
+      <ul class="claims${cls ? ` ${cls}` : ''}">${claims.map((c) => renderClaim(c, esc)).join('')}</ul></section>`;
   }
 
   function renderSections(state) {
@@ -116,37 +142,44 @@
     if (!n) { $('nx-sections').innerHTML = ''; return; }
     const hecho = claimsByLevel(n, 'performance', 'hecho');
     const calculo = claimsByLevel(n, 'performance', 'calculo');
-    const parts = [];
-    parts.push(block('¿Qué pasó?', hecho, esc));
-    parts.push(block('¿Por qué importa?', calculo, esc));
-    // Drivers: el enunciado principal siempre visible; el desglose por driver es detalle de modo Analista.
+    // Agrupación visual (Fase 15.1): mismos bloques y mismo contenido, en una cuadrícula de columnas con jerarquía
+    // Resultado → Explicación → Señales/hipótesis → Producto/recuperación → Siguiente paso. Nada se quita ni se renombra.
+    const col = (inner, full) => (inner.join('') ? `<div class="nx-col${full ? ' nx-col--full' : ''}">${inner.join('')}</div>` : '');
+    const rows = [];
+    rows.push(col([block('¿Qué pasó?', hecho, esc)]));
+    rows.push(col([block('¿Por qué importa?', calculo, esc)]));
+    // Drivers: el enunciado principal siempre visible; el desglose por driver es detalle de modo Analista (en 3 columnas, compacto).
+    const dr = [];
     const driverClaims = n.claims.filter((c) => n.sections.drivers.claims.includes(c.id));
     if (driverClaims.length) {
-      parts.push(block(SECTION_TITLES.drivers, driverClaims.slice(0, 1), esc));
-      if (driverClaims.length > 1) parts.push(block(null, driverClaims.slice(1), esc, { analystOnly: true }));
-    } else if (n.sections.drivers.empty) parts.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES.drivers)}</h4><p class="note">${esc(n.sections.drivers.empty)}</p></section>`);
+      dr.push(block(SECTION_TITLES.drivers, driverClaims.slice(0, 1), esc));
+      if (driverClaims.length > 1) dr.push(block(null, driverClaims.slice(1), esc, { analystOnly: true, cls: 'claims--cols' }));
+    } else if (n.sections.drivers.empty) dr.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES.drivers)}</h4><p class="note">${esc(n.sections.drivers.empty)}</p></section>`);
+    rows.push(col(dr, true));
     // Señales e hipótesis: solo la de mayor prioridad siempre visible; el resto es detalle de modo Analista.
     ['signals', 'hypotheses'].forEach((key) => {
-      const sec = n.sections[key];
-      if (sec.empty) { parts.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES[key])}</h4><p class="note">${esc(sec.empty)}</p></section>`); return; }
+      const sec = n.sections[key], inner = [];
+      if (sec.empty) { inner.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES[key])}</h4><p class="note">${esc(sec.empty)}</p></section>`); rows.push(col(inner)); return; }
       const claims = n.claims.filter((c) => sec.claims.includes(c.id));
-      parts.push(block(SECTION_TITLES[key], claims.slice(0, 1), esc));
-      if (claims.length > 1) parts.push(block(null, claims.slice(1), esc, { analystOnly: true }));
-      if (claims.length > 1) parts.push(`<p class="field__hint" data-analyst>${claims.length - 1} más.</p>`);
+      inner.push(block(SECTION_TITLES[key], claims.slice(0, 1), esc));
+      if (claims.length > 1) inner.push(block(null, claims.slice(1), esc, { analystOnly: true }));
+      if (claims.length > 1) inner.push(`<p class="field__hint" data-analyst>${claims.length - 1} más.</p>`);
+      rows.push(col(inner));
     });
     // Producto y recuperación: detalle completo de modo Analista (el resumen ejecutivo ya los resume arriba).
     // Cada una conserva su propio alcance (canal/periodo/comparación/nivel u horizonte) — nunca se asume
     // que coincide con el de Diagnóstico; el banner lo deja explícito.
     ['product', 'recovery'].forEach((key) => {
-      const sec = n.sections[key];
-      if (sec.empty) { parts.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES[key])}</h4><p class="note">${esc(sec.empty)}</p></section>`); return; }
+      const sec = n.sections[key], inner = [];
+      if (sec.empty) { inner.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES[key])}</h4><p class="note">${esc(sec.empty)}</p></section>`); rows.push(col(inner)); return; }
       const claims = n.claims.filter((c) => sec.claims.includes(c.id));
       const scopeHtml = scopeBanner(key, sec.scope, esc);
-      parts.push(block(SECTION_TITLES[key], claims, esc, { analystOnly: true, scopeHtml }));
-      if (key === 'product' && sec.geoNote) parts.push(`<p class="field__hint" data-analyst>${esc(sec.geoNote)}</p>`);
+      inner.push(block(SECTION_TITLES[key], claims, esc, { analystOnly: true, scopeHtml }));
+      if (key === 'product' && sec.geoNote) inner.push(`<p class="field__hint" data-analyst>${esc(sec.geoNote)}</p>`);
+      rows.push(col(inner));
     });
-    parts.push(block(SECTION_TITLES.nextSteps, n.claims.filter((c) => n.sections.nextSteps.claims.includes(c.id)), esc));
-    $('nx-sections').innerHTML = parts.join('');
+    rows.push(col([block(SECTION_TITLES.nextSteps, n.claims.filter((c) => n.sections.nextSteps.claims.includes(c.id)), esc)], true));
+    $('nx-sections').innerHTML = `<div class="nx-grid">${rows.join('')}</div>`;
   }
 
   function renderAi(state) {
