@@ -156,7 +156,7 @@
       if (isNum(fv)) f += fv; else fOk = false;
       plan.push(pOk ? p : null); fc.push(fOk ? f : null); actual.push(aOk && i <= cut ? a : null);
     });
-    const rows = [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]].filter(([, x]) => x && x[coll]).map(([c, x]) => {
+    const rows = (s.channel && s.channel !== 'total' ? [[s.channel, series(s.run, s.channel)]] : [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]]).filter(([, x]) => x && x[coll]).map(([c, x]) => {
       const m = x[coll].find((q) => q.key === mk), t = m && m.toDate && m.toDate.revenue;
       return { channel: chLabel(c), real: t ? t.actual : null, plan: t ? t.plan : null, gap: t ? t.gap : null, gapPct: t ? t.gapPct : null, days: m ? m.countedDays : null, _total: c === 'total' };
     }).filter((r) => r.real !== null);
@@ -230,7 +230,7 @@
     const headline = !hasPlan
       ? `Venta real a la fecha ${moneyC(tr.actual)}; no hay plan comparable para medir el avance.`
       : `${Math.abs(tr.gapPct) < 0.005 ? 'En línea con el plan' : tr.gap < 0 ? `${pct(Math.abs(tr.gapPct))} por debajo del plan` : `${pct(Math.abs(tr.gapPct))} por encima del plan`} a la fecha (${smoneyC(tr.gap)}); ${isNum(A.forecast && A.forecast.revenue) ? `cierre estimado ${moneyC(A.forecast.revenue)}${isNum(fg && fg.gapPct) ? ` (${spct(fg.gapPct)} vs. meta)` : ''}.` : 'el cierre estimado no está disponible.'}`;
-    const rows = [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]].filter(([, x]) => x && x.annual).map(([c, x]) => {
+    const rows = (s.channel && s.channel !== 'total' ? [[s.channel, series(s.run, s.channel)]] : [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]]).filter(([, x]) => x && x.annual).map(([c, x]) => {
       const t = x.annual.toDate && x.annual.toDate.revenue;
       return { channel: chLabel(c), real: t ? t.actual : null, plan: t ? t.plan : null, gap: t ? t.gap : null, gapPct: t ? t.gapPct : null, days: x.annual.countedDays, _total: c === 'total' };
     });
@@ -632,7 +632,7 @@
   function readout(s, by) {
     const out = {};
     const pc = by.pacing, kp = (p, id) => (p && p.kpis.find((k) => k.id === id)) || null;
-    const rows = pc && pc.tables[0] ? pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)) : [];
+    const rows = pc && pc.tables[0] && (!s.channel || s.channel === 'total') ? pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)) : []; // con un canal elegido no se comparan canales entre sí
     const real = kp(pc, 'real'), plan = kp(pc, 'plan'), comp = kp(pc, 'compliance'), fc = kp(pc, 'forecast');
     const hasPlan = Boolean(pc && comp && isNum(comp.value) && plan && isNum(plan.value));
     const gap = hasPlan ? real.value - plan.value : null;
@@ -751,7 +751,7 @@
     const ref = by.pacing && by.pacing.selection ? 'vs. referencia' : 'vs. plan';
     const dv = by.drivers, chMain = new Map(((dv && dv.tables.find((t) => t.id === 'channels') || {}).rows || []).map((r) => [r.channel, r.main]));
     const pc = by.pacing;
-    if (pc && pc.tables[0]) pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)).forEach((r) => add('Canal', r.channel, r.gap, `${isNum(r.gapPct) ? `${spct(r.gapPct)} ${ref}` : ref}${chMain.get(r.channel) && !pc.selection ? ` · mayor palanca: ${chMain.get(r.channel)}` : ''}`, 'pacing'));
+    if (pc && pc.tables[0] && (!s.channel || s.channel === 'total')) pc.tables[0].rows.filter((r) => !r._total && isNum(r.gap)).forEach((r) => add('Canal', r.channel, r.gap, `${isNum(r.gapPct) ? `${spct(r.gapPct)} ${ref}` : ref}${chMain.get(r.channel) && !pc.selection ? ` · mayor palanca: ${chMain.get(r.channel)}` : ''}`, 'pacing'));
     if (dv && !s.reportFilter) (dv.tables[0] ? dv.tables[0].rows : []).filter((r) => isNum(r.contribution)).forEach((r) => add('Palanca', r.driver, r.contribution, isNum(r.deltaPct) ? `${spct(r.deltaPct)} vs. referencia` : null, 'drivers'));
     const ca = by.categories;
     if (ca && ca.charts[0]) ca.charts[0].items.forEach((i) => add('Categoría', i.label, i.value, null, 'categories'));
