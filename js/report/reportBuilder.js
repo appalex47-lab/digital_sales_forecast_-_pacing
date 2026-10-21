@@ -657,7 +657,7 @@
     out.drag = drag && isNum(drag.impact) && drag.impact < 0 ? drag : null;
     out.material = Boolean(by.reliability && by.reliability.warning);
     const rc = by.recovery;
-    out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
+    out.rec = rc ? { remaining: (kp(rc, 'remaining') || {}).value, daily: (kp(rc, 'daily') || {}).value, days: (kp(rc, 'days') || {}).value != null ? (kp(rc, 'days') || {}).value : rc.daysLeft, actions: rc.actions || [], target: (kp(rc, 'target') || {}).value } : null;
     out.sel = pc && pc.selection ? { real: (kp(pc, 'real') || {}).value, prev: (kp(pc, 'prev') || {}).value, pct: (kp(pc, 'change') || {}).value, period: pc.periodLabel, base: pc.baseLabel, baseRef: pc.baseRef, filter: pc.filterLabel } : null;
     out.cutoff = s.run && s.run.cutoff ? dateLabel(s.run.cutoff) : null;
     out.movers = by.movers ? { minus: by.movers.minus, plus: by.movers.plus } : null;

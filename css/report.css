@@ -1,3 +1,5 @@
+/* Inter incluida (SIL OFL): la presentación se ve igual en cualquier equipo y el PDF la embebe */
+@font-face { font-family:"Inter"; font-style:normal; font-weight:100 900; font-display:swap; src:url("fonts/inter-latin-wght-normal.woff2") format("woff2"); }
 /* report.css — Presentación (PDF). Láminas 16:9 (297 × 167 mm ≈ 1122 × 630 px a 96 dpi). Letra mínima 13.4 px ≈ 10 pt.
    Sistema editorial: una paleta con significado fijo (navy = dato observado y títulos; azul = calculado; naranja = estimado/advertencia;
    verde/rojo solo acompañan a un signo ▲▼ o +/−), escala tipográfica de 5 tamaños (32 · 17 · 26/34 · 14 · 13.4) y espaciado de 6 · 10 · 14 px. */

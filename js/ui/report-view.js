@@ -176,7 +176,7 @@
       const txt = !na && k2 === 'text' && c.key === 'entity' ? cut2(nice(v), 44) : fmt(k2, v);
       return `<td class="${c.num ? 'num' : ''}${tone}${na ? ' rp-na' : ''}">${esc(txt)}</td>`;
     };
-    return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t"><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
+    return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t${t.id === 'retention' ? ' rp-t--rt' : ''}"><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
       <tbody>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   let NOANNEX = false;   // se fija en docHtml: si el anexo no va en el PDF, no se remite a él
@@ -217,7 +217,8 @@
     const lag = b.rows.filter((r) => r.shortfall > 0).slice(0, 2), share = t.shortfall > 0 ? lag.reduce((a, r) => a + r.shortfall, 0) / t.shortfall : null;
     const nm = lag.map((r) => r.channel).join(' y ');
     const next = lag.length ? `<div class="rp-card"><b>Siguiente paso</b><br>${esc(nm)} concentra${lag.length > 1 ? 'n' : ''} ${isNum(share) ? `${Math.round(share * 100)} % ` : ''}de lo que falta: ${p.actions.length ? 'confirma que sus acciones cubren esa brecha' : 'define una acción con responsable y fecha'}${p.scenarios.length ? '.' : ' y guarda un escenario de recuperación.'}</div>` : '';
-    return `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-h">${table}${how}</div><div class="rp-col-h">${acts}${scen}${next}</div></div>${notesHtml({ notes: (p.notes || []).slice(1) })}`;
+    const bare = !acts && !scen;   // sin acciones ni escenarios: la tabla a la izquierda y las dos lecturas apiladas a la derecha (sin hueco vacío)
+    return `${kpisHtml(p, x.tags)}<div class="rp-row"><div class="rp-col-h">${bare ? table : table + how}</div><div class="rp-col-h">${bare ? next + how : acts + scen + next}</div></div>${notesHtml({ notes: (p.notes || []).slice(1) })}`;
   }
 
   const BODY = {
