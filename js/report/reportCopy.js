@@ -10,8 +10,9 @@
   const fin = (v) => typeof v === 'number' && isFinite(v);
   // Nombres largos: se corta en límite de palabra, sin puntos suspensivos ni dosis/medidas sueltas al final («MOUNJARO KWIKPEN MULTIDOSIS 1…» → «MOUNJARO KWIKPEN MULTIDOSIS»).
   // Un nombre técnico sin espacios no se corta (se deja entero).
+  const nice = (t) => (t && t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]{3}/.test(t) ? t.toLowerCase().replace(/(^|[\s(\/-])([a-záéíóúñ])/g, (m, a, b) => a + b.toUpperCase()) : t);   // «MOUNJARO KWIKPEN» → «Mounjaro Kwikpen»
   const cut = (s, n) => {
-    s = String(s == null ? '' : s).trim(); if (s.length <= n) return s;
+    s = nice(String(s == null ? '' : s).trim()); if (s.length <= n) return s;
     if (!/\s/.test(s)) return s.length <= 48 ? s : s.slice(0, n - 1) + '…';
     let w = s.split(/\s+/), out = []; for (const t of w) { if ((out.concat(t).join(' ')).length > n || (out.length && /\d/.test(t))) break; out.push(t); }   // se detiene antes de la dosis/presentación (primer token con dígitos)
     while (out.length > 1 && /^[\d.,/%()+-]+[A-Za-zµ]{0,4}$|^(de|del|la|el|con|y|c\/\d*)$/i.test(out[out.length - 1])) out.pop();
@@ -51,6 +52,10 @@
         const lp = ch.plan[ch.plan.length - 1], lf = ch.forecast[ch.forecast.length - 1];
         if (fin(lp) && fin(lf) && lp > 0) { const r = lf / lp; const yr = /^Año\b/.test(per || ''); tail = r >= 1.02 ? `; el cierre estimado supera ${yr ? 'la meta anual' : 'el plan del mes'}` : r >= 0.98 ? '; el cierre estimado confirma el ritmo' : `; el cierre estimado queda por debajo ${yr ? 'de la meta anual' : 'del plan del mes'}`; }
       }
+      // con el plan a la vista: «Octubre va 4.2 % arriba del plan y cerraría en $35.8M» (cifras de la misma lámina)
+      let close = null; const chx = (p.charts || [])[0];
+      if (chx && Array.isArray(chx.forecast) && fin(chx.cutIndex) && chx.cutIndex < chx.forecast.length - 1 && fin(chx.forecast[chx.forecast.length - 1]) && !/^Año\b/.test(per || '')) close = chx.forecast[chx.forecast.length - 1];
+      if (fin(c) && close !== null && Math.abs(c - 1) >= 0.02) return `${subj} va ${(Math.abs(c - 1) * 100).toFixed(1)} % ${c > 1 ? 'arriba' : 'abajo'} del plan y cerraría en ${moneyC(close)}`;
       return `${subj} ${verb} plan comparable${tail}`;
     },
     drivers(p) {
@@ -136,7 +141,7 @@
     }
   };
 
-  const sg = (v, d) => (v < 0 ? '−' : '+') + (Math.abs(v) * 100).toFixed(d == null ? 1 : d) + ' %';
+  const sg = (v, d) => (v >= 5 ? 'más de 5 veces' : (v < 0 ? '−' : '+') + (Math.abs(v) * 100).toFixed(d == null ? 1 : d) + ' %');
   const bestWorst = (rows) => { const r = rows.filter((x) => fin(x.crChg)); if (r.length < 2) return null; const b = [...r].sort((x, y) => y.crChg - x.crChg)[0], w = [...r].sort((x, y) => x.crChg - y.crChg)[0]; return b === w ? null : { b, w }; };
   const READ = {
     /** Párrafo de lectura: dónde se movió el tráfico y la conversión (canal y dispositivo siempre que haya datos). «**x**» marca negritas. */
