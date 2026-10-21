@@ -175,26 +175,30 @@
   function renderSaved(state) {
     const esc = H().esc;
     const rc = state.rc;
-    const list = rc.analysis ? rc.analysis.scenarios : [];
+    // Con «Total digital» se listan también los escenarios guardados en cualquier canal (mismo periodo); solo se comparan los del canal actual,
+    // porque el resultado simulado de un escenario de otro canal no es comparable contra el total.
+    const list = rc.analysis ? (rc.analysis.allScenarios || rc.analysis.scenarios) : [];
     const ctx = rc.ctx;
+    const own = (s) => !s.context || s.context.channel === ctx.channel;
+    const chName = (s) => FP.scenarioEngine.chLabel(s.context ? s.context.channel : ctx.channel);
     const base = rc.base;
     if (!list.length) {
       $('rc-saved').innerHTML = `<div class="subhead"><h3 class="panel__title">¿Cuánto del gap puedo recuperar? ${SIM}</h3></div>
         <p class="note">Aún no hay escenarios guardados para este canal y periodo.</p>`;
       return;
     }
-    const sel = new Set(rc.selected.filter((id) => list.some((s) => s.scenarioId === id)));
+    const sel = new Set(rc.selected.filter((id) => list.some((s) => s.scenarioId === id && own(s))));
     const gapBefore = base && base.valid ? base.gap.gapBefore : null;
     const chosen = list.filter((s) => sel.has(s.scenarioId));
     const sumInc = chosen.reduce((a, s) => a + (s.expectedImpact.incrementalValue || 0), 0);
     const rows = list.map((s) => `<tr>
-      <td><input type="checkbox" data-action="rc-select" data-id="${esc(s.scenarioId)}" ${sel.has(s.scenarioId) ? 'checked' : ''} aria-label="Seleccionar ${esc(s.name)}"></td>
-      <td><strong>${esc(s.name)}</strong> <span class="chip">${esc(C().recovery.scenarioTypes[s.type] || s.type)}</span><span class="cell-sub">${esc(s.scenarioId)}${s.supersedes ? ` · reemplaza a ${esc(s.supersedes)}` : ''} · ${esc(s.createdAt.slice(0, 16).replace('T', ' '))}</span></td>
+      <td><input type="checkbox" data-action="rc-select" data-id="${esc(s.scenarioId)}" ${sel.has(s.scenarioId) ? 'checked' : ''} ${own(s) ? '' : `disabled title="Escenario de ${esc(chName(s))}: cambia a ese canal para compararlo"`} aria-label="Seleccionar ${esc(s.name)}"></td>
+      <td><strong>${esc(s.name)}</strong> <span class="chip">${esc(C().recovery.scenarioTypes[s.type] || s.type)}</span>${ctx.channel === 'total' ? ` <span class="chip chip--soft">Canal: ${esc(chName(s))}</span>` : ''}<span class="cell-sub">${esc(s.scenarioId)}${s.supersedes ? ` · reemplaza a ${esc(s.supersedes)}` : ''} · ${esc(s.createdAt.slice(0, 16).replace('T', ' '))}</span></td>
       <td class="wrap">${esc(changesText(s.inputs))}<span class="cell-sub">${esc(targetText(s.target))}</span></td>
       <td class="wrap"><span class="cell-sub">${s.links.hypothesisId ? `${esc(s.links.hypothesisId)}: ${esc((s.links.hypothesis || '').slice(0, 80))}` : 'Sin hipótesis'}</span></td>
       <td class="num">${esc(signedMoney(s.expectedImpact.incrementalValue))}</td>
       <td class="num">${esc(fin(s.expectedImpact.recoveryPercent) ? pct(s.expectedImpact.recoveryPercent) : '—')}</td>
-      <td><button type="button" class="btn btn--small btn--ghost" data-action="rc-edit-scenario" data-id="${esc(s.scenarioId)}">Nueva versión</button>
+      <td><button type="button" class="btn btn--small btn--ghost" data-action="rc-edit-scenario" data-id="${esc(s.scenarioId)}" ${own(s) ? '' : `disabled title="Escenario de ${esc(chName(s))}: cambia a ese canal para crear una versión nueva"`}>Nueva versión</button>
         <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rc-delete-scenario" data-id="${esc(s.scenarioId)}" aria-label="Borrar escenario ${esc(s.name)}">Borrar</button></td></tr>`).join('');
 
     // Plan / actual / forecast / reforecast / escenarios (líneas de cierre)

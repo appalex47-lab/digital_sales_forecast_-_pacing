@@ -151,7 +151,7 @@
   function renderPlan(state) {
     const esc = H().esc;
     const rc = state.rc;
-    const actions = rc.analysis ? rc.analysis.actions : [];
+    const actions = rc.analysis ? (rc.analysis.allActions || rc.analysis.actions) : [];   // con «Total digital»: acciones de cualquier canal (mismo periodo)
     const statuses = C().recovery.actionStatuses;
     if (!actions.length) { $('rc-plan').innerHTML = '<div class="subhead"><h3 class="panel__title">Plan de acción</h3></div><p class="note">Sin acciones para este canal y periodo.</p>'; return; }
     const counts = Object.keys(statuses).map((k) => [k, actions.filter((a) => a.status === k).length]).filter(([, n]) => n);
@@ -164,7 +164,7 @@
           const p = a.priority || {};
           const last = FP.actionTracking.latest(rc.plan, a.actionId);
           return `<tr>
-            <td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}<span class="cell-sub">${esc(a.description || '')}${a.source === 'cohere' ? ' · propuesta por IA' : ''}</span>${detailHtml(a)}</td>
+            <td><strong>${esc(a.actionId)}</strong> ${esc(a.title)}${rc.ctx && rc.ctx.channel === 'total' && a.channel ? ` <span class="chip chip--soft">Canal: ${esc(FP.scenarioEngine.chLabel(a.channel))}</span>` : ''}<span class="cell-sub">${esc(a.description || '')}${a.source === 'cohere' ? ' · propuesta por IA' : ''}</span>${detailHtml(a)}</td>
             <td class="wrap"><span class="cell-sub">Driver ${esc(DRIVER[a.driver] || a.driver || '—')} · ${esc(a.hypothesisId || '—')} · ${esc(a.scenarioId || '—')}</span></td>
             <td><input type="text" value="${esc(a.owner)}" data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="owner" aria-label="Responsable" class="input--compact"></td>
             <td><select data-action="rc-action-field" data-id="${esc(a.actionId)}" data-key="status" aria-label="Estado">${FP.actionPlan.nextStates(state.rc.plan, a).map((o) =>
@@ -196,7 +196,7 @@
   function renderTracking(state) {
     const esc = H().esc;
     const rc = state.rc;
-    const ids = new Set((rc.analysis ? rc.analysis.actions : []).map((a) => a.actionId));
+    const ids = new Set((rc.analysis ? (rc.analysis.allActions || rc.analysis.actions) : []).map((a) => a.actionId));
     const ms = rc.plan.measurements.filter((m) => ids.has(m.actionId));
     if (!ms.length) { $('rc-tracking').innerHTML = '<div class="subhead"><h3 class="panel__title">Seguimiento</h3></div><p class="note">Sin mediciones. Usa "Medir" en una acción cuando haya real en su ventana.</p>'; return; }
     const fmt = (k, v) => F().metric(k, v);
