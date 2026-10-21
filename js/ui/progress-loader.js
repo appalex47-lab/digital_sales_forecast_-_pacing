@@ -12,11 +12,11 @@
   const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
   /** «0:23 transcurridos · faltan ≈ 0:40»; la estimación solo aparece con ≥5 % de avance y ≥3 s de reloj. */
-  function timeText(t0, pct, now) {
+  function timeText(t0, pct, now, est) {
     if (!t0) return '';
     const el = (now || Date.now()) - t0;
     let s = `${mmss(el)} transcurridos`;
-    if (known(pct) && pct >= 5 && pct < 100 && el >= 3000) s += ` · faltan ≈ ${mmss(el * (100 - pct) / pct)}`;
+    if (known(pct) && pct >= 5 && pct < 100 && el >= 3000) s += ` · faltan ≈ ${mmss(el * (100 - pct) / pct)}${est ? ' (estimado con la última vez)' : ''}`;
     return s;
   }
 
@@ -27,7 +27,7 @@
     els.forEach((el) => {
       const t = el.querySelector('.ldr__time'); if (!t) return;
       const p = el.getAttribute('data-pct');
-      t.textContent = timeText(Number(el.getAttribute('data-t0')), p === '' || p == null ? null : Number(p));
+      t.textContent = timeText(Number(el.getAttribute('data-t0')), p === '' || p == null ? null : Number(p), null, el.getAttribute('data-est') === '1');
     });
   }
   function ensureTicker() { if (!timer) timer = setInterval(tick, 1000); }
@@ -38,11 +38,11 @@
     const p = known(o.pct) ? clamp(o.pct) : null;
     const label = o.label || 'Trabajando';
     if (o.t0) ensureTicker();
-    return `<div class="ldr${p === null ? ' ldr--ind' : ''}${o.compact ? ' ldr--compact' : ''}"${o.id ? ` id="${esc(o.id)}"` : ''} role="progressbar" aria-label="${esc(o.title || label)}" aria-valuemin="0" aria-valuemax="100"${p === null ? '' : ` aria-valuenow="${p}"`} aria-valuetext="${esc(label)}${p === null ? '' : ` · ${p} %`}"${o.t0 ? ` data-t0="${Number(o.t0)}"` : ''} data-pct="${p === null ? '' : p}">`
+    return `<div class="ldr${p === null ? ' ldr--ind' : ''}${o.compact ? ' ldr--compact' : ''}"${o.id ? ` id="${esc(o.id)}"` : ''} role="progressbar" aria-label="${esc(o.title || label)}" aria-valuemin="0" aria-valuemax="100"${p === null ? '' : ` aria-valuenow="${p}"`} aria-valuetext="${esc(label)}${p === null ? '' : ` · ${p} %`}"${o.t0 ? ` data-t0="${Number(o.t0)}"` : ''} data-pct="${p === null ? '' : p}"${o.est ? ' data-est="1"' : ''}${o.key ? ` data-key="${esc(o.key)}"` : ''}>`
       + `<div class="ldr__head">${o.title ? `<strong class="ldr__title">${esc(o.title)}</strong>` : ''}<span class="ldr__pct">${p === null ? '' : `${p} %`}</span></div>`
       + `<span class="ldr__label">${esc(label)}</span>`
       + `<span class="ldr__bar"><i${p === null ? '' : ` style="width:${p}%"`}></i></span>`
-      + `<span class="ldr__time field__hint" aria-hidden="true">${o.t0 ? esc(timeText(o.t0, p)) : ''}</span>`
+      + `<span class="ldr__time field__hint" aria-hidden="true">${o.t0 ? esc(timeText(o.t0, p, null, o.est)) : ''}</span>`
       + (o.hint ? `<span class="ldr__hint field__hint">${esc(o.hint)}</span>` : '')
       + `</div>`;
   }
@@ -62,7 +62,7 @@
     if (p === null) el.removeAttribute('aria-valuenow'); else el.setAttribute('aria-valuenow', String(p));
     el.setAttribute('aria-valuetext', `${lab ? lab.textContent : ''}${p === null ? '' : ` · ${p} %`}`);
     const t = el.querySelector('.ldr__time'), t0 = Number(el.getAttribute('data-t0')) || 0;
-    if (t) t.textContent = t0 ? timeText(t0, p) : '';
+    if (t) t.textContent = t0 ? timeText(t0, p, null, el.getAttribute('data-est') === '1') : '';
     return true;
   }
 

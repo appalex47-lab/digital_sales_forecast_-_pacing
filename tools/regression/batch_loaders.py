@@ -31,6 +31,15 @@ async def main():
             chk(f'{tag}U1 sin % es indeterminado y no inventa estimación', r['ind'] and r['noEta'], r)
             chk(f'{tag}U2 con % muestra valor, tiempo y faltante', r['mid'][0] == '50' and r['mid'][1] == '50 %' and 'faltan' in r['mid'][2] and not r['mid'][3], r)
             chk(f'{tag}U3 estimación solo tras 3 s; sin reloj no hay texto; update de id inexistente es false', 'faltan' not in r['t'][0] and 'faltan' in r['t'][1] and r['t'][2] == '' and r['none'] is False, r['t'])
+            # FP.loader (cálculos sin avance real): 1.ª vez indeterminado; 2.ª vez estimado y rotulado
+            r = await q.evaluate("""(async()=>{const w=(ms)=>new Promise(r=>setTimeout(r,ms)); const host=document.createElement('div'); document.body.appendChild(host); const out={};
+              const paint=()=>{host.innerHTML=FP.loader.html('Calculando X…',{key:'t-est'});}; const el=()=>host.querySelector('.ldr');
+              paint(); out.first=el().classList.contains('ldr--ind'); for(let i=0;i<9;i++){await w(250);paint();} host.innerHTML=''; await w(3300);
+              paint(); await w(1500); paint(); out.second=[el().classList.contains('ldr--ind'),el().getAttribute('data-est'),el().querySelector('.ldr__pct').textContent,el().querySelector('.ldr__time').textContent];
+              const real=FP.loader.html('Y',{key:'t-real',pct:30}); out.real=/aria-valuenow="30"/.test(real)&&!/data-est/.test(real); host.remove(); return out;})()""")
+            chk(f'{tag}L1 la primera vez no inventa % (indeterminado, con reloj)', r['first'] is True, r)
+            chk(f'{tag}L2 la segunda vez el % y el faltante salen estimados y rotulados', r['second'][0] is False and r['second'][1] == '1' and '%' in r['second'][2] and 'transcurridos' in r['second'][3], r)
+            chk(f'{tag}L3 con avance real (pct) no se rotula estimado', r['real'] is True, r)
             # carga de productos: frena el procesamiento para ver el loader
             await q.evaluate("(()=>{const o=FP.productImport.process;FP.productImport.process=async function(st,opt){for(let i=1;i<=4;i++){await new Promise(r=>setTimeout(r,500));opt&&opt.onProgress&&opt.onProgress(i/5);}return o.call(this,st,opt);};})()")
             sel = 'input[data-action="pick-files"][data-type="products"]'
