@@ -316,6 +316,11 @@ const lowC = cm34.campaigns.rows.find((r) => r.name === 'beta');
 t('34 · la oportunidad solo aparece cuando la diferencia de conversión es concluyente y por debajo del total', lowC.opportunity === null || (lowC.conclusive && lowC.cr < cm34.campaigns.crTotal), lowC);
 t('34 · sin campañas la lámina se omite con motivo', (() => { const d = diagOk(); d.level2 = [diag34.level2[0]]; const o = pg(RB.build(base({ diag: d })), 'campaigns'); return o.status === 'omitted' && !!o.reason; })());
 
+// Filtro de canal: con un canal elegido no se mezclan los demás canales en la tabla, el resumen ni «qué suma / qué resta».
+{ const rc1 = RB.build(base({ channel: 'ecommerce' })); const pcc = pg(rc1, 'pacing'), mvv = pg(rc1, 'movers');
+  t('canal elegido: la tabla «Por canal» solo trae ese canal', pcc.tables[0].rows.length === 1 && pcc.tables[0].rows[0].channel === 'Ecommerce', pcc.tables[0].rows.map((r) => r.channel));
+  t('canal elegido: Qué suma / Qué resta no compara canales ni el resumen nombra otro canal', !(mvv.status === 'included' && [...mvv.minus, ...mvv.plus].some((i) => i.type === 'Canal')) && !/canal que más sobresale/.test(JSON.stringify(pg(rc1, 'summary').narrative || '')), mvv.minus); }
+
 // Caracterización numérica: todas las hojas numéricas de las láminas (sin textos) deben permanecer idénticas.
 // CHAR=write node tools/test-report-builder.js  → guarda la línea base;  sin CHAR → compara.
 {

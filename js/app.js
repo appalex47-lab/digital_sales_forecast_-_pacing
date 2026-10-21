@@ -880,8 +880,8 @@
           const lv = {}; for (const l of ['category', 'subcategory']) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
           productByLevel = lv;
         } else if (pr && pr.period) {
-          const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: state.pa.channel, filter: rpF || pr.filter || undefined, next: null };
-          const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l && !rpF) lv[l] = pr; });
+          const args = { from: pr.period.from, to: pr.period.to, periodType: state.pa.periodType, comparison: state.pa.comparison, channel: ch, filter: rpF || pr.filter || undefined, next: null }; // el canal de la presentación manda (no el de la vista Productos)
+          const lv = {}; ['category', 'subcategory'].forEach((l) => { if (pr.level === l && !rpF && (state.pa.channel || 'total') === ch) lv[l] = pr; });
           for (const l of ['category', 'subcategory']) if (!lv[l]) lv[l] = await FP.productAnalysis.run({ ...args, level: l, withGeoSignals: false });
           productByLevel = lv;
         }
@@ -942,7 +942,7 @@
       const o = { ...FP.customersView.optsOf(state), channel: ch === 'total' ? null : ch };
       if (rpF) o.filter = rpF;
       const res = await FP.customerStore.analyze(o);
-      customers = { result: res, scopeLabel: o.filter ? `Selección: ${FP.productFilter.describe(o.filter)}` : 'Toda la empresa' };
+      customers = { result: res, scopeLabel: o.filter ? `Selección: ${FP.productFilter.describe(o.filter)}${ch === 'total' ? '' : ` · Canal ${FP.analysisContext.channelLabel(ch)}`}` : (ch === 'total' ? 'Toda la empresa' : `Canal ${FP.analysisContext.channelLabel(ch)}`) };
     } catch (e) { /* sin libro de clientes la página se omite */ }
     let profiles = null; try { profiles = ensureProfiles(); } catch (e) { /* sin historia */ }
     let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run }); } catch (e) { /* sin proyección */ }
