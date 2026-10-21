@@ -1382,3 +1382,28 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .nx-sig__members { padding: 0 !important; margin-top: 6px; }
 .nx-sigcol__f { display: flex; gap: var(--sp-2); padding: 10px var(--sp-3); border-top: 1px solid var(--c-line); background: #FAFBFC; flex-wrap: wrap; }
 @media (max-width: 720px) { .nx-sigcols { grid-template-columns: 1fr; } .nx-sigcol__f .btn { flex: 1 1 100%; min-height: 44px; } }
+
+/* ---------- Marca de la presentación (Configuración → Negocio) ---------- */
+.brand { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:24px; align-items:start; }
+@media (max-width:900px) { .brand { grid-template-columns:1fr; } }
+.brand__col { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.brand__h { margin:0; font-size:13.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ds-text-muted, #55657d); }
+.brand__logo { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.brand__drop { width:132px; height:96px; border:2px dashed #b9c4d6; border-radius:12px; display:flex; align-items:center; justify-content:center; background:#fff; color:#7d8aa0; font-size:13px; }
+.brand__drop img { max-width:120px; max-height:84px; }
+.brand__name { margin:0 0 2px; }
+.brand__sws { display:flex; gap:10px; flex-wrap:wrap; }
+.brand-sw { all:unset; cursor:pointer; width:86px; text-align:left; border-radius:10px; padding:3px; }
+.brand-sw i { display:block; height:48px; border-radius:8px; border:1px solid #d5dce6; }
+.brand-sw b { display:block; font-size:13px; margin-top:4px; } .brand-sw span { font-size:12.5px; color:#55657d; }
+.brand-sw:focus-visible { outline:3px solid #1f4fd8; } .brand-sw.is-sel { outline:3px solid #1f4fd8; outline-offset:1px; }
+.brand__hex { display:flex; gap:14px; flex-wrap:wrap; } .brand__hex label { display:flex; gap:8px; align-items:center; font-size:14px; } .brand__hex input { width:104px; }
+.brand__warn { margin:0; padding:8px 12px; border-radius:10px; background:#fff6e0; color:#8a5a00; font-size:14px; font-weight:600; }
+.brand-pv { border-radius:10px; position:relative; box-sizing:border-box; overflow:hidden; }
+.brand-pv--cover { height:190px; padding:16px 18px; color:#fff; } .brand-pv--slide { height:190px; padding:14px 18px; background:#fff; border:1px solid #d5dce6; }
+.brand-pv__chip { display:inline-flex; background:#fff; border-radius:8px; padding:4px; } .brand-pv__chip img { height:30px; max-width:150px; }
+.brand-pv__eye { font-size:11px; font-weight:700; letter-spacing:.14em; margin-top:22px; } .brand-pv--slide .brand-pv__eye { margin-top:0; }
+.brand-pv__ttl { font-size:20px; font-weight:700; line-height:1.15; margin-top:4px; } .brand-pv__rule { width:60px; height:4px; border-radius:2px; margin-top:12px; }
+.brand-pv__st { font-size:16px; font-weight:700; margin-top:3px; color:#0f1b2d; }
+.brand-pv__k { display:flex; gap:10px; margin-top:10px; } .brand-pv__k span { flex:1; font-size:10.5px; color:#55657d; padding-top:4px; } .brand-pv__k b { display:block; font-size:16px; color:#0f1b2d; } .brand-pv__k i { font-style:normal; }
+.brand-pv__foot { position:absolute; left:18px; right:18px; bottom:8px; display:flex; align-items:center; gap:6px; font-size:10.5px; color:#55657d; } .brand-pv__sm img { height:16px; max-width:70px; display:block; }

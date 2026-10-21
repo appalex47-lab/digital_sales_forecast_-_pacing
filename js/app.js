@@ -91,6 +91,7 @@
     an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
+    brand: { draft: { logo: null, palette: [], main: null, accent: null }, sel: null, saved: false, dirty: false, error: null },
     // Asistente de metas (no se guarda: solo llena el formulario)
     ta: { baseYear: null, growth: '', total: '', mix: {}, open: false, last: null },
     // Fase 6: Recovery Center
@@ -524,6 +525,12 @@
     // Hay algo guardado que no se puede leer (JSON dañado o versión de esquema desconocida): se avisa, no se adivina
     const raw = lsAdapter.get(`${C.storage.namespace}:${K.businessContext}`);
     state.bc = { draft: ctx || BCX.empty(), storedAt: ctx ? env.savedAt : null, dirty: false, unreadable: Boolean(raw) && !ctx };
+  }
+  /** Marca de la presentación: lo guardado se aplica a la presentación; el borrador sirve a la pantalla de Configuración. */
+  function loadBrand() {
+    const env = storage.load(K.reportBrand), b = env ? FP.brand.normalize(env.data) : null;
+    FP.brand.set(b);
+    state.brand = { draft: b ? { logo: b.logo, palette: b.palette, main: b.main, accent: b.accent } : { logo: null, palette: [], main: null, accent: null }, sel: null, saved: Boolean(b), dirty: false, error: null };
   }
   function setPath(obj, path, value) {
     const parts = path.split('.');
@@ -1270,7 +1277,7 @@
     else if (state.view === 'ayuda') FP.helpView.render(state);
     else if (state.view === 'ajustes') {
       if (state.ajustesSection) { const tb = FP.settingsView.TABS.find((t) => t.sections.includes('st-' + state.ajustesSection)); if (tb) state.stTab = tb.id; }   // un enlace a una sección abre su pestaña
-      FP.settingsView.render(state); FP.ui.renderStatus(state); FP.businessView.render(state); ensureStorageEstimate();   // la ficha de estado se repinta porque settings-view reescribe su contenedor
+      FP.settingsView.render(state); FP.ui.renderStatus(state); FP.businessView.render(state); FP.brandView.render(state); ensureStorageEstimate();   // la ficha de estado se repinta porque settings-view reescribe su contenedor
       if (state.ajustesSection) {   // llegada desde un enlace a una sección (p. ej. #negocio)
         const el = document.getElementById('st-' + state.ajustesSection); state.ajustesSection = null;
         if (el) setTimeout(() => { el.scrollIntoView({ block: 'start' }); try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 0);
@@ -2301,7 +2308,7 @@
       loadForecastSettings();
       loadReforecastSettings();
       loadRecovery();
-      loadBusinessContext();
+      loadBusinessContext(); loadBrand();
       state.rc.draft = emptyDraft(); state.rc.selected = []; state.rc.imported = null;
       loadDiagnosticSettings();
       state.rf.simDate = null;
@@ -2943,6 +2950,35 @@
       state.bc = { draft: ctx, storedAt: env ? env.savedAt : null, dirty: false };
       render();
       FP.ui.toast('Contexto del negocio guardado. Moneda, nombre y terminología se aplican al recargar la app.');
+    },
+    async 'brand-file'(el) {
+      const f = el.files && el.files[0]; el.value = ''; if (!f) return;
+      const r = await FP.brand.readLogo(f), b = state.brand;
+      if (!r.ok) { b.error = r.error; render(); return; }
+      b.error = null; b.draft = { logo: r.logo, palette: r.palette, main: r.main, accent: r.accent }; b.sel = null; b.dirty = true; render();
+      FP.ui.toast(r.palette.length ? 'Logo cargado. Revisa la paleta propuesta y pulsa «Guardar marca».' : 'Logo cargado, pero no encontré colores de marca claros. Escribe tus colores y guarda.');
+    },
+    'brand-remove-logo'() { const b = state.brand; b.draft.logo = null; b.draft.palette = []; b.sel = null; b.dirty = true; render(); },
+    'brand-sel'(el) { const b = state.brand, i = Number(el.dataset.i); b.sel = b.sel === i ? null : i; render(); },
+    'brand-role'(el) { const b = state.brand, c = b.draft.palette[b.sel]; if (!c) return; b.draft[el.dataset.role] = c; b.dirty = true; render(); },
+    'brand-hex'(el) {
+      let v = String(el.value || '').trim(); if (v && v[0] !== '#') v = '#' + v;
+      const b = state.brand; if (v && !FP.brand.HEX.test(v)) { b.error = 'El color debe ser un hexadecimal de 6 dígitos, por ejemplo #0E8F7E.'; render(); return; }
+      b.error = null; b.draft[el.dataset.role] = v ? v.toUpperCase() : null; b.dirty = true; render();
+    },
+    'brand-reset'() {
+      const b = state.brand, pal = b.draft.palette || [], r = FP.brand.pickRoles(pal);
+      if (!pal.length) return; b.draft.main = r.main; b.draft.accent = r.accent; b.sel = null; b.dirty = true; render();
+    },
+    'brand-save'() {
+      const b = state.brand, n = FP.brand.normalize(b.draft);
+      if (!n) { b.error = 'Sube un logo o escribe un color principal.'; render(); return; }
+      if (!storage.save(K.reportBrand, n)) { b.error = 'No se pudo guardar la marca en este navegador (¿logo demasiado pesado?).'; render(); return; }
+      loadBrand(); render(); FP.ui.toast('Marca guardada. Se aplica a la presentación; vuelve a generar la vista previa.');
+    },
+    'brand-clear'() {
+      if (!confirm('¿Quitar la marca? La presentación volverá a su aspecto original. Tus datos no se tocan.')) return;
+      storage.remove(K.reportBrand); loadBrand(); render(); FP.ui.toast('Marca quitada.');
     },
     'bc-reload'() { location.reload(); },
     'bc-clear'() {
@@ -4515,6 +4551,7 @@
     state.cloud.auto.error = null;
     if (r.applied.length) {
       state.cloud.auto.pulled = r.applied;
+      if (r.applied.includes('reportBrand')) { loadBrand(); render(); }   // la marca se aplica en caliente
       const needReload = r.applied.includes('businessContext');   // config.js lo lee antes de arrancar
       if (needReload) state.cloud.restored = true;
       FP.ui.toast(`Se trajeron ${r.applied.length} ajuste(s) más nuevos de la nube${needReload ? '. Recarga la página para aplicar los del negocio.' : '.'}`);
