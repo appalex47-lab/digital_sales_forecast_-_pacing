@@ -1358,3 +1358,27 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .nx-col .claim__why[open] { flex-basis: 100%; margin-top: 2px; }
 .nx-head__bar .filters { flex-wrap: wrap; }
 @media (max-width: 420px) { .nx-kpi__v { font-size: 1.05rem; overflow-wrap: normal; } }
+
+/* Narrativa · señales A favor / En contra (propuesta A) */
+.nx-sigcols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-2); }
+.nx-sigcols--neu { grid-template-columns: 1fr; }
+.nx-sigcol { border: 1px solid var(--c-line); border-radius: 10px; overflow: hidden; min-width: 0; background: var(--c-surface); }
+.nx-sigcol > .field__hint { padding: 0 var(--sp-3); margin: 6px 0 0; }
+.nx-sigcol__h { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); padding: 10px var(--sp-3); border-bottom: 2px solid; }
+.nx-sigcol--pos .nx-sigcol__h { background: #E4F2E9; color: #0D5C33; border-color: #1E8A53; }
+.nx-sigcol--neg .nx-sigcol__h { background: #FBE9E8; color: #8F1F23; border-color: #C0392B; }
+.nx-sigcol--neu .nx-sigcol__h { background: #EEF1F5; color: #33404F; border-color: #9AA6B5; }
+.nx-sigcol .claims { padding: 0 var(--sp-3); }
+.nx-sig { display: block !important; padding: 8px 0; border-top: 1px solid var(--c-line); }
+.nx-sig:first-child { border-top: 0; }
+.nx-sig .claim__row { display: flex; align-items: flex-start; gap: 10px; flex: initial; }
+.nx-sig__t { flex: 1 1 auto; min-width: 0; }
+.nx-arrow { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; margin-top: 1px; }
+.nx-sig--pos .nx-arrow { background: #1E8A53; } .nx-sig--neg .nx-arrow { background: #C0392B; } .nx-sig--neu .nx-arrow { background: #6B7787; }
+.nx-pill { flex: none; font-weight: 700; font-size: var(--fs-sm); padding: 1px 8px; border-radius: 6px; white-space: nowrap; }
+.nx-sig--pos .nx-pill { background: #E4F2E9; color: #0D5C33; } .nx-sig--neg .nx-pill { background: #FBE9E8; color: #8F1F23; } .nx-sig--neu .nx-pill { background: #EEF1F5; color: #33404F; }
+.nx-sig--grp { background: #F7F9FB; margin: 0 calc(-1 * var(--sp-3)); padding-left: var(--sp-3); padding-right: var(--sp-3); }
+.nx-sig .claim__why { margin: 4px 0 0 30px; }
+.nx-sig__members { padding: 0 !important; margin-top: 6px; }
+.nx-sigcol__f { display: flex; gap: var(--sp-2); padding: 10px var(--sp-3); border-top: 1px solid var(--c-line); background: #FAFBFC; flex-wrap: wrap; }
+@media (max-width: 720px) { .nx-sigcols { grid-template-columns: 1fr; } .nx-sigcol__f .btn { flex: 1 1 100%; min-height: 44px; } }

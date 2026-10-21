@@ -41,6 +41,61 @@
     </li>`;
   }
 
+
+  /* ---- Señales: A favor / En contra, top 5 y «ver 5 más» (solo presentación; mismas señales y mismo orden del motor) ---- */
+  const SIG_STEP = 5;
+  function sigDir(c) {
+    const d = c.meta && c.meta.direction;
+    return d === 'improvement' ? 'pos' : d === 'deterioration' ? 'neg' : 'neu';
+  }
+  /** Agrupa 3 o más señales de segmento del mismo indicador y dimensión (p. ej. CR por cada día de la semana) en una sola fila. */
+  function groupSignals(list) {
+    const out = [], seen = new Map();
+    const key = (c) => (c.meta && c.meta.kind === 'segment_change') ? `${c.meta.metric}|${c.meta.dimension}` : null;
+    const count = new Map();
+    list.forEach((c) => { const k = key(c); if (k) count.set(k, (count.get(k) || 0) + 1); });
+    list.forEach((c) => {
+      const k = key(c);
+      if (!k || count.get(k) < 3) { out.push({ one: c }); return; }
+      if (!seen.has(k)) { const g = { group: [], k }; seen.set(k, g); out.push(g); }
+      seen.get(k).group.push(c);
+    });
+    return out;
+  }
+  function pill(v) { return Number.isFinite(v) ? `<span class="nx-pill">${FP.format.signedPercent(v, 1).replace('-', '−')}</span>` : ''; }
+  function sigItem(entry, dir, esc) {
+    const arrow = dir === 'pos' ? '▲' : dir === 'neg' ? '▼' : '◆', word = dir === 'pos' ? 'A favor' : dir === 'neg' ? 'En contra' : 'Otra señal';
+    const lead = `<span class="nx-arrow" aria-hidden="true">${arrow}</span><span class="visually-hidden">${word}: </span>`;
+    if (entry.one) {
+      const c = entry.one;
+      return `<li class="claim nx-sig nx-sig--${dir}"><div class="claim__row">${lead}<span class="nx-sig__t">${esc(c.text)}</span>${c.meta ? pill(c.meta.deltaPct) : ''}</div>
+        <details class="claim__why"><summary>¿Por qué dices eso?</summary><p class="cell-sub">${esc(sourceDetail(c.source))}${c.numbers.length ? ` · Cifras citadas: ${esc(c.numbers.join(', '))}` : ''}</p></details></li>`;
+    }
+    const g = entry.group, m = g[0].meta, vals = g.map((c) => c.meta.deltaPct).filter(Number.isFinite);
+    const lo = vals.length ? vals.reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a)) : null, hi = vals.length ? vals.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)) : null;
+    const fp = (v) => FP.format.signedPercent(v, 1).replace('-', '−');
+    const verb = dir === 'pos' ? 'sube' : 'baja';
+    return `<li class="claim nx-sig nx-sig--${dir} nx-sig--grp"><div class="claim__row">${lead}<span class="nx-sig__t"><strong>${esc(m.metricLabel)} ${verb} en ${g.length} valores de «${esc(m.dimensionLabel || m.dimension)}»</strong></span>${lo !== null ? `<span class="nx-pill">${esc(fp(lo))} a ${esc(fp(hi))}</span>` : ''}</div>
+      <details class="claim__why"><summary>Ver las ${g.length} señales agrupadas</summary><ul class="claims nx-sig__members">${g.map((c) => renderClaim(c, esc)).join('')}</ul></details></li>`;
+  }
+  function signalsBlock(n, claims, esc, ui) {
+    const cols = { pos: [], neg: [], neu: [] };
+    claims.forEach((c) => cols[sigDir(c)].push(c));
+    const meta = { pos: ['A favor', 'Señales que mejoran frente a la referencia'], neg: ['En contra', 'Señales que se deterioran frente a la referencia'], neu: ['Otras señales', 'Cambios de mezcla o datos atípicos: revisar, sin signo bueno/malo'] };
+    const one = (dir) => {
+      const entries = groupSignals(cols[dir]);
+      if (!entries.length) return '';
+      const shown = Math.min(ui[dir] || SIG_STEP, entries.length);
+      const more = entries.length > shown ? `<button type="button" class="btn btn--small" data-action="nx-sig-more" data-col="${dir}">Ver ${Math.min(SIG_STEP, entries.length - shown)} más (${entries.length - shown} restantes)</button>` : '';
+      const less = shown > SIG_STEP ? `<button type="button" class="btn btn--small btn--ghost" data-action="nx-sig-more" data-col="${dir}" data-dir="less">Ver menos</button>` : '';
+      return `<div class="nx-sigcol nx-sigcol--${dir}"><div class="nx-sigcol__h"><strong>${meta[dir][0]}</strong><span class="field__hint">${shown} de ${entries.length}${entries.length !== cols[dir].length ? ` (${cols[dir].length} señales)` : ''}</span></div>
+        <p class="field__hint">${meta[dir][1]}</p><ul class="claims">${entries.slice(0, shown).map((e) => sigItem(e, dir, esc)).join('')}</ul>${more || less ? `<div class="nx-sigcol__f">${more}${less}</div>` : ''}</div>`;
+    };
+    return `<section class="narrative-block"><h4>${esc(SECTION_TITLES.signals)}</h4>
+      <p class="field__hint">Orden del motor (prioridad). Las señales repetidas se agrupan; el detalle y la fuente de cada una siguen a un clic.</p>
+      <div class="nx-sigcols">${one('pos')}${one('neg')}</div>${cols.neu.length ? `<div class="nx-sigcols nx-sigcols--neu">${one('neu')}</div>` : ''}</section>`;
+  }
+
   function claimsByLevel(n, sectionKey, level) {
     const ids = new Set(n.sections[sectionKey].claims);
     return n.claims.filter((c) => ids.has(c.id) && c.level === level);
@@ -156,16 +211,22 @@
       if (driverClaims.length > 1) dr.push(block(null, driverClaims.slice(1), esc, { analystOnly: true, cls: 'claims--cols' }));
     } else if (n.sections.drivers.empty) dr.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES.drivers)}</h4><p class="note">${esc(n.sections.drivers.empty)}</p></section>`);
     rows.push(col(dr, true));
-    // Señales e hipótesis: solo la de mayor prioridad siempre visible; el resto es detalle de modo Analista.
-    ['signals', 'hypotheses'].forEach((key) => {
-      const sec = n.sections[key], inner = [];
-      if (sec.empty) { inner.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES[key])}</h4><p class="note">${esc(sec.empty)}</p></section>`); rows.push(col(inner)); return; }
-      const claims = n.claims.filter((c) => sec.claims.includes(c.id));
-      inner.push(block(SECTION_TITLES[key], claims.slice(0, 1), esc));
-      if (claims.length > 1) inner.push(block(null, claims.slice(1), esc, { analystOnly: true }));
-      if (claims.length > 1) inner.push(`<p class="field__hint" data-analyst>${claims.length - 1} más.</p>`);
-      rows.push(col(inner));
-    });
+    // Señales: A favor / En contra (top 5 + «ver más»); mismas señales y mismo orden del motor, solo presentadas por signo.
+    const sigSec = n.sections.signals;
+    if (sigSec.empty) rows.push(col([`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES.signals)}</h4><p class="note">${esc(sigSec.empty)}</p></section>`]));
+    else rows.push(col([signalsBlock(n, n.claims.filter((c) => sigSec.claims.includes(c.id)), esc, state.nx.sigShown || {})], true));
+    // Hipótesis: la de mayor prioridad siempre visible; el resto es detalle de modo Analista.
+    {
+      const sec = n.sections.hypotheses, inner = [];
+      if (sec.empty) inner.push(`<section class="narrative-block" data-analyst><h4>${esc(SECTION_TITLES.hypotheses)}</h4><p class="note">${esc(sec.empty)}</p></section>`);
+      else {
+        const claims = n.claims.filter((c) => sec.claims.includes(c.id));
+        inner.push(block(SECTION_TITLES.hypotheses, claims.slice(0, 1), esc));
+        if (claims.length > 1) inner.push(block(null, claims.slice(1), esc, { analystOnly: true }));
+        if (claims.length > 1) inner.push(`<p class="field__hint" data-analyst>${claims.length - 1} más.</p>`);
+      }
+      rows.push(col(inner, true));
+    }
     // Producto y recuperación: detalle completo de modo Analista (el resumen ejecutivo ya los resume arriba).
     // Cada una conserva su propio alcance (canal/periodo/comparación/nivel u horizonte) — nunca se asume
     // que coincide con el de Diagnóstico; el banner lo deja explícito.
