@@ -2071,3 +2071,22 @@ body.gs-lock{overflow:hidden}
 .ldr__time, .ldr__hint { font-size: .8rem; font-variant-numeric: tabular-nums; }
 .ldr--compact { margin: .25rem 0; padding: .5rem .75rem; }
 @media (prefers-reduced-motion: reduce) { .ldr--ind .ldr__bar i { animation: none; width: 100%; opacity: .55; } .ldr__bar i { transition: none; } }
+
+/* Recovery Center · estado por canal (tamaños compactos) */
+.rcs__head { display: flex; flex-wrap: wrap; gap: .5rem 1rem; justify-content: space-between; align-items: center; padding: .6rem .8rem; border-radius: var(--ds-r-md, 8px); font-size: .85rem; line-height: 1.4; }
+.rcs__head > div:first-child, .rcs__head { }
+.rcs__head strong { display: block; font-size: .95rem; margin: .1rem 0; }
+.rcs__head--ok { background: #e6f4ec; border: 1px solid #b6dcc5; color: #0d5c33; }
+.rcs__head--bad { background: #fbe9e8; border: 1px solid #efc2c0; color: #8f1f23; }
+.rcs__eyebrow { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.rcs__sum { text-align: right; font-size: .75rem; } .rcs__sum b { display: block; font-size: 1.05rem; }
+.rcs__title { margin: .75rem 0 .4rem; font-size: .9rem; }
+.rcs__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .6rem; }
+.rcs__card { border: 1px solid var(--ds-border, #d8dde5); border-radius: var(--ds-r-md, 8px); padding: .55rem .7rem; display: grid; gap: .2rem; font-size: .8rem; background: var(--ds-surface, transparent); }
+.rcs__card--gap { border-left: 3px solid #c0392b; } .rcs__card.is-open { outline: 2px solid var(--ds-accent, #2563eb); }
+.rcs__row { display: flex; justify-content: space-between; align-items: center; gap: .4rem; }
+.rcs__amt { font-size: 1.05rem; font-weight: 700; color: #8f1f23; font-variant-numeric: tabular-nums; }
+.rcs__meta { color: var(--ds-muted, #55606e); font-size: .75rem; }
+.rcs__pill { font-size: .7rem; font-weight: 700; padding: .05rem .4rem; border-radius: 6px; white-space: nowrap; }
+.rcs__pill--bad { background: #fbe9e8; color: #8f1f23; } .rcs__pill--ok { background: #e6f4ec; color: #0d5c33; }
+.rcs__ok { margin: .6rem 0 .2rem; font-size: .8rem; display: flex; flex-wrap: wrap; gap: .3rem .4rem; align-items: center; }
