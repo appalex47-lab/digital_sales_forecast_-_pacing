@@ -2051,3 +2051,10 @@ body.gs-lock{overflow:hidden}
 .cloud-progress { display: grid; gap: .35rem; margin: .5rem 0 .75rem; max-width: 520px; }
 .cloud-progress [data-prog-label] { font-weight: 600; font-size: .95rem; }
 .cloud-progress .an-loader__bar { width: 100%; }
+
+/* Nube: barra indeterminada para operaciones sin porcentaje (restaurar, borrar) */
+.an-loader__bar--ind { position: relative; }
+.an-loader__bar--ind i { position: absolute; left: 0; top: 0; width: 38%; animation: cloud-ind 1.2s ease-in-out infinite; }
+@keyframes cloud-ind { 0% { transform: translateX(-100%); } 100% { transform: translateX(270%); } }
+@media (prefers-reduced-motion: reduce) { .an-loader__bar--ind i { animation: none; width: 100%; opacity: .55; } }
+.btn[aria-busy="true"] { cursor: progress; }
