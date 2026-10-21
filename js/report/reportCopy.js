@@ -128,8 +128,8 @@
       const rem = kpi(p, 'remaining'), days = kpi(p, 'days') !== null ? kpi(p, 'days') : (fin(p.daysLeft) ? p.daysLeft : null), daily = kpi(p, 'daily');
       if (!fin(rem) || !fin(days)) return null;
       if (rem <= 0) return 'La meta del período ya está cubierta';
-      if (p.net && fin(p.net.gap) && fin(p.net.shortfall)) return `Los canales rezagados necesitan ${moneyC(p.net.shortfall)}${fin(daily) ? `: ${moneyC(daily)} diarios en ${RB().fmt('int', days)} días` : ' para llegar a su plan'}`;
-      return `Faltan ${moneyC(rem)} en ${RB().fmt('int', days)} días${fin(daily) ? `: se requieren ${moneyC(daily)} por día` : ''}`;
+      if (p.net && fin(p.net.gap) && fin(p.net.shortfall)) return `Los canales rezagados necesitan ${moneyC(p.net.shortfall)}${fin(daily) ? `: ${moneyC(daily)} diarios en ${RB().fmt('int', days)} ${days === 1 ? 'día' : 'días'}` : ' para llegar a su plan'}`;
+      return `Faltan ${moneyC(rem)} en ${RB().fmt('int', days)} ${days === 1 ? 'día' : 'días'}${fin(daily) ? `: se requieren ${moneyC(daily)} por día` : ''}`;
     },
     closing(p, rep) {
       const st = standing(kpi(page(rep, 'pacing'), 'compliance')), per = periodOf(rep);
@@ -137,7 +137,7 @@
       const down = blk('Qué resta').list && blk('Qué resta').list[0];
       if (!st) return null;
       const head = `${per ? per.split(' ')[0] : 'El período'} ${st.text}`;
-      return down && down.name ? `${head}; ${cut(down.name, 30)} merece atención` : head;
+      return down && down.name ? `${head}; conviene revisar primero ${cut(down.name, 30)}` : head;
     }
   };
 
