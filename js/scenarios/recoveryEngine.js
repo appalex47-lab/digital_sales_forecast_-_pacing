@@ -119,6 +119,11 @@
       s.context.source === ctx.source;
     const scenarios = scenarioStore ? scenarioStore.scenarios.filter(sameCtx) : [];
     const actions = actionPlan ? actionPlan.actions.filter((a) => a.channel === ctx.channel && a.period && a.period.start === ctx.period.start && a.period.end === ctx.period.end) : [];
+    // Panorama general: con «Total digital» las vistas muestran también los escenarios y acciones guardados en cualquier canal (mismo periodo),
+    // para saber si ya existen sin tener que cambiar de canal. `scenarios` y `actions` siguen siendo solo los del contexto exacto (los usan narrativa y exportaciones).
+    const samePeriod = (x) => x.context && x.context.period && x.context.period.start === ctx.period.start && x.context.period.end === ctx.period.end && x.context.source === ctx.source;
+    const allScenarios = ctx.channel === 'total' && scenarioStore ? scenarioStore.scenarios.filter(samePeriod) : scenarios;
+    const allActions = ctx.channel === 'total' && actionPlan ? actionPlan.actions.filter((a) => a.period && a.period.start === ctx.period.start && a.period.end === ctx.period.end) : actions;
     const avail = d && d.availability ? d.availability.available.map((x) => x.dimension) : (S().availableTargets(ctx) || []).map((x) => x.dimension);
     const mainDriver = d && d.level1 ? d.level1.mainDriver : null;
     return {
@@ -128,7 +133,7 @@
       drivers: d ? d.level1Drivers : ctx.importedDrivers || [],
       signals: d ? d.signals : ctx.importedSignals || [],
       hypotheses: d ? d.hypotheses : ctx.importedHypotheses || [],
-      scenarios,
+      scenarios, allScenarios, allActions,
       recoveryOptions: recoveryOptions(ctx, { targetPct, constraints }),
       actions,
       catalog: FP.actionLibrary.applicable(customActions, { driver: null, channel: ctx.channel,
