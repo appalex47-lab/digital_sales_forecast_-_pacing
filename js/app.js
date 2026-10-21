@@ -3021,8 +3021,8 @@
         if (bundle.tooBig) return cloudNote(`Los productos pesan ${fmtKb(bundle.bytes)} ya comprimidos y rebasan el tope de ${fmtKb(FP.productSync.MAX_BYTES)} (el plan gratuito de Supabase tiene 500 MB en total). No se subió nada; reduce el rango de fechas de productos o pide ampliar el plan.`, 'bad');
         const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), { onProgress: (o) => cloudProg(`Subiendo bloque ${o.index} de ${o.of}`, 35 + Math.round(55 * o.index / o.of)) });
         if (!up.ok) return cloudNote(up.error, 'bad');
-        cloudProg('Verificando la copia', 92);
-        const v = await FP.cloud.verify(up, {});
+        cloudProg('Verificando la copia', 90);
+        const v = await FP.cloud.verify(up, { onProgress: (o) => cloudProg(`Verificando la copia (${fmtKb(o.doneBytes)} de ${fmtKb(o.totalBytes || o.doneBytes)})`, 90 + Math.round(7 * (o.totalBytes ? o.doneBytes / o.totalBytes : 1))) });
         if (!v.ok && !Array.isArray(v.diffs)) { state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: false }; return cloudNote(`Se subió la copia (${up.keys.length} bloques), pero no pude verificarla al leerla de vuelta: ${v.error || 'sin detalle'}. Revisa la copia con «Restaurar» o vuelve a subir.`, 'bad'); }
         cloudProg('Limpiando trozos viejos', 97);
         const pr = await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {});
@@ -3034,8 +3034,8 @@
     'cloud-download'() {
       if (!window.confirm('Esto reemplaza en este navegador los bloques de datos que existan en la nube por la copia guardada. ¿Continuar?')) return;
       return cloudRun(async () => {
-        cloudProg('Descargando la copia de la nube', null);
-        const d = await FP.cloud.download({});
+        cloudProg('Descargando la copia de la nube', 2);
+        const d = await FP.cloud.download({ onProgress: (o) => cloudProg(`Descargando la copia (${fmtKb(o.doneBytes)} de ${fmtKb(o.totalBytes || o.doneBytes)})`, 2 + Math.round(58 * (o.totalBytes ? o.doneBytes / o.totalBytes : 1))) });
         if (!d.ok) return cloudNote(d.error, 'bad');
         if (!d.items.length) return cloudNote('No hay copia en la nube todavía. Primero usa «Subir copia a la nube».', 'warn');
         cloudProg('Guardando los bloques de datos', 60);
@@ -3052,7 +3052,7 @@
     },
     'cloud-delete'() {
       if (!window.confirm('Se borrará la copia de la nube de TODO tu equipo (todas las personas del equipo la comparten). Tus datos locales no se tocan. ¿Continuar?')) return;
-      return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; }, 'delete', 'Borrando la copia de la nube');
+      return cloudRun(async () => { const r = await FP.cloud.remove({ onProgress: (o) => cloudProg(`Borrando la copia (${o.index} de ${o.of} bloques de datos)`, 5 + Math.round(90 * o.index / o.of)) }); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; }, 'delete', 'Borrando la copia de la nube');
     },
 
     /* ----- Acceso por equipo: correo y contraseña (cuentas creadas por la persona administradora) ----- */
@@ -4603,24 +4603,44 @@
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
   function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s && !s.anonymous && s.team_id ? { userId: s.user_id, email: s.email || null, teamId: s.team_id, teamName: s.team_name || null } : null; }
   const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-  /** Avance de la subida: actualiza la barra en sitio (sin redibujar toda la pantalla); si aún no existe, dibuja. */
+  /** Avance de la operación de nube: actualiza la barra en sitio (sin redibujar toda la pantalla); si aún no existe, dibuja. */
+  const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  /** «0:23 transcurridos · faltan ≈ 0:40»: la estimación solo aparece cuando ya hay avance suficiente para que no sea un invento. */
+  function cloudTimeText() {
+    const c = state.cloud, p = c.progress; if (!c.t0) return '';
+    const el = Date.now() - c.t0; let s = `${mmss(el)} transcurridos`;
+    if (p && Number.isFinite(p.pct) && p.pct >= 5 && p.pct < 100 && el >= 3000) s += ` · faltan ≈ ${mmss(el * (100 - p.pct) / p.pct)}`;
+    return s;
+  }
+  function cloudTick() { const e = document.querySelector('#cloud-progress [data-prog-time]'); if (e) e.textContent = cloudTimeText(); }
+  let cloudTimer = null;
   function cloudProg(label, pct) {
     state.cloud.progress = { label, pct };
     const el = document.getElementById('cloud-progress');
-    if (!el) { render(); return; }
+    if (!el) { render(); cloudTick(); return; }
     const t = el.querySelector('[data-prog-label]'), b = el.querySelector('i');
     const ind = pct === null || pct === undefined;   // sin porcentaje conocido: barra indeterminada (solo texto de la etapa)
     if (t) t.textContent = ind ? label : `${label} · ${pct} %`;
     const bar = el.querySelector('.an-loader__bar'); if (bar) bar.classList.toggle('an-loader__bar--ind', ind);
     if (b) b.style.width = ind ? '' : `${pct}%`;
     if (ind) el.removeAttribute('aria-valuenow'); else el.setAttribute('aria-valuenow', String(pct));
+    cloudTick();
   }
-  /** `op` ('upload' | 'restore' | 'delete') y `label` encienden el loader desde el primer instante (también las operaciones sin porcentaje). */
+  /** `op` ('upload' | 'restore' | 'delete') y `label` encienden el loader desde el primer instante, con reloj. */
   async function cloudRun(fn, op, label) {
     if (state.cloud.busy) return;
-    state.cloud.busy = true; state.cloud.op = op || null; state.cloud.progress = op ? { label: label || 'Trabajando', pct: null } : null; cloudNote('Trabajando…'); render();
+    state.cloud.busy = true; state.cloud.op = op || null; state.cloud.t0 = op ? Date.now() : null; state.cloud.progress = op ? { label: label || 'Trabajando', pct: null } : null; cloudNote('Trabajando…'); render();
+    if (op) {
+      cloudTick(); if (cloudTimer) clearInterval(cloudTimer); cloudTimer = setInterval(cloudTick, 1000);
+      // Un fallo temporal de Supabase (502/520/521 o de red) se reintenta solo: se avisa en el propio loader.
+      FP.cloud.setRetryHook(({ attempt, of, status }) => { const t = document.querySelector('#cloud-progress [data-prog-label]'); if (t) t.textContent = `${(state.cloud.progress || {}).label || 'Trabajando'} — reintentando (${attempt} de ${of})${status ? ` · error ${status}` : ''}…`; });
+    }
     try { await fn(); } catch (e) { cloudNote(`Falló: ${e && e.message || e}`, 'bad'); }
-    state.cloud.busy = false; state.cloud.op = null; state.cloud.progress = null; cloudRefreshSession(); render();
+    if (cloudTimer) { clearInterval(cloudTimer); cloudTimer = null; }
+    FP.cloud.setRetryHook(null);
+    const took = state.cloud.t0 ? Date.now() - state.cloud.t0 : 0;
+    if (op && state.cloud.msg && took > 1500) state.cloud.msg += ` (${mmss(took)})`;
+    state.cloud.busy = false; state.cloud.op = null; state.cloud.t0 = null; state.cloud.progress = null; cloudRefreshSession(); render();
   }
 
   FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };

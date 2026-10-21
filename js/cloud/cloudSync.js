@@ -175,13 +175,35 @@
   }
 
   /* ---------- REST ---------- */
+  /**
+   * Fallos temporales de la pasarela (502/503/504 y 520-524 de Cloudflare) o de red: se reintenta (2 veces más, con espera).
+   * Las respuestas 520/521 llegan sin cabeceras CORS: el navegador las ve como «fallo de red». Todas las llamadas de esta
+   * función son repetibles sin riesgo (lecturas, upsert con merge-duplicates y borrados por filtro).
+   */
+  const TRANSIENT = new Set([429, 502, 503, 504, 520, 521, 522, 523, 524]);
+  const RETRY_WAIT = [700, 2000];
+  let retryHook = null;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function rest(path, { method = 'GET', body, prefer, fetchImpl, session, signal } = {}) {
     const f = fetchImpl || root.fetch.bind(root);
     const headers = authHeaders({ Authorization: `Bearer ${session.access_token}` }); if (prefer) headers.Prefer = prefer;
-    let res; try { res = await f(`${cfg().url}/rest/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal }); }
-    catch (e) { if (e && e.name === 'AbortError') { const a = new Error('Cancelado.'); a.aborted = true; throw a; } throw new Error('Sin conexión con Supabase.'); }
-    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(explain(res.status, j)); }
-    const t = await res.text(); return t ? JSON.parse(t) : null;
+    const tries = RETRY_WAIT.length + 1; let last = null;
+    for (let attempt = 1; attempt <= tries; attempt++) {
+      let res = null;
+      try { res = await f(`${cfg().url}/rest/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal }); }
+      catch (e) { if (e && e.name === 'AbortError') { const a = new Error('Cancelado.'); a.aborted = true; throw a; } last = { net: true }; }
+      if (res) {
+        if (res.ok) { const t = await res.text(); return t ? JSON.parse(t) : null; }
+        if (!TRANSIENT.has(res.status)) { const j = await res.json().catch(() => ({})); throw new Error(explain(res.status, j)); }
+        last = { status: res.status };
+      }
+      if (attempt < tries) {
+        if (retryHook) { try { retryHook({ attempt: attempt + 1, of: tries, status: last.status || null }); } catch (e) { /* solo informativo */ } }
+        await sleep(RETRY_WAIT[attempt - 1]);
+        if (signal && signal.aborted) { const a = new Error('Cancelado.'); a.aborted = true; throw a; }
+      }
+    }
+    throw new Error(last && last.status ? `Supabase respondió con un error temporal (${last.status}) tras ${tries} intentos. Es un fallo del servicio, no de tu conexión; reintenta en un minuto.` : `Sin conexión con Supabase tras ${tries} intentos (sin red, bloqueado o servicio caído). Reintenta en un minuto.`);
   }
 
   /* ---------- trozos ---------- */
@@ -223,26 +245,13 @@
     return { ok: true, keys: report, bytes: total, userId: session.user_id, at: new Date().toISOString() };
   }
 
-  /** Lee de la nube y arma los sobres. Devuelve { ok, items:[{key,envelope,bytes,digest}] }. */
-  async function download({ fetchImpl } = {}) {
-    const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: false, error: 'Inicia sesión para leer la copia de tu equipo.' };
-    const session = se.session; let rows;
-    try { rows = await rest(`${cfg().table}?select=key,part,total,payload&order=key.asc,part.asc`, { fetchImpl, session }); }
-    catch (e) { return { ok: false, error: e.message }; }
-    const by = new Map(); (rows || []).forEach((r) => { if (!by.has(r.key)) by.set(r.key, []); by.get(r.key)[r.part] = r; });
-    const items = [];
-    for (const [key, arr] of by) {
-      const total = arr[0] ? arr[0].total : 0;
-      if (!arr[0] || arr.length < total || Array.from({ length: total }, (_, i) => arr[i]).some((x) => !x)) return { ok: false, error: `La copia de «${key}» está incompleta en la nube. No se restauró nada.` };
-      const text = arr.slice(0, total).map((x) => x.payload).join('');
-      let envelope; try { envelope = JSON.parse(text); } catch (e) { return { ok: false, error: `La copia de «${key}» está dañada. No se restauró nada.` }; }
-      items.push({ key, envelope, bytes: text.length, digest: digest(text) });
-    }
-    return { ok: true, items, userId: session.user_id };
+  /** Lee de la nube y arma los sobres, por bloques (no en una sola petición gigante) y con avance. Devuelve { ok, items:[{key,envelope,bytes,digest}] }. */
+  async function download({ fetchImpl, signal, onProgress } = {}) {
+    return downloadProgress({ fetchImpl, signal, onProgress });
   }
 
   /**
-   * Igual que download(), pero por trozos y con avance real (bytes). Se puede cancelar con `signal` (AbortController):
+   * Lectura por trozos y con avance real (bytes); la usa download(). Se puede cancelar con `signal` (AbortController):
    * no se guarda nada, solo se deja de leer. onProgress({ doneBytes, totalBytes, keyIndex, keys, key }).
    * Devuelve { ok, items } | { ok:false, aborted:true } | { ok:false, error }.
    */
@@ -351,11 +360,20 @@
     } catch (e) { return { ok: false, error: e.message }; }
   }
 
-  async function remove({ fetchImpl } = {}) {
+  /** Borra la copia del equipo clave por clave (con avance); al final un barrido por si quedaron filas sueltas. */
+  async function remove({ fetchImpl, onProgress } = {}) {
     const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: true, nothing: true };
-    try { await rest(`${cfg().table}?key=neq.__none__`, { method: 'DELETE', fetchImpl, session: se.session }); } catch (e) { return { ok: false, error: e.message }; }
+    try {
+      const rows = await rest(`${cfg().table}?select=key&part=eq.0`, { fetchImpl, session: se.session });
+      const keys = [...new Set((rows || []).map((r) => r.key))];
+      for (let i = 0; i < keys.length; i++) {
+        await rest(`${cfg().table}?key=eq.${encodeURIComponent(keys[i])}`, { method: 'DELETE', fetchImpl, session: se.session });
+        if (onProgress) onProgress({ index: i + 1, of: keys.length, key: keys[i] });
+      }
+      await rest(`${cfg().table}?key=neq.__none__`, { method: 'DELETE', fetchImpl, session: se.session });
+    } catch (e) { return { ok: false, error: e.message }; }
     return { ok: true };
   }
 
-  FP.cloud = { listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, downloadProgress, verify, pruneKeys, remove, digest, split };
+  FP.cloud = { setRetryHook: (f) => { retryHook = f; }, listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, downloadProgress, verify, pruneKeys, remove, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
