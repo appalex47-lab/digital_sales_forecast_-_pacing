@@ -3029,26 +3029,30 @@
         state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
         const prod = bundle.items ? ` Productos: ${(bundle.rows || 0).toLocaleString('es-MX')} renglones de venta (${fmtKb(bundle.bytes)} comprimidos).` : ' Sin productos cargados.';
         cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.${prod}${pr.ok ? '' : ' (No pude limpiar trozos viejos de productos.)'}` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
-      });
+      }, 'upload', 'Preparando la copia');
     },
     'cloud-download'() {
       if (!window.confirm('Esto reemplaza en este navegador los bloques de datos que existan en la nube por la copia guardada. ¿Continuar?')) return;
       return cloudRun(async () => {
+        cloudProg('Descargando la copia de la nube', null);
         const d = await FP.cloud.download({});
         if (!d.ok) return cloudNote(d.error, 'bad');
         if (!d.items.length) return cloudNote('No hay copia en la nube todavía. Primero usa «Subir copia a la nube».', 'warn');
-        for (const it of d.items) { if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+        cloudProg('Guardando los bloques de datos', 60);
+        let sv = 0;
+        for (const it of d.items) { cloudProg(`Guardando los bloques de datos (${sv++} de ${d.items.length})`, 60 + Math.round(15 * sv / d.items.length)); if (FP.productSync.isKey(it.key)) continue; const env = it.envelope; storage.save(it.key, env && typeof env === 'object' && 'data' in env ? env.data : env); }
+        cloudProg('Aplicando los datos en este navegador', 78);
         await repo.flush();
-        const pr = await FP.productSync.restore(repo, d.items);
+        const pr = await FP.productSync.restore(repo, d.items, { onProgress: (n, tot) => { if (tot > 0) cloudProg(`Restaurando productos (${Math.min(n + 1, tot)} de ${tot})`, 80 + Math.round(18 * n / tot)); } });
         state.cu.status = 'idle';
         if (!pr.ok) { cloudNote(`Se restauraron los datos generales, pero ${pr.error}`, 'bad'); state.cloud.restored = true; return; }
         cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
-      });
+      }, 'restore', 'Descargando la copia de la nube');
     },
     'cloud-delete'() {
       if (!window.confirm('Se borrará la copia de la nube de TODO tu equipo (todas las personas del equipo la comparten). Tus datos locales no se tocan. ¿Continuar?')) return;
-      return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; });
+      return cloudRun(async () => { const r = await FP.cloud.remove({}); cloudNote(r.ok ? 'Copia de la nube eliminada.' : r.error, r.ok ? 'ok' : 'bad'); state.cloud.last = null; }, 'delete', 'Borrando la copia de la nube');
     },
 
     /* ----- Acceso por equipo: correo y contraseña (cuentas creadas por la persona administradora) ----- */
@@ -4605,13 +4609,18 @@
     const el = document.getElementById('cloud-progress');
     if (!el) { render(); return; }
     const t = el.querySelector('[data-prog-label]'), b = el.querySelector('i');
-    if (t) t.textContent = `${label} · ${pct} %`; if (b) b.style.width = `${pct}%`; el.setAttribute('aria-valuenow', String(pct));
+    const ind = pct === null || pct === undefined;   // sin porcentaje conocido: barra indeterminada (solo texto de la etapa)
+    if (t) t.textContent = ind ? label : `${label} · ${pct} %`;
+    const bar = el.querySelector('.an-loader__bar'); if (bar) bar.classList.toggle('an-loader__bar--ind', ind);
+    if (b) b.style.width = ind ? '' : `${pct}%`;
+    if (ind) el.removeAttribute('aria-valuenow'); else el.setAttribute('aria-valuenow', String(pct));
   }
-  async function cloudRun(fn) {
+  /** `op` ('upload' | 'restore' | 'delete') y `label` encienden el loader desde el primer instante (también las operaciones sin porcentaje). */
+  async function cloudRun(fn, op, label) {
     if (state.cloud.busy) return;
-    state.cloud.busy = true; cloudNote('Trabajando…'); render();
+    state.cloud.busy = true; state.cloud.op = op || null; state.cloud.progress = op ? { label: label || 'Trabajando', pct: null } : null; cloudNote('Trabajando…'); render();
     try { await fn(); } catch (e) { cloudNote(`Falló: ${e && e.message || e}`, 'bad'); }
-    state.cloud.busy = false; state.cloud.progress = null; cloudRefreshSession(); render();
+    state.cloud.busy = false; state.cloud.op = null; state.cloud.progress = null; cloudRefreshSession(); render();
   }
 
   FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
