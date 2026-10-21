@@ -377,7 +377,7 @@
       const per = (x.units.find((q) => q.id === 'cover').page.facts.find((f) => f.id === 'period') || {}).value || '';
       return `<section class="rp-page rp-page--cover" data-page="cover">${DECO}<div class="rp-cover__in"><div class="rp-brand"><span class="rp-mark"></span>RevNavigator</div>
         <div class="rp-cover__eyebrow">Reporte ejecutivo</div><h1 class="rp-cover__title">${esc(p.headline)}</h1><div class="rp-cover__rule"></div><p class="rp-cover__sub">${esc([per, p.businessName].filter(Boolean).join(' · '))}</p>
-        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div><div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
+        <dl class="rp-cover__meta"><div><dt>Período analizado</dt><dd>${esc(per)}</dd></div><div><dt>Fecha de corte</dt><dd>${esc(x.cutoff)}</dd></div>${x.lastActual ? `<div><dt>Venta real hasta</dt><dd>${esc(x.lastActual)}</dd></div>` : ''}<div><dt>Alcance</dt><dd>${esc(p.scope || x.channelLabel)}</dd></div>${p.filterLabel ? `<div><dt>Filtro</dt><dd>${esc(p.filterLabel)}</dd></div>` : ''}</dl>${p.filterNote ? `<p class="rp-cover__note">${esc(p.filterNote)}</p>` : ''}</div></section>`;
     }
     const body = u.id === 'summary' ? summaryBody(p, x) : u.id === 'closing' ? closingBody(p, x) : u.id === 'annex' ? annexBody(p, x, u.sub) : (BODY[u.id] ? BODY[u.id](p, x) : '');
     const concl = u.id === 'annex' || !FP.reportCopy ? null : FP.reportCopy.title(p, x.report);   // título con conclusión si los datos la permiten; si no, el neutro
@@ -390,7 +390,7 @@
   function docHtml(report, opts = {}) {
     const us = units(report, opts.exclude); NOANNEX = !us.some((q) => q.id === 'annex'); const cover = report.pages.find((p) => p.id === 'cover');
     const sel = cover && cover.facts ? (cover.facts.find((f) => f.id === 'selection') || {}).value : '';
-    const x = { report, tags: opts.tags === undefined ? report.options.showTags === true : Boolean(opts.tags), units: us, total: us.length, omitted: report.omitted.length, omittedList: report.omitted, gapsPage: (report.pages.find((q) => q.id === 'recovery' && q.status === 'included') || {}).gaps ? report.pages.find((q) => q.id === 'recovery') : null, relPage: report.pages.find((q) => q.id === 'reliability' && q.status === 'included') || null, channelLabel: report.context.channel === 'total' || !report.context.channel ? 'Total digital' : ({ ecommerce: 'Ecommerce', app: 'App', whatsapp: 'WhatsApp', llamadas: 'Llamadas' }[report.context.channel] || report.context.channel), cutoff: report.context.cutoff ? dateOf(report.context.cutoff) : NA,
+    const x = { report, tags: opts.tags === undefined ? report.options.showTags === true : Boolean(opts.tags), units: us, total: us.length, omitted: report.omitted.length, omittedList: report.omitted, gapsPage: (report.pages.find((q) => q.id === 'recovery' && q.status === 'included') || {}).gaps ? report.pages.find((q) => q.id === 'recovery') : null, relPage: report.pages.find((q) => q.id === 'reliability' && q.status === 'included') || null, channelLabel: report.context.channel === 'total' || !report.context.channel ? 'Total digital' : ({ ecommerce: 'Ecommerce', app: 'App', whatsapp: 'WhatsApp', llamadas: 'Llamadas' }[report.context.channel] || report.context.channel), cutoff: report.context.cutoff ? dateOf(report.context.cutoff) : NA, lastActual: report.context.lastActual && report.context.cutoff && report.context.lastActual < report.context.cutoff ? dateOf(report.context.lastActual) : null,
       selection: sel && !/^Sin filtros/.test(sel) ? cut(sel, 60) : 'Sin filtros' };
     const parts = us.map((u) => pageHtml(u, x).replace(/<(th|dt)(\s|>)/g, '<$1 data-helped="1"$2'));   // sin íconos de ayuda de la app dentro del reporte
     return { html: parts.join(''), parts, units: us, total: us.length };
@@ -496,6 +496,17 @@
       <div class="rp-filters__grid">${KEYS.map(sel).join('')}</div>
       <p class="field__hint">Se pueden combinar. Aplican a las láminas de categorías, evolución y clientes; pacing, forecast, diagnóstico y recuperación siguen siendo del total del negocio porque el plan no está por producto ni por sucursal (cada una lo indica en su encabezado).</p></div>`;
   }
+  /** Aviso al pulsar «Generar vista previa» cuando el corte va más adelante que la venta real cargada. */
+  function gapWarn(g) {
+    const d = (x) => esc(dateOf(x)), n = g.days;
+    return `<div class="note note--warn rp-gap" role="alertdialog" aria-labelledby="rp-gap-t" aria-describedby="rp-gap-d">
+      <h3 class="panel__title" id="rp-gap-t">Faltan datos para el corte</h3>
+      <p id="rp-gap-d">El corte es el <strong>${d(g.cutoff)}</strong>, pero la venta real cargada llega al <strong>${d(g.last)}</strong> (${n} día${n === 1 ? '' : 's'} sin dato).${g.products ? ` Productos y categorías llegan al ${d(g.products)}.` : ''} La presentación se genera con lo que hay: la venta diaria requerida y el cierre estimado usan datos incompletos.</p>
+      <div class="btn-row"><button type="button" class="btn" data-action="rp-gap-load">Cargar datos</button>
+        <button type="button" class="btn" data-action="rp-gap-last">Usar el último día con datos</button>
+        <button type="button" class="btn btn--primary" data-action="rp-gap-go">Generar de todos modos</button>
+        <button type="button" class="btn btn--ghost" data-action="rp-gap-cancel">Cancelar</button></div></div>`;
+  }
   function render(state) {
     const el = document.getElementById('presentacion-view'); if (!el) return;
     const rp = state.rp, H = () => FP.ui.helpers;
@@ -518,6 +529,7 @@
             <label class="check"><input type="checkbox" data-action="rp-option" data-key="showBusinessName" ${rp.options.showBusinessName ? 'checked' : ''}> Incluir el nombre del negocio en la portada</label></div>
           <div class="btn-row"><button type="button" class="btn ${ready && !stale ? '' : 'btn--primary'}" data-action="rp-generate" ${rp.status === 'busy' ? 'disabled aria-busy="true"' : ''}>${ready ? 'Volver a generar' : 'Generar vista previa'}</button>
             <button type="button" class="btn btn--primary" data-action="rp-print" ${ready ? '' : 'disabled title="Primero genera el reporte"'}>Guardar como PDF</button></div>
+          ${rp.gap ? gapWarn(rp.gap) : ''}
           <div id="rp-status" aria-live="polite">${rp.status === 'busy' ? FP.loader.html('Armando la presentación con los cálculos actuales…', { key: 'presentacion' }) : ''}
             ${rp.status === 'error' ? `<p class="note note--warn">No pude armar la presentación: ${H().esc(rp.error || '')}</p>` : ''}
             ${stale ? '<p class="note note--warn" role="status">La selección o los datos cambiaron desde que se generó la vista previa. Vuelve a generar antes de guardar el PDF.</p>' : ''}</div>

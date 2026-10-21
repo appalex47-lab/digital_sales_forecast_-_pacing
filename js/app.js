@@ -987,7 +987,7 @@
       focusData, trend: trendSnap || { priorities: an.priorities, rows: an.rows, context: an.context, share: an.share }, trendFilterLabel: rpF ? rpLabel : desc(an.filter), reportFilter: rpLabel, branchNames: (() => { const o = {}; try { (FP.productStore.geoOptions({}).branches || []).forEach((b) => { if (b.name && b.name !== b.code) o[b.code] = b.name; }); } catch (e) { /* sin nombres */ } return o; })(),
       product: monthOn && productByLevel ? productByLevel.category : pa.result, productByLevel, productFilterLabel: rpF ? rpLabel : (pa.result && pa.result.filter ? desc(pa.result.filter) : ''), customers, projection, profiles,
       backtest: run && state.fc.backtest && state.fc.backtest.stamp === run.generatedAt ? state.fc.backtest.data : null,
-      quality: FP.coverage.summarize(state.store), filters, recovery,
+      quality: FP.coverage.summarize(state.store), lastActual: lastActualDate(), filters, recovery,
       options: { showTags: state.rp.options.showTags, showBusinessName: state.rp.options.showBusinessName },
       businessName: state.rp.options.showBusinessName && C.business ? C.business.name : null
     });
@@ -3721,13 +3721,24 @@
       pa.result = null; pa.note = null;
       render();
     },
+    /** Antes de generar: si el corte es posterior al último día con venta real cargada, se avisa y se deja decidir (no se oculta ni se inventa dato). */
     async 'rp-generate'() {
       const rp = state.rp; if (rp.status === 'busy') return;
+      if (!rp.gapOk) {
+        let cut = null; try { const r = ensureForecast(); cut = r && r.cutoff; } catch (e) { /* sin forecast no hay corte que comparar */ }
+        const last = lastActualDate(), pm = FP.productStore && FP.productStore.available && FP.productStore.available() ? (FP.productStore.meta || {}) : {};
+        if (cut && last && last < cut) { rp.gap = { cutoff: cut, last, products: pm.dateMax || null, days: Math.round((Date.parse(cut + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 864e5) }; render(); return; }
+      }
+      rp.gap = null; rp.gapOk = false;
       rp.status = 'busy'; rp.error = null; FP.reportView.render(state);
-      try { rp.report = await buildExecutiveReport(); rp.sig = FP.reportView.signature(state); rp.at = new Date().toISOString(); rp.status = 'ready'; FP.ui.toast(`Presentación lista: ${rp.report.total} página${rp.report.total === 1 ? '' : 's'}${rp.report.omitted.length ? `, ${rp.report.omitted.length} sin datos suficientes (ver anexo)` : ''}.`); }
+      try { rp.report = await buildExecutiveReport(); rp.report.context.lastActual = lastActualDate(); rp.sig = FP.reportView.signature(state); rp.at = new Date().toISOString(); rp.status = 'ready'; FP.ui.toast(`Presentación lista: ${rp.report.total} página${rp.report.total === 1 ? '' : 's'}${rp.report.omitted.length ? `, ${rp.report.omitted.length} sin datos suficientes (ver anexo)` : ''}.`); }
       catch (e) { rp.status = 'error'; rp.error = e && e.message ? e.message : String(e); }
       render();
     },
+    async 'rp-gap-go'() { state.rp.gapOk = true; state.rp.gap = null; await actions['rp-generate'](); },
+    'rp-gap-last'() { state.rp.gap = null; state.rp.gapOk = false; actions['fc-ref-last'](); },
+    'rp-gap-load'() { state.rp.gap = null; root.location.hash = 'carga'; },
+    'rp-gap-cancel'() { state.rp.gap = null; render(); },
     'rp-print'() { const rp = state.rp; if (rp.report) FP.reportView.print(rp.report, { exclude: rp.exclude, tags: rp.options.showTags }); },
     'rp-toggle-page'(el) { const rp = state.rp, id = el.dataset.id; rp.exclude = rp.exclude.includes(id) ? rp.exclude.filter((x) => x !== id) : [...rp.exclude, id]; render(); },
     'rp-filter'(el) { const f = FP.productFilter.cascade(state.rp.filter || {}, el.dataset.key, el.value); state.rp.filter = Object.keys(f).length ? f : null; render(); },
