@@ -1337,7 +1337,7 @@
   }
   async function processProduct(item) {
     const token = (item.token || 0) + 1;
-    item.token = token; item.status = 'processing'; item.progress = 0;
+    item.token = token; item.status = 'processing'; item.progress = 0; item.t0 = Date.now();
     const res = await FP.productImport.process(item.staged, { settings: state.settings, onProgress: (p) => { item.progress = p; progressRender(); } });
     if (item.token !== token) return; // hubo un cambio de mapeo mientras tanto
     item.result = res; item.status = 'ready';
@@ -1355,7 +1355,7 @@
 
   async function commitProduct(item) {
     if (!item.result || !item.result.canImport) return;
-    item.status = 'saving'; item.progress = 0; render();
+    item.status = 'saving'; item.progress = 0; item.t0 = Date.now(); render();
     let replaced = null;
     try {
       const oldId = item.replace && item.replace.batchId;
@@ -1528,11 +1528,8 @@
   function anLoaderEl() { return document.getElementById('an-loader'); }
   function paintAnLoader(an) {
     const el = anLoaderEl(); if (!el || !an.progress) return;
-    const p = an.progress, sec = Math.max(0, Math.round((Date.now() - p.startedAt) / 1000)), pct = Math.min(99, Math.round(p.frac * 100));
-    const bar = el.querySelector('.an-loader__bar i'), t = el.querySelector('.an-loader__t'), l = el.querySelector('.an-loader__l');
-    if (bar) bar.style.width = pct + '%'; el.setAttribute('aria-valuenow', String(pct));
-    if (l) l.textContent = p.label || 'Preparando'; 
-    if (t) t.textContent = `${pct} % · ${sec} s` + (p.frac > 0.1 && sec >= 3 ? ` · faltan ~${Math.max(1, Math.round(sec * (1 - p.frac) / p.frac))} s` : '');
+    const p = an.progress;
+    FP.ui.loader.update(el, { label: p.label || 'Preparando', pct: Math.min(99, Math.round(p.frac * 100)), t0: p.startedAt });
   }
   function startAnLoader(an, n) {
     an.progress = { frac: 0, label: 'Leyendo datos de este navegador', startedAt: Date.now(), n };
@@ -1967,7 +1964,11 @@
   async function stageFiles(files, dataType, stateEl) {
     if (!files.length) return;
     setUploadState(stateEl, 'loading', `Leyendo ${files.length} archivo${files.length === 1 ? '' : 's'}…`);
-    try { await stageFilesInner(files, dataType); } finally { restoreUploadState(stateEl); }
+    // Loader homologado desde el primer instante (sin %: se desconoce hasta que el lector reporte avance)
+    setWorking({ fileName: files.length === 1 ? files[0].name : `${files.length} archivos`, phase: PHASE.leer, pct: null, generic: true });
+    if (state.view === 'carga') render();
+    try { await stageFilesInner(files, dataType); }
+    finally { restoreUploadState(stateEl); if (state.staging.working && state.staging.working.generic) { state.staging.working = null; if (state.view === 'carga') render(); } }
   }
 
   /** Mensajes al convertir un export de GA4 a Segmentos: { skip: true } si ninguna fila se pudo convertir (ya avisó) o { note } con el resumen. */
@@ -1997,6 +1998,8 @@
   const PHASE = { leer: 'Leyendo el archivo', traducir: 'Traduciendo el export de GA4', validar: 'Validando filas', enviar: 'Guardando registros' };
   let workingTimer = null;
   function setWorking(w) {
+    const prev = state.staging.working;
+    if (w && !w.t0) w.t0 = (prev && prev.fileName === w.fileName && prev.t0) || Date.now();   // el reloj arranca con el archivo, no con cada etapa
     state.staging.working = w;
     if (workingTimer) return;
     workingTimer = setTimeout(() => { workingTimer = null; if (state.view === 'carga') render(); }, 150);   // el avance se repinta ~6 veces por segundo, no en cada mensaje
@@ -4604,39 +4607,22 @@
   function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s && !s.anonymous && s.team_id ? { userId: s.user_id, email: s.email || null, teamId: s.team_id, teamName: s.team_name || null } : null; }
   const fmtKb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   /** Avance de la operación de nube: actualiza la barra en sitio (sin redibujar toda la pantalla); si aún no existe, dibuja. */
-  const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  /** «0:23 transcurridos · faltan ≈ 0:40»: la estimación solo aparece cuando ya hay avance suficiente para que no sea un invento. */
-  function cloudTimeText() {
-    const c = state.cloud, p = c.progress; if (!c.t0) return '';
-    const el = Date.now() - c.t0; let s = `${mmss(el)} transcurridos`;
-    if (p && Number.isFinite(p.pct) && p.pct >= 5 && p.pct < 100 && el >= 3000) s += ` · faltan ≈ ${mmss(el * (100 - p.pct) / p.pct)}`;
-    return s;
-  }
-  function cloudTick() { const e = document.querySelector('#cloud-progress [data-prog-time]'); if (e) e.textContent = cloudTimeText(); }
-  let cloudTimer = null;
+  const mmss = (ms) => FP.ui.loader.mmss(ms);
+  /** Avance de la nube: el loader homologado se actualiza en sitio; si aún no está en pantalla, se dibuja la vista. */
   function cloudProg(label, pct) {
     state.cloud.progress = { label, pct };
-    const el = document.getElementById('cloud-progress');
-    if (!el) { render(); cloudTick(); return; }
-    const t = el.querySelector('[data-prog-label]'), b = el.querySelector('i');
     const ind = pct === null || pct === undefined;   // sin porcentaje conocido: barra indeterminada (solo texto de la etapa)
-    if (t) t.textContent = ind ? label : `${label} · ${pct} %`;
-    const bar = el.querySelector('.an-loader__bar'); if (bar) bar.classList.toggle('an-loader__bar--ind', ind);
-    if (b) b.style.width = ind ? '' : `${pct}%`;
-    if (ind) el.removeAttribute('aria-valuenow'); else el.setAttribute('aria-valuenow', String(pct));
-    cloudTick();
+    if (!FP.ui.loader.update('cloud-progress', { label, pct: ind ? null : pct })) render();
   }
   /** `op` ('upload' | 'restore' | 'delete') y `label` encienden el loader desde el primer instante, con reloj. */
   async function cloudRun(fn, op, label) {
     if (state.cloud.busy) return;
     state.cloud.busy = true; state.cloud.op = op || null; state.cloud.t0 = op ? Date.now() : null; state.cloud.progress = op ? { label: label || 'Trabajando', pct: null } : null; cloudNote('Trabajando…'); render();
     if (op) {
-      cloudTick(); if (cloudTimer) clearInterval(cloudTimer); cloudTimer = setInterval(cloudTick, 1000);
       // Un fallo temporal de Supabase (502/520/521 o de red) se reintenta solo: se avisa en el propio loader.
-      FP.cloud.setRetryHook(({ attempt, of, status }) => { const t = document.querySelector('#cloud-progress [data-prog-label]'); if (t) t.textContent = `${(state.cloud.progress || {}).label || 'Trabajando'} — reintentando (${attempt} de ${of})${status ? ` · error ${status}` : ''}…`; });
+      FP.cloud.setRetryHook(({ attempt, of, status }) => { const t = document.querySelector('#cloud-progress .ldr__label'); if (t) t.textContent = `${(state.cloud.progress || {}).label || 'Trabajando'} — reintentando (${attempt} de ${of})${status ? ` · error ${status}` : ''}…`; });
     }
     try { await fn(); } catch (e) { cloudNote(`Falló: ${e && e.message || e}`, 'bad'); }
-    if (cloudTimer) { clearInterval(cloudTimer); cloudTimer = null; }
     FP.cloud.setRetryHook(null);
     const took = state.cloud.t0 ? Date.now() - state.cloud.t0 : 0;
     if (op && state.cloud.msg && took > 1500) state.cloud.msg += ` (${mmss(took)})`;

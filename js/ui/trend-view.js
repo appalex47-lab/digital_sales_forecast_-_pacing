@@ -584,9 +584,7 @@
       el.innerHTML = `<div class="empty"><strong>Faltan datos de productos</strong>Carga y guarda datos de productos para construir las series históricas de Evolución.</div>`; return;
     }
     if (a.loading && !a.rows.length) { const pr = a.progress || { frac: 0, label: 'Preparando', startedAt: Date.now() };
-      el.innerHTML = `${safe('Filtros', () => filters(state))}<div class="empty an-loader" id="an-loader" role="progressbar" aria-label="Construyendo evolución histórica" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pr.frac * 100)}"><strong>Construyendo evolución histórica…</strong>
-        <span class="an-loader__l">${esc(pr.label)}</span><span class="an-loader__bar"><i style="width:${Math.round(pr.frac * 100)}%"></i></span><span class="an-loader__t field__hint">${Math.round(pr.frac * 100)} % · 0 s</span>
-        <span class="field__hint">Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.</span></div>`; return; }
+      el.innerHTML = `${safe('Filtros', () => filters(state))}${FP.ui.loader.html({ id: 'an-loader', title: 'Construyendo evolución histórica…', label: pr.label, pct: Math.min(99, Math.round(pr.frac * 100)), t0: pr.startedAt, hint: 'Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.' })}`; return; }
     if (a.error) { el.innerHTML = `${safe('Filtros', () => filters(state))}<div class="empty empty--error"><strong>No se pudo calcular Evolución</strong>${esc(a.error)}</div>`; return; }
     const total = filteredRows.length, allTotal=a.rows.length, growth = filteredRows.filter((r) => r.direction === 'growth').length, decline = filteredRows.filter((r) => r.direction === 'decline').length;
     const sh=a.share||{}; const tm=a.temporal||{}; const ci2=a.comparisonInfo||{}; const cur=typeof tm.currentTotal==='number'?tm.currentTotal:(typeof sh.currentTotal==='number'?sh.currentTotal:null), base=ci2.comparable&&typeof sh.baselineTotal==='number'?sh.baselineTotal:null, delta=cur!==null&&base!==null?cur-base:null, deltaPct=FP.analysisContext.pctChange(cur,base);

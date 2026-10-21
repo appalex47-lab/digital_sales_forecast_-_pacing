@@ -240,7 +240,7 @@
     const box = $('staging');
     const items = state.staging.items;
     const w = state.staging.working;
-    const workingHtml0 = w ? `<div class="stgwork" role="status" aria-live="polite"><p><strong>${esc(w.fileName)}</strong> · ${esc(w.phase)}${w.pct ? ` · ${w.pct} %` : ''}</p><progress max="100" value="${w.pct || 0}" aria-label="Avance"></progress><p class="field__hint">Se procesa en segundo plano: RevNavigator sigue respondiendo y puedes seguir usándolo.</p></div>` : '';
+    const workingHtml0 = w ? FP.ui.loader.html({ id: 'imp-loader', title: w.fileName, label: w.phase, pct: w.pct ? w.pct : null, t0: w.t0, hint: w.generic ? '' : 'Se procesa en segundo plano: RevNavigator sigue respondiendo y puedes seguir usándolo.' }) : '';
     const workingHtml = FP.replaceView.undoBar(state) + workingHtml0;
     if (!items.length) {
       box.innerHTML = workingHtml + `<div class="empty"><strong>No hay archivos en revisión</strong>Selecciona un CSV o XLSX en cualquiera de las tres cargas. Nada se guarda hasta que confirmes la importación.</div>`;

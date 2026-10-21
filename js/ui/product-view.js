@@ -65,7 +65,7 @@
       <td>${!p.accepted && !p.duplicate ? H().pill('error', 'Se rechaza') : p.duplicate === 'summed' ? H().pill('ok', 'Se suma a la fila con la misma llave') : p.duplicate === 'exact' ? H().pill('na', 'Duplicado exacto') : p.duplicate === 'conflict' ? H().pill('warning', 'Conflicto') : p.issues.length ? H().pill('warning', 'Advertencia') : H().pill('ok', '✓ Válida')}</td></tr>`).join('');
     let body;
     if (item.status === 'processing') {
-      body = `<p class="note">Validando el archivo completo… ${Math.round((item.progress || 0) * 100)} %</p><div class="progress"><span style="width:${Math.round((item.progress || 0) * 100)}%"></span></div>`;
+      body = FP.ui.loader.html({ title: item.staged.fileName, label: 'Validando el archivo completo', pct: Math.round((item.progress || 0) * 100), t0: item.t0, compact: true });
     } else if (r && r.mappingIssues.length) {
       body = `<ul class="issues issues--block">${r.mappingIssues.map((i) => `<li>${H().pill('error', 'Mapeo')} <span>${esc(i.message)}</span></li>`).join('')}</ul>`;
     } else if (r) {
@@ -118,6 +118,7 @@
         </ol>
         <div class="staging__foot">
           ${FP.replaceView.block(state, item)}
+          ${item.status === 'saving' ? FP.ui.loader.html({ title: item.staged.fileName, label: 'Guardando en este navegador', pct: Math.round((item.progress || 0) * 100), t0: item.t0, compact: true }) : ''}
           <p>${r && r.canImport ? `Se guardarán <strong>${F().integer(r.summary.accepted)}</strong> renglones válidos de ${F().integer(r.summary.rows)} filas.` : 'Corrige el mapeo para poder importar.'}</p>
           <div class="btn-row">
             <button type="button" class="btn" data-action="discard-staged">Descartar archivo</button>

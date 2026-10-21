@@ -19,11 +19,11 @@ async def main():
         for act, op, lbl in [('cloud-upload','upload','Subiendo…'),('cloud-download','restore','Restaurando…'),('cloud-delete','delete','Borrando…')]:
             await q.evaluate(f"setTimeout(()=>FP.app.actions['{act}'](),0)"); await q.wait_for_timeout(350)
             s = await q.evaluate("""(()=>{const e=document.getElementById('cloud-progress'); const bt=[...document.querySelectorAll('[data-action^=cloud-]')].filter(x=>['cloud-upload','cloud-download','cloud-delete'].includes(x.dataset.action));
-              return {has:!!e, role:e&&e.getAttribute('role'), label:e&&e.querySelector('[data-prog-label]').textContent, busyBtn:bt.filter(x=>x.getAttribute('aria-busy')==='true').map(x=>x.dataset.action+':'+x.textContent.trim()), dis:bt.every(x=>x.disabled)}})()""")
+              return {has:!!e, role:e&&e.getAttribute('role'), label:e&&e.querySelector('.ldr__label').textContent, busyBtn:bt.filter(x=>x.getAttribute('aria-busy')==='true').map(x=>x.dataset.action+':'+x.textContent.trim()), dis:bt.every(x=>x.disabled)}})()""")
             chk(f'CL-{op} aparece el loader con su etapa y el botón activo cambia de texto', s['has'] and s['role']=='progressbar' and len(s['busyBtn'])==1 and lbl in s['busyBtn'][0] and s['dis'], s)
             if op in ('restore','delete'):
                 await q.wait_for_timeout(1200)
-                pg = await q.evaluate("(()=>{const e=document.getElementById('cloud-progress');return {now:e.getAttribute('aria-valuenow'),label:e.querySelector('[data-prog-label]').textContent,time:e.querySelector('[data-prog-time]').textContent,ind:e.querySelector('.an-loader__bar').classList.contains('an-loader__bar--ind')}})()")
+                pg = await q.evaluate("(()=>{const e=document.getElementById('cloud-progress');return {now:e.getAttribute('aria-valuenow'),label:e.querySelector('.ldr__label').textContent+' '+e.querySelector('.ldr__pct').textContent,time:e.querySelector('.ldr__time').textContent,ind:e.classList.contains('ldr--ind')}})()")
                 chk(f'CL-{op}-prog el avance es progresivo (porcentaje y bloques/MB) y muestra el tiempo', pg['now'] is not None and not pg['ind'] and re.search(r'\d+ %', pg['label']) and re.search(r'\d:\d\d transcurridos', pg['time']) and ('KB' in pg['label'] or 'MB' in pg['label'] or 'bloques' in pg['label']), pg)
             await q.wait_for_function("!FP.app.state.cloud.busy", timeout=15000); await q.wait_for_timeout(200)
             gone = await q.evaluate("!document.getElementById('cloud-progress') && [...document.querySelectorAll('[data-action=cloud-upload],[data-action=cloud-download],[data-action=cloud-delete]')].every(x=>!x.disabled&&x.getAttribute('aria-busy')!=='true')")
