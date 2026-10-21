@@ -3934,23 +3934,21 @@
     entry.busy = true; entry.step = 'restoring';
     entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">Cargando tus datos…</h2>
       <p class="mut">Espera un momento, esto puede tardar unos minutos según el tamaño de tu copia. No cierres esta ventana.</p>
-      <div class="rs__bar" id="rs-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Avance de la restauración"><i id="rs-fill"></i></div>
-      <div class="rs__row"><span id="rs-pct">0 %</span><span id="rs-eta">Calculando tiempo…</span></div>
+      ${FP.ui.loader.html({ id: 'rs-bar', title: 'Avance de la restauración', label: RESTORE_STAGES[0], pct: 0, t0: Date.now() })}
       <ol class="rs__stages" id="rs-stages">${RESTORE_STAGES.map((t) => `<li><span class="rs__ic">○</span>${t}</li>`).join('')}</ol>
       <p class="visually-hidden" id="rs-live" role="status" aria-live="polite"></p>
       <div class="tour-offer__btns"><button type="button" class="btn" id="rs-cancel" data-action="restore-cancel">Cancelar</button></div>`);
   }
   let rsLastSay = -1;
   function paintRestore(pct, stage, eta) {
-    const $ = (id) => document.getElementById(id); if (!$('rs-fill')) return;
+    const $ = (id) => document.getElementById(id); if (!$('rs-bar')) return;
     const v = Math.max(0, Math.min(100, Math.round(pct)));
-    $('rs-fill').style.width = `${v}%`; $('rs-bar').setAttribute('aria-valuenow', String(v)); $('rs-pct').textContent = `${v} %`;
-    $('rs-eta').textContent = eta || (stage === 0 ? 'Calculando tiempo…' : stage === 1 ? 'Esto ya no se puede cancelar' : 'Casi listo');
+    FP.ui.loader.update('rs-bar', { label: RESTORE_STAGES[stage], pct: v });   // % real por bytes; reloj y «faltan» los calcula el loader
+    if (stage > 0) { const t = document.querySelector('#rs-bar .ldr__time'); if (t) t.textContent += ' · esto ya no se puede cancelar'; }
     [...$('rs-stages').children].forEach((li, i) => { li.className = i < stage ? 'done' : i === stage ? 'on' : ''; li.firstChild.textContent = i < stage ? '✓' : i === stage ? '●' : '○'; });
     const c = $('rs-cancel'); if (c) { c.disabled = stage > 0; c.hidden = stage > 0; }
     if (v >= rsLastSay + 25 || v === 100) { rsLastSay = v; $('rs-live').textContent = `${v} por ciento. ${RESTORE_STAGES[stage]}.`; }
   }
-  const etaText = (ms) => { const s = Math.max(1, Math.round(ms / 1000)); return s < 90 ? `Faltan ~${s} s` : `Faltan ~${Math.round(s / 60)} min`; };
   function openRestoreError(msg) {
     entry.busy = false; entry.step = 'restore-error';
     entryDialog(`<p class="tour-offer__eyebrow">Restaurando copia del equipo</p><h2 id="entry-t">No pude terminar la carga</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No se aplicó nada: tus datos locales siguen como estaban.</p>
@@ -3964,7 +3962,7 @@
     try {
       d = await FP.cloud.downloadProgress({ signal: ctl.signal, onProgress: (p) => {
         const f = p.totalBytes ? p.doneBytes / p.totalBytes : 0, el = Date.now() - t0;
-        paintRestore(70 * f, 0, f > 0.05 && el > 1500 ? etaText(el / f * (1 - f)) : null);
+        paintRestore(70 * f, 0);
       } });
     } catch (e) { d = { ok: false, error: String(e && e.message || e) }; }
     restoreRun.ctl = null;

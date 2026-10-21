@@ -71,7 +71,7 @@ async def main():
                 v = await q.evaluate("(document.getElementById('rs-bar')||{getAttribute:()=>null}).getAttribute('aria-valuenow')")
                 if v is not None: pcts.append(int(v))
                 if cancel_vis is None: cancel_vis = await q.evaluate("!!document.getElementById('rs-cancel') && !document.getElementById('rs-cancel').hidden")
-                e = await q.evaluate("(document.getElementById('rs-eta')||{}).textContent||''"); eta = eta or (e if 'Faltan' in e else '')
+                e = await q.evaluate("(document.querySelector('#rs-bar .ldr__time')||{}).textContent||''"); eta = eta or (e if 'faltan' in e else '')
             except Exception: break
             await q.wait_for_timeout(120)
         chk('R1b la barra avanza de forma creciente (aria-valuenow)', len(pcts) > 3 and pcts == sorted(pcts) and max(pcts) > 50, pcts[:20])

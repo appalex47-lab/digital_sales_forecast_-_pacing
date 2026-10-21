@@ -249,7 +249,7 @@
     const box = $('nx-ai'), sec = box.closest('section');
     if (sec) sec.hidden = ai.status === null;   // sin redacción de Cohere no se muestra un panel vacío
     if (ai.status === null) { box.innerHTML = ''; return; }
-    if (ai.status === 'busy') { $('nx-ai').innerHTML = '<p class="ds-loading" role="status">Redactando con Cohere…</p>'; return; }
+    if (ai.status === 'busy') { $('nx-ai').innerHTML = FP.loader.html('Redactando con Cohere…', { key: 'nx-ai' }); return; }
     if (ai.status !== 'ok') {
       $('nx-ai').innerHTML = `<div class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc((ai.errors || []).join(' '))} La narrativa determinística sigue disponible y no depende de Cohere.</div>`;
       return;

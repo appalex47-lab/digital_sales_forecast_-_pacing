@@ -141,6 +141,7 @@
         <div class="subhead"><h4>Líneas de acción con Cohere (opcional)</h4>
           <button type="button" class="btn btn--small" data-action="rc-ai" ${selSc && ai.status !== 'busy' ? '' : `disabled title="${selSc ? 'Consultando…' : 'Primero guarda y elige un escenario'}"`}>${ai.status === 'busy' ? 'Consultando…' : 'Proponer con Cohere'}</button></div>
         <p class="field__hint">Cohere recibe la hipótesis, el driver, las señales y el escenario ya calculados. No calcula impacto ni cifras y sus propuestas requieren validación. Usa la API key de Configuración de RevNavigator.</p>
+        ${ai.status === 'busy' ? FP.loader.html('Consultando a Cohere…', { key: 'rc-ai' }) : ''}
         ${ai.status === 'unavailable' || ai.status === 'invalid' ? `<p class="ds-alert ds-alert--danger" role="alert">Análisis con IA no disponible. ${esc(ai.errors.join(' '))}</p>` : ''}
         ${ai.actions.length ? `<ul class="alert-list">${ai.actions.map((a, i) => `<li>${H().pill('na', 'IA · propuesta')} <span><strong>${esc(a.action)}</strong> (${esc(DRIVER[a.relatedDriver])})
           <span class="cell-sub">${esc(a.rationale)}${a.informationNeeded.length ? ` · Información necesaria: ${esc(a.informationNeeded.join('; '))}` : ''}</span></span>
