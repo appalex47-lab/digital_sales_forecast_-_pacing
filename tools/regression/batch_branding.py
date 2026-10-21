@@ -32,6 +32,11 @@ async def main():
             if SHOT: await (await q.query_selector('#st-negocio')).screenshot(path=os.path.join(SHOT, 'brand_cfg.png'))
         else:
             await q.evaluate("(()=>{const s=FP.app.state.brand;s.draft={logo:{dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',w:1,h:1,name:'x.png'},palette:['#243C8C','#EB6C2E'],main:'#243C8C',accent:'#EB6C2E'};s.dirty=true})()")
+        nt = await q.evaluate("document.querySelectorAll('.brand-cv').length")
+        chk('BR-17 el selector ofrece los 6 fondos de portada', nt == 6, nt)
+        await q.click('.brand-cv[data-id="waves"]'); await q.wait_for_timeout(150)
+        ch = await q.evaluate("({d:FP.app.state.brand.draft.cover,sel:document.querySelector('.brand-cv.is-sel').dataset.id,aria:document.querySelector('.brand-cv[data-id=waves]').getAttribute('aria-checked')})")
+        chk('BR-18 elegir un fondo lo marca como seleccionado y queda en el borrador', ch['d'] == 'waves' and ch['sel'] == 'waves' and ch['aria'] == 'true', ch)
         await q.evaluate("document.querySelector('[data-action=\"brand-save\"]') || 0")
         await q.evaluate("FP.app.actions && 0")
         await q.click('[data-action="brand-save"]'); await q.wait_for_timeout(300)
@@ -53,6 +58,26 @@ async def main():
         chk('BR-9b con logo, la portada no repite texto junto al logo y firma «RevNavigator» abajo a la izquierda', cv['brand'] == '' and cv['by'] == 'RevNavigator', cv)
         chk('BR-10 el color principal cambia y el rojo de «resta» sigue fijo', m['blue'].upper() != '#1F5FD6' and m['red'].upper() == '#C0392B', m)
         chk('BR-11 ninguna lámina desborda con el logo en el pie', m['ov'] == [], m['ov'])
+        res = []
+        for cid in ['chart', 'waves', 'geo', 'dots', 'side', 'light']:
+            r2 = await q.evaluate("""((cid)=>{const a=FP.brand.active();FP.brand.set(Object.assign({},a,{cover:cid}));FP.reportView.unmountPrint();FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[],tags:false});
+              const c=document.querySelector('#rp-print-host [data-page=cover]'),b=c.querySelector('.rp-cover__in');const ey=getComputedStyle(c.querySelector('.rp-cover__eyebrow')).color,bg=getComputedStyle(c).backgroundColor,ti=getComputedStyle(c.querySelector('.rp-cover__title')).color;
+              const meta=c.querySelector('.rp-cover__meta').getBoundingClientRect();const dec=c.querySelector('svg.rp-deco');
+              return {cid,attr:c.getAttribute('data-cover'),ti,ey,overflow:c.scrollHeight>c.clientHeight+1,hasDeco:!!dec,by:!!c.querySelector('.rp-cover__by')}})""", cid)
+            res.append(r2)
+        chk('BR-19 cada fondo se aplica a la portada con su dibujo y firma', all(x['attr'] == x['cid'] and x['hasDeco'] and x['by'] and not x['overflow'] for x in res), res)
+        lt = [x for x in res if x['cid'] == 'light'][0]; dk = [x for x in res if x['cid'] == 'waves'][0]
+        rgb = lambda c: [int(v) for v in c[c.index('(')+1:c.index(')')].split(',')[:3]]
+        lum = lambda c: sum(w * (lambda v: v/12.92 if v <= .03928 else ((v+.055)/1.055)**2.4)(x/255) for w, x in zip([.2126, .7152, .0722], rgb(c)))
+        con = lambda a, b: (max(lum(a), lum(b)) + .05) / (min(lum(a), lum(b)) + .05)
+        chk('BR-20 en «Claro» el título y el rótulo se leen sobre blanco (contraste ≥ 4.5)', con(lt['ti'], 'rgb(255,255,255)') >= 4.5 and con(lt['ey'], 'rgb(255,255,255)') >= 4.5, lt)
+        chk('BR-21 en fondos oscuros el título es blanco', dk['ti'].replace(' ', '') == 'rgb(255,255,255)', dk)
+        await q.evaluate("(()=>{const a=FP.brand.active();FP.brand.set(Object.assign({},a,{cover:'waves'}))})()")
+        if SHOT:
+            for cid in ['waves', 'geo', 'dots', 'side', 'light']:
+                await q.evaluate("((cid)=>{const a=FP.brand.active();FP.brand.set(Object.assign({},a,{cover:cid}));FP.reportView.unmountPrint();FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[],tags:false})})", cid)
+                el = await q.query_selector('#rp-print-host [data-page=cover]')
+                if el: await el.screenshot(path=os.path.join(SHOT, f'cover_{cid}.png'))
         if SHOT:
             for pid in ('cover', 'pacing'):
                 el = await q.query_selector(f'#rp-print-host [data-page={pid}]')
@@ -68,6 +93,8 @@ async def main():
         await q.fill('input[data-role="main"]', 'rojo'); await q.dispatch_event('input[data-role="main"]', 'change'); await q.wait_for_timeout(200)
         chk('BR-13 un hex inválido se rechaza con mensaje', 'hexadecimal' in await q.inner_text('#brand-body'))
         e = await q.evaluate("FP.brand.normalize({logo:{dataUrl:'data:text/html;base64,AAAA'},main:'#12345'})")
+        cn = await q.evaluate("FP.brand.normalize({main:'#243C8A',cover:'inventado'}).cover")
+        chk('BR-22 un fondo desconocido vuelve a la gráfica ascendente', cn == 'chart', cn)
         chk('BR-14 una marca con logo no imagen o color inválido no se acepta', e is None, e)
         await b.close()
 asyncio.run(main())

@@ -91,7 +91,7 @@
     an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
-    brand: { draft: { logo: null, palette: [], main: null, accent: null }, sel: null, saved: false, dirty: false, error: null },
+    brand: { draft: { logo: null, palette: [], main: null, accent: null, cover: 'chart' }, sel: null, saved: false, dirty: false, error: null },
     // Asistente de metas (no se guarda: solo llena el formulario)
     ta: { baseYear: null, growth: '', total: '', mix: {}, open: false, last: null },
     // Fase 6: Recovery Center
@@ -530,7 +530,7 @@
   function loadBrand() {
     const env = storage.load(K.reportBrand), b = env ? FP.brand.normalize(env.data) : null;
     FP.brand.set(b);
-    state.brand = { draft: b ? { logo: b.logo, palette: b.palette, main: b.main, accent: b.accent } : { logo: null, palette: [], main: null, accent: null }, sel: null, saved: Boolean(b), dirty: false, error: null };
+    state.brand = { draft: b ? { logo: b.logo, palette: b.palette, main: b.main, accent: b.accent, cover: b.cover } : { logo: null, palette: [], main: null, accent: null, cover: 'chart' }, sel: null, saved: Boolean(b), dirty: false, error: null };
   }
   function setPath(obj, path, value) {
     const parts = path.split('.');
@@ -2955,9 +2955,10 @@
       const f = el.files && el.files[0]; el.value = ''; if (!f) return;
       const r = await FP.brand.readLogo(f), b = state.brand;
       if (!r.ok) { b.error = r.error; render(); return; }
-      b.error = null; b.draft = { logo: r.logo, palette: r.palette, main: r.main, accent: r.accent }; b.sel = null; b.dirty = true; render();
+      b.error = null; b.draft = { logo: r.logo, palette: r.palette, main: r.main, accent: r.accent, cover: b.draft.cover || 'chart' }; b.sel = null; b.dirty = true; render();
       FP.ui.toast(r.palette.length ? 'Logo cargado. Revisa la paleta propuesta y pulsa «Guardar marca».' : 'Logo cargado, pero no encontré colores de marca claros. Escribe tus colores y guarda.');
     },
+    'brand-cover'(el) { const b = state.brand; b.draft.cover = FP.brand.coverId(el.dataset.id); b.dirty = true; render(); },
     'brand-remove-logo'() { const b = state.brand; b.draft.logo = null; b.draft.palette = []; b.sel = null; b.dirty = true; render(); },
     'brand-sel'(el) { const b = state.brand, i = Number(el.dataset.i); b.sel = b.sel === i ? null : i; render(); },
     'brand-role'(el) { const b = state.brand, c = b.draft.palette[b.sel]; if (!c) return; b.draft[el.dataset.role] = c; b.dirty = true; render(); },

@@ -1407,3 +1407,9 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .brand-pv__st { font-size:16px; font-weight:700; margin-top:3px; color:#0f1b2d; }
 .brand-pv__k { display:flex; gap:10px; margin-top:10px; } .brand-pv__k span { flex:1; font-size:10.5px; color:#55657d; padding-top:4px; } .brand-pv__k b { display:block; font-size:16px; color:#0f1b2d; } .brand-pv__k i { font-style:normal; }
 .brand-pv__foot { position:absolute; left:18px; right:18px; bottom:8px; display:flex; align-items:center; gap:6px; font-size:10.5px; color:#55657d; } .brand-pv__sm img { height:16px; max-width:70px; display:block; }
+.brand__covers { display:flex; gap:10px; flex-wrap:wrap; }
+.brand-cv { all:unset; cursor:pointer; width:112px; border-radius:10px; padding:3px; box-sizing:border-box; }
+.brand-cv span { display:block; font-size:12.5px; margin-top:4px; color:#33415a; } .brand-cv.is-sel span { font-weight:700; color:#14233b; }
+.brand-cv:focus-visible, .brand-cv.is-sel { outline:3px solid #1f4fd8; outline-offset:1px; }
+.brand-pv--thumb { height:60px; border:1px solid #d5dce6; padding:0; } .brand-pv svg.rp-deco--bg { position:absolute; inset:0; width:100%; height:100%; }
+.brand-pv--cover svg.rp-deco--bg { z-index:0; } .brand-pv__chip, .brand-pv__eye, .brand-pv__ttl, .brand-pv__rule { position:relative; z-index:1; }
