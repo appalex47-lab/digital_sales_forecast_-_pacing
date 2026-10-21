@@ -727,13 +727,14 @@
     const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
     const F = R.focus, fw = F ? focusWhere(F) : [];
     const move = F ? { title: 'Qué debemos mover', big: smoney(F.loss), unit: `${F.entity}${F.sinceLabel ? ` · cae desde ${F.sinceLabel}` : ' · mayor arrastre'}`, text: `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${F.sinceLabel ? ` y lleva ${F.periods} períodos sin recuperarse` : ''}.${fw.length ? ` Revisar primero ${fw.join(', ')}.` : ''} ${actionsOn(R, F)}` }
-      : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída ${trendWhen(by, R)}.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
-      : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ' No hay acciones registradas en el plan.'}` }
+      : R.drag ? { title: 'Qué debemos mover', big: smoney(R.drag.impact), unit: `${R.drag.entity}: mayor arrastre`, text: `${R.drag.entity} concentra la mayor caída ${trendWhen(by, R)}.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ''}` }
+      : R.worst ? { title: 'Qué debemos mover', big: smoney(R.worst.gap), unit: `${R.worst.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.worst.channel} es el canal más rezagado.${acts.length ? ` Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ''}` }
       : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
     const watch = [];
     if (R.material) watch.push('El cierre estimado cambia de forma material según el método de proyección.');
     if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} requiere ${moneyC(R.rec.daily)} por día en ${int(R.rec.days)} días restantes.`);
-    if (s.quality && s.quality.status && s.quality.status !== 'ok') watch.push('Hay advertencias de calidad de datos (ver anexo técnico).');
+    if (s.lastActual && s.run && s.run.cutoff && s.lastActual < s.run.cutoff) watch.push(`La venta real llega al ${dateLabel(s.lastActual)}, antes del corte (${dateLabel(s.run.cutoff)}); falta cargar esos días.`);
+    if (s.quality && s.quality.status && s.quality.status !== 'ok') watch.push('Algunos datos tienen advertencias de calidad (ver anexo técnico).');
     const vig = { title: 'Qué debemos vigilar', big: R.rec && isNum(R.rec.daily) ? moneyC(R.rec.daily) : '', unit: R.rec && isNum(R.rec.daily) ? (R.mk ? `requeridos por día para cerrar ${R.mlow}` : 'requeridos por día para la meta') : '', text: watch.length ? watch.join(' ') : 'Sin riesgos materiales identificados en los datos disponibles.' };
     if (R.movers) {
       const top = (arr) => [...arr].sort((a, b) => a.rank - b.rank).slice(0, 3).map((i) => ({ name: i.name, value: i.value, type: i.type }));

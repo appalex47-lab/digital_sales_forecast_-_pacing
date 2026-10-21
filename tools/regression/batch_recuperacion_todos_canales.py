@@ -15,6 +15,10 @@ def chk(n, ok, d=''):
     if not ok: fails.append(n)
 async def setch(q, ch):
     await q.select_option('#rc-ch', ch); await q.wait_for_timeout(1200)
+async def gen_rp(pg):
+    """Pulsa «Generar vista previa»; si aparece el aviso de datos faltantes, elige «Generar de todos modos»."""
+    await pg.click('[data-action="rp-generate"]'); await pg.wait_for_timeout(150)
+    if await pg.query_selector('[data-action="rp-gap-go"]'): await pg.click('[data-action="rp-gap-go"]')
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); errs = []
@@ -45,7 +49,7 @@ async def main():
         chk('T5 escenarios de otro canal no son comparables (checkbox deshabilitado)', dis >= 1, dis)
         await q.evaluate("location.hash='#presentacion'"); await q.wait_for_selector('[data-action="rp-generate"]')
         await q.evaluate("FP.app.state.dx.settings.channel='total';FP.app.state.rc.settings.channel='total';const c=FP.app.state.ux.ctx;c.periodType='month';c.periodKey=FP.app.state.rc.ctx.period.start.slice(0,7);c.channel='total';const d=FP.app.state.dx.settings;d.periodType='month';d.periodKey=c.periodKey")
-        await q.click('[data-action="rp-generate"]')
+        await gen_rp(q)
         await q.wait_for_function("FP.app.state.rp.status==='ready'||FP.app.state.rp.status==='error'", timeout=120000)
         pg = await q.evaluate("(()=>{const r=FP.app.state.rp.report;const p=r.pages.find(x=>x.id==='recovery');return p?JSON.stringify(p):'omitido:'+JSON.stringify(r.omitted.filter(o=>o.id==='recovery'))})()")
         chk('T6 la lámina de Recuperación (PDF) trae el nombre del escenario y su canal', not pg.startswith('omitido') and nm in pg and lbl in pg and 'Acción canal prueba' in pg, (pg or '')[:300])
