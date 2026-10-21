@@ -76,6 +76,17 @@ async def main():
         chk('ED-22 compensación insuficiente en singular', '1 grupo creció +$3.0K' in nB and 'no alcanza a compensar la caída de 1 grupo' in nB, nB)
         cD = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=(P.drag||[]).slice(0,2);P.compensate=P.drag.map(x=>({...x,impact:Math.abs(x.impact)}));")
         chk('ED-23 evolución: «otros N» cuando restan y suman', ' y otros ' in cD['trends']['h'], cD['trends']['h'])
+
+        # ---- diseño con textos largos reales (cierre y etiquetas de barras) ----
+        await q.evaluate("""(()=>{const r=FP.app.state.rp.report;const cl=r.pages.find(p=>p.id==='closing');cl.blocks[2].text='Dermacosméticos concentra 58 % de lo que se pierde; revisar primero la subcategoría Dermocosméticos (−$40.7K), entregas Envío a domicilio (−$52.3K). Ninguna de las 3 acciones registradas en el plan es sobre Dermacosméticos.';cl.blocks[2].list=[{name:'Ecommerce',value:-1670000,type:'Canal'},{name:'Volumen',value:-6990000,type:'Factor'},{name:'Dermacosméticos',value:-71900,type:'Categoría'}];cl.blocks[3].text='El cierre estimado cambia de forma importante según el método de proyección. Cumplir el plan de octubre requiere $1.20M por día durante 11 días restantes. Algunos datos cargados tienen advertencias de calidad; el detalle está en el anexo técnico.';
+          const ca=r.pages.find(p=>p.id==='categories');ca.charts[0].items[0].label='Artículos de Medición y Material de Curación';})()""")
+        await q.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[],tags:true})"); await q.emulate_media(media='print')
+        lay = await q.evaluate("""(()=>{const h=document.getElementById('rp-print-host');Object.assign(h.style,{display:'block',position:'absolute',left:'-99999px',top:'0'});FP.reportView.fitPages(h);
+          const pg=h.querySelector('[data-page=closing]'),pb=pg.getBoundingClientRect(),ft=pg.querySelector('.rp-foot').getBoundingClientRect();const over=[...pg.querySelectorAll('.rp-cl')].filter(c=>c.getBoundingClientRect().bottom>ft.top+1).length;
+          const cg=h.querySelector('[data-page=categories]'),svg=cg.querySelector('svg'),sr=svg.getBoundingClientRect();const cut=[...svg.querySelectorAll('text')].filter(t=>t.getBoundingClientRect().left<sr.left+1).map(t=>t.textContent);return {over,cut}})()""")
+        chk('ED-24 cierre con textos largos reales: las tarjetas no invaden el pie', lay['over'] == 0, lay)
+        chk('ED-25 etiqueta larga de barras no se sale del gráfico por la izquierda', lay['cut'] == [], lay)
+        await q.emulate_media(media='screen')
         base = json.load(open('tools/regression/data/editorial_baseline.json'))
         for k in ('base', 'mes_anterior', 'excedente'):
             cur = nums[k]
