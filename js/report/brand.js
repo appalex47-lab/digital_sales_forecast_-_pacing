@@ -72,6 +72,33 @@
     return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
 
+  /* ---------- fondos de portada ---------- */
+  const COVERS = [{ id: 'chart', label: 'Gráfica ascendente' }, { id: 'waves', label: 'Ondas' }, { id: 'geo', label: 'Geométrico' }, { id: 'dots', label: 'Retícula de puntos' }, { id: 'side', label: 'Bloque lateral' }, { id: 'light', label: 'Claro (ahorra tinta)' }];
+  const coverId = (id) => (COVERS.some((c) => c.id === id) ? id : 'chart');
+  const tones = (b) => { const main = b.main, acc = b.accent || FALLBACK_ACCENT; return { main, acc, dark: darkTone(main), text: textTone(main), accText: textTone(acc) }; };
+  /** Fondo (CSS background) de la portada según el estilo; todos salen de los colores de la marca. */
+  function coverBg(id, b) {
+    const t = tones(b);
+    switch (coverId(id)) {
+      case 'waves': return `linear-gradient(135deg,${t.dark},${t.main} 140%)`;
+      case 'dots': return `linear-gradient(120deg,${t.dark} 40%,${t.main})`;
+      case 'geo': case 'side': return t.dark;
+      case 'light': return '#FFFFFF';
+      default: return `radial-gradient(760px 420px at 88% 6%,${t.main}8C,transparent 62%),radial-gradient(620px 420px at 0% 108%,${t.main}47,transparent 62%),${t.dark}`;
+    }
+  }
+  /** Dibujo decorativo (SVG 1122×630) de cada fondo; null en «Gráfica ascendente» (la usa el dibujo de siempre). Queda lejos del bloque de datos. */
+  function coverDeco(id, b) {
+    const t = tones(b); id = coverId(id);
+    const open = '<svg class="rp-deco rp-deco--bg" viewBox="0 0 1122 630" preserveAspectRatio="xMidYMid slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">';
+    if (id === 'waves') return `${open}<path d="M0 412C280 333 560 491 1122 377V630H0Z" fill="${t.main}" opacity=".5"/><path d="M0 473C280 394 560 552 1122 438V630H0Z" fill="${t.acc}" opacity=".2"/><path d="M0 526C280 447 560 605 1122 491V630H0Z" fill="#fff" opacity=".1"/></svg>`;
+    if (id === 'geo') return `${open}<polygon points="666,0 1122,0 1122,630 421,630" fill="${t.main}" opacity=".45"/><polygon points="859,0 1122,0 1122,377" fill="${t.acc}" opacity=".85"/><polygon points="964,630 1122,630 1122,491" fill="#fff" opacity=".12"/></svg>`;
+    if (id === 'dots') { let d = ''; for (let x = 640; x < 1122; x += 36) for (let y = 18; y < 630; y += 36) { const k = (1122 - x) / 230; d += `<circle cx="${x}" cy="${y}" r="${Math.max(1.2, 4.4 - k).toFixed(1)}" fill="#fff" opacity="${Math.max(0.06, 0.5 - (1122 - x) / 1600).toFixed(2)}"/>`; } return `${open}${d}<rect x="1108" y="0" width="14" height="630" fill="${t.acc}"/></svg>`; }
+    if (id === 'side') return `${open}<rect x="833" y="0" width="289" height="630" fill="${t.main}"/><rect x="824" y="0" width="9" height="630" fill="${t.acc}"/><circle cx="978" cy="494" r="105" fill="none" stroke="#fff" opacity=".22" stroke-width="3"/><circle cx="978" cy="494" r="70" fill="none" stroke="#fff" opacity=".22" stroke-width="3"/><circle cx="978" cy="494" r="35" fill="#fff" opacity=".12"/></svg>`;
+    if (id === 'light') return `${open}<rect x="0" y="0" width="1122" height="14" fill="${t.main}"/><polygon points="1122,630 1122,368 753,630" fill="${t.main}" opacity=".13"/><polygon points="1122,630 1122,490 930,630" fill="${t.acc}" opacity=".35"/></svg>`;
+    return null;
+  }
+
   /* ---------- marca guardada ---------- */
   function normalize(b) {
     if (!b || typeof b !== 'object') return null;
@@ -80,7 +107,7 @@
     const palette = Array.isArray(b.palette) ? b.palette.filter((c) => HEX.test(c)).map((c) => c.toUpperCase()).slice(0, 5) : [];
     const main = HEX.test(b.main || '') ? b.main.toUpperCase() : null, accent = HEX.test(b.accent || '') ? b.accent.toUpperCase() : null;
     if (!logo && !main) return null;
-    return { v: 1, logo, palette, main, accent: accent || (main ? FALLBACK_ACCENT : null) };
+    return { v: 1, logo, palette, main, accent: accent || (main ? FALLBACK_ACCENT : null), cover: coverId(b.cover) };
   }
 
   let current = null;
@@ -89,10 +116,15 @@
   function css(b) {
     if (!b || !b.main) return '';
     const main = b.main, text = textTone(main), dark = darkTone(main), acc = b.accent || FALLBACK_ACCENT;
+    const cv = coverId(b.cover), bg = coverBg(cv, b), at = textTone(acc);
     return `.rp-doc,.rp-preview{--blue:${text};--brand:${main};--brand-accent:${acc};--brand-dark:${dark};}
-.rp-page--cover{background:radial-gradient(760px 420px at 88% 6%,${main}8C,transparent 62%),radial-gradient(620px 420px at 0% 108%,${main}47,transparent 62%),${dark};}
-.rp-page--cover .rp-cover__rule{background:${acc};}.rp-page--cover .rp-cover__eyebrow{color:${acc};}
-.rp-page--cover .rp-cover__sub{color:#fff;opacity:.88;}`;
+.rp-page--cover{background:${bg};}
+.rp-page--cover .rp-cover__rule{background:${acc};}.rp-page--cover .rp-cover__eyebrow{color:${cv === 'light' ? at : acc};}
+.rp-page--cover .rp-cover__sub{color:#fff;opacity:.88;}
+.rp-page--cover[data-cover=light]{color:#14233B;}.rp-page--cover[data-cover=light] .rp-cover__title{color:#14233B;}
+.rp-page--cover[data-cover=light] .rp-cover__sub{color:#55657D;opacity:1;}.rp-page--cover[data-cover=light] .rp-cover__meta dt{color:#55657D;}
+.rp-page--cover[data-cover=light] .rp-cover__meta dd{color:#14233B;}.rp-page--cover[data-cover=light] .rp-cover__by{color:#55657D;}
+.rp-page--cover[data-cover=light] .rp-logo-l{border:1px solid #DFE5F0;}`;
   }
   function applyStyle() {
     const d = root.document; if (!d) return;
@@ -129,5 +161,5 @@
     });
   }
 
-  FP.brand = { contrast, textTone, darkTone, mix, paletteFromPixels, pickRoles, trimBox, normalize, css, set, active, applyStyle, readLogo, HEX, FALLBACK_ACCENT, MAX_STORED };
+  FP.brand = { contrast, textTone, darkTone, mix, paletteFromPixels, pickRoles, trimBox, COVERS, coverId, coverBg, coverDeco, tones, normalize, css, set, active, applyStyle, readLogo, HEX, FALLBACK_ACCENT, MAX_STORED };
 })(typeof window !== 'undefined' ? window : globalThis);
