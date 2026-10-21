@@ -88,13 +88,13 @@
   const wrapLbl = (txt, n) => { const w = String(txt).split(/\s+/), l = ['']; w.forEach((t) => { const cur = l[l.length - 1]; if (!cur) l[l.length - 1] = t; else if ((cur + ' ' + t).length <= n) l[l.length - 1] = cur + ' ' + t; else l.push(t); }); if (l.length > 2) { l[1] = l.slice(1).join(' '); l.length = 2; } return l.map((x) => (x.length > n + 3 ? x.slice(0, n + 2) + '…' : x)); };
   function chartHbar(c) {
     const items = c.items.filter((i) => isNum(i.value)); if (!items.length) return empty(520, 120, 'Sin datos para graficar');
-    const W = 520, rowH = 38, T = 6, H = T + items.length * rowH + 6, labW = 132;
+    const W = 520, rowH = 38, T = 6, H = T + items.length * rowH + 6, labW = 152;
     const vals = items.map((i) => i.value), mn = Math.min(0, ...vals), mx = Math.max(0, ...vals);
     const plotL = labW + 8 + (mn < 0 ? 92 : 0), plotR = W - 8 - (mx > 0 ? 92 : 0), sc = (plotR - plotL) / ((mx - mn) || 1), x0 = plotL - mn * sc;
     let g = `<line x1="${x0}" x2="${x0}" y1="${T}" y2="${H - 4}" stroke="${C.grey}"/>`;
     items.forEach((it, i) => {
       const y = T + i * rowH + 7, w = Math.abs(it.value) * sc, x = it.value >= 0 ? x0 : x0 - w, col = it.value >= 0 ? C.green : C.red;
-      const ln = wrapLbl(it.label, 19); g += `<g><title>${esc(it.label)}</title>${ln.length > 1 ? ln.map((t2, k) => svgT(labW, y + 10 + k * 14, t2, { anchor: 'end', fill: C.ink })).join('') : svgT(labW, y + 17, ln[0], { anchor: 'end', fill: C.ink })}</g>` + `<rect x="${x}" y="${y}" width="${Math.max(2, w)}" height="22" fill="${col}" rx="2"/>`;
+      const ln = wrapLbl(it.label, 21); g += `<g><title>${esc(it.label)}</title>${ln.length > 1 ? ln.map((t2, k) => svgT(labW, y + 10 + k * 14, t2, { anchor: 'end', fill: C.ink })).join('') : svgT(labW, y + 17, ln[0], { anchor: 'end', fill: C.ink })}</g>` + `<rect x="${x}" y="${y}" width="${Math.max(2, w)}" height="22" fill="${col}" rx="2"/>`;
       g += it.value >= 0 ? svgT(x + w + 5, y + 17, `▲ ${sMC(it.value)}`, { fill: col, weight: 700 }) : svgT(x - 5, y + 17, `▼ ${sMC(it.value)}`, { anchor: 'end', fill: col, weight: 700 });
     });
     return wrap(W, H, g, c.title);
