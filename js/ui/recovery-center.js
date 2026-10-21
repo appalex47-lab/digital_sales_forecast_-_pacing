@@ -89,7 +89,7 @@
         ${PV().card('Plan', esc(money(g.plan)), '', 'plan', '', `Plan original del periodo (${rc.ctx.planVersion ? rc.ctx.planVersion.label : 'archivo'})`)}
         ${PV().card('Actual', esc(money(g.actualToDate)), '', 'actual', '', 'Real de los días cerrados del periodo')}
         ${PV().card('Forecast', esc(money(g.base)), '', 'forecast', '', 'Real de días cerrados + forecast del método en uso para días abiertos')}
-        ${PV().card('Forecast gap', esc(fin(g.gapBefore) ? (g.gapBefore > 0 ? `−${money(g.gapBefore)}` : `+${money(-g.gapBefore)}`) : F().DASH), esc(g.noGap ? 'La base alcanza el plan' : 'Falta para el plan'), 'forecast', '', 'Plan − forecast del periodo')}
+        ${PV().card('Forecast gap', esc(fin(g.gapBefore) ? (g.gapBefore > 0 ? `−${money(g.gapBefore)}` : `+${money(Math.abs(g.gapBefore))}`) : F().DASH), esc(g.noGap ? 'La base alcanza el plan' : 'Falta para el plan'), 'forecast', '', 'Plan − forecast del periodo')}
         ${PV().card('Reforecast requerido', esc(money(r ? r.requiredTotal : null)), esc(r && r.key ? `horizonte ${r.key}` : ''), 'reforecast', '', `Fase 4: pendiente del horizonte ${r ? r.horizon || '' : ''}`)}
         ${PV().card('Presión de recuperación', esc(r ? F().signedPercent(r.pressure, 1) : F().DASH), 'Requerido vs plan de esos días')}
       </div>
@@ -157,8 +157,44 @@
     const layer = root.querySelector('.rc-layer'); if (layer) layer.hidden = !any;
   }
 
+  /** Estado por canal: aviso «meta sana, pero hay gap en estos canales» + tarjetas por canal (gap en pesos, de mayor a menor). */
+  function renderStatus(state) {
+    const esc = H().esc, rc = state.rc, box = $('rc-status'), panel = $('rc-status-panel');
+    if (!box || !panel) return;
+    const st = rc.imported ? null : rc.chStatus;
+    const sel = rc.settings.channel;
+    const hide = () => { panel.hidden = true; box.innerHTML = ''; };
+    if (!st || !st.total) return hide();
+    const n = st.withGap.length;
+    if (!n && sel !== 'total') return hide();
+    const unit = { month: 'del mes', week: 'de la semana', year: 'del año', day: 'del día' }[st.periodType] || 'del periodo';
+    const pctTxt = (v) => (fin(v) ? `${(Math.abs(v) * 100).toFixed(1).replace('.0', '')} %` : F().DASH);
+    const totalHealthy = !(st.total.gap > 0);
+    let head;
+    if (!n) head = `<div class="rcs__head rcs__head--ok" role="status"><strong>Todos los canales alcanzan su plan</strong><span>No hace falta recuperar en ${esc(st.periodLabel)}.</span></div>`;
+    else if (totalHealthy) head = `<div class="rcs__head rcs__head--ok" role="status"><div><span class="rcs__eyebrow">Meta ${unit} · sana</span><strong>El total digital alcanza el plan, pero hay gap por recuperar en ${n} ${n === 1 ? 'canal' : 'canales'}</strong>
+      <span>Forecast ${esc(money(st.total.forecast))} vs plan ${esc(money(st.total.plan))} (${esc(signedMoney(st.total.forecast - st.total.plan))}). Lo que sobra en otros canales tapa la brecha de ${st.withGap.map((x) => esc(x.label)).join(' y ')}.</span></div>
+      <div class="rcs__sum"><span>Gap por recuperar</span><b>−${esc(money(st.gapSum))}</b></div></div>`;
+    else head = `<div class="rcs__head rcs__head--bad" role="status"><div><span class="rcs__eyebrow">Meta ${unit} · con gap</span><strong>El total digital tiene gap de ${esc(money(st.total.gap))} y ${n} ${n === 1 ? 'canal lo aporta' : 'canales lo aportan'}</strong>
+      <span>Forecast ${esc(money(st.total.forecast))} vs plan ${esc(money(st.total.plan))}.</span></div><div class="rcs__sum"><span>Gap en canales</span><b>−${esc(money(st.gapSum))}</b></div></div>`;
+    const card = (x) => {
+      const open = sel === x.id, has = x.scenarios + x.actions > 0;
+      const btn = open ? '<span class="ds-badge ds-badge--neutral">Abierto abajo</span>'
+        : `<button type="button" class="btn btn--small ${has ? '' : 'btn--primary'}" data-action="rc-open-channel" data-channel="${esc(x.id)}">${has ? `Ver plan de ${esc(x.label)}` : `Crear plan de ${esc(x.label)}`}</button>`;
+      return `<div class="rcs__card rcs__card--gap${open ? ' is-open' : ''}" data-channel="${esc(x.id)}"><div class="rcs__row"><b>${esc(x.label)}</b><span class="rcs__pill rcs__pill--bad">Falta ${pctTxt(x.pct)}</span></div>
+        <div class="rcs__amt">−${esc(money(x.gap))}</div><div class="rcs__meta">Plan ${esc(money(x.plan))} · forecast ${esc(money(x.forecast))}</div>
+        <div class="rcs__meta">${x.scenarios ? `${x.scenarios} escenario${x.scenarios === 1 ? '' : 's'}` : 'Sin escenarios'} · ${x.actions ? `${x.actions} acci${x.actions === 1 ? 'ón' : 'ones'}` : 'sin acciones'}</div><div>${btn}</div></div>`;
+    };
+    const healthy = st.healthy.length ? `<p class="rcs__ok"><span>Canales sanos:</span> ${st.healthy.map((x) => `<span class="rcs__pill rcs__pill--ok">${esc(x.label)} ${esc(signedPct(x))}</span>`).join(' ')}</p>` : '';
+    panel.hidden = false;
+    box.innerHTML = `${head}${n ? `<h3 class="rcs__title">Canales con gap · de mayor a menor</h3><div class="rcs__grid">${st.withGap.map(card).join('')}</div>` : ''}${healthy}
+      <p class="field__hint">Gap = plan del canal − forecast del canal, mismo cálculo que la brecha de abajo. «Ver plan» cambia el filtro Canal y abre ese canal abajo.</p>`;
+  }
+  function signedPct(x) { const v = x.plan > 0 ? (x.forecast - x.plan) / x.plan : null; return fin(v) ? `${v >= 0 ? '+' : '−'}${(Math.abs(v) * 100).toFixed(1)} %` : ''; }
+
   function render(state) {
     renderContext(state);
+    renderStatus(state);
     renderGap(state);
     renderChain(state);
     FP.scenarioView.render(state);

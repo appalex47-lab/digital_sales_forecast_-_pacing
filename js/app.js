@@ -577,6 +577,27 @@
     return { type: 'segment', dimension, segment, segmentLabel: sg ? sg.label : segment };
   }
 
+  /** Estado por canal del mismo periodo: plan, forecast y gap de cada canal (mismo cálculo del gap total, sin simular cambios). Solo lee. */
+  function channelStatus({ run, rf, period, applyTo, ctx }) {
+    try {
+      const one = (id, label) => {
+        const c = id === ctx.channel ? ctx : FP.scenarioEngine.buildContext({ run, rf, channel: id, period, applyTo, store: state.store });
+        const b = FP.scenarioEngine.simulate(c, { changes: {} });
+        if (!b.valid) return { id, label, valid: false };
+        const g = b.gap, plan = g.plan, forecast = g.base, gap = g.gapBefore;
+        const same = (x) => x.context && x.context.period && x.context.period.start === ctx.period.start && x.context.period.end === ctx.period.end && x.context.channel === id;
+        const nSc = state.rc.scenarioStore ? state.rc.scenarioStore.scenarios.filter(same).length : 0;
+        const nAc = state.rc.plan ? state.rc.plan.actions.filter((a) => a.channel === id && a.period && a.period.start === ctx.period.start && a.period.end === ctx.period.end).length : 0;
+        return { id, label, valid: true, plan, forecast, gap, pct: plan > 0 ? gap / plan : null, scenarios: nSc, actions: nAc };
+      };
+      const total = one('total', 'Total digital');
+      const channels = C.channels.map((c) => one(c.id, c.label)).filter((x) => x.valid);
+      const withGap = channels.filter((x) => x.gap > 0).sort((a, b) => b.gap - a.gap);   // por tamaño del gap en pesos
+      const healthy = channels.filter((x) => !(x.gap > 0)).sort((a, b) => a.gap - b.gap);
+      return { total: total.valid ? total : null, withGap, healthy, gapSum: withGap.reduce((t, x) => t + x.gap, 0), periodType: ctx.period.type, periodLabel: ctx.period.label };
+    } catch (e) { return null; }
+  }
+
   /** Contexto, diagnóstico de origen, análisis y vista previa. Solo lee plan/actual/forecast/reforecast. */
   function ensureRecovery() {
     const rc = state.rc;
@@ -600,7 +621,8 @@
           channel: s.channel, metric: 'revenue', method: C.diagnostics.attributionMethod, run, rf, store: state.store, quality: state.quality });
       }
       rc.stampRun = run; rc.stampRf = rf;
-    }
+      rc.chStatus = channelStatus({ run, rf, period, applyTo: s.applyTo, ctx });
+    } else rc.chStatus = null;
     rc.ctx = ctx;
     rc.diagnosis = diagnosis;
     rc.base = FP.scenarioEngine.simulate(ctx, { changes: {} });
@@ -3134,6 +3156,10 @@
       const s = state.rc.settings;
       s[el.dataset.key] = el.value;
       saveRecoverySettings(); render();
+    },
+    'rc-open-channel'(el) {
+      state.rc.settings.channel = el.dataset.channel; saveRecoverySettings(); render();
+      const g = document.getElementById('rc-gap'); if (g && g.scrollIntoView) g.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
     'rc-ptype'(el) { state.rc.settings.periodType = el.dataset.value; state.rc.settings.periodKey = null; saveRecoverySettings(); render(); },
     'rc-constraint'(el) {
