@@ -297,6 +297,13 @@
     const r = await SL.fetchCsv(n.csvUrl);
     if (!r.ok) { if (!quiet) FP.ui.toast(r.error); return { ok: false, error: r.error }; }
     const file = new File([r.text], SL.fileName(link.label, type), { type: 'text/csv' });
+    // Una nueva «Actualizar» SUSTITUYE la revisión pendiente de esa misma hoja (si no, se apilan y el reemplazo queda en la vieja)
+    const pend = state.staging.items.filter((i) => i.staged.fileName === file.name && i.staged.dataType === type && i.status !== 'saving' && !i.busy);
+    if (pend.length) {
+      pend.forEach((i) => { if (i.remote) FP.importWorker.drop(i.remote.jobId); });
+      state.staging.items = state.staging.items.filter((i) => !pend.includes(i));
+      if (!quiet) FP.ui.toast('Había una revisión pendiente de esta hoja: se sustituyó por la versión recién traída.');
+    }
     const card = document.getElementById(`up-${type}`);
     await stageFiles([file], type, card ? card.closest('.upload-card').querySelector('.upload-card__state') : null);
     // Actualizar desde Sheets: por omisión solo entran las filas nuevas o cambiadas (la hoja publicada siempre baja completa)
