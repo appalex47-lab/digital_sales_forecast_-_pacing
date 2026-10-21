@@ -42,7 +42,8 @@
   const pct = (v, d = 1) => (isNum(v) ? `${(v * 100).toFixed(d)} %` : NA);
   const spct = (v, d = 1) => (isNum(v) ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(d)} %` : NA);
   const smoneyC = (v) => (isNum(v) ? `${v > 0 ? '+' : ''}${moneyC(v)}` : NA);
-  const smoney = (v, d = 0) => (isNum(v) ? `${v > 0 ? '+' : ''}${money(v, d)}` : NA);
+  const smoneyExact = (v, d = 0) => (isNum(v) ? `${v > 0 ? '+' : ''}${money(v, d)}` : NA);   // anexo y exports: monto completo
+  const smoney = (v) => smoneyC(v);   // texto de las láminas: $859K, $5.11M (legible de un vistazo)
   const int = (v) => (isNum(v) ? nf({ maximumFractionDigits: 0 }).format(v) : NA);
   const num2 = (v, d = 2) => (isNum(v) ? nf({ maximumFractionDigits: d }).format(v) : NA);
   const pp = (v) => (isNum(v) ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(1)} pp` : NA);
@@ -60,7 +61,7 @@
   const rangeLabel = (a, b) => (!a || !b ? null : a === b ? dateLabel(a) : `${dShort(a)} – ${dateLabel(b)}`);
   const addDay = (iso, n) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return null; const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + n)); return d.toISOString().slice(0, 10); };
   const periodEnd = (per) => { if (!per) return null; if (per.type === 'year') return `${per.key}-12-31`; if (per.type === 'month' && /^\d{4}-\d{2}$/.test(per.key || '')) { const [y, m] = per.key.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); } return null; };
-  const FMT = { smoneyC, pct2, text: (v) => (v === null || v === undefined || v === '' ? NA : String(v)), money, moneyC, smoney, pct, spct, int, num2, pp, date: dateLabel };
+  const FMT = { smoneyC, pct2, text: (v) => (v === null || v === undefined || v === '' ? NA : String(v)), money, moneyC, smoney: smoneyExact, pct, spct, int, num2, pp, date: dateLabel };
   const fmt = (kind, v) => (FMT[kind] || FMT.text)(v);
   const chLabel = (id) => CH_LABEL[id] || id || NA;
   const absOr = (v) => (isNum(v) ? Math.abs(v) : null);
@@ -418,8 +419,9 @@
     if (!months.length) return omit('customers', 'Clientes, recurrencia y LTV', 'No hay meses con clientes identificados.');
     const reliableNew = months.every((m) => m.reliableNew);
     const last = months[months.length - 1];
-    const pooled = (c.pooled || []).filter((p) => p.mature > 0 && isNum(p.repeatRate));
-    const retention = pooled.map((p) => ({ window: `${p.days} días`, mature: p.mature, repeat: p.repeatRate, ltv: p.ltv }));
+    // todas las ventanas (30, 60, 90, 180, 365): la que aún no tiene clientes con ventana completa se muestra como «No disponible», no se esconde
+    const pooled = (c.pooled || []).filter((p) => isNum(p.days));
+    const retention = pooled.map((p) => (p.mature > 0 && isNum(p.repeatRate) ? { window: `${p.days} días`, mature: p.mature, repeat: p.repeatRate, ltv: p.ltv } : { window: `${p.days} días`, mature: p.mature > 0 ? p.mature : 0, repeat: null, ltv: null }));
     const filtered = Boolean(c.filtered);
     const cutIso = s.run && s.run.cutoff, inProgress = Boolean(cutIso && last.key === cutIso.slice(0, 7) && cutIso < periodEnd({ type: 'month', key: last.key }));
     const mLab = (k) => (monthName(k) || k).split(' ')[0].toLowerCase(), dim = (k) => new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7), 0)).getUTCDate();
@@ -473,12 +475,14 @@
 
   /* Tráfico y conversión: panorama (totales contra la referencia, mezcla por canal / dispositivo / tipo de cliente y semanas) y campañas.
      Solo reordena lo que el diagnóstico ya calculó por segmento (current, baseline, metrics): no hay fórmulas nuevas. */
-  const MEDIUM_NAME = { '(none)': 'Directo', '(direct)': 'Directo', cpc: 'Pago (cpc)', organic: 'Orgánico', referral: 'Referido', email: 'Correo' };
+  const MEDIUM_NAME = { '(none)': 'Directo', '(direct)': 'Directo', cpc: 'Pago', paid: 'Pago', organic: 'Orgánico', referral: 'Referido', email: 'Correo', wa: 'WhatsApp', WA: 'WhatsApp' };
+  /** Solo para mostrar: etiquetas del archivo de segmentos a español claro para quien no usa la herramienta («Sin dato (not set)» → «Sin dato»). */
+  const dispLabel = (t) => { const v = String(t == null ? '' : t); return MEDIUM_NAME[v] || MEDIUM_NAME[v.toLowerCase()] || v.replace(/\s*\(not set\)/i, '').trim() || 'Sin dato'; };
   const mixRows = (dim, nameMap) => {
     const g = dim.groups.filter((x) => x.current && isNum(x.current.trafficVolume) && x.baseline && isNum(x.baseline.trafficVolume));
     const T = g.reduce((a, x) => a + x.current.trafficVolume, 0), B = g.reduce((a, x) => a + x.baseline.trafficVolume, 0);
     if (!g.length || !(T > 0) || !(B > 0)) return null;
-    return { id: dim.dimension, label: dim.label, rows: g.map((x) => ({ label: nameMap && nameMap[x.label] ? nameMap[x.label] : x.label, traffic: x.current.trafficVolume, share: x.current.trafficVolume / T, baseShare: x.baseline.trafficVolume / B, cr: x.current.conversionRate, crChg: x.metrics && x.metrics.conversionRate ? x.metrics.conversionRate.deltaPct : null, trafficChg: x.metrics && x.metrics.trafficVolume ? x.metrics.trafficVolume.deltaPct : null, aov: x.current.aov, revenue: x.current.revenue })).sort((a, b) => b.traffic - a.traffic) };
+    return { id: dim.dimension, label: dim.label, rows: g.map((x) => ({ label: dispLabel(nameMap && nameMap[x.label] ? nameMap[x.label] : x.label), traffic: x.current.trafficVolume, share: x.current.trafficVolume / T, baseShare: x.baseline.trafficVolume / B, cr: x.current.conversionRate, crChg: x.metrics && x.metrics.conversionRate ? x.metrics.conversionRate.deltaPct : null, trafficChg: x.metrics && x.metrics.trafficVolume ? x.metrics.trafficVolume.deltaPct : null, aov: x.current.aov, revenue: x.current.revenue })).sort((a, b) => b.traffic - a.traffic) };
   };
   function trafficOverview(dims, weekly) {
     const by = Object.fromEntries(dims.map((d) => [d.dimension, d]));
@@ -560,8 +564,8 @@
       ],
       scenarios: scen.map((x) => ({ name: x.name, type: x.type || null, channel: x.channel ? chLabel(x.channel) : null, impact: x.impact, tag: TAG.est })),
       actions: actions.map((a) => ({ title: a.title, channel: a.channel ? chLabel(a.channel) : null, owner: a.owner || null, status: a.status || null, start: a.startDate || null, end: a.endDate || null, impact: a.expectedImpact && isNum(a.expectedImpact.incrementalValue) ? a.expectedImpact.incrementalValue : null })),
-      progress: isNum(h.actualToDate) && h.target > 0 ? { real: h.actualToDate, target: h.target, pct: h.actualToDate / h.target } : null,
-      notes: [netGap !== null ? `La brecha neta del total es meta − real (${moneyC(netGap)}). Los canales por debajo de su meta suman ${moneyC(h.remaining)} por cubrir; el excedente de los demás (${moneyC(h.surplus)}) no se resta.` : null, netGap !== null ? 'El requerimiento diario neto es meta − real dividido entre los días restantes; el de los canales rezagados es el ritmo que calcula el motor por canal. Ninguno es una proyección.' : 'El requerimiento diario es lo que tendría que ocurrir para cumplir la meta; no es una proyección.', scen.length ? 'Los escenarios guardados son simulaciones con supuestos, no resultados.' : null, actions.length ? null : 'No hay acciones registradas en el plan de acción; no se muestran responsables ni fechas.'].filter(Boolean),
+      progress: isNum(h.actualToDate) && h.target > 0 ? { real: h.actualToDate, target: h.target, pct: h.actualToDate / h.target, label: mk ? `Avance hacia el plan de ${periodLow(mk)}` : 'Avance hacia la meta anual' } : null,
+      notes: [netGap !== null ? `La brecha neta del total es meta − real (${moneyC(netGap)}). Los canales por debajo de su meta suman ${moneyC(h.remaining)} por cubrir; el excedente de los demás (${moneyC(h.surplus)}) no se resta.` : null, netGap !== null ? 'El requerimiento diario neto es meta − real dividido entre los días restantes; el de los canales rezagados es el ritmo que calcula el motor por canal. Ninguno es una proyección.' : 'El requerimiento diario es lo que tendría que ocurrir para cumplir la meta; no es una proyección.', scen.length ? 'Los escenarios guardados son simulaciones con supuestos, no resultados.' : null, null].filter(Boolean),
       annex: false,
       sources: ['Reforecast', 'Recovery Center'], tags: [TAG.calc, TAG.est]
     });
@@ -665,7 +669,7 @@
   const focusSince = (f) => (f.sinceLabel ? `cae desde ${f.sinceLabel} (${f.periods} períodos seguidos)` : null);
   const restPhrase = (f) => (!isNum(f.restChange) ? null : Math.abs(f.restChange) < 0.03 ? 'el resto del negocio se mantiene' : f.restChange > 0 ? `el resto del negocio crece ${pct(f.restChange, 0)}` : `el resto del negocio baja ${pct(Math.abs(f.restChange), 0)}`);
   const yoyPhrase = (f) => (f.yoy ? `Frente a ${f.yoy.period}, ${f.yoy.pct < 0 ? 'cae' : 'crece'} ${pct(Math.abs(f.yoy.pct), 0)}.` : null);
-  const actionsOn = (R, f) => { const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : []; if (!acts.length) return 'No hay acciones registradas en el plan.'; const on = acts.filter((a) => String(a.title).toLowerCase().includes(String(f.entity).toLowerCase())); return on.length ? `Hay ${on.length} acción${on.length === 1 ? '' : 'es'} registrada${on.length === 1 ? '' : 's'} sobre ${f.entity}.` : (acts.length === 1 ? `La acción registrada en el plan no es sobre ${f.entity}.` : `Ninguna de las ${acts.length} acciones registradas en el plan es sobre ${f.entity}.`); };
+  const actionsOn = (R, f) => { const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : []; if (!acts.length) return ''; const on = acts.filter((a) => String(a.title).toLowerCase().includes(String(f.entity).toLowerCase())); return on.length ? `Hay ${on.length} acción${on.length === 1 ? '' : 'es'} registrada${on.length === 1 ? '' : 's'} sobre ${f.entity}.` : (acts.length === 1 ? `La acción registrada en el plan no es sobre ${f.entity}.` : `Ninguna de las ${acts.length} acciones registradas en el plan es sobre ${f.entity}.`); };
 
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
   /** «en septiembre (último mes completo)»: a qué período se refiere la señal de Evolución (en lectura anual es el último mes completo, no el corte). */
@@ -739,7 +743,7 @@
     if (R.movers) {
       const top = (arr) => [...arr].sort((a, b) => a.rank - b.rank).slice(0, 3).map((i) => ({ name: i.name, value: i.value, type: i.type }));
       if (R.movers.plus.length) { stand.list = top(R.movers.plus); stand.title = 'Qué suma'; stand.big = ''; stand.unit = ''; stand.text = R.best ? `${R.best.channel} es el canal con mayor avance${R.sel ? ' sobre la referencia' : ' sobre el plan'}.` : (by.categories && by.categories.headline ? stand.text : ''); }
-      if (R.movers.minus.length) { move.list = top(R.movers.minus); move.title = 'Qué resta'; move.big = ''; move.unit = ''; move.text = F ? `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${fw.length ? `; revisar primero ${fw.join(', ')}` : ''}. ${actionsOn(R, F)}` : (acts.length ? `Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : 'No hay acciones registradas en el plan.'); }
+      if (R.movers.minus.length) { move.list = top(R.movers.minus); move.title = 'Qué resta'; move.big = ''; move.unit = ''; move.text = F ? `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${fw.length ? `; revisar primero ${fw.join(', ')}` : ''}. ${actionsOn(R, F)}` : (acts.length ? `Hay ${acts.length} acción${acts.length === 1 ? '' : 'es'} registrada${acts.length === 1 ? '' : 's'} en el plan.` : ''); }
     }
     return page('closing', 'Cierre ejecutivo', { question: 'Qué nos llevamos de este periodo', headline: '', blocks: [where, stand, move, vig], sources: [], tags: [] });
   }
