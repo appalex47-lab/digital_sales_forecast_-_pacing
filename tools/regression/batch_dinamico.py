@@ -33,6 +33,7 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
    cover:g('cover').headline||'',
    drv:{st:g('drivers').status,h:g('drivers').headline||'',title:(g('drivers').status==='included'?FP.reportCopy.title(g('drivers'),r):'')||'',rows:(((g('drivers').tables||[])[0]||{rows:[]}).rows||[]).map(x=>[x.driver,x.contribution])},
    trN:{h:g('trends').headline||'',kd:((g('trends').kpis||[]).find(k=>k.id==='drag')||{}).sub||'',kc:((g('trends').kpis||[]).find(k=>k.id==='comp')||{}).sub||'',td:((g('trends').tables||[])[0]||{}).total,tc:((g('trends').tables||[])[1]||{}).total,rows:((g('trends').tables||[])[0]||{rows:[]}).rows.length},
+   chs:(()=>{const m=g('movers');return {minus:m.channelSums&&m.channelSums.minus,plus:m.channelSums&&m.channelSums.plus,gaps:rows.filter(x=>!x._total).map(x=>x.gap),tot:(rows.find(x=>x._total)||{}).gap,st:m.status}})(),
    sumNotes:(g('summary').items||[]).map(x=>x.note||'').join(' | '),trCtx:g('trends').ctx||'',cvH:g('customers').headline||'',
    sumTitle:(FP.reportCopy.title(g('summary'),r)||''),clH:(FP.reportCopy.title(g('closing'),r)||''),
    sumN:g('summary').narrative||'',sumT:(g('summary').items||[]).map(x=>x.title).join(' | '),sumH:g('summary').headline||'',
@@ -141,6 +142,14 @@ async def main():
         chk('DX-12 el total de la tarjeta, de la tabla y del titular coinciden', tr0['td'] == n0(tr0['kd']) and tr0['tc'] == n0(tr0['kc']) and f"{tr0['td']} " in tr0['h'].replace('\xa0', ' '), tr0)
         chk('DX-12 al haber más elementos en el análisis completo, el total sube en las tres partes (no se queda en el tope)', n0(tr3['kd']) == n0(tr0['kd']) + 5 and n0(tr3['kc']) == n0(tr0['kc']) + 3 and tr3['td'] == tr0['td'] + 5 and tr3['tc'] == tr0['tc'] + 3 and f"{tr3['td']} " in tr3['h'], (tr0, tr3))
         chk('DX-12 las filas visibles de la tabla siguen siendo las mismas (solo cambia el conteo)', tr3['rows'] == tr0['rows'], (tr0['rows'], tr3['rows']))
+        # ---- DX-13 · los totales de «Lo que resta / suma» de canales cubren todos los canales
+        for nm, sp in [('base', {}), ('Llamadas ×4 (un canal que antes quedaba fuera de la lista)', {'scale': {'llamadas': 4.0}}), ('todo ×0.7', {'scale': {c: 0.7 for c in CH}}), ('todo ×1.5', {'scale': {c: 1.5 for c in CH}})]:
+            r = await run(sp); cs = r['chs']
+            if cs['st'] != 'included': continue
+            exp_m = sum(g for g in cs['gaps'] if g < 0); exp_p = sum(g for g in cs['gaps'] if g > 0)
+            chk(f'DX-13 {nm}: el total de canales que restan = suma de todos los canales negativos', (cs['minus'] is None and exp_m == 0) or abs((cs['minus'] or 0) - exp_m) < 1, (cs, exp_m))
+            chk(f'DX-13 {nm}: el total de canales que suman = suma de todos los canales positivos', (cs['plus'] is None and exp_p == 0) or abs((cs['plus'] or 0) - exp_p) < 1, (cs, exp_p))
+            chk(f'DX-13 {nm}: resta + suma = resultado total frente al plan', cs['tot'] is None or abs((cs['minus'] or 0) + (cs['plus'] or 0) - cs['tot']) < 1, cs)
         chk('DX-10 sin errores de redacción conocidos: «superóron», «frente a el», mes abreviado con año, sentido del plan diario', not re.search(r'superóron|frente a el |(?<!\d )\b(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic) \d{4}\b', base['all'] + base['sumN']) and not ('no una predicción' in base['all'] and 'no una proyección' in base['sumN'] and 'no una predicción' in base['sumN']), base['sumN'][:400])
         chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → solo el mes y año, abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and ((re.search(r': \w+ \d{4}$', base['cover']) and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'acumulado' in base['cover'])), base['cover'])
         yr0 = str(int(re.search(r'\d{4}', json.dumps(base['cover'])) .group(0))) if re.search(r'\d{4}', base['cover']) else '2026'
