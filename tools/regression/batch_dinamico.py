@@ -23,6 +23,7 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
  if(spec.drv&&i.diag&&i.diag.level1Drivers){const M={traffic:'trafficVolume',cr:'conversionRate',aov:'aov'};let s=0;i.diag.level1Drivers.forEach(x=>{const k=Object.keys(M).find(z=>M[z]===x.driver);if(k&&spec.drv[k]!=null){x.contribution=spec.drv[k]}s+=x.contribution});if(i.diag.gap){i.diag.gap.abs=s;if(i.diag.gap.baseline)i.diag.gap.pct=s/i.diag.gap.baseline}}
  if(spec.swapDrag&&i.focusData&&i.focusData.category&&i.focusData.category.priorities){const d=i.focusData.category.priorities.drag;if(d&&d.length>1)[d[0],d[1]]=[d[1],d[0]]}
  if(spec.noDrag&&i.focusData&&i.focusData.category&&i.focusData.category.priorities){i.focusData.category.priorities.drag=[]}
+ if(spec.addAll&&i.trend&&i.trend.priorities){const P=i.trend.priorities;P.all=(P.all||[]).slice();['drag','compensate'].forEach(k=>{for(let n=0;n<(spec.addAll[k]||0);n++)P.all.push({type:k,impact:k==='drag'?-1:1,entity:'x'+k+n})})}
  if(spec.cutoff)i.run.cutoff=spec.cutoff;
  if(spec.missing!=null)CH.concat(['total']).forEach(c=>{const S=c==='total'?i.run.total:i.run.channels[c];if(S&&S.annual)S.annual.missingActualDays=spec.missing});
  const r=FP.reportBuilder.build.__orig(i);const g=id=>r.pages.find(p=>p.id===id)||{};
@@ -31,6 +32,7 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
    kreal:((pc.kpis||[]).find(k=>k.id==='real')||{}).value,
    cover:g('cover').headline||'',
    drv:{st:g('drivers').status,h:g('drivers').headline||'',title:(g('drivers').status==='included'?FP.reportCopy.title(g('drivers'),r):'')||'',rows:(((g('drivers').tables||[])[0]||{rows:[]}).rows||[]).map(x=>[x.driver,x.contribution])},
+   trN:{h:g('trends').headline||'',kd:((g('trends').kpis||[]).find(k=>k.id==='drag')||{}).sub||'',kc:((g('trends').kpis||[]).find(k=>k.id==='comp')||{}).sub||'',td:((g('trends').tables||[])[0]||{}).total,tc:((g('trends').tables||[])[1]||{}).total,rows:((g('trends').tables||[])[0]||{rows:[]}).rows.length},
    sumNotes:(g('summary').items||[]).map(x=>x.note||'').join(' | '),trCtx:g('trends').ctx||'',cvH:g('customers').headline||'',
    sumTitle:(FP.reportCopy.title(g('summary'),r)||''),clH:(FP.reportCopy.title(g('closing'),r)||''),
    sumN:g('summary').narrative||'',sumT:(g('summary').items||[]).map(x=>x.title).join(' | '),sumH:g('summary').headline||'',
@@ -133,6 +135,12 @@ async def main():
         mon0 = base['pac']['mon'].split(' ')[0].lower() if base['pac']['mon'] else ''
         chk('DX-8 base: la narrativa nombra el mes del pacing', mon0 and mon0 in base['sumN'].lower(), (mon0, base['sumN'][:200]))
         chk('DX-9 el resumen y el cierre no abrevian el mes («Sep 2026» / «Sep 21–27»): usan el nombre completo', not re.search(r'\b(Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic) (\d{4}|\d{1,2}\s*[–-])', base['sumN'] + ' ' + base['sumT'] + ' ' + ' '.join(c['x'] or '' for c in base['cl'])), base['sumN'][:300])
+        # ---- DX-12 · totales reales de productos que restan y suman (no el tope de 12 del motor)
+        n0 = lambda s: int(re.match(r'\d+', s).group(0)) if re.match(r'\d+', s or '') else 0
+        tr0 = base['trN']; a3 = await run({'addAll': {'drag': 5, 'compensate': 3}}); tr3 = a3['trN']
+        chk('DX-12 el total de la tarjeta, de la tabla y del titular coinciden', tr0['td'] == n0(tr0['kd']) and tr0['tc'] == n0(tr0['kc']) and f"{tr0['td']} " in tr0['h'].replace('\xa0', ' '), tr0)
+        chk('DX-12 al haber más elementos en el análisis completo, el total sube en las tres partes (no se queda en el tope)', n0(tr3['kd']) == n0(tr0['kd']) + 5 and n0(tr3['kc']) == n0(tr0['kc']) + 3 and tr3['td'] == tr0['td'] + 5 and tr3['tc'] == tr0['tc'] + 3 and f"{tr3['td']} " in tr3['h'], (tr0, tr3))
+        chk('DX-12 las filas visibles de la tabla siguen siendo las mismas (solo cambia el conteo)', tr3['rows'] == tr0['rows'], (tr0['rows'], tr3['rows']))
         chk('DX-10 sin errores de redacción conocidos: «superóron», «frente a el», mes abreviado con año, sentido del plan diario', not re.search(r'superóron|frente a el |(?<!\d )\b(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic) \d{4}\b', base['all'] + base['sumN']) and not ('no una predicción' in base['all'] and 'no una proyección' in base['sumN'] and 'no una predicción' in base['sumN']), base['sumN'][:400])
         chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → solo el mes y año, abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and ((re.search(r': \w+ \d{4}$', base['cover']) and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'acumulado' in base['cover'])), base['cover'])
         yr0 = str(int(re.search(r'\d{4}', json.dumps(base['cover'])) .group(0))) if re.search(r'\d{4}', base['cover']) else '2026'

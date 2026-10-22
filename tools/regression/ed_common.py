@@ -8,7 +8,7 @@ PATCH = """(()=>{const o=FP.reforecastEngine.runReforecast;if(o.__ed)return;cons
 const t=r.total.horizon;const S=(k)=>ids.reduce((x,c)=>x+(r.channels[c].horizon[k]||0),0);t.remaining=S('remaining');t.surplus=S('surplus');}}catch(e){}return r};w.__ed=true;FP.reforecastEngine.runReforecast=w})()"""
 NUM = """(()=>{const out=[];const walk=(v,p)=>{if(v===null||v===undefined)return;if(typeof v==='number'){out.push([p,Number.isFinite(v)?v:String(v)]);return}
   if(Array.isArray(v)){v.forEach((x,i)=>walk(x,p+'['+i+']'));return}
-  if(typeof v==='object'){Object.keys(v).sort().forEach(k=>{if(k==='tags'||k==='generatedAt')return;walk(v[k],p+'.'+k)})}};
+  if(typeof v==='object'){Object.keys(v).sort().forEach(k=>{if(k==='tags'||k==='generatedAt'||(k==='total'&&v.unit!==undefined))return;walk(v[k],p+'.'+k)})}};
   const r=FP.app.state.rp.report;r.pages.forEach(pg=>walk(pg,pg.id));return {ids:r.pages.map(p=>p.id),omitted:r.omitted.map(o=>o.id),nums:out}})()"""
 async def boot(b, patch=False):
     q = await new_page(b, 1280, 900)
