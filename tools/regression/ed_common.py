@@ -20,9 +20,9 @@ async def boot(b, patch=False):
         await q.evaluate("FP.app.state.fc.settings.referenceDate='2026-09-22';FP.app.state.fc.run=null;FP.app.state.rf.run=null"); await q.evaluate(PATCH)
     return q
 async def generate(q):
-    await q.goto(U + '#presentacion'); await q.wait_for_selector('[data-action="rp-generate"]'); await q.click('[data-action="rp-generate"]'); await q.wait_for_timeout(300)
+    await q.goto(U + '#presentacion'); await q.wait_for_selector('[data-action="rp-generate"]'); await q.evaluate("window.__edIn=null"); await q.click('[data-action="rp-generate"]'); await q.wait_for_timeout(300)
     if await q.query_selector('[data-action="rp-gap-go"]'): await q.click('[data-action="rp-gap-go"]')
-    await q.wait_for_function("FP.app.state.rp.status==='ready'||FP.app.state.rp.status==='error'", timeout=120000)
+    await q.wait_for_function("window.__edIn&&(FP.app.state.rp.status==='ready'||FP.app.state.rp.status==='error')", timeout=120000)
     return await q.evaluate("FP.app.state.rp.status")
 async def month_prev(q):
-    await q.evaluate("(()=>{const s=FP.app.state.dx.settings;const c=FP.app.state.fc.run.cutoff;const d=new Date(c.slice(0,7)+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()-1);s.periodType='month';s.periodKey=d.toISOString().slice(0,7);FP.app.state.dx.run=null})")
+    await q.evaluate("(()=>{const s=FP.app.state.dx.settings;const c=(window.__edIn&&window.__edIn.selection&&window.__edIn.selection.periodKey)||FP.app.state.fc.run.cutoff;const d=new Date(c.slice(0,7)+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()-1);s.periodType='month';s.periodKey=d.toISOString().slice(0,7);FP.app.state.dx.run=null})")
