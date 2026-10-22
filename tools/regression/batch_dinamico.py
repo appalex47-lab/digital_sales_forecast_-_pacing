@@ -23,6 +23,8 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
  if(spec.drv&&i.diag&&i.diag.level1Drivers){const M={traffic:'trafficVolume',cr:'conversionRate',aov:'aov'};let s=0;i.diag.level1Drivers.forEach(x=>{const k=Object.keys(M).find(z=>M[z]===x.driver);if(k&&spec.drv[k]!=null){x.contribution=spec.drv[k]}s+=x.contribution});if(i.diag.gap){i.diag.gap.abs=s;if(i.diag.gap.baseline)i.diag.gap.pct=s/i.diag.gap.baseline}}
  if(spec.swapDrag&&i.focusData&&i.focusData.category&&i.focusData.category.priorities){const d=i.focusData.category.priorities.drag;if(d&&d.length>1)[d[0],d[1]]=[d[1],d[0]]}
  if(spec.noDrag&&i.focusData&&i.focusData.category&&i.focusData.category.priorities){i.focusData.category.priorities.drag=[]}
+ if(spec.cutoff)i.run.cutoff=spec.cutoff;
+ if(spec.missing!=null)CH.concat(['total']).forEach(c=>{const S=c==='total'?i.run.total:i.run.channels[c];if(S&&S.annual)S.annual.missingActualDays=spec.missing});
  const r=FP.reportBuilder.build.__orig(i);const g=id=>r.pages.find(p=>p.id===id)||{};
  const pc=g('pacing');const rows=((pc.tables||[])[0]||{rows:[]}).rows;
  return {ids:r.pages.filter(p=>p.status==='included').map(p=>p.id),pac:{st:pc.status,h:pc.headline||'',mon:pc.monthLabel||'',period:pc.periodLabel||''},rows:rows.map(x=>({ch:x.channel,gap:x.gap,tot:!!x._total,real:x.real})),
@@ -122,7 +124,15 @@ async def main():
         # ---- períodos: el texto habla del período realmente mostrado
         mon0 = base['pac']['mon'].split(' ')[0].lower() if base['pac']['mon'] else ''
         chk('DX-8 base: la narrativa nombra el mes del pacing', mon0 and mon0 in base['sumN'].lower(), (mon0, base['sumN'][:200]))
-        chk('DX-8 base: el título de portada habla de acumulado, de ese mes y de corte', 'acumulado' in base['cover'] and mon0 in base['cover'].lower() and ('al corte' in base['cover']), base['cover'])
+        chk('DX-9 el resumen y el cierre no abrevian el mes («Sep 2026» / «Sep 21–27»): usan el nombre completo', not re.search(r'\b(Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic) (\d{4}|\d{1,2}\s*[–-])', base['sumN'] + ' ' + base['sumT'] + ' ' + ' '.join(c['x'] or '' for c in base['cl'])), base['sumN'][:300])
+        chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → solo el mes y año, abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and ((re.search(r': \w+ \d{4}$', base['cover']) and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'acumulado' in base['cover'])), base['cover'])
+        yr0 = str(int(re.search(r'\d{4}', json.dumps(base['cover'])) .group(0))) if re.search(r'\d{4}', base['cover']) else '2026'
+        mm = {'enero':'01','febrero':'02','marzo':'03','abril':'04','mayo':'05','junio':'06','julio':'07','agosto':'08','septiembre':'09','octubre':'10','noviembre':'11','diciembre':'12'}[mon0]
+        ky = await q.evaluate("window.__edIn.run.year")
+        ab = await run({'cutoff': f'{ky}-{mm}-10'}); ce = await run({'cutoff': f'{ky}-{mm}-28'}); cz = await run({'cutoff': f'{ky}-12-31'})
+        chk('DX-8 mes abierto (corte a mitad de mes): «acumulado … al corte y cierre estimado»', 'acumulado de ' + mon0 in ab['cover'].lower() and 'al corte y cierre estimado' in ab['cover'], ab['cover'])
+        chk('DX-8 mes cerrado (corte ≥ fin de mes): solo el mes, sin «al corte» ni «acumulado»', mon0 + ' ' + str(ky) in cz['cover'].lower() and 'resultados' not in cz['cover'] and 'al corte' not in cz['cover'] and 'acumulado' not in cz['cover'], cz['cover'])
+
         # mes sin datos de pacing (agosto en los datos de prueba): no se conserva ninguna conclusión contra el plan
         await month_prev(q); await generate(q); pv = await run({})
         mon1 = (re.search(r'(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)', pv['cover'].lower()) or [None, ''])[1]
@@ -132,7 +142,10 @@ async def main():
         chk('DX-6 período sin pacing: el reporte se construye sin errores y sin textos rotos', not re.search(r'undefined|NaN|\[object', pv['all']), pv['all'][:200])
         await q.evaluate("(()=>{Object.assign(FP.app.state.dx.settings,{periodType:'year',periodKey:String(FP.app.state.year)});FP.app.state.dx.run=null})()")
         await generate(q); yr = await run({})
-        chk('DX-8 período anual: el título de portada pasa a «acumulado 2026 al corte» y ya no nombra el mes', 'acumulado' in yr['cover'] and 'al corte' in yr['cover'] and mon0 not in yr['cover'].lower(), yr['cover'])
+        chk('DX-8 período anual (corte antes de fin de año): «acumulado 2026 al corte» y ya no nombra el mes', 'acumulado' in yr['cover'] and 'al corte' in yr['cover'] and mon0 not in yr['cover'].lower(), yr['cover'])
+        yc = await run({'cutoff': f'{ky}-12-31', 'missing': 0}); ym = await run({'cutoff': f'{ky}-12-31', 'missing': 12})
+        chk('DX-8 año completo (corte fin de año, sin días faltantes): sin «al corte»', yc['cover'].endswith(f': {ky}') and 'al corte' not in yc['cover'], yc['cover'])
+        chk('DX-8 año con días sin dato: vuelve «al corte»', 'al corte' in ym['cover'], ym['cover'])
         chk('DX-8 período anual: la narrativa habla del negocio (no de un mes) y no nombra el mes anterior', 'el negocio' in yr['sumN'] and mon0 not in yr['sumN'].lower(), yr['sumN'][:260])
         for k, v in [('base', base['sumN']), ('año', yr['sumN'])]:
             chk(f'DX-9 {k}: el mes no aparece con mayúscula tras una coma', not re.search(r', (Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre) 20\d\d', v), v[:200])
