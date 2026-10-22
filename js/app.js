@@ -3088,16 +3088,20 @@
         cloudNote('Preparando productos…'); cloudProg('Preparando productos', 2);
         const bundle = await FP.productSync.build(repo, { onProgress: (d, n) => cloudProg(`Preparando productos (${d} de ${n})`, 2 + Math.round(33 * d / n)) });
         if (bundle.tooBig) return cloudNote(`Los productos pesan ${fmtKb(bundle.bytes)} ya comprimidos y rebasan el tope de ${fmtKb(FP.productSync.MAX_BYTES)} (el plan gratuito de Supabase tiene 500 MB en total). No se subió nada; reduce el rango de fechas de productos o pide ampliar el plan.`, 'bad');
-        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), { onProgress: (o) => cloudProg(`Subiendo bloque ${o.index} de ${o.of}`, 35 + Math.round(55 * o.index / o.of)) });
+        cloudProg('Revisando la copia anterior de la nube', 35);
+        const pre = await FP.cloud.currentRefs({});   // los bloques que usa hoy la nube serán la «generación anterior» (respaldo) tras esta subida
+        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), { onProgress: (o) => cloudProg(`Subiendo bloque ${o.index} de ${o.of}`, 36 + Math.round(52 * o.index / o.of)) });
         if (!up.ok) return cloudNote(up.error, 'bad');
-        cloudProg('Verificando la copia', 90);
-        const v = await FP.cloud.verify(up, { onProgress: (o) => cloudProg(`Verificando la copia (${fmtKb(o.doneBytes)} de ${fmtKb(o.totalBytes || o.doneBytes)})`, 90 + Math.round(7 * (o.totalBytes ? o.doneBytes / o.totalBytes : 1))) });
+        cloudProg('Verificando la copia', 88);
+        const v = await FP.cloud.verify(up, { onProgress: (o) => cloudProg(`Verificando la copia (${fmtKb(o.doneBytes)} de ${fmtKb(o.totalBytes || o.doneBytes)})`, 88 + Math.round(6 * (o.totalBytes ? o.doneBytes / o.totalBytes : 1))) });
         if (!v.ok && !Array.isArray(v.diffs)) { state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: false }; return cloudNote(`Se subió la copia (${up.keys.length} bloques), pero no pude verificarla al leerla de vuelta: ${v.error || 'sin detalle'}. Revisa la copia con «Restaurar» o vuelve a subir.`, 'bad'); }
-        cloudProg('Limpiando trozos viejos', 97);
+        cloudProg('Limpiando trozos viejos', 94);
         const pr = await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {});
+        let gc = null;
+        if (v.ok && pre.ok) gc = await autoCleanCloud(pre.refs);   // borrado automático de copias huérfanas tras una subida verificada
         state.cloud.last = { at: up.at, keys: up.keys.length, bytes: up.bytes, verified: v.ok };
         const prod = bundle.items ? ` Productos: ${(bundle.rows || 0).toLocaleString('es-MX')} renglones de venta (${fmtKb(bundle.bytes)} comprimidos).` : ' Sin productos cargados.';
-        cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.${prod}${pr.ok ? '' : ' (No pude limpiar trozos viejos de productos.)'}` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
+        cloudNote(v.ok ? `Copia subida y verificada: ${up.keys.length} bloques de datos, ${fmtKb(up.bytes)}.${prod}${pr.ok ? '' : ' (No pude limpiar trozos viejos de productos.)'}${gcNote(gc, v.ok && pre.ok)}` : `Se subió, pero la verificación encontró diferencias: ${v.diffs.slice(0, 3).join('; ')}`, v.ok ? 'ok' : 'bad');
       }, 'upload', 'Preparando la copia');
     },
     'cloud-download'() {
@@ -3118,6 +3122,32 @@
         cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
       }, 'restore', 'Descargando la copia de la nube');
+    },
+    /* Limpiar nube: primero una vista previa (no borra nada); solo borra tras marcar la confirmación y pulsar «Borrar». */
+    'cloud-gc-plan'() {
+      const g = state.cloud.gc || {}; state.cloud.gc = { keepPrev: g.keepPrev !== false, confirm: false, plan: null };
+      return cloudRun(async () => {
+        cloudProg('Revisando qué hay en la nube', 10);
+        const plan = await FP.cloud.planCleanup({ prevRefs: readPrevRefs(), keepPrevious: state.cloud.gc.keepPrev });
+        if (!plan.ok) return cloudNote(plan.error, 'bad');
+        state.cloud.gc.plan = plan; cloudNote('Revisión lista: abajo ves qué se borraría. Todavía no se borró nada.', 'ok');
+      }, 'gc-plan', 'Revisando qué hay en la nube');
+    },
+    'cloud-gc-keep'(el) { const g = state.cloud.gc; if (!g) return; g.keepPrev = !!el.checked; g.confirm = false; return actions['cloud-gc-plan'](); },
+    'cloud-gc-confirm'(el) { const g = state.cloud.gc; if (!g) return; g.confirm = !!el.checked; render(); },
+    'cloud-gc-cancel'() { state.cloud.gc = null; cloudNote('Limpieza cancelada: no se borró nada.', null); render(); },
+    'cloud-gc-run'() {
+      const g = state.cloud.gc; if (!g || !g.plan || !g.confirm) return;
+      const keys = g.plan.orphans.keys.slice(), bytes = g.plan.orphans.bytes;
+      return cloudRun(async () => {
+        const r = await FP.cloud.deleteChunks(keys, { onProgress: (o) => cloudProg(`Borrando copias viejas (${o.index} de ${o.of})`, 3 + Math.round(87 * o.index / o.of)) });
+        if (!r.ok) return cloudNote(`Se borraron ${r.deleted || 0} lotes y luego falló: ${r.error}`, 'bad');
+        cloudProg('Verificando la nube', 93);
+        const chk = await FP.cloud.planCleanup({ prevRefs: readPrevRefs(), keepPrevious: g.keepPrev });
+        const left = chk.ok ? chk.orphans.keys.length : null;
+        state.cloud.gc = null;
+        cloudNote(`Nube limpia: se borraron ${r.deleted} lotes viejos (${fmtKb(bytes)} de datos).${left === null ? '' : left ? ` Quedan ${left} lotes que no pude borrar.` : ' Verificado: no queda ningún lote huérfano.'}`, left ? 'bad' : 'ok');
+      }, 'gc-run', 'Borrando copias viejas');
     },
     'cloud-delete'() {
       if (!window.confirm('Se borrará la copia de la nube de TODO tu equipo (todas las personas del equipo la comparten). Tus datos locales no se tocan. ¿Continuar?')) return;
@@ -3992,7 +4022,7 @@
       <p>Inicia sesión para ver los datos de tu equipo, o continúa sin sesión y empieza desde cero.</p>
       <div class="tour-offer__btns"><button type="button" class="btn btn--primary" data-action="entry-guest" autofocus>Continuar sin sesión</button><button type="button" class="btn" data-action="entry-login">Iniciar sesión con el equipo</button></div>`);
   }
-  function openLoading() { entry.busy = true; entry.step = 'loading'; entryDialog('<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Cargando datos del equipo…</h2><p role="status" aria-live="polite">Estoy comprobando si tu equipo ya tiene datos. No cambio nada de lo que tienes aquí.</p>'); }
+  function openLoading() { entry.busy = true; entry.step = 'loading'; entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">Cargando datos del equipo…</h2>${FP.ui.loader.html({ id: 'entry-progress', label: 'Comprobando si tu equipo ya tiene datos', pct: null, t0: Date.now(), hint: 'No cambio nada de lo que tienes aquí.' })}`); }
   function openEntryError(msg) {
     entry.busy = false; entry.step = 'error';
     entryDialog(`<p class="tour-offer__eyebrow">Acceso por equipo</p><h2 id="entry-t">No pude comprobar los datos del equipo</h2><p role="alert">${FP.ui.helpers.esc(msg || 'Sin detalle.')} No digo que tu cuenta esté vacía porque no lo pude comprobar.</p>
@@ -4532,8 +4562,10 @@
   async function autoFlush() {
     if (autoBusy || !autoPending.size) return;
     autoBusy = true; const keys = [...autoPending]; autoPending.clear();
-    const r = await FP.cloud.pushKeys(cloudProvider, keys, {});
-    autoBusy = false;
+    const box = document.getElementById('cloud-auto-progress'), t0 = Date.now();
+    if (box) box.innerHTML = FP.ui.loader.html({ id: 'cloud-auto-bar', compact: true, label: 'Sincronizando ajustes con la nube', pct: 0, t0 });
+    const r = await FP.cloud.pushKeys(cloudProvider, keys, { onProgress: (o) => FP.ui.loader.update('cloud-auto-bar', { label: `Sincronizando ajustes (${o.index} de ${o.of})`, pct: Math.round(100 * o.index / o.of) }) });
+    autoBusy = false; const box2 = document.getElementById('cloud-auto-progress'); if (box2) box2.innerHTML = '';
     if (r.ok) { state.cloud.auto.last = r.at; state.cloud.auto.error = null; } else { state.cloud.auto.error = r.error; keys.forEach((k) => autoPending.add(k)); }
     autoPaint(); cloudRefreshSession();
     if (autoPending.size && r.ok) autoSchedule();
@@ -4612,15 +4644,16 @@
     }
     const esc = FP.ui.helpers.esc, a = signout.audit;
     let status = '', btns = '';
-    if (signout.phase === 'checking') status = '<p role="status" aria-live="polite">Comprobando que tus datos estén respaldados en la nube…</p>';
-    else if (signout.phase === 'wiping') status = '<p role="status" aria-live="polite">Borrando los datos de este navegador…</p>';
+    const pr = signout.prog;
+    if (signout.phase === 'checking') status = FP.ui.loader.html({ id: 'signout-progress', title: 'Comprobando el respaldo', label: (pr && pr.label) || 'Comprobando que tus datos estén respaldados en la nube', pct: pr ? pr.pct : null, t0: signout.t0 || Date.now() });
+    else if (signout.phase === 'wiping') status = FP.ui.loader.html({ id: 'signout-progress', title: 'Borrando los datos de este navegador', label: (pr && pr.label) || 'Borrando los datos de este navegador', pct: pr ? pr.pct : null, t0: signout.t0 || Date.now(), hint: 'No cierres la página hasta que termine.' });
     else if (a && a.ok && !a.unsynced.length) {
       status = `<p class="signout__ok" role="status">Todo está respaldado en la nube del equipo (${a.checked} bloque${a.checked === 1 ? '' : 's'} comprobado${a.checked === 1 ? '' : 's'}).</p>`;
       btns = '<button type="button" class="btn btn--primary" data-action="signout-confirm" autofocus>Cerrar sesión y borrar datos de este navegador</button><button type="button" class="btn" data-action="signout-cancel">Cancelar</button>';
     } else {
       const why = a && a.ok ? `<p role="alert"><strong>Hay datos sin respaldar en la nube.</strong> Si cierras sesión ahora se pierden:</p><ul>${a.unsynced.slice(0, 6).map((u) => `<li>${esc(u)}</li>`).join('')}${a.unsynced.length > 6 ? `<li>y ${a.unsynced.length - 6} más</li>` : ''}</ul>`
         : `<p role="alert"><strong>No pude comprobar el respaldo</strong> (${esc((a && a.error) || 'sin detalle')}). No sé si tus datos están en la nube.</p>`;
-      status = `${why}${signout.msg ? `<p role="status">${esc(signout.msg)}</p>` : ''}<label class="signout__ack"><input type="checkbox" data-action="signout-ack" ${signout.ack ? 'checked' : ''}> Entiendo que lo que no esté en la nube se pierde</label>`;
+      status = `${why}${signout.busy && pr ? FP.ui.loader.html({ id: 'signout-progress', title: 'Subiendo la copia a la nube', label: pr.label, pct: pr.pct, t0: signout.t0 || Date.now(), hint: 'No cierres la página hasta que termine.' }) : signout.msg ? `<p role="status">${esc(signout.msg)}</p>` : ''}<label class="signout__ack"><input type="checkbox" data-action="signout-ack" ${signout.ack ? 'checked' : ''}> Entiendo que lo que no esté en la nube se pierde</label>`;
       btns = `<button type="button" class="btn btn--primary" data-action="signout-upload" ${signout.busy ? 'disabled' : ''} autofocus>Subir copia a la nube ahora</button><button type="button" class="btn" data-action="signout-download" ${signout.busy ? 'disabled' : ''}>Descargar copia (.json)</button><button type="button" class="btn" data-action="signout-confirm" ${signout.ack && !signout.busy ? '' : 'disabled'}>Cerrar sesión y borrar de todos modos</button><button type="button" class="btn" data-action="signout-cancel">Cancelar</button>`;
     }
     d.innerHTML = `<p class="tour-offer__eyebrow">Cuenta de equipo</p><h2 id="signout-t">Cerrar sesión</h2>
@@ -4630,25 +4663,31 @@
   }
   async function openSignout() {
     if (signout.phase === 'checking' || signout.phase === 'wiping') return;
-    signout.phase = 'checking'; signout.audit = null; signout.ack = false; signout.msg = ''; paintSignout();
+    signout.phase = 'checking'; signout.audit = null; signout.ack = false; signout.msg = ''; signout.prog = null; signout.t0 = Date.now(); paintSignout();
     let a; try { a = await signoutAudit(); } catch (e) { a = { ok: false, error: e && e.message || String(e) }; }
     if (signout.phase === 'idle') return;
     signout.audit = a; signout.phase = 'ready'; paintSignout();
   }
+  /** Avance del cierre de sesión con el loader homologado: se actualiza en sitio; si aún no está en pantalla, se pinta el diálogo. */
+  function signoutProg(label, pct) {
+    signout.prog = { label, pct: pct === undefined ? null : pct };
+    if (!FP.ui.loader.update('signout-progress', { label, pct: pct === undefined ? null : pct })) paintSignout();
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
   async function signoutUpload() {
-    if (signout.busy) return; signout.busy = true; signout.msg = 'Subiendo copia…'; paintSignout();
+    if (signout.busy) return; signout.busy = true; signout.msg = ''; signout.t0 = Date.now(); signoutProg('Preparando la copia', 2);
     try {
       await repo.flush();
-      const bundle = await FP.productSync.build(repo);
+      const bundle = await FP.productSync.build(repo, { onProgress: (d, n) => signoutProg(`Preparando productos (${d} de ${n})`, 2 + Math.round(33 * d / n)) });
       if (bundle.tooBig) { signout.msg = 'Los productos rebasan el tope de la nube; no se subieron.'; }
       else {
-        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), {});
+        const up = await FP.cloud.upload(FP.productSync.withProducts(cloudProvider, bundle), { onProgress: (o) => signoutProg(`Subiendo bloque ${o.index} de ${o.of}`, 35 + Math.round(60 * o.index / o.of)) });
         if (!up.ok) signout.msg = `No se pudo subir: ${up.error}`;
-        else { await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {}); signout.msg = ''; }
+        else { signoutProg('Limpiando trozos viejos', 96); await FP.cloud.pruneKeys(FP.productSync.PREFIX, new Set(bundle.keys || []), {}); signout.msg = ''; }
       }
     } catch (e) { signout.msg = `Falló la subida: ${e && e.message || e}`; }
     if (!document.getElementById('signout-dialog')) { signout.busy = false; return; }
-    signout.busy = false; signout.phase = 'checking'; paintSignout();
+    signout.busy = false; signout.phase = 'checking'; signout.prog = null; signout.t0 = Date.now(); paintSignout();
     let a; try { a = await signoutAudit(); } catch (e) { a = { ok: false, error: e && e.message || String(e) }; }
     signout.audit = a; signout.phase = 'ready'; paintSignout();
   }
@@ -4661,27 +4700,53 @@
     signout.msg = 'Copia descargada (sin productos).'; paintSignout();
   }
   /** Borra los datos de este navegador y recarga. No toca la nube. */
-  async function wipeLocalData() {
-    wiping = true;
+  async function wipeLocalData(step) {
+    const st = async (label, pct) => { if (step) { step(label, pct); await tick(); } };
+    wiping = true; await st('Guardando lo pendiente', 5);
     clearTimeout(autoTimer); autoPending.clear();
     FP.cloud.setAuto(false); state.cloud.auto.on = false;
     await repo.flush();
     const keep = {}; SIGNOUT_KEEP.forEach((k) => { const raw = lsAdapter.get(`${C.storage.namespace}:${k}`); if (raw != null) keep[k] = raw; });
+    await st('Borrando los datos guardados', 25);
     storage.clear();                                   // localStorage de la app + IndexedDB (todos los almacenes)
+    await st('Borrando productos', 60);
     if (FP.productStore) FP.productStore.reset();
     if (FP.customerStore) FP.customerStore.reset();
+    await st('Restaurando tus preferencias', 80);
     Object.keys(keep).forEach((k) => lsAdapter.set(`${C.storage.namespace}:${k}`, keep[k]));
+    await st('Cerrando la sesión', 92);
     FP.cloud.signOut();
-    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
     ['fp.route.origin.v1', 'fp.loginAsked'].forEach((k) => { try { root.sessionStorage.removeItem(k); } catch (e) { /* nada */ } });
   }
   async function signoutConfirm() {
     if (signout.busy || signout.phase === 'wiping') return;
     const a = signout.audit; if (!(a && a.ok && !a.unsynced.length) && !signout.ack) return;
-    signout.phase = 'wiping'; signout.busy = true; paintSignout();
-    try { await wipeLocalData(); } catch (e) { wiping = false; signout.busy = false; signout.phase = 'ready'; signout.msg = `No pude borrar todo: ${e && e.message || e}`; paintSignout(); return; }
+    signout.phase = 'wiping'; signout.busy = true; signout.prog = null; signout.t0 = Date.now(); paintSignout();
+    try { await wipeLocalData(signoutProg); signoutProg('Listo, recargando', 100); await tick(); } catch (e) { wiping = false; signout.busy = false; signout.phase = 'ready'; signout.msg = `No pude borrar todo: ${e && e.message || e}`; paintSignout(); return; }
     root.location.reload();
   }
+
+  /* ----- Limpieza de copias huérfanas en la nube ----- */
+  const PREV_REFS = 'fp.cloudPrevRefs';   // preferencia de este navegador (fuera del namespace de datos): bloques de la generación anterior
+  const readPrevRefs = () => { try { return JSON.parse(localStorage.getItem(PREV_REFS) || '[]'); } catch (e) { return []; } };
+  const savePrevRefs = (a) => { try { localStorage.setItem(PREV_REFS, JSON.stringify(a)); } catch (e) { /* sin storage */ } };
+  /** Tras una subida verificada: guarda la generación anterior como respaldo y borra lo demás que ya nadie usa. */
+  async function autoCleanCloud(preRefs) {
+    cloudProg('Buscando copias viejas en la nube', 95);
+    const plan = await FP.cloud.planCleanup({ prevRefs: preRefs, keepPrevious: true });
+    if (!plan.ok) return { ok: false, error: plan.error };
+    const now = new Set(plan.refsNow), changed = preRefs.some((k) => !now.has(k));
+    if (changed) savePrevRefs(preRefs);   // si no cambió nada, se conserva el respaldo que ya había
+    const keepBackup = changed ? preRefs : readPrevRefs();
+    const plan2 = changed ? plan : await FP.cloud.planCleanup({ prevRefs: keepBackup, keepPrevious: true });
+    if (!plan2.ok) return { ok: false, error: plan2.error };
+    const del = plan2.orphans.keys;
+    if (!del.length) return { ok: true, deleted: 0, bytes: 0 };
+    const r = await FP.cloud.deleteChunks(del, { onProgress: (o) => cloudProg(`Limpiando copias viejas (${o.index} de ${o.of})`, 96 + Math.round(3 * o.index / o.of)) });
+    return r.ok ? { ok: true, deleted: r.deleted, bytes: plan2.orphans.bytes } : { ok: false, error: r.error, deleted: r.deleted };
+  }
+  const gcNote = (gc, tried) => !tried ? ' (No limpié copias viejas: no pude leer la copia anterior.)' : !gc ? '' : !gc.ok ? ` (No pude limpiar copias viejas: ${gc.error}.)` : gc.deleted ? ` Se limpiaron ${gc.deleted} lotes viejos (${fmtKb(gc.bytes)} de datos); la generación anterior se conserva como respaldo.` : ' No había copias viejas por limpiar.';
 
   function cloudNote(msg, tone) { state.cloud.msg = msg; state.cloud.tone = tone || null; }
   function cloudRefreshSession() { const s = FP.cloud.loadSession(); state.cloud.session = s && !s.anonymous && s.team_id ? { userId: s.user_id, email: s.email || null, teamId: s.team_id, teamName: s.team_name || null } : null; }

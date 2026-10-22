@@ -172,6 +172,25 @@
       <div class="btn-row"><button type="button" class="btn" data-action="tour-change-path">Cambiar tipo de uso</button></div></div></section>`;
   }
 
+  /** Vista previa de «Limpiar nube»: tamaños = datos guardados (sin comprimir), no el espacio en disco de Supabase. */
+  function gcPreview(c, dis) {
+    const g = c.gc; if (!g || !g.plan) return '';
+    const p = g.plan, kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    const row = (t, o, note) => `<tr><td>${t}</td><td class="num">${o.keys.length}</td><td class="num">${kb(o.bytes)}</td><td>${note}</td></tr>`;
+    const n = p.orphans.keys.length;
+    return `<div class="note" id="cloud-gc"><strong>Vista previa de la limpieza</strong> (aún no se borró nada)
+      <div class="table-wrap"><table class="table"><thead><tr><th scope="col">Qué es</th><th scope="col" class="num">Lotes</th><th scope="col" class="num">Datos</th><th scope="col">Qué pasa</th></tr></thead><tbody>
+        ${row('Copia vigente', p.current, 'se queda')}
+        ${row('Generación anterior (respaldo)', p.previous, g.keepPrev ? 'se queda' : 'se borra')}
+        ${row('Lotes huérfanos', p.orphans, n ? 'se borran' : 'nada que borrar')}
+        ${row('Recién subidos (menos de 10 min)', p.young, 'no se tocan')}
+        ${row('Otros datos del equipo', p.other, 'no se tocan')}</tbody></table></div>
+      <span class="field__hint">Los tamaños son los datos guardados sin comprimir; el espacio real que ocupan en Supabase puede ser menor.</span>
+      <div class="field field--check"><label><input type="checkbox" data-action="cloud-gc-keep" ${g.keepPrev ? 'checked' : ''} ${dis}> Conservar la generación anterior como respaldo</label></div>
+      ${n ? `<div class="field field--check"><label><input type="checkbox" data-action="cloud-gc-confirm" ${g.confirm ? 'checked' : ''} ${dis}> Entiendo que se borrarán ${n} lotes (${kb(p.orphans.bytes)}) de la nube de todo el equipo</label></div>` : ''}
+      <div class="btn-row">${n ? `<button type="button" class="btn btn--primary" data-action="cloud-gc-run" ${g.confirm && !dis ? '' : 'disabled'}>Borrar ${kb(p.orphans.bytes)}</button>` : ''}<button type="button" class="btn btn--small" data-action="cloud-gc-cancel" ${dis}>${n ? 'Cancelar' : 'Cerrar'}</button></div></div>`;
+  }
+
   /** Nube (Supabase) con acceso por equipo: correo y contraseña; todos los miembros del equipo comparten la misma copia. */
   function cloudPanel(state) {
     const esc = FP.ui.helpers.esc, c = state.cloud || {}, s = c.session;
@@ -196,12 +215,15 @@
             <button type="button" class="btn btn--primary" data-action="cloud-upload" ${dis || !s ? 'disabled' : ''} ${c.busy && c.op === 'upload' ? 'aria-busy="true"' : ''}>${c.busy && c.op === 'upload' ? 'Subiendo…' : 'Subir copia a la nube'}</button>
             <button type="button" class="btn" data-action="cloud-download" ${dis || !s ? 'disabled' : ''} ${c.busy && c.op === 'restore' ? 'aria-busy="true"' : ''}>${c.busy && c.op === 'restore' ? 'Restaurando…' : 'Restaurar desde la nube'}</button>
             <button type="button" class="btn btn--small" data-action="cloud-delete" ${dis || !s ? 'disabled' : ''} ${c.busy && c.op === 'delete' ? 'aria-busy="true"' : ''}>${c.busy && c.op === 'delete' ? 'Borrando…' : 'Borrar copia de la nube'}</button>
+            ${s ? `<button type="button" class="btn btn--small" data-action="cloud-gc-plan" ${dis} ${c.busy && c.op === 'gc-plan' ? 'aria-busy="true"' : ''}>Limpiar nube</button>` : ''}
             ${s ? `<button type="button" class="btn btn--small" data-action="cloud-signout" ${dis}>Cerrar sesión</button>` : ''}
             ${c.restored ? '<button type="button" class="btn btn--small btn--primary" data-action="bc-reload">Recargar y aplicar</button>' : ''}
           </div>
-          ${c.busy && c.progress ? FP.ui.loader.html({ id: 'cloud-progress', title: { upload: 'Subiendo la copia a la nube', restore: 'Restaurando desde la nube', delete: 'Borrando la copia de la nube' }[c.op] || 'Trabajando con la nube', label: c.progress.label, pct: c.progress.pct, t0: c.t0, hint: 'No cierres ni recargues la página hasta que termine.' }) : ''}
+          ${c.busy && c.progress ? FP.ui.loader.html({ id: 'cloud-progress', title: { upload: 'Subiendo la copia a la nube', restore: 'Restaurando desde la nube', delete: 'Borrando la copia de la nube', 'gc-plan': 'Revisando la nube', 'gc-run': 'Limpiando la nube' }[c.op] || 'Trabajando con la nube', label: c.progress.label, pct: c.progress.pct, t0: c.t0, hint: 'No cierres ni recargues la página hasta que termine.' }) : ''}
+          ${gcPreview(c, dis)}
           <div class="field field--check"><label><input type="checkbox" data-action="cloud-auto-toggle" ${c.auto && c.auto.on ? 'checked' : ''} ${s ? '' : 'disabled'} ${dis}> Sincronizar automáticamente metas, supuestos y ajustes</label>
             <span class="field__hint">Solo lo liviano (metas, supuestos, versiones, equivalencias, enlaces de Sheets, negocio). Los datos pesados siguen subiéndose a mano. Si dos equipos cambian lo mismo, gana el cambio más reciente. No incluye preferencias por dispositivo ni la API key de Cohere.${s ? '' : ' Requiere una sesión: sube una copia primero.'}</span>
+            <div id="cloud-auto-progress"></div>
             <span class="field__hint" id="cloud-auto-status">${esc(c.auto && c.auto.on ? (c.auto.error ? `No se pudo sincronizar: ${c.auto.error}` : c.auto.last ? `Última sincronización: ${new Date(c.auto.last).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : 'Encendida: se sincroniza cuando cambies algo.') : 'Apagada: tus metas y ajustes solo se guardan en este navegador.')}</span></div>
           ${account}
           ${c.msg ? `<p class="note ${c.tone === 'bad' ? 'note--warning' : c.tone === 'ok' ? 'note--ok' : ''}" id="cloud-msg" role="status">${esc(c.msg)}</p>` : '<p class="note" id="cloud-msg" role="status" hidden></p>'}
