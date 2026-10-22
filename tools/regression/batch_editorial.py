@@ -5,7 +5,7 @@ from ed_common import *
 STR = """(()=>{const out=[];const walk=(v,p)=>{if(typeof v==='string'){out.push([p,v]);return}if(!v||typeof v!=='object')return;
   if(Array.isArray(v)){v.forEach((x,i)=>walk(x,p));return}Object.keys(v).forEach(k=>{if(k==='tags'||k==='dataUrl')return;walk(v[k],p+'.'+k)})};
   FP.app.state.rp.report.pages.forEach(pg=>walk(pg,pg.id));return out})()"""
-BAD = [r'matemáticamente', r'es aritmética, no demuestra', r'\(s\)', r'de l año', r'undefined', r'NaN', r'\[object', r'\bnull\b', r'  +', r'Historia insuficiente', r'\bPalanca', r'Lo que arrastra', r'Lo que compensa', r'grupo\(s\)', r'mayor palanca', r'[Cc]omponente', r'\bVolumen\b', r'\b1 días\b', r'\b1 productos\b']
+BAD = [r'matemáticamente', r'es aritmética, no demuestra', r'\(s\)', r'de l año', r'undefined', r'NaN', r'\[object', r'\bnull\b', r'  +', r'Historia insuficiente', r'\bPalanca', r'plan comparable', r'Historia insuficiente', r'desacelerando', r'Ruptura de tendencia', r'Lo que arrastra', r'Lo que compensa', r'grupo\(s\)', r'mayor palanca', r'[Cc]omponente', r'\bVolumen\b', r'\b1 días\b', r'\b1 productos\b']
 ok = bad = 0
 def chk(n, c, d=''):
     global ok, bad
@@ -87,6 +87,14 @@ async def main():
         chk('ED-24 cierre con textos largos reales: las tarjetas no invaden el pie', lay['over'] == 0, lay)
         chk('ED-25 etiqueta larga de barras no se sale del gráfico por la izquierda', lay['cut'] == [], lay)
         await q.emulate_media(media='screen')
+
+        CL = """(mut)=>{const i=JSON.parse(JSON.stringify(window.__edIn));new Function('i',mut)(i);const r=FP.reportBuilder.build.__orig(i);return JSON.stringify(r.pages.find(p=>p.id==='closing').blocks)}"""
+        cq1 = await q.evaluate(CL, "i.quality=i.quality||{};i.quality.status='warning';i.quality.totals={rejected:1,missingChannels:3};")
+        chk('ED-26 calidad concreta en el cierre: singular y plural', '1 fila se rechazó' in cq1 and '3 combinaciones fecha-canal no tienen dato' in cq1, cq1[-300:])
+        cq2 = await q.evaluate(CL, "i.quality=i.quality||{};i.quality.status='warning';i.quality.totals={rejected:0,missingChannels:0};")
+        chk('ED-27 calidad sin detalle: mensaje neutral, sin inventar la causa', 'advertencias de calidad' in cq2 and 'rechaz' not in cq2, cq2[-200:])
+        cq3 = await q.evaluate(CL, "i.quality=i.quality||{};i.quality.status='ok';")
+        chk('ED-28 calidad ok: no aparece advertencia de calidad', 'advertencias de calidad' not in cq3 and 'Limitaciones en los datos' not in cq3, cq3[-150:])
         base = json.load(open('tools/regression/data/editorial_baseline.json'))
         for k in ('base', 'mes_anterior', 'excedente'):
             cur = nums[k]

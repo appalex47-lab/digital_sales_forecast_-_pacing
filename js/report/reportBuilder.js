@@ -176,11 +176,11 @@
       return { channel: chLabel(c), real: t ? t.actual : null, plan: t ? t.plan : null, gap: t ? t.gap : null, gapPct: t ? t.gapPct : null, days: m ? m.countedDays : null, _total: c === 'total' };
     }).filter((r) => r.real !== null);
     const state = !hasPlan ? null : Math.abs(tr.gapPct) < 0.005 ? 'en línea con el plan' : tr.gap < 0 ? `${pct(Math.abs(tr.gapPct))} por debajo del plan` : `${pct(Math.abs(tr.gapPct))} por encima del plan`;
-    const headline = !hasPlan ? `${name}: venta real a la fecha ${moneyC(tr.actual)}; no hay plan comparable para medir el avance.`
+    const headline = !hasPlan ? `${name}: venta real a la fecha ${moneyC(tr.actual)}; no hay plan esperado a la fecha para medir el avance.`
       : `${name} va ${state} a la fecha (${smoney(tr.gap)})${fcM !== null && planM !== null ? `; cierre estimado ${uDel} ${moneyC(fcM)} frente a un plan de ${moneyC(planM)}.` : '.'}`;
     const recon = s.channel === 'total' && FP.methodAdvisor ? FP.methodAdvisor.totalReconciliation(s.run) : null;
     const notes = [];
-    if (!hasPlan) notes.push('Sin plan comparable no se calculan brecha ni cumplimiento; se muestra solo el real.');
+    if (!hasPlan) notes.push('Sin plan esperado a la fecha no se calculan la diferencia ni el cumplimiento; se muestra solo la venta real.');
     notes.push(`Plan esperado: plan de los mismos ${M.countedDays} días con venta real cargada de ${name.toLowerCase()}. El cierre estimado ${uDel} no es un compromiso ni una meta.`);
     return page('pacing', 'Pacing y forecast', {
       ctx: `${name} · ${M.countedDays} días contados${cutIso && M.firstDate && M.lastDate && cutIso >= M.firstDate && cutIso < M.lastDate ? ` al ${dateLabel(cutIso)}` : ''}`,
@@ -243,7 +243,7 @@
     if (!tr || !isNum(tr.actual) || !(A.countedDays > 0)) return omit('pacing', 'Pacing y forecast', 'Todavía no hay días contados con venta real hasta la fecha de corte.');
     const hasPlan = isNum(tr.plan), cutIso = s.run.cutoff;
     const headline = !hasPlan
-      ? `Venta real a la fecha ${moneyC(tr.actual)}; no hay plan comparable para medir el avance.`
+      ? `Venta real a la fecha ${moneyC(tr.actual)}; no hay plan esperado a la fecha para medir el avance.`
       : `${Math.abs(tr.gapPct) < 0.005 ? 'En línea con el plan' : tr.gap < 0 ? `${pct(Math.abs(tr.gapPct))} por debajo del plan` : `${pct(Math.abs(tr.gapPct))} por encima del plan`} a la fecha (${smoneyC(tr.gap)}); ${isNum(A.forecast && A.forecast.revenue) ? `cierre estimado ${moneyC(A.forecast.revenue)}${isNum(fg && fg.gapPct) ? ` (${spct(fg.gapPct)} vs. meta)` : ''}.` : 'el cierre estimado no está disponible.'}`;
     const rows = (s.channel && s.channel !== 'total' ? [[s.channel, series(s.run, s.channel)]] : [...CHANNELS.map((c) => [c, series(s.run, c)]), ['total', s.run.total]]).filter(([, x]) => x && x.annual).map(([c, x]) => {
       const t = x.annual.toDate && x.annual.toDate.revenue;
@@ -255,7 +255,7 @@
       const who = Object.entries(recon.byChannel || {}).map(([c, r]) => `${chLabel(c)} (${r.map((x) => (x[0] === x[1] ? dateLabel(x[0]) : `${dateLabel(x[0])} a ${dateLabel(x[1])}`)).join(', ')})`).join('; ');
       notes.push(`Conciliación del Total: ${recon.excludedDays} día${recon.excludedDays === 1 ? '' : 's'} excluido${recon.excludedDays === 1 ? '' : 's'} del pacing del Total porque falta el real de ${who}. Suma de los canales ${smoney(recon.sumChannelsGap)} · Total estricto ${smoney(recon.totalGap)} · Diferencia ${smoney(recon.difference)}.`);
     }
-    if (!hasPlan) notes.push('Sin plan comparable no se calculan brecha ni cumplimiento; se muestra solo el real.');
+    if (!hasPlan) notes.push('Sin plan esperado a la fecha no se calculan la diferencia ni el cumplimiento; se muestra solo la venta real.');
     if (!isNum(A.forecast && A.forecast.revenue)) notes.push('El forecast al cierre no está disponible: el plan no cubre todo el año o no hay método con datos suficientes.');
     notes.push(`Plan esperado: plan de los mismos ${A.countedDays} días con venta real cargada (1 ene – ${dateLabel(cutIso)}). El cierre estimado no es un compromiso ni una meta.`);
     return page('pacing', 'Pacing y forecast', {
@@ -338,7 +338,7 @@
     const dPartial = Boolean(perEnd && cov.currentRange && cov.currentRange[1] && cov.currentRange[1] < perEnd);
     return page('drivers', 'Diagnóstico de motores y canales', {
       ctx: `${d.period && d.period.label ? d.period.label : 'Período del diagnóstico'}${obsRange ? ` (datos ${obsRange})` : ''} · ${d.comparison && d.comparison.label ? d.comparison.label : 'vs. referencia'}`,
-      question: '¿Qué factor pesa más en la brecha contra el plan?',
+      question: '¿Qué factor pesa más en la diferencia frente al plan?',
       headline: `${d.period && d.period.label ? `${d.period.label}: l` : 'L'}a brecha es de ${smoneyC(d.gap.abs)} (${spct(d.gap.pct)}). Lo que más aporta a esa diferencia es ${({ trafficVolume: 'el tráfico', conversionRate: 'la conversión (CR)', aov: 'el ticket promedio (AOV)' })[main.driver] || main.label} (${smoneyC(main.contribution)}). Es un reparto, no una causa.`,
       kpis: [
         kpi('gap', `Brecha del diagnóstico (${d.comparison && d.comparison.baseline ? `real − ${String(d.comparison.baseline).toLowerCase()}` : 'real − referencia'})`, d.gap.abs, 'smoney', TAG.calc, { tone: toneOfGap(d.gap.abs), sub: spct(d.gap.pct) }),
@@ -356,7 +356,7 @@
   }
 
   /* ---------------- 6 · Evolución y patrones ---------------- */
-  const PATTERN = { growth_sustained: 'Crecimiento sostenido', growth_accelerating: 'Crecimiento acelerado', growth_decelerating: 'Crecimiento desacelerando', decline_sustained: 'Caída sostenida', decline_accelerating: 'Caída acelerada', decline_decelerating: 'Caída desacelerando', recovery: 'Recuperación', strong_recovery: 'Recuperación fuerte', trend_break: 'Ruptura de tendencia', stable: 'Estable', volatile: 'Volátil', anomaly: 'Anomalía', insufficient_history: 'Historia insuficiente' };
+  const PATTERN = { growth_sustained: 'Crecimiento sostenido', growth_accelerating: 'Crecimiento acelerado', growth_decelerating: 'Crecimiento que se modera', decline_sustained: 'Caída sostenida', decline_accelerating: 'Caída acelerada', decline_decelerating: 'Caída que se modera', recovery: 'Recuperación', strong_recovery: 'Recuperación fuerte', trend_break: 'Cambio de tendencia', stable: 'Estable', volatile: 'Variaciones fuertes', anomaly: 'Cambio atípico', insufficient_history: 'Información insuficiente para una tendencia' };
   const patternText = (p, n) => {
     const base = PATTERN[p] || NA;
     const dec = /^decline|^growth/.test(p || '');
@@ -709,7 +709,7 @@
     } else if (pc) {
       const comp = pc.kpis.find((k) => k.id === 'compliance');
       const f = R.pc && isNum(R.pc.forecast) ? `Cierre estimado ${R.scopeWord === 'año' ? 'del año' : 'de ' + R.mlow}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : null;
-      items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Pacing y forecast', limit: comp && comp.value === null ? 'Sin plan comparable.' : (by.reliability && by.reliability.warning ? 'El cierre estimado depende del método; los alternativos difieren de forma importante.' : 'El cierre estimado depende del método elegido.'), page: 'pacing',
+      items.push({ tag: TAG.obs, certainty: 'Hecho observado', text: pc.headline, source: 'Pág. Pacing y forecast', limit: comp && comp.value === null ? 'Sin plan esperado a la fecha.' : (by.reliability && by.reliability.warning ? 'El cierre estimado depende del método; los alternativos difieren de forma importante.' : 'El cierre estimado depende del método elegido.'), page: 'pacing',
         title: R.state ? `${R.mk ? R.mname : 'El negocio'} ${phrasePlan(R)}` : (R.mk ? `Venta real de ${R.mlow} a la fecha` : 'Venta real acumulada al corte'), figure: R.state ? pct(R.pc.compliance) : moneyC(R.pc && R.pc.real), figureLabel: R.state ? (R.mk ? `de cumplimiento de ${R.mlow}` : 'de cumplimiento al corte') : 'venta real',
         why: [R.state ? `${moneyC(R.pc.real)} de venta real frente a ${moneyC(R.pc.plan)} esperados (${smoneyC(R.pc.gap)}).` : null, R.mk ? null : f].filter(Boolean).join(' '), note: R.material ? 'El cierre depende del método de proyección elegido; los alternativos difieren de forma importante.' : null });
     }
@@ -730,7 +730,7 @@
     const sent = [];
     if (R.sel) sent.push(`En ${R.sel.period}, ${R.sel.filter} vende ${moneyC(R.sel.real)}${isNum(R.sel.pct) ? `, ${Math.abs(R.sel.pct) < 0.005 ? 'sin cambio' : R.sel.pct < 0 ? `${pct(Math.abs(R.sel.pct))} menos` : `${pct(R.sel.pct)} más`} que ${R.sel.baseRef}` : ''}.`);
     else if (R.state) sent.push(`Al corte del ${R.cutoff}, ${R.mk ? R.mname : 'el negocio'} ${phrasePlan(R)}. Se han vendido ${moneyC(R.pc.real)}, frente a los ${moneyC(R.pc.plan)} previstos para este mismo período.`);
-    else if (R.pc && isNum(R.pc.real) && !R.sel) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan comparable para medir el avance.`);
+    else if (R.pc && isNum(R.pc.real) && !R.sel) sent.push(`Al corte del ${R.cutoff}, la venta real acumulada es ${moneyC(R.pc.real)}; no hay plan esperado a la fecha para medir el avance.`);
     if (R.best) sent.push(`${R.best.channel} es el canal que más sobresale (${smoney(R.best.gap)} frente al plan).`);
     if (R.focus) sent.push(`Lo que más pesa en la caída es ${R.focus.entity}: concentra el ${pct(R.focus.share, 0)} de lo que se pierde${R.focus.sinceLabel ? ` y ${focusSince(R.focus).replace('cae desde', 'cae desde')}` : ''}.`);
     else if (R.drag) sent.push(`La principal área de atención es ${R.drag.entity}, que resta ${money(Math.abs(R.drag.impact))} ${trPer}.`);
@@ -747,10 +747,10 @@
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
     const R = readout(s, by); if (!R.pc) return omit('closing', 'Cierre ejecutivo', 'Sin resultados de pacing no hay base para un cierre.');
     const where = R.sel ? { title: 'Dónde estamos', big: isNum(R.sel.pct) ? spct(R.sel.pct) : moneyC(R.sel.real), unit: `${R.sel.period} vs. ${R.sel.base}`, text: `${R.sel.filter}: ${moneyC(R.sel.real)} frente a ${moneyC(R.sel.prev)}${isNum(R.sel.real) && isNum(R.sel.prev) ? ` (${smoneyC(R.sel.real - R.sel.prev)})` : ''}. No hay plan por producto ni sucursal: se compara contra el periodo de referencia.` }
-      : R.state ? { title: 'Dónde estamos', big: pct(R.pc.compliance), unit: R.mk ? `de cumplimiento de ${R.mlow}` : 'de cumplimiento al corte', text: `${R.mk ? `${R.mname}: ` : ''}${moneyC(R.pc.real)} de venta real contra ${moneyC(R.pc.plan)} del plan comparable (${smoneyC(R.pc.gap)}). ${isNum(R.pc.forecast) ? `Cierre estimado de${R.mk ? ` ${R.mlow}` : 'l año'}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : ''} ${yearPhrase(R) || ''}`.replace(/\s+/g, ' ').trim() }
-      : { title: 'Dónde estamos', big: moneyC(R.pc.real), unit: 'venta real acumulada', text: 'No hay plan comparable: no es posible medir el cumplimiento del período.' };
-    const stand = R.best ? { title: 'Qué sobresalió', big: smoneyC(R.best.gap), unit: `${R.best.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.best.channel} es el canal con mayor avance sobre ${R.sel ? 'el periodo de referencia' : 'el plan comparable'}.` }
-      : (by.categories && by.categories.headline ? { title: 'Qué sobresalió', big: '', unit: '', text: by.categories.headline } : { title: 'Qué sobresalió', big: '', unit: '', text: 'Ningún canal supera su plan comparable al corte.' });
+      : R.state ? { title: 'Dónde estamos', big: pct(R.pc.compliance), unit: R.mk ? `de cumplimiento de ${R.mlow}` : 'de cumplimiento al corte', text: `${R.mk ? `${R.mname}: ` : ''}${moneyC(R.pc.real)} de venta real contra ${moneyC(R.pc.plan)} del plan esperado a la fecha (${smoneyC(R.pc.gap)}). ${isNum(R.pc.forecast) ? `Cierre estimado de${R.mk ? ` ${R.mlow}` : 'l año'}: ${moneyC(R.pc.forecast)}${R.pc.forecastSub ? ` (${R.pc.forecastSub})` : ''}.` : ''} ${yearPhrase(R) || ''}`.replace(/\s+/g, ' ').trim() }
+      : { title: 'Dónde estamos', big: moneyC(R.pc.real), unit: 'venta real acumulada', text: 'No hay plan esperado a la fecha: no es posible medir el cumplimiento del período.' };
+    const stand = R.best ? { title: 'Qué sobresalió', big: smoneyC(R.best.gap), unit: `${R.best.channel} frente ${R.sel ? 'a la referencia' : 'al plan'}`, text: `${R.best.channel} es el canal con mayor avance sobre ${R.sel ? 'el periodo de referencia' : 'el plan esperado a la fecha'}.` }
+      : (by.categories && by.categories.headline ? { title: 'Qué sobresalió', big: '', unit: '', text: by.categories.headline } : { title: 'Qué sobresalió', big: '', unit: '', text: 'Ningún canal supera su plan esperado a la fecha al corte.' });
     const acts = R.rec ? R.rec.actions.filter((a) => a && a.title) : [];
     const F = R.focus, fw = F ? focusWhere(F) : [];
     const move = F ? { title: 'Qué debemos mover', big: smoney(F.loss), unit: `${F.entity}${F.sinceLabel ? ` · cae desde ${F.sinceLabel}` : ' · mayor arrastre'}`, text: `${F.entity} concentra ${pct(F.share, 0)} de lo que se pierde${F.sinceLabel ? ` y lleva ${F.periods} períodos sin recuperarse` : ''}.${fw.length ? ` Revisar primero ${fw.join(', ')}.` : ''} ${actionsOn(R, F)}` }
@@ -761,7 +761,12 @@
     if (R.material) watch.push('El cierre estimado cambia de forma importante según el método de proyección.');
     if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} requiere ${moneyC(R.rec.daily)} por día durante ${int(R.rec.days)} ${Number(R.rec.days) === 1 ? 'día restante' : 'días restantes'}.`);
     if (s.lastActual && s.run && s.run.cutoff && s.lastActual < s.run.cutoff) watch.push(`La venta real llega al ${dateLabel(s.lastActual)}, antes del corte (${dateLabel(s.run.cutoff)}); falta cargar esos días.`);
-    if (s.quality && s.quality.status && s.quality.status !== 'ok') watch.push('Algunos datos cargados tienen advertencias de calidad; el detalle está en el anexo técnico.');
+    if (s.quality && s.quality.status && s.quality.status !== 'ok') {
+      const qt = s.quality.totals || {}, qp = [];
+      if (isNum(qt.rejected) && qt.rejected > 0) qp.push(`${int(qt.rejected)} ${qt.rejected === 1 ? 'fila se rechazó' : 'filas se rechazaron'} al importar`);
+      if (isNum(qt.missingChannels) && qt.missingChannels > 0) qp.push(`${int(qt.missingChannels)} ${qt.missingChannels === 1 ? 'combinación fecha-canal no tiene' : 'combinaciones fecha-canal no tienen'} dato`);
+      watch.push(qp.length ? `Limitaciones en los datos cargados: ${qp.join('; ')}. El detalle está en el anexo técnico.` : 'Los datos cargados tienen advertencias de calidad; el detalle está en el anexo técnico.');
+    }
     const vig = { title: 'Qué debemos vigilar', big: R.rec && isNum(R.rec.daily) ? moneyC(R.rec.daily) : '', unit: R.rec && isNum(R.rec.daily) ? (R.mk ? `requeridos por día para cerrar ${R.mlow}` : 'requeridos por día para la meta') : '', text: watch.length ? watch.join(' ') : 'Sin riesgos materiales identificados en los datos disponibles.' };
     if (R.movers) {
       const top = (arr) => [...arr].sort((a, b) => a.rank - b.rank).slice(0, 3).map((i) => ({ name: i.name, value: i.value, type: i.type }));
@@ -844,8 +849,8 @@
         { item: 'Cobertura mínima de ventana', value: isNum(ST.minWindowCoverage) ? pct(ST.minWindowCoverage, 0) : NA }, { item: 'Método de atribución de la brecha', value: s.diag && s.diag.attributionMethodLabel ? s.diag.attributionMethodLabel : NA }],
       definitions: [
         ['Venta', 'Tráfico × CR × AOV. Los tres factores reparten la venta de forma aritmética, sin establecer causas.'], ['CR', 'Pedidos ÷ tráfico, siempre desde sumas del período (nunca promedio de tasas diarias).'], ['AOV', 'Venta ÷ pedidos, desde sumas.'],
-        ['Corte', 'Último día con venta real cargada que se usa para comparar con el plan.'], ['Día contado', 'Día con real válido en el canal; en el Total, día con real en todos los canales.'], ['Plan comparable', 'Plan de los mismos días que tienen venta real.'],
-        ['Brecha', 'Real − plan comparable. Cumplimiento = real ÷ plan comparable.'], ['Observado', 'Dato cargado desde un archivo.'], ['Calculado', 'Derivado de datos con una regla fija.'], ['Estimado', 'Proyección, simulación o supuesto.']],
+        ['Corte', 'Último día con venta real cargada que se usa para comparar con el plan.'], ['Día contado', 'Día con real válido en el canal; en el Total, día con real en todos los canales.'], ['Plan esperado a la fecha', 'Plan de los mismos días que ya tienen venta real.'],
+        ['Diferencia frente al plan (brecha)', 'Real − plan esperado a la fecha. Cumplimiento = real ÷ plan esperado a la fecha.'], ['Observado', 'Dato cargado desde un archivo.'], ['Calculado', 'Derivado de datos con una regla fija.'], ['Estimado', 'Proyección, simulación o supuesto.']],
       omitted,
       limits: ['La fecha de corte es diaria; no hay hora de corte.', 'Un dato faltante se muestra como «No disponible», nunca como 0.', 'El rango entre métodos no es un intervalo de confianza estadístico.', 'La descomposición de la brecha y los patrones son descriptivos: no establecen causas.', 'No incluye marketing pagado (CAC, ROAS), ejecución de CRM ni claves, preferencias o datos del negocio.', 'El reporte se genera en este navegador; no envía datos a ningún servicio.'],
       sources: ['Calidad de datos', 'Configuración de forecast'], tags: []
