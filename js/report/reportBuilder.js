@@ -369,7 +369,7 @@
   }
 
   /* ---------------- 6 · Evolución y patrones ---------------- */
-  const PATTERN = { growth_sustained: 'Crecimiento sostenido', growth_accelerating: 'Crecimiento acelerado', growth_decelerating: 'Crecimiento que se modera', decline_sustained: 'Caída sostenida', decline_accelerating: 'Caída acelerada', decline_decelerating: 'Caída que se modera', recovery: 'Recuperación', strong_recovery: 'Recuperación fuerte', trend_break: 'Cambio de tendencia', stable: 'Estable', volatile: 'Variaciones fuertes', anomaly: 'Cambio atípico', insufficient_history: 'Información insuficiente para una tendencia' };
+  const PATTERN = { growth_sustained: 'Crecimiento sostenido', growth_accelerating: 'Crecimiento acelerado', growth_decelerating: 'Crecimiento que se modera', decline_sustained: 'Caída sostenida', decline_accelerating: 'Caída acelerada', decline_decelerating: 'Caída que se modera', recovery: 'Recuperación previa', strong_recovery: 'Recuperación fuerte previa', trend_break: 'Cambio de tendencia', stable: 'Estable', volatile: 'Variaciones fuertes', anomaly: 'Cambio atípico', insufficient_history: 'Información insuficiente para una tendencia' };
   const patternText = (p, n) => {
     const base = PATTERN[p] || NA;
     const dec = /^decline|^growth/.test(p || '');
@@ -833,6 +833,13 @@
       const q = types.map((t) => items.filter((i) => i.type === t && (neg ? i.value < 0 : i.value > 0)).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)));
       const out = []; let k = 0;
       while (out.length < cap && q.some((x) => x.length > k)) { q.forEach((x) => { if (x[k] && out.length < cap) { x[k].rank = out.length; out.push(x[k]); } }); k++; }
+      // Todo canal con este signo aparece en la lista: si el reparto entre tipos dejó alguno fuera, ocupa el lugar (y el orden de prioridad) de la última fila que no es canal.
+      q.filter((x) => x.length && x[0].type === 'Canal').forEach((x) => x.forEach((it) => {
+        if (out.includes(it)) return;
+        const j = out.map((o, ix) => (o.type === 'Canal' ? -1 : ix)).filter((ix) => ix >= 0).pop();
+        if (j === undefined) return;
+        it.rank = out[j].rank; out[j] = it;
+      }));
       return out.sort((a, b) => (types.indexOf(a.type) - types.indexOf(b.type)) || (Math.abs(b.value) - Math.abs(a.value)));
     };
     return { items, types, minus: side(true, 8), plus: side(false, 8) };
