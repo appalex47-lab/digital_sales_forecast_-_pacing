@@ -95,6 +95,10 @@ async def main():
         chk('ED-27 calidad sin detalle: mensaje neutral, sin inventar la causa', 'advertencias de calidad' in cq2 and 'rechaz' not in cq2, cq2[-200:])
         cq3 = await q.evaluate(CL, "i.quality=i.quality||{};i.quality.status='ok';")
         chk('ED-28 calidad ok: no aparece advertencia de calidad', 'advertencias de calidad' not in cq3 and 'Limitaciones en los datos' not in cq3, cq3[-150:])
+
+        for k, L in scen.items():
+            hs = [s for pa, s in L if pa == 'cover.headline']
+            chk(f'ED-29 portada {k}: habla de acumulado y de corte/cierre', len(hs) == 1 and 'acumulado' in hs[0] and ('al corte' in hs[0] or 'al cierre del mes' in hs[0]), hs)
         base = json.load(open('tools/regression/data/editorial_baseline.json'))
         for k in ('base', 'mes_anterior', 'excedente'):
             cur = nums[k]

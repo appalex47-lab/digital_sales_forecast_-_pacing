@@ -118,8 +118,8 @@
     // Título editorial según canal y período: mes cerrado → resultados; mes abierto → avance y cierre estimado; semana; año acumulado.
     const sm = selMonth(s), subj = s.channel === 'total' || !s.channel ? 'Ventas digitales' : `Ventas de ${chLabel(s.channel)}`;
     const cutoff = run && run.cutoff, mEnd = sm && !isWeekKey(sm) ? periodEnd({ type: 'month', key: sm }) : null;
-    const headline = sm ? (isWeekKey(sm) ? `${subj}: lectura de ${periodLow(sm)}` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: avance de ${periodLow(sm)} y cierre estimado` : `${subj}: resultados y lectura de ${periodLow(sm)}`))
-      : (run && run.year ? `${subj}: acumulado ${run.year} y cierre estimado` : `${subj}: resultados y lectura del período`);
+    const headline = sm ? (isWeekKey(sm) ? `${subj}: acumulado de ${periodLow(sm)} al corte` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: acumulado de ${periodLow(sm)} al corte y cierre estimado` : `${subj}: acumulado de ${periodLow(sm)} al cierre del mes`))
+      : (run && run.year ? `${subj}: acumulado ${run.year} al corte y cierre estimado` : `${subj}: acumulado del período al corte`);
     return page('cover', 'Portada', {
       headline,
       scope: s.channel === 'total' || !s.channel ? 'Total digital · Ecommerce, App, WhatsApp y Llamadas' : chLabel(s.channel),
