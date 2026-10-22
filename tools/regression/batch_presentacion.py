@@ -93,7 +93,7 @@ async def main():
         await f.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[]})")
         main_txt = await f.evaluate("[...document.querySelectorAll('#rp-print-host .rp-page')].filter(p=>!/^annex/.test(p.dataset.page)).map(p=>p.innerText).join('\\n')")
         tr_txt = await f.evaluate("(document.querySelector('#rp-print-host .rp-page[data-page=trends]')||{innerText:''}).innerText")
-        chk('PR-21 la lámina de evolución dice cuántos productos restan y suman en total y no usa «2 de 5»', bool(tr_txt) and (re.search(r'en total, \d+ (resta|restan)( y \d+ (suma|suman))?', tr_txt) is not None and not re.search(r'\d+ de \d+ · \d+ de \d+', tr_txt)), tr_txt[:600])
+        chk('PR-21 la lámina de evolución dice cuántos productos restan y suman en total (titular y filas «Otros») y no usa «2 de 5»', bool(tr_txt) and (re.search(r'\d+ (producto|productos) (resta|restan) .* (suma|suman)', tr_txt) is not None and (re.search(r'Otros [\d,]+ productos?', tr_txt) is not None or re.search(r'en total, [\d,]+ (resta|restan)', tr_txt) is not None) and not re.search(r'\d+ de \d+ · \d+ de \d+', tr_txt)), tr_txt[:600])
         banned = ['Hecho observado', 'Cálculo aritmético', 'Requerimiento aritmético', 'Fuente:', 'Etiquetas:', 'Sin filtros', 'Selección y filtros', 'Cobertura del reporte', 'Método de forecast', 'Calidad de datos', 'Configuración de la herramienta', 'Pág. ', 'ver el anexo', 'sin datos suficientes']
         chk('PR-17 la presentación por defecto no expone filtros, etiquetas, fuentes internas ni cobertura de módulos', not [b for b in banned if b in main_txt], [b for b in banned if b in main_txt])
         chk('PR-17 hay resumen con narrativa y cierre ejecutivo con sus cuatro bloques', all(w in main_txt for w in ('Cierre ejecutivo', 'DÓNDE ESTAMOS', 'QUÉ SOBRESALIÓ', 'QUÉ DEBEMOS MOVER', 'QUÉ DEBEMOS VIGILAR', 'Al corte del')) or all(w in main_txt.lower() for w in ('dónde estamos','qué debemos vigilar','al corte del')), main_txt[:200])
@@ -130,13 +130,13 @@ async def main():
         await gen_rp(f); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
         r19 = await f.evaluate("(()=>{const r=FP.app.state.rp.report,pc=r.pages.find(p=>p.id==='pacing'),sm=r.pages.find(p=>p.id==='summary');return {mk:pc&&pc.monthKey,label:pc&&pc.monthLabel,n:pc&&pc.charts[0].labels.length,narr:sm&&sm.narrative,yr:sm&&sm.yearStrip,rec:(r.omitted.find(o=>o.id==='recovery')||{}).reason||null,sel:FP.app.state.dx.settings.periodKey}})()")
         chk('PR-19 con un mes seleccionado, pacing es de ese mes y su gráfica es diaria', r19['mk'] == r19['sel'] and (r19['n'] or 0) >= 28, r19)
-        chk('PR-19 el resumen habla del mes y trae una línea del año', (r19['label'] or '??').lower() in (r19['narr'] or '').lower() and 'En el año' in (r19['yr'] or ''), r19)
+        chk('PR-19 el resumen habla del mes y trae una línea del año', 'el mes ' in (r19['narr'] or '').lower() and 'En el año' in (r19['yr'] or ''), r19)
         chk('PR-19 la recuperación de un mes que no es el abierto se omite con su motivo', 'mes en curso' in (r19['rec'] or ''), r19)
         # 20 · semana seleccionada: el reporte gira en torno a la semana
         await f.evaluate("(()=>{const s=FP.app.state.dx.settings;s.periodType='week';s.periodKey='2026-W39';FP.app.state.dx.run=null})()")
         await gen_rp(f); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)
         r20 = await f.evaluate("(()=>{const r=FP.app.state.rp.report,pc=r.pages.find(p=>p.id==='pacing'),sm=r.pages.find(p=>p.id==='summary');return {mk:pc&&pc.monthKey,n:pc&&pc.charts[0].labels.length,narr:sm&&sm.narrative}})()")
-        chk('PR-20 con una semana seleccionada, el pacing y el resumen son de esa semana', r20['mk'] == '2026-W39' and (r20['n'] or 0) == 7 and 'semana 39' in (r20['narr'] or '').lower(), r20)
+        chk('PR-20 con una semana seleccionada, el pacing y el resumen son de esa semana', r20['mk'] == '2026-W39' and (r20['n'] or 0) == 7 and 'la semana ' in (r20['narr'] or '').lower(), r20)
         # 21 · el corte del reporte lo da su propio selector de periodo; la fecha de referencia de la app no cambia
         await f.evaluate("(()=>{const s=FP.app.state.dx.settings;s.periodType='month';s.periodKey='2026-09';FP.app.state.dx.run=null;window.__ref0=FP.app.state.fc.run.cutoff})()")
         await gen_rp(f); await f.wait_for_function("FP.app.state.rp.status==='ready'", timeout=120000)

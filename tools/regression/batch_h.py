@@ -138,10 +138,10 @@ async def main():
             st = {}
             for name, ai in {'busy': "{status:'busy',actions:[],errors:[]}", 'error': "{status:'unavailable',errors:['Sin conexión con Cohere.']}", 'ok': "{status:'ok',errors:[],result:{summary:'Resumen de prueba.',narrative:'Párrafo uno.\\n\\nPárrafo dos.',missingInfo:[]}}"}.items():
                 st[name] = await q.evaluate("""(ai)=>{FP.app.state.nx.ai=eval('('+ai+')');FP.narrativeView.render(FP.app.state);const b=document.getElementById('nx-ai');
-                  const l=b.querySelector('.ds-loading'),a=b.querySelector('.ds-alert');
-                  return {loading:l?{t:l.innerText.trim(),role:l.getAttribute('role'),spin:getComputedStyle(l,'::before').content!=='none'}:null,
+                  const l=b.querySelector('.ldr, .ds-loading'),a=b.querySelector('.ds-alert');
+                  return {loading:l?{t:l.innerText.trim(),role:l.getAttribute('role'),spin:l.classList.contains('ldr')||getComputedStyle(l,'::before').content!=='none'}:null,
                           alert:a?{cls:a.className,role:a.getAttribute('role'),t:a.innerText.trim(),bg:getComputedStyle(a).backgroundColor}:null,text:b.innerText.replace(/\\s+/g,' ').trim().slice(0,160),chip:!!b.querySelector('.chip')}}""", ai)
-            chk('H-narr espera: «Redactando con Cohere…» con .ds-loading y role="status"', bool(st['busy']['loading']) and st['busy']['loading']['t'].startswith('Redactando con Cohere') and st['busy']['loading']['role'] == 'status' and st['busy']['loading']['spin'], st['busy'])
+            chk('H-narr espera: «Redactando con Cohere…» con el loader homologado (role="progressbar")', bool(st['busy']['loading']) and st['busy']['loading']['t'].startswith('Redactando con Cohere') and st['busy']['loading']['role'] in ('status', 'progressbar') and st['busy']['loading']['spin'], st['busy'])
             chk('H-narr error: aviso con .ds-alert--danger, role="alert" y el mismo texto; aclara que la narrativa determinística sigue disponible', bool(st['error']['alert']) and 'ds-alert--danger' in st['error']['alert']['cls'] and st['error']['alert']['role'] == 'alert' and 'Análisis con IA no disponible' in st['error']['alert']['t'] and 'no depende de Cohere' in st['error']['alert']['t'], st['error'])
             chk('H-narr generado: se conserva «Redacción de Cohere» validada, sin estilo de alerta ni de carga', 'Redacción de Cohere' in st['ok']['text'] and st['ok']['chip'] and not st['ok']['alert'] and not st['ok']['loading'], st['ok'])
             soft = await q.evaluate("""()=>{const e=document.querySelector('#nx-summary .chip--soft');if(!e)return null;const c=getComputedStyle(e);return {w:c.borderTopWidth,st:c.borderTopStyle}}""")

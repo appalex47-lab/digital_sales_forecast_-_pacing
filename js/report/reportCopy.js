@@ -41,14 +41,14 @@
     summary(p, rep) {
       const st = standing(kpi(page(rep, 'pacing'), 'compliance')); if (!st) return null;
       const per = periodOf(rep), sel = page(rep, 'pacing') && page(rep, 'pacing').selection;
-      const subj = sel ? 'La selección' : (per ? per.split(' ')[0] : 'El período');
+      const subj = sel ? 'La selección' : (per ? ({ 'Año': 'El año', 'Semana': 'La semana' }[per.split(' ')[0]] || per.split(' ')[0]) : 'El período');
       const ent = p.focus && p.focus.entity ? withDim(p.focus.level, cut(p.focus.entity, 32)) : null;
       return `${subj} ${st.text}${ent ? `; la atención está en ${ent}` : ''}`;
     },
     pacing(p, rep) {
       const c = kpi(p, 'compliance'), st = standing(c); if (!st) return null;
       const per = periodOf(rep), sel = p.selection;
-      const subj = sel ? 'La selección' : (per ? per.split(' ')[0] : 'El período');
+      const subj = sel ? 'La selección' : (per ? ({ 'Año': 'El año', 'Semana': 'La semana' }[per.split(' ')[0]] || per.split(' ')[0]) : 'El período');
       const verb = st.key === 'above' ? 'supera el' : st.key === 'on' ? 'llega al' : st.key === 'below' ? 'queda por debajo del' : 'queda lejos del';
       let tail = '';
       const ch = (p.charts || [])[0];
@@ -84,6 +84,12 @@
     trends(p) {
       const drag = kpi(p, 'drag'), comp = kpi(p, 'comp'), t0 = (p.tables || [])[0], ent = t0 && t0.rows && t0.rows[0] ? cut(t0.rows[0].entity, 30) : null;
       if (!fin(drag) || drag >= 0) return fin(comp) && comp > 0 ? `Lo que suma, ${money(comp)}; nada resta de forma medible` : null;
+      const t1 = (p.tables || [])[1], nD = t0 && fin(t0.total) ? t0.total : null, nC = t1 && fin(t1.total) ? t1.total : null, bal = kpi(p, 'bal'), u = t0 && t0.unit;
+      if (nD && nC && u && fin(bal) && fin(comp)) {   // lectura de conjunto: cuántos restan, cuántos suman y si se compensan (los nombres quedan en las tablas)
+        const pl = (w, n) => (n === 1 ? w : (/[aeiou]$/i.test(w) ? `${w}s` : /z$/i.test(w) ? `${w.slice(0, -1)}ces` : `${w}es`)), nf = (n) => n.toLocaleString('es-MX');
+        const big = Math.max(-drag, comp), near = big > 0 && Math.abs(bal) <= 0.05 * big;
+        return `${nf(nD)} ${pl(u, nD)} ${nD === 1 ? 'resta' : 'restan'} ${moneyC(-drag)} y ${nf(nC)} ${nC === 1 ? 'suma' : 'suman'} ${moneyC(comp)}: ${near ? 'casi se compensan' : bal < 0 ? 'la caída supera al crecimiento' : 'el crecimiento supera a la caída'} (neto ${money(bal)})`;
+      }
       const tail = fin(comp) && comp > 0 ? `; lo que suma, ${money(comp)}` : '; nada suma de forma medible';
       return `${ent ? `${ent} concentra la mayor caída` : 'Lo que resta'} (total ${money(drag)})${tail}`;
     },

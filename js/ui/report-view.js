@@ -177,7 +177,7 @@
       return `<td class="${c.num ? 'num' : ''}${tone}${na ? ' rp-na' : ''}">${esc(txt)}</td>`;
     };
     return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t${t.id === 'retention' ? ' rp-t--rt' : ''}"><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
-      <tbody${isNum(t.total) && t.unit ? ` data-all="${t.total}" data-unit="${esc(t.unit)}" data-side="${esc(t.id)}"` : ''}>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
+      <tbody${isNum(t.total) && t.unit ? ` data-all="${t.total}" data-unit="${esc(t.unit)}" data-side="${esc(t.id)}"${isNum(t.sum) ? ` data-sum="${t.sum}"` : ''}` : ''}>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}${isNum(t.sum) && isNum(r.impact) ? ` data-imp="${r.impact}"` : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   let NOANNEX = false;   // se fija en docHtml: si el anexo no va en el PDF, no se remite a él
   const dx = (t) => (NOANNEX ? String(t == null ? '' : t).replace(/\s*\((?:detalle|ver)[^)]*anexo[^)]*\)/i, '').replace(/\s*El detalle de cada método está en el anexo\.?/i, '').replace(/\s*Ver anexo técnico\.?/i, '').trim() : t);
@@ -375,7 +375,7 @@
   /* ================= páginas, numeración e impresión ================= */
   function units(report, exclude) {
     const ex = new Set(exclude || []), out = [];
-    const ORDER = ['cover', 'summary', 'pacing', 'drivers', 'movers', 'trends', 'categories', 'customers', 'traffic', 'campaigns', 'seasonality', 'recovery', 'closing', 'reliability', 'annex'], rank = (id) => { const i = ORDER.indexOf(id); return i < 0 ? ORDER.length : i; };   // solo el orden de lectura de la presentación; el reporte conserva el suyo
+    const ORDER = ['cover', 'summary', 'pacing', 'drivers', 'movers', 'categories', 'trends', 'customers', 'traffic', 'campaigns', 'seasonality', 'recovery', 'closing', 'reliability', 'annex'], rank = (id) => { const i = ORDER.indexOf(id); return i < 0 ? ORDER.length : i; };   // solo el orden de lectura de la presentación; el reporte conserva el suyo
     report.pages.filter((p) => p.status === 'included' && !p.annex && !ex.has(p.id)).map((p, i) => ({ p, i })).sort((a, b) => rank(a.p.id) - rank(b.p.id) || a.i - b.i).map((o) => o.p).forEach((p) => {
       if (p.id === 'annex') [['Anexo técnico A · Calidad de datos y brechas', 1], ['Anexo técnico B · Métodos, backtest y confiabilidad', 2], ['Anexo técnico C · Definiciones y límites', 3]].forEach(([t, s]) => out.push({ id: 'annex', sub: s, title: t, page: p }));
       else out.push({ id: p.id, title: p.title, page: p });
@@ -443,6 +443,8 @@
     rootEl.querySelectorAll('.rp-page').forEach((pg) => {
       const b = pg.querySelector('.rp-body'); if (!b) return;
       pg.classList.remove('rp-compact', 'rp-tight'); pg.removeAttribute('data-overflow');
+      b.querySelectorAll('tr.rp-rest, tr.rp-rest-total').forEach((x) => x.remove());   // se recalculan en cada ajuste
+      delete pg.dataset.noTotal;
       if (b.scrollHeight > b.clientHeight + 1) { pg.classList.add('rp-compact'); }
       if (b.scrollHeight > b.clientHeight + 1) { pg.classList.add('rp-tight'); }   // último recurso antes de quitar filas: gráficos más bajos
       // Resumen: antes de quitar nada se esconde el gráfico del foco; luego, los hallazgos secundarios (lo dice una nota; siguen en sus láminas).
@@ -457,17 +459,43 @@
         const tb = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')];
         if (tb.length && tb.every((x) => x.dataset.all) && tb.some((x) => +x.dataset.all > x.rows.length) && !b.querySelector(':scope > .rp-trim')) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = sideNote(tb); b.appendChild(n); }
       }
+      // Evolución: «Otros N» y total para que la tabla sume lo mismo que la tarjeta (se agregan al final, ya con las filas visibles definitivas; si no caben, se quita primero el total).
+      const addRest = () => {
+        if (pg.getAttribute('data-page') !== 'trends') return;
+        const pl = (w, n) => (n === 1 ? w : (/[aeiou]$/i.test(w) ? `${w}s` : /z$/i.test(w) ? `${w.slice(0, -1)}ces` : `${w}es`)), nf = (n) => n.toLocaleString('es-MX');
+        b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody[data-sum]').forEach((tb) => {
+          tb.querySelectorAll('tr.rp-rest, tr.rp-rest-total').forEach((x) => x.remove());
+          const rows = [...tb.rows].filter((r) => r.dataset.imp !== undefined), all = +tb.dataset.all, sum = +tb.dataset.sum, u = tb.dataset.unit, cols = tb.rows[0] ? tb.rows[0].cells.length : 5;
+          if (!(all > rows.length) || !isFinite(sum)) return;
+          const shown = rows.reduce((a, r) => a + (+r.dataset.imp), 0), cls = sum < 0 ? ' rp-neg' : ' rp-pos', ocls = (sum - shown) < 0 ? ' rp-neg' : ' rp-pos';
+          const tr = (c, label, v, vcls) => `<tr class="${c}"><td>${esc(label)}</td><td class="num${vcls}">${esc(fmt('smoneyC', v))}</td>${'<td></td>'.repeat(Math.max(0, cols - 2))}</tr>`;
+          tb.insertAdjacentHTML('beforeend', tr('rp-rest', `Otros ${nf(all - rows.length)} ${pl(u, all - rows.length)}`, sum - shown, ocls) + (pg.dataset.noTotal ? '' : tr('rp-rest-total', 'Total', sum, cls)));
+          const t = tb.closest('.rp-tbl') && tb.closest('.rp-tbl').querySelector('.rp-tbl__t'), verb = tb.dataset.side === 'drag' ? ['resta', 'restan'] : ['suma', 'suman'];
+          if (t) t.textContent = rows.length === 1 ? `El ${u} que más ${verb[0]}` : `Los ${rows.length} ${pl(u, 2)} que más ${verb[1]}`;
+        });
+        // con «Otros» y total la tabla ya dice cuántos hay: la nota de conteo sería redundante
+        if (b.querySelector('tr.rp-rest')) { const n = b.querySelector(':scope > .rp-trim'); if (n && /en total/.test(n.textContent)) n.remove(); }
+      };
       // Aun compacta no cabe: se muestran solo las filas de mayor magnitud (las tablas ya vienen ordenadas) y la lámina lo dice; nunca se recorta en silencio.
       if (b.scrollHeight > b.clientHeight + 1 && !/^annex/.test(pg.getAttribute('data-page') || '')) {
         const note = b.querySelector(':scope > .rp-trim') || b.appendChild(Object.assign(document.createElement('p'), { className: 'rp-scope rp-trim' }));
         const tables = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')]; tables.forEach((t) => { t.dataset.total = t.dataset.all || t.rows.length; });
         let guard = 60;
+        const dr = (x) => [...x.rows].filter((r) => !r.classList.contains('rp-rest') && !r.classList.contains('rp-rest-total'));   // filas de datos (sin «Otros» ni total)
+        addRest();   // «Otros» y total ocupan lugar fijo: lo que se recorta son filas de datos
         while (b.scrollHeight > b.clientHeight + 1 && guard-- > 0) {
-          const t = tables.filter((x) => x.rows.length > 1).sort((a, c) => c.rows.length - a.rows.length)[0]; if (!t) break;
-          t.lastElementChild.remove();
-          note.textContent = tables.every((x) => x.dataset.all) ? sideNote(tables) : `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${x.rows.length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
+          if (pg.getAttribute('data-page') === 'trends' && !pg.dataset.noTotal) { pg.dataset.noTotal = '1'; addRest(); continue; }   // primero se quita el total; después, filas de datos
+          const t = tables.filter((x) => dr(x).length > 1).sort((a, c) => dr(c).length - dr(a).length)[0]; if (!t) break;
+          dr(t).pop().remove(); addRest();
+          note.textContent = tables.every((x) => x.dataset.all) ? sideNote(tables) : `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${dr(x).length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
         }
-        if (tables.every((x) => x.rows.length === +x.dataset.total)) note.remove(); else pg.setAttribute('data-trimmed', '1');
+        if (tables.every((x) => dr(x).length === +x.dataset.total)) note.remove(); else pg.setAttribute('data-trimmed', '1');
+      }
+      addRest();
+      if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'trends') {   // último recurso: sin «Otros» ni total; la nota de conteo dice cuántos hay
+        b.querySelectorAll('tr.rp-rest, tr.rp-rest-total').forEach((x) => x.remove());
+        const tbs = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')];
+        if (tbs.length && tbs.every((x) => x.dataset.all) && !b.querySelector(':scope > .rp-trim')) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = sideNote(tbs); b.appendChild(n); }
       }
       // Clientes: con filtro u otras líneas, primero se quita la fila de base histórica de la tira y luego su línea en la caja (siguen en la caja/notas).
       if (b.scrollHeight > b.clientHeight + 1 && pg.getAttribute('data-page') === 'customers') {
