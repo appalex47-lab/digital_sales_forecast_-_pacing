@@ -92,6 +92,8 @@ async def main():
         # 17 · la presentación por defecto no expone metadatos de la herramienta
         await f.evaluate("FP.reportView.mountPrint(FP.app.state.rp.report,{exclude:[]})")
         main_txt = await f.evaluate("[...document.querySelectorAll('#rp-print-host .rp-page')].filter(p=>!/^annex/.test(p.dataset.page)).map(p=>p.innerText).join('\\n')")
+        tr_txt = await f.evaluate("(document.querySelector('#rp-print-host .rp-page[data-page=trends]')||{innerText:''}).innerText")
+        chk('PR-21 la lámina de evolución dice cuántos productos restan y suman en total y no usa «2 de 5»', bool(tr_txt) and (re.search(r'en total, \d+ (resta|restan)( y \d+ (suma|suman))?', tr_txt) is not None and not re.search(r'\d+ de \d+ · \d+ de \d+', tr_txt)), tr_txt[:600])
         banned = ['Hecho observado', 'Cálculo aritmético', 'Requerimiento aritmético', 'Fuente:', 'Etiquetas:', 'Sin filtros', 'Selección y filtros', 'Cobertura del reporte', 'Método de forecast', 'Calidad de datos', 'Configuración de la herramienta', 'Pág. ', 'ver el anexo', 'sin datos suficientes']
         chk('PR-17 la presentación por defecto no expone filtros, etiquetas, fuentes internas ni cobertura de módulos', not [b for b in banned if b in main_txt], [b for b in banned if b in main_txt])
         chk('PR-17 hay resumen con narrativa y cierre ejecutivo con sus cuatro bloques', all(w in main_txt for w in ('Cierre ejecutivo', 'DÓNDE ESTAMOS', 'QUÉ SOBRESALIÓ', 'QUÉ DEBEMOS MOVER', 'QUÉ DEBEMOS VIGILAR', 'Al corte del')) or all(w in main_txt.lower() for w in ('dónde estamos','qué debemos vigilar','al corte del')), main_txt[:200])

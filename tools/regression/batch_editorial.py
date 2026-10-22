@@ -41,7 +41,7 @@ async def main():
         c2 = await q.evaluate(MX, "i.customers.result.monthly.forEach(l=>{l.customers={total:2,new:1,recurrent:1,reactivated:0}});")
         h = c2['customers']['h']
         chk('ED-11 2 clientes: «2 compraron», «1 recurrente», «0 reactivados»', all(x in h for x in ['2 compraron', '1 nuevo', '1 recurrente', '0 reactivados']), h)
-        c3 = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=(P.drag||[]).slice(0,1);P.compensate=[];")
+        c3 = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=(P.drag||[]).slice(0,1);P.compensate=[];P.all=(P.all||[]).filter(x=>x.type==='watch').concat(P.drag);")
         h = c3['trends']['h']
         chk('ED-12 1 que resta y ninguno suma: singular y «nada suma»', c3['trends']['st'] == 'included' and ' resta ' in h and 'restan' not in h and 'nada suma de forma medible' in h and '(s)' not in h, h)
         c4 = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=[];P.compensate=[];")

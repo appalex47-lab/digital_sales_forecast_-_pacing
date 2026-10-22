@@ -383,6 +383,9 @@
     const bn = (e) => (ctx.level === 'branch' && s.branchNames && s.branchNames[e]) || e;   // sucursal: nombre_sucursal, no el código
     const mapRow = (x) => ({ entity: bn(x.entity), impact: x.impact, relative: x.relativeChange, pattern: patternText(x.pattern, x.consecutivePeriods), _spark: (rowBy.get(x.entity) || {}).series || null });
     const drag = (P.drag || []).filter((x) => isNum(x.impact)).slice(0, 5).map(mapRow), comp = (P.compensate || []).filter((x) => isNum(x.impact)).slice(0, 5).map(mapRow);
+    // Total real de cada lado: la lista completa del motor (`all`), no solo las 12 de mayor impacto que guarda en `drag`/`compensate`; los totales en $ ya se calculan sobre todas.
+    const cntSide = (type, shown) => (Array.isArray(P.all) ? Math.max(P.all.filter((x) => x && x.type === type && isNum(x.impact)).length, shown) : shown);
+    const nDrag = cntSide('drag', (P.drag || []).filter((x) => isNum(x.impact)).length), nComp = cntSide('compensate', (P.compensate || []).filter((x) => isNum(x.impact)).length);
     if (!drag.length && !comp.length) return omit('trends', 'Evolución y patrones', 'El análisis no encontró categorías, productos u otras partes del negocio con un cambio medible en el período.');
     const cmp = P.comparison || {};
     const partial = cmp.currentPartial || cmp.baselinePartial;
@@ -391,13 +394,13 @@
     return page('trends', 'Evolución y patrones', {
       ctx: `${ctxPeriod(cmp.currentPeriod) || 'Período'} vs. ${ctxPeriod(cmp.baselinePeriod) || 'anterior'}${partial ? ' (incluye período parcial)' : ''}`,
       question: `¿Qué ${plural(lvl)} restan, cuáles suman y desde cuándo?`,
-      headline: `${cmp.currentPeriod || 'El período'} vs. ${cmp.baselinePeriod || 'el anterior'}: ${(P.drag || []).length ? `${nUnits((P.drag || []).length, lvl)} ${(P.drag || []).length === 1 ? 'resta' : 'restan'} ${moneyC(P.totals && P.totals.dragAbs)}` : 'nada resta de forma medible'}${(P.compensate || []).length ? ` y ${(P.drag || []).length ? 'otros ' : ''}${nUnits((P.compensate || []).length, lvl)} ${(P.compensate || []).length === 1 ? 'suma' : 'suman'} ${moneyC(P.totals && P.totals.compensateAbs)}` : '; nada suma de forma medible'}.`,
+      headline: `${ctxPeriod(cmp.currentPeriod) || 'El período'} vs. ${ctxPeriod(cmp.baselinePeriod) || 'el anterior'}: ${nDrag ? `${nUnits(nDrag, lvl)} ${nDrag === 1 ? 'resta' : 'restan'} ${moneyC(P.totals && P.totals.dragAbs)}` : 'nada resta de forma medible'}${nComp ? ` y ${nDrag ? 'otros ' : ''}${nUnits(nComp, lvl)} ${nComp === 1 ? 'suma' : 'suman'} ${moneyC(P.totals && P.totals.compensateAbs)}` : '; nada suma de forma medible'}.`,
       kpis: [
-        kpi('drag', 'Lo que resta', P.totals ? P.totals.drag : null, 'smoney', TAG.calc, { tone: 'neg' }),
-        kpi('comp', 'Lo que suma', P.totals ? P.totals.compensate : null, 'smoney', TAG.calc, { tone: 'pos' }),
+        kpi('drag', 'Lo que resta', P.totals ? P.totals.drag : null, 'smoney', TAG.calc, { tone: 'neg', sub: nUnits(nDrag, lvl) }),
+        kpi('comp', 'Lo que suma', P.totals ? P.totals.compensate : null, 'smoney', TAG.calc, { tone: 'pos', sub: nUnits(nComp, lvl) }),
         kpi('bal', 'Balance neto', P.totals ? P.totals.balance : null, 'smoney', TAG.calc, { tone: P.totals ? toneOfGap(P.totals.balance) : 'neutral' })
       ],
-      tables: [{ id: 'drag', title: 'Restan', columns: cols, rows: drag }, { id: 'comp', title: 'Suman', columns: cols, rows: comp }],
+      tables: [{ id: 'drag', title: 'Restan', columns: cols, rows: drag, total: nDrag, unit: lvl }, { id: 'comp', title: 'Suman', columns: cols, rows: comp, total: nComp, unit: lvl }],
       scope: { level: ctx.levelLabel || lvl, metric: ctx.metricLabel || 'Venta', channel: ctx.channelLabel || null, periodType: ctx.periodType || null, currentPeriod: cmp.currentPeriod || null, filter: s.trendFilterLabel || null, partial: Boolean(partial) },
       notes: [partial ? 'Hay un período parcial en la comparación: los cambios pueden cambiar al cerrar el período.' : 'Comparación entre períodos completos.', 'Los patrones son descriptivos (cómo se movió la venta), no explican por qué. Una duración corta no es un deterioro estructural.'],
       sources: ['Evolución y patrones'], tags: [TAG.obs, TAG.calc]

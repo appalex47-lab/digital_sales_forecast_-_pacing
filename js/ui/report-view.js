@@ -177,7 +177,7 @@
       return `<td class="${c.num ? 'num' : ''}${tone}${na ? ' rp-na' : ''}">${esc(txt)}</td>`;
     };
     return `<div class="rp-tbl rp-panel"><div class="rp-tbl__t">${esc(t.title)}</div><table class="rp-t${t.id === 'retention' ? ' rp-t--rt' : ''}"><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
-      <tbody>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
+      <tbody${isNum(t.total) && t.unit ? ` data-all="${t.total}" data-unit="${esc(t.unit)}" data-side="${esc(t.id)}"` : ''}>${t.rows.map((r) => `<tr${r._total ? ' class="rp-total"' : ''}>${t.columns.map((c) => cell(c, r)).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   let NOANNEX = false;   // se fija en docHtml: si el anexo no va en el PDF, no se remite a él
   const dx = (t) => (NOANNEX ? String(t == null ? '' : t).replace(/\s*\((?:detalle|ver)[^)]*anexo[^)]*\)/i, '').replace(/\s*El detalle de cada método está en el anexo\.?/i, '').replace(/\s*Ver anexo técnico\.?/i, '').trim() : t);
@@ -384,6 +384,14 @@
     return out;
   }
   const dateOf = (iso) => fmt('date', iso);
+  /** Evolución: «se muestran los 2 productos que más restan y los 2 que más suman; en total restan N y suman M». Los totales son los reales del análisis, no las filas visibles. */
+  const sideNote = (tables) => {
+    const pl = (w) => (/[aeiou]$/i.test(w) ? `${w}s` : `${w}es`), part = (x, verb) => { const n = x.rows.length, u = x.dataset.unit; return `${n === 1 ? `el ${u}` : `los ${n} ${pl(u)}`} que más ${n === 1 ? verb[0] : verb[1]}`; };
+    const by = Object.fromEntries(tables.map((x) => [x.dataset.side, x]));
+    const shown = [by.drag ? part(by.drag, ['resta', 'restan']) : null, by.comp ? part(by.comp, ['suma', 'suman']) : null].filter(Boolean).join(' y ');
+    const all = [by.drag ? `${by.drag.dataset.all} ${+by.drag.dataset.all === 1 ? 'resta' : 'restan'}` : null, by.comp ? `${by.comp.dataset.all} ${+by.comp.dataset.all === 1 ? 'suma' : 'suman'}` : null].filter(Boolean).join(' y ');
+    return `Esta lámina muestra ${shown}; en total, ${all}.`;
+  };
   const TITLES = { movers: 'Qué resta y qué suma', summary: 'Resumen ejecutivo', pacing: 'Desempeño contra el plan y proyección de cierre', drivers: 'Qué explica la diferencia: tráfico, conversión y ticket', trends: 'Evolución: qué cae y qué compensa', categories: 'Categorías y productos: dónde se concentra el cambio', customers: 'Clientes, recurrencia y valor', traffic: 'Tráfico y conversión por segmento', recovery: 'Recuperación: lo que falta para la meta', seasonality: 'Estacionalidad y meta del siguiente año', closing: 'Cierre ejecutivo | Qué nos llevamos de este periodo' };
   const SECTION = { summary: 'Resumen ejecutivo', pacing: 'Desempeño comercial', drivers: 'Qué explica la diferencia', movers: 'Qué suma y qué resta', trends: 'Evolución y movimientos', categories: 'Categorías y productos', customers: 'Clientes y recurrencia', traffic: 'Tráfico y conversión', campaigns: 'Campañas', recovery: 'Recuperación y prioridades', closing: 'Cierre ejecutivo', reliability: 'Método y confiabilidad', seasonality: 'Estacionalidad' };
   const DECO = '<svg class="rp-deco" width="640" height="420" viewBox="0 0 640 420" aria-hidden="true"><g fill="#fff" opacity=".10"><rect x="330" y="250" width="34" height="170"/><rect x="380" y="210" width="34" height="210"/><rect x="430" y="165" width="34" height="255"/><rect x="480" y="120" width="34" height="300"/><rect x="530" y="70" width="34" height="350"/><rect x="580" y="20" width="34" height="400"/></g><g fill="none" stroke="#8DB6E8" stroke-width="2.5" opacity=".55"><path d="M0 330 L90 290 L180 308 L270 230 L360 250 L450 160 L540 150 L640 60"/></g><circle cx="640" cy="60" r="7" fill="#8DB6E8" opacity=".8"/></svg>';
@@ -444,15 +452,20 @@
         while (b.scrollHeight > b.clientHeight + 1 && finds.length - dropped > 1) { finds[finds.length - 1 - dropped].remove(); dropped++; }
         if (dropped) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = `Por espacio, el resumen muestra ${finds.length - dropped} de ${finds.length} hallazgos; el resto está en sus láminas.`; b.appendChild(n); pg.setAttribute('data-trimmed', '1'); }
       }
+      // Evolución: siempre se dice cuántos productos restan y suman en total cuando la lámina muestra menos (aunque quepan las filas).
+      if (pg.getAttribute('data-page') === 'trends') {
+        const tb = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')];
+        if (tb.length && tb.every((x) => x.dataset.all) && tb.some((x) => +x.dataset.all > x.rows.length) && !b.querySelector(':scope > .rp-trim')) { const n = document.createElement('p'); n.className = 'rp-scope rp-trim'; n.textContent = sideNote(tb); b.appendChild(n); }
+      }
       // Aun compacta no cabe: se muestran solo las filas de mayor magnitud (las tablas ya vienen ordenadas) y la lámina lo dice; nunca se recorta en silencio.
       if (b.scrollHeight > b.clientHeight + 1 && !/^annex/.test(pg.getAttribute('data-page') || '')) {
-        const note = document.createElement('p'); note.className = 'rp-scope rp-trim'; b.appendChild(note);
-        const tables = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')]; tables.forEach((t) => { t.dataset.total = t.rows.length; });
+        const note = b.querySelector(':scope > .rp-trim') || b.appendChild(Object.assign(document.createElement('p'), { className: 'rp-scope rp-trim' }));
+        const tables = [...b.querySelectorAll('table.rp-t:not(.rp-t--rt) tbody')]; tables.forEach((t) => { t.dataset.total = t.dataset.all || t.rows.length; });
         let guard = 60;
         while (b.scrollHeight > b.clientHeight + 1 && guard-- > 0) {
           const t = tables.filter((x) => x.rows.length > 1).sort((a, c) => c.rows.length - a.rows.length)[0]; if (!t) break;
           t.lastElementChild.remove();
-          note.textContent = `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${x.rows.length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
+          note.textContent = tables.every((x) => x.dataset.all) ? sideNote(tables) : `Por espacio, esta lámina muestra solo las filas de mayor magnitud (${tables.map((x) => `${x.rows.length} de ${x.dataset.total}`).join(' · ')}); el orden es por impacto.`;
         }
         if (tables.every((x) => x.rows.length === +x.dataset.total)) note.remove(); else pg.setAttribute('data-trimmed', '1');
       }
