@@ -309,10 +309,10 @@
   }
 
   /** Sube solo estas claves (sin tocar ni borrar las demás de la nube). */
-  async function pushKeys(provider, keys, { fetchImpl, captchaImpl } = {}) {
+  async function pushKeys(provider, keys, { fetchImpl, captchaImpl, onProgress } = {}) {
     const se = await ensureSession({ fetchImpl, captchaImpl }); if (!se.ok) return se;
     let n = 0;
-    try { for (const key of keys) { const env = await provider.read(key); if (!env) continue; await putKey(se.session, key, env, fetchImpl); n++; } }
+    try { for (const key of keys) { const env = await provider.read(key); if (!env) continue; await putKey(se.session, key, env, fetchImpl); n++; if (onProgress) onProgress({ key, index: n, of: keys.length }); } }
     catch (e) { return { ok: false, error: e.message }; }
     return { ok: true, pushed: n, at: new Date().toISOString() };
   }
@@ -360,6 +360,76 @@
     } catch (e) { return { ok: false, error: e.message }; }
   }
 
+  /* ---------- Limpieza de copias huérfanas ----------
+   * Los datos grandes viajan en bloques `<clave>:c<sello>-<n>`; cada guardado nuevo estrena bloques y deja los viejos en la nube.
+   * Huérfano = bloque que ningún índice vigente (ni el de la generación anterior, que se conserva como respaldo) menciona. */
+  const CHUNK_RE = /^(.+):c([a-z0-9]+)-(\d+)$/;
+  const MIN_AGE_MS = 10 * 60 * 1000;   // un bloque recién subido (otra persona puede estar subiendo) nunca se toca
+  /** Bloques que menciona un sobre/índice guardado como texto JSON. [] si no es un índice por bloques. */
+  function chunkRefsOfText(baseKey, text) {
+    let j; try { j = JSON.parse(text); } catch (e) { return []; }
+    const m = j && j.format === 'packed-chunked-v1' ? j : (j && j.data && j.data.format === 'packed-chunked-v1' ? j.data : null);
+    if (!m || !(m.chunks > 0)) return [];
+    const out = [];
+    for (let i = 0; i < m.chunks; i++) out.push(`${baseKey}:c${(m.stamps && m.stamps[i]) || m.stamp}-${i}`);
+    return out;
+  }
+  async function listAllRows(session, fetchImpl) {
+    const rows = [], page = 1000;
+    for (let off = 0; ; off += page) {
+      const r = await rest(`${cfg().table}?select=key,part,total,bytes,updated_at&order=key.asc,part.asc&limit=${page}&offset=${off}`, { fetchImpl, session }) || [];
+      rows.push(...r); if (r.length < page) break;
+    }
+    return rows;
+  }
+  /** Bloques que mencionan los índices vigentes en la nube. */
+  async function refsOfGroups(session, groups, fetchImpl) {
+    const refs = new Set();
+    for (const g of groups) {
+      if (CHUNK_RE.test(g.key) || g.total !== 1 || g.key.startsWith('productsCloud:')) continue;   // los trozos de productos no llevan índice por bloques
+      const r = await rest(`${cfg().table}?select=payload&key=eq.${encodeURIComponent(g.key)}&part=eq.0`, { fetchImpl, session });
+      const text = r && r[0] && r[0].payload; if (text && text.includes('packed-chunked-v1')) chunkRefsOfText(g.key, text).forEach((k) => refs.add(k));
+    }
+    return refs;
+  }
+  /** Solo lectura: bloques que usa hoy la copia de la nube (antes de subir una nueva, son la «generación anterior»). */
+  async function currentRefs({ fetchImpl } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+    try {
+      const rows = await listAllRows(se.session, fetchImpl), by = new Map();
+      rows.forEach((r) => by.set(r.key, { key: r.key, total: r.total }));
+      return { ok: true, refs: [...await refsOfGroups(se.session, [...by.values()], fetchImpl)] };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  /**
+   * Solo lectura: clasifica lo que hay en la nube. `prevRefs`: bloques de la generación anterior (se guardan al subir).
+   * Devuelve { ok, current, previous, orphans, young, other } con { keys:[], bytes, rows } y `refsNow` (para guardar como «anterior»).
+   */
+  async function planCleanup({ prevRefs = [], keepPrevious = true, fetchImpl, now = Date.now(), minAge = MIN_AGE_MS } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+    try {
+      const rows = await listAllRows(se.session, fetchImpl), by = new Map();
+      rows.forEach((r) => { const g = by.get(r.key) || { key: r.key, rows: 0, bytes: 0, total: r.total, at: 0 }; g.rows++; g.bytes += Number(r.bytes) || 0; g.at = Math.max(g.at, Date.parse(r.updated_at) || 0); by.set(r.key, g); });
+      const refsNow = await refsOfGroups(se.session, [...by.values()], fetchImpl);
+      const prev = new Set(keepPrevious ? prevRefs : []);
+      const mk = () => ({ keys: [], bytes: 0, rows: 0 }), out = { current: mk(), previous: mk(), orphans: mk(), young: mk(), other: mk() };
+      for (const g of by.values()) {
+        const cat = !CHUNK_RE.test(g.key) ? 'other' : refsNow.has(g.key) ? 'current' : prev.has(g.key) ? 'previous' : (now - g.at < minAge ? 'young' : 'orphans');
+        out[cat].keys.push(g.key); out[cat].bytes += g.bytes; out[cat].rows += g.rows;
+      }
+      return { ok: true, ...out, refsNow: [...refsNow] };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  /** Borra los bloques indicados (con avance). Solo acepta claves con forma de bloque: nunca un índice ni datos sueltos. */
+  async function deleteChunks(keys, { fetchImpl, onProgress } = {}) {
+    const se = await ensureSession({ fetchImpl }); if (!se.ok) return se;
+    const list = keys.filter((k) => CHUNK_RE.test(k)); let n = 0;
+    try {
+      for (const k of list) { await rest(`${cfg().table}?key=eq.${encodeURIComponent(k)}`, { method: 'DELETE', fetchImpl, session: se.session }); n++; if (onProgress) onProgress({ index: n, of: list.length, key: k }); }
+    } catch (e) { return { ok: false, error: e.message, deleted: n }; }
+    return { ok: true, deleted: n };
+  }
+
   /** Borra la copia del equipo clave por clave (con avance); al final un barrido por si quedaron filas sueltas. */
   async function remove({ fetchImpl, onProgress } = {}) {
     const se = await ensureSession({ fetchImpl }); if (!se.ok) return { ok: true, nothing: true };
@@ -375,5 +445,5 @@
     return { ok: true };
   }
 
-  FP.cloud = { setRetryHook: (f) => { retryHook = f; }, listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, downloadProgress, verify, pruneKeys, remove, digest, split };
+  FP.cloud = { setRetryHook: (f) => { retryHook = f; }, listKeys, rest, consumeAuthHash, redirectUrl, autoOn, setAuto, isAutoKey, pushKeys, pullNewer, loginPassword, changePassword, loadTeam, validEmail, getCaptchaToken, loadSession, ensureSession, signOut, upload, download, downloadProgress, verify, pruneKeys, remove, planCleanup, currentRefs, deleteChunks, chunkRefsOfText, digest, split };
 })(typeof window !== 'undefined' ? window : globalThis);
