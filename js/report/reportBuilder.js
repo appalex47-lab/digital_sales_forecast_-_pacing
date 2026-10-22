@@ -122,8 +122,11 @@
     // Título editorial según canal y período: mes cerrado → resultados; mes abierto → avance y cierre estimado; semana; año acumulado.
     const sm = selMonth(s), subj = s.channel === 'total' || !s.channel ? 'Ventas digitales' : `Ventas de ${chLabel(s.channel)}`;
     const cutoff = run && run.cutoff, mEnd = sm && !isWeekKey(sm) ? periodEnd({ type: 'month', key: sm }) : null;
-    const headline = sm ? (isWeekKey(sm) ? `${subj}: acumulado de ${periodLow(sm)} al corte` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: acumulado de ${periodLow(sm)} al corte y cierre estimado` : `${subj}: acumulado de ${periodLow(sm)} al corte`))
-      : (run && run.year ? `${subj}: acumulado ${run.year} al corte y cierre estimado` : `${subj}: acumulado del período al corte`);
+    // «al corte» solo cuando el período aún no está completo: mes cerrado → solo el mes; mes abierto o semana → al corte; año completo → solo el año; año con meses sin cerrar o días sin dato → al corte.
+    const AN = (series(run, s.channel) || {}).annual, yEnd = run && run.year ? `${run.year}-12-31` : null;
+    const yearOpen = Boolean(cutoff && yEnd && cutoff < yEnd) || Boolean(AN && isNum(AN.missingActualDays) && AN.missingActualDays > 0);
+    const headline = sm ? (isWeekKey(sm) ? `${subj}: acumulado de ${periodLow(sm)} al corte` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: acumulado de ${periodLow(sm)} al corte y cierre estimado` : `${subj}: resultados de ${periodLow(sm)}`))
+      : (run && run.year ? (yearOpen ? `${subj}: acumulado ${run.year} al corte y cierre estimado` : `${subj}: resultados ${run.year}`) : `${subj}: acumulado del período al corte`);
     return page('cover', 'Portada', {
       headline,
       scope: s.channel === 'total' || !s.channel ? `Total digital · ${joinY(chNames())}` : chLabel(s.channel),
@@ -701,7 +704,14 @@
 
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
   /** «en septiembre (último mes completo)»: a qué período se refiere la señal de Evolución (en lectura anual es el último mes completo, no el corte). */
-  const trendWhen = (by, R) => { const sc = by.trends && by.trends.scope ? by.trends.scope : null; return sc && sc.currentPeriod ? `en ${sc.currentPeriod}${R.mk || sc.periodType !== 'month' ? '' : sc.partial ? ' (mes en curso, mismos días del anterior)' : ' (mes del corte)'}` : 'en el período comparado'; };
+  /** «Sep 2026» → «septiembre»; «Sep 21–27» → «la semana del 21 al 27 de septiembre»: el mismo nombre completo que usa la narrativa. */
+  const fullPeriod = (lab) => {
+    const ix = (a) => MONTHS.findIndex((m) => m.toLowerCase() === String(a).toLowerCase());
+    let m = /^([A-Za-zñÑ]{3}) \d{4}$/.exec(lab || ''); if (m && ix(m[1]) >= 0) return MONTH_FULL[ix(m[1])];
+    m = /^([A-Za-zñÑ]{3}) (\d{1,2})\s*[–-]\s*(\d{1,2})$/.exec(lab || ''); if (m && ix(m[1]) >= 0) return `la semana del ${m[2]} al ${m[3]} de ${MONTH_FULL[ix(m[1])]}`;
+    return lab;
+  };
+  const trendWhen = (by, R) => { const sc = by.trends && by.trends.scope ? by.trends.scope : null; return sc && sc.currentPeriod ? `en ${fullPeriod(sc.currentPeriod)}${R.mk || sc.periodType !== 'month' ? '' : sc.partial ? ' (mes en curso, mismos días del anterior)' : ' (mes del corte)'}` : 'en el período comparado'; };
   function pageSummary(s, pages) {
     const by = Object.fromEntries(pages.filter((p) => p.status === 'included').map((p) => [p.id, p]));
     const R = readout(s, by), items = [];
