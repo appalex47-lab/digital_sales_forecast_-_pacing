@@ -94,8 +94,8 @@
       if (L && L.monthLabel && L.prevLabel && fin(L.count) && fin(L.base) && L.base > 0 && L.count > 0) {
         const pc = Math.round(L.count / L.base * 100), n = RB().fmt('int', L.count), b = RB().fmt('int', L.base);
         const tenth = L.count / L.base * 10, kk = Math.round(tenth);
-        if (kk >= 1 && kk <= 9 && Math.abs(tenth - kk) <= 0.35) return L.inProgress ? `${kk} de cada 10 clientes que compraron en ${L.prevLabel} aún no vuelven a comprar en ${L.monthLabel}` : `${kk} de cada 10 clientes que compraron en ${L.prevLabel} no volvieron a comprar en ${L.monthLabel}`;
-        return L.inProgress ? `${n} de ${b} clientes de ${L.prevLabel} aún no vuelven a comprar (${pc} %)` : `${n} de ${b} clientes de ${L.prevLabel} no volvieron a comprar en ${L.monthLabel} (${pc} %)`;
+        if (kk >= 1 && kk <= 9 && Math.abs(tenth - kk) <= 0.35) return L.inProgress ? `Al corte, ${10 - kk} de cada 10 compradores de ${L.prevLabel} ya volvieron a comprar en ${L.monthLabel}` : `${kk} de cada 10 clientes que compraron en ${L.prevLabel} no volvieron a comprar en ${L.monthLabel}`;
+        return L.inProgress ? `${RB().fmt('int', L.base - L.count)} de ${b} compradores de ${L.prevLabel} ya volvieron a comprar (${100 - pc} %)` : `${n} de ${b} clientes de ${L.prevLabel} no volvieron a comprar en ${L.monthLabel} (${pc} %)`;
       }
       if (p.lapsed && fin(p.lapsed.count) && fin(p.lapsed.base) && p.lapsed.base > 0) return `${RB().fmt('int', p.lapsed.count)} de ${RB().fmt('int', p.lapsed.base)} clientes del mes anterior no volvieron a comprar en ${p.lapsed.month}`;
       const n = kpi(p, 'customers'); return fin(n) ? `${RB().fmt('int', n)} clientes identificados compran en el período` : null;
