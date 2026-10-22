@@ -125,8 +125,11 @@
     // «al corte» solo cuando el período aún no está completo: mes cerrado → solo el mes; mes abierto o semana → al corte; año completo → solo el año; año con meses sin cerrar o días sin dato → al corte.
     const AN = (series(run, s.channel) || {}).annual, yEnd = run && run.year ? `${run.year}-12-31` : null;
     const yearOpen = Boolean(cutoff && yEnd && cutoff < yEnd) || Boolean(AN && isNum(AN.missingActualDays) && AN.missingActualDays > 0);
-    const headline = sm ? (isWeekKey(sm) ? `${subj}: acumulado de ${periodLow(sm)} al corte` : (cutoff && mEnd && cutoff < mEnd ? `${subj}: acumulado de ${periodLow(sm)} al corte y cierre estimado` : `${subj}: resultados de ${periodLow(sm)}`))
-      : (run && run.year ? (yearOpen ? `${subj}: acumulado ${run.year} al corte y cierre estimado` : `${subj}: resultados ${run.year}`) : `${subj}: acumulado del período al corte`);
+    const wkRow = sm && isWeekKey(sm) ? ((series(run, s.channel) || {}).weeks || []).find((w) => w.key === sm) : null;
+    const wEnd = wkRow ? (wkRow.weekEnd || wkRow.lastDate || null) : null;
+    const closed = sm ? (isWeekKey(sm) ? Boolean(cutoff && wEnd && cutoff >= wEnd) : Boolean(cutoff && mEnd && cutoff >= mEnd)) : false;
+    const headline = sm ? (closed ? `${subj}: ${(monthName(sm) || '').toLowerCase()}` : (isWeekKey(sm) ? `${subj}: acumulado de ${periodLow(sm)} al corte` : `${subj}: acumulado de ${periodLow(sm)} al corte y cierre estimado`))
+      : (run && run.year ? (yearOpen ? `${subj}: acumulado ${run.year} al corte y cierre estimado` : `${subj}: ${run.year}`) : `${subj}: acumulado del período al corte`);
     return page('cover', 'Portada', {
       headline,
       scope: s.channel === 'total' || !s.channel ? `Total digital · ${joinY(chNames())}` : chLabel(s.channel),
@@ -704,10 +707,10 @@
 
   /* ---------------- 2 · Resumen ejecutivo (determinista, desde las páginas ya armadas) ---------------- */
   /** «en septiembre (último mes completo)»: a qué período se refiere la señal de Evolución (en lectura anual es el último mes completo, no el corte). */
-  /** «Sep 2026» → «septiembre»; «Sep 21–27» → «la semana del 21 al 27 de septiembre»: el mismo nombre completo que usa la narrativa. */
+  /** «Sep 2026» → «septiembre de 2026»; «Sep 21–27» → «la semana del 21 al 27 de septiembre»: el mismo nombre completo que usa la narrativa. */
   const fullPeriod = (lab) => {
     const ix = (a) => MONTHS.findIndex((m) => m.toLowerCase() === String(a).toLowerCase());
-    let m = /^([A-Za-zñÑ]{3}) \d{4}$/.exec(lab || ''); if (m && ix(m[1]) >= 0) return MONTH_FULL[ix(m[1])];
+    let m = /^([A-Za-zñÑ]{3}) \d{4}$/.exec(lab || ''); if (m && ix(m[1]) >= 0) return `${MONTH_FULL[ix(m[1])]} de ${lab.slice(-4)}`;
     m = /^([A-Za-zñÑ]{3}) (\d{1,2})\s*[–-]\s*(\d{1,2})$/.exec(lab || ''); if (m && ix(m[1]) >= 0) return `la semana del ${m[2]} al ${m[3]} de ${MONTH_FULL[ix(m[1])]}`;
     return lab;
   };

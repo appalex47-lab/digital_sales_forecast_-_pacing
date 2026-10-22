@@ -125,13 +125,13 @@ async def main():
         mon0 = base['pac']['mon'].split(' ')[0].lower() if base['pac']['mon'] else ''
         chk('DX-8 base: la narrativa nombra el mes del pacing', mon0 and mon0 in base['sumN'].lower(), (mon0, base['sumN'][:200]))
         chk('DX-9 el resumen y el cierre no abrevian el mes («Sep 2026» / «Sep 21–27»): usan el nombre completo', not re.search(r'\b(Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic) (\d{4}|\d{1,2}\s*[–-])', base['sumN'] + ' ' + base['sumT'] + ' ' + ' '.join(c['x'] or '' for c in base['cl'])), base['sumN'][:300])
-        chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → «resultados de», abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and (('resultados de' in base['cover'] and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'resultados' not in base['cover'])), base['cover'])
+        chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → solo el mes y año, abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and ((re.search(r': \w+ \d{4}$', base['cover']) and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'acumulado' in base['cover'])), base['cover'])
         yr0 = str(int(re.search(r'\d{4}', json.dumps(base['cover'])) .group(0))) if re.search(r'\d{4}', base['cover']) else '2026'
         mm = {'enero':'01','febrero':'02','marzo':'03','abril':'04','mayo':'05','junio':'06','julio':'07','agosto':'08','septiembre':'09','octubre':'10','noviembre':'11','diciembre':'12'}[mon0]
         ky = await q.evaluate("window.__edIn.run.year")
         ab = await run({'cutoff': f'{ky}-{mm}-10'}); ce = await run({'cutoff': f'{ky}-{mm}-28'}); cz = await run({'cutoff': f'{ky}-12-31'})
         chk('DX-8 mes abierto (corte a mitad de mes): «acumulado … al corte y cierre estimado»', 'acumulado de ' + mon0 in ab['cover'].lower() and 'al corte y cierre estimado' in ab['cover'], ab['cover'])
-        chk('DX-8 mes cerrado (corte ≥ fin de mes): solo el mes, sin «al corte» ni «acumulado»', 'resultados de ' + mon0 in cz['cover'].lower() and 'al corte' not in cz['cover'] and 'acumulado' not in cz['cover'], cz['cover'])
+        chk('DX-8 mes cerrado (corte ≥ fin de mes): solo el mes, sin «al corte» ni «acumulado»', mon0 + ' ' + str(ky) in cz['cover'].lower() and 'resultados' not in cz['cover'] and 'al corte' not in cz['cover'] and 'acumulado' not in cz['cover'], cz['cover'])
 
         # mes sin datos de pacing (agosto en los datos de prueba): no se conserva ninguna conclusión contra el plan
         await month_prev(q); await generate(q); pv = await run({})
@@ -144,7 +144,7 @@ async def main():
         await generate(q); yr = await run({})
         chk('DX-8 período anual (corte antes de fin de año): «acumulado 2026 al corte» y ya no nombra el mes', 'acumulado' in yr['cover'] and 'al corte' in yr['cover'] and mon0 not in yr['cover'].lower(), yr['cover'])
         yc = await run({'cutoff': f'{ky}-12-31', 'missing': 0}); ym = await run({'cutoff': f'{ky}-12-31', 'missing': 12})
-        chk('DX-8 año completo (corte fin de año, sin días faltantes): sin «al corte»', f'resultados {ky}' in yc['cover'] and 'al corte' not in yc['cover'], yc['cover'])
+        chk('DX-8 año completo (corte fin de año, sin días faltantes): sin «al corte»', yc['cover'].endswith(f': {ky}') and 'al corte' not in yc['cover'], yc['cover'])
         chk('DX-8 año con días sin dato: vuelve «al corte»', 'al corte' in ym['cover'], ym['cover'])
         chk('DX-8 período anual: la narrativa habla del negocio (no de un mes) y no nombra el mes anterior', 'el negocio' in yr['sumN'] and mon0 not in yr['sumN'].lower(), yr['sumN'][:260])
         for k, v in [('base', base['sumN']), ('año', yr['sumN'])]:
