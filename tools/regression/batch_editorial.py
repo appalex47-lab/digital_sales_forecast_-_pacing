@@ -75,7 +75,7 @@ async def main():
         nB = cB['categories']['n']
         chk('ED-22 compensación insuficiente en singular', '1 grupo creció +$3.0K' in nB and 'no alcanza a compensar la caída de 1 grupo' in nB, nB)
         cD = await q.evaluate(MX, "const P=i.trend.priorities;P.drag=(P.drag||[]).slice(0,2);P.compensate=P.drag.map(x=>({...x,impact:Math.abs(x.impact)}));")
-        chk('ED-23 evolución: «otros N» cuando restan y suman', ' y otros ' in cD['trends']['h'], cD['trends']['h'])
+        chk('ED-23 evolución: el titular dice cuántos restan y cuántos suman y si se compensan', re.search(r'restan? .* y .* suman?', cD['trends']['h']) is not None or 'se anulan' in cD['trends']['h'] or 'supera' in cD['trends']['h'], cD['trends']['h'])
 
         # ---- diseño con textos largos reales (cierre y etiquetas de barras) ----
         await q.evaluate("""(()=>{const r=FP.app.state.rp.report;const cl=r.pages.find(p=>p.id==='closing');cl.blocks[2].text='Dermacosméticos concentra 58 % de lo que se pierde; revisar primero la subcategoría Dermocosméticos (−$40.7K), entregas Envío a domicilio (−$52.3K). Ninguna de las 3 acciones registradas en el plan es sobre Dermacosméticos.';cl.blocks[2].list=[{name:'Ecommerce',value:-1670000,type:'Canal'},{name:'Volumen',value:-6990000,type:'Factor'},{name:'Dermacosméticos',value:-71900,type:'Categoría'}];cl.blocks[3].text='El cierre estimado cambia de forma importante según el método de proyección. Cumplir el plan de octubre requiere $1.20M por día durante 11 días restantes. Algunos datos cargados tienen advertencias de calidad; el detalle está en el anexo técnico.';

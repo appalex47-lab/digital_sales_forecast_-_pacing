@@ -32,7 +32,7 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
    kreal:((pc.kpis||[]).find(k=>k.id==='real')||{}).value,
    cover:g('cover').headline||'',
    drv:{st:g('drivers').status,h:g('drivers').headline||'',title:(g('drivers').status==='included'?FP.reportCopy.title(g('drivers'),r):'')||'',rows:(((g('drivers').tables||[])[0]||{rows:[]}).rows||[]).map(x=>[x.driver,x.contribution])},
-   trN:{h:g('trends').headline||'',kd:((g('trends').kpis||[]).find(k=>k.id==='drag')||{}).sub||'',kc:((g('trends').kpis||[]).find(k=>k.id==='comp')||{}).sub||'',td:((g('trends').tables||[])[0]||{}).total,tc:((g('trends').tables||[])[1]||{}).total,rows:((g('trends').tables||[])[0]||{rows:[]}).rows.length},
+   trN:{h:((FP.reportCopy.title(g('trends'),r)||'')+' | '+(g('trends').headline||'')),kd:((g('trends').kpis||[]).find(k=>k.id==='drag')||{}).sub||'',kc:((g('trends').kpis||[]).find(k=>k.id==='comp')||{}).sub||'',td:((g('trends').tables||[])[0]||{}).total,tc:((g('trends').tables||[])[1]||{}).total,rows:((g('trends').tables||[])[0]||{rows:[]}).rows.length},
    chs:(()=>{const m=g('movers');return {minus:m.channelSums&&m.channelSums.minus,plus:m.channelSums&&m.channelSums.plus,gaps:rows.filter(x=>!x._total).map(x=>[x.channel,x.gap]),chp:(m.plus||[]).filter(i=>i.type==='Canal').map(i=>i.name),chm:(m.minus||[]).filter(i=>i.type==='Canal').map(i=>i.name),np:(m.plus||[]).length,nm:(m.minus||[]).length,tot:(rows.find(x=>x._total)||{}).gap,st:m.status}})(),
    sumNotes:(g('summary').items||[]).map(x=>x.note||'').join(' | '),trCtx:g('trends').ctx||'',cvH:g('customers').headline||'',
    sumTitle:(FP.reportCopy.title(g('summary'),r)||''),clH:(FP.reportCopy.title(g('closing'),r)||''),
@@ -134,7 +134,7 @@ async def main():
         await drv({'traffic': -5e6, 'cr': -1e5, 'aov': 9e6}, 'ticket compensa y es el mayor')
         # ---- períodos: el texto habla del período realmente mostrado
         mon0 = base['pac']['mon'].split(' ')[0].lower() if base['pac']['mon'] else ''
-        chk('DX-8 base: la narrativa nombra el mes del pacing', mon0 and mon0 in base['sumN'].lower(), (mon0, base['sumN'][:200]))
+        chk('DX-8 base: la narrativa dice «el mes» (el nombre del mes va en la etiqueta y el titular, no se repite)', 'el mes va' in base['sumN'].lower() or 'el mes ' in base['sumN'].lower(), (mon0, base['sumN'][:200]))
         chk('DX-9 el resumen y el cierre no abrevian el mes («Sep 2026» / «Sep 21–27»): usan el nombre completo', not re.search(r'\b(Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic) (\d{4}|\d{1,2}\s*[–-])', base['sumN'] + ' ' + base['sumT'] + ' ' + ' '.join(c['x'] or '' for c in base['cl'])), base['sumN'][:300])
         # ---- DX-12 · totales reales de productos que restan y suman (no el tope de 12 del motor)
         n0 = lambda s: int(re.match(r'\d+', s).group(0)) if re.match(r'\d+', s or '') else 0
