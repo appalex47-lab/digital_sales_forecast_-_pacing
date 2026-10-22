@@ -843,7 +843,8 @@
     if (!M.minus.length && !M.plus.length) return omit('movers', 'Qué resta y qué suma', 'No hay canales, factores, categorías ni productos con un cambio medible en el período.');
     const pc = by.pacing, per = pc ? (pc.monthLabel || pc.periodLabel || null) : null, sel = pc && pc.selection;
     const tot = pc && pc.tables[0] ? pc.tables[0].rows.find((r) => r._total) : null;
-    const minusSum = M.minus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0), plusSum = M.plus.filter((i) => i.type === 'Canal').reduce((a, i) => a + i.value, 0);
+    // El total de cada lado suma TODOS los canales con ese signo (no solo los que alcanzan a mostrarse en la lista de 8 filas repartida entre tipos).
+    const chAll = M.items.filter((i) => i.type === 'Canal'), minusSum = chAll.filter((i) => i.value < 0).reduce((a, i) => a + i.value, 0), plusSum = chAll.filter((i) => i.value > 0).reduce((a, i) => a + i.value, 0);
     const lead = (i, dir) => (i && i.type === 'Canal' && /vs\. plan/.test(i.evidence || '') ? `${i.name} está ${moneyC(Math.abs(i.value))} ${dir === 'minus' ? 'por debajo' : 'por encima'} del plan y es el canal que más ${dir === 'minus' ? 'resta' : 'suma'}.` : null);
     const list = (arr, lab, dir, none) => { if (!arr.length) return none; const l0 = lead(arr[0], dir), rest = l0 ? arr.slice(1, 3) : arr.slice(0, 3); return `${l0 ? l0 + (rest.length ? ' ' : '') : ''}${rest.length ? `${l0 ? 'También ' + (dir === 'minus' ? 'restan' : 'suman') : lab}: ${rest.map((i) => `${i.type === 'Factor' ? 'el factor ' : i.type === 'Categoría' ? 'la categoría ' : ''}${i.name} (${smoneyC(i.value)})`).join(', ')}.` : ''}`; };
     const head = `${list(M.minus, 'Lo que más resta', 'minus', 'Nada resta de forma medible.')} ${list(M.plus, 'Lo que más suma', 'plus', 'Nada suma de forma medible.')}`;
@@ -851,7 +852,7 @@
       ctx: [per, s.reportFilter ? `Filtro: ${s.reportFilter}` : null].filter(Boolean).join(' · ') || 'Período elegido',
       question: '¿Qué está moviendo la venta hacia abajo y hacia arriba, y cuánto pesa cada cosa?',
       headline: head, minus: M.minus, plus: M.plus, types: M.types,
-      channelSums: { minus: M.minus.some((i) => i.type === 'Canal') ? minusSum : null, plus: M.plus.some((i) => i.type === 'Canal') ? plusSum : null },
+      channelSums: { minus: chAll.some((i) => i.value < 0) ? minusSum : null, plus: chAll.some((i) => i.value > 0) ? plusSum : null },
       totals: tot && isNum(tot.gap) ? { gap: tot.gap, ref: sel ? 'la referencia' : 'el plan' } : null,
       notes: ['Cada fila es un ángulo distinto del mismo resultado: no se suman entre sí y la barra compara dentro de cada tipo. Son contribuciones descriptivas; no demuestran la causa.', s.reportFilter ? 'Con filtro, los factores del diagnóstico se omiten porque son del total del negocio.' : null].filter(Boolean),
       sources: ['Pacing, diagnóstico, categorías y evolución'], tags: [TAG.calc]
