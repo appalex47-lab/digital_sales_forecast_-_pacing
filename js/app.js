@@ -4568,6 +4568,7 @@
     autoBusy = false; const box2 = document.getElementById('cloud-auto-progress'); if (box2) box2.innerHTML = '';
     if (r.ok) { state.cloud.auto.last = r.at; state.cloud.auto.error = null; } else { state.cloud.auto.error = r.error; keys.forEach((k) => autoPending.add(k)); }
     autoPaint(); cloudRefreshSession();
+    if (r.ok) autoCleanLater();
     if (autoPending.size && r.ok) autoSchedule();
   }
   function autoSchedule() { clearTimeout(autoTimer); autoTimer = setTimeout(autoFlush, C.cloud.autoDebounceMs); }
@@ -4716,7 +4717,7 @@
     Object.keys(keep).forEach((k) => lsAdapter.set(`${C.storage.namespace}:${k}`, keep[k]));
     await st('Cerrando la sesión', 92);
     FP.cloud.signOut();
-    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs', 'fp.cloudGcLast'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
     ['fp.route.origin.v1', 'fp.loginAsked'].forEach((k) => { try { root.sessionStorage.removeItem(k); } catch (e) { /* nada */ } });
   }
   async function signoutConfirm() {
@@ -4745,6 +4746,18 @@
     if (!del.length) return { ok: true, deleted: 0, bytes: 0 };
     const r = await FP.cloud.deleteChunks(del, { onProgress: (o) => cloudProg(`Limpiando copias viejas (${o.index} de ${o.of})`, 96 + Math.round(3 * o.index / o.of)) });
     return r.ok ? { ok: true, deleted: r.deleted, bytes: plan2.orphans.bytes } : { ok: false, error: r.error, deleted: r.deleted };
+  }
+  /** Tras la sincronización automática: limpieza discreta (máx. una vez cada 6 h, solo huérfanos de más de 24 h, siempre respetando el respaldo). */
+  const GC_LAST = 'fp.cloudGcLast', GC_EVERY = 6 * 3600 * 1000;
+  async function autoCleanLater() {
+    try {
+      const last = Number(localStorage.getItem(GC_LAST) || 0); if (Date.now() - last < GC_EVERY || state.cloud.busy) return;
+      localStorage.setItem(GC_LAST, String(Date.now()));
+      const plan = await FP.cloud.planCleanup({ prevRefs: readPrevRefs(), keepPrevious: true, minAge: 24 * 3600 * 1000 });
+      if (!plan.ok || !plan.orphans.keys.length) return;
+      const r = await FP.cloud.deleteChunks(plan.orphans.keys, {});
+      if (r.ok) FP.ui.toast(`Limpieza automática de la nube: ${r.deleted} lotes viejos (${fmtKb(plan.orphans.bytes)} de datos).`);
+    } catch (e) { /* la limpieza es oportunista: nunca interrumpe la sincronización */ }
   }
   const gcNote = (gc, tried) => !tried ? ' (No limpié copias viejas: no pude leer la copia anterior.)' : !gc ? '' : !gc.ok ? ` (No pude limpiar copias viejas: ${gc.error}.)` : gc.deleted ? ` Se limpiaron ${gc.deleted} lotes viejos (${fmtKb(gc.bytes)} de datos); la generación anterior se conserva como respaldo.` : ' No había copias viejas por limpiar.';
 
