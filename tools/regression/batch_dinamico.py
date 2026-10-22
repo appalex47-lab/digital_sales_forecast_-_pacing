@@ -31,6 +31,8 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
    kreal:((pc.kpis||[]).find(k=>k.id==='real')||{}).value,
    cover:g('cover').headline||'',
    drv:{st:g('drivers').status,h:g('drivers').headline||'',title:(g('drivers').status==='included'?FP.reportCopy.title(g('drivers'),r):'')||'',rows:(((g('drivers').tables||[])[0]||{rows:[]}).rows||[]).map(x=>[x.driver,x.contribution])},
+   sumNotes:(g('summary').items||[]).map(x=>x.note||'').join(' | '),trCtx:g('trends').ctx||'',cvH:g('customers').headline||'',
+   sumTitle:(FP.reportCopy.title(g('summary'),r)||''),clH:(FP.reportCopy.title(g('closing'),r)||''),
    sumN:g('summary').narrative||'',sumT:(g('summary').items||[]).map(x=>x.title).join(' | '),sumH:g('summary').headline||'',
    cl:(g('closing').blocks||[]).map(b=>({t:b.title,big:b.big,u:b.unit,x:b.text,l:(b.list||[]).map(z=>z.name)})),clSt:g('closing').status,
    all:JSON.stringify(r.pages.filter(p=>p.status==='included').map(p=>[p.headline,p.question,p.narrative,(p.blocks||[]).map(b=>b.text),(p.notes||[])]))}}"""
@@ -92,18 +94,24 @@ async def main():
         # ---- cambia la entidad que más resta (evolución)
         base_first = re.search(r'(?:pesa en la caída es|atención es) ([^:.,]+)', base['sumN'])
         rs = await run({'swapDrag': True}); rd = await run({'noDrag': True})
-        chk('DX-7 el control sí nombra una entidad que concentra la caída', 'concentra' in base['sumT'] or 'Lo que más pesa en la caída' in base['sumN'], base['sumT'])
-        chk('DX-7 sin entidades que restar: el resumen ya no habla de «lo que más pesa en la caída» ni «concentra»', 'Lo que más pesa en la caída' not in rd['sumN'] and 'concentra' not in rd['sumT'], rd['sumN'][:300])
-        ent0 = re.search(r'Lo que más pesa en la caída es ([^:]+):', base['sumN'])
-        ent1 = re.search(r'(?:Lo que más pesa en la caída es ([^:]+):|área de atención es ([^,]+),)', rs['sumN'])
+        chk('DX-7 el control sí nombra una entidad que concentra la caída', 'concentra' in base['sumT'] or 'lo que más pesa es' in base['sumN'], base['sumT'])
+        chk('DX-7 sin entidades que restar: el resumen ya no habla de «lo que más pesa en la caída» ni «concentra»', 'lo que más pesa es' not in rd['sumN'] and 'concentra' not in rd['sumT'], rd['sumN'][:300])
+        ent0 = re.search(r'lo que más pesa es ([^:]+):', base['sumN'])
+        ent1 = re.search(r'(?:lo que más pesa es ([^:]+):|área de atención es ([^,]+),)', rs['sumN'])
         chk('DX-7 cambia la entidad principal → el resumen nombra la nueva y no la anterior', ent0 and ent1 and (ent1.group(1) or ent1.group(2)) != ent0.group(1) and ent0.group(1) not in rs['sumN'] + rs['sumT'], (ent0 and ent0.group(1), ent1 and ent1.groups()))
         chk('DX-7 los importes del resumen usan un solo formato abreviado ($6.26K, no $6,260)', not re.search(r'\$\d{1,3},\d{3}\b', rs['sumN']), rs['sumN'][-200:])
 
 
         # ---- relación entre factores (tráfico, conversión, ticket): el texto sigue al signo y al peso de cada uno
         d0 = await run({})
+        chk('DX-11 titulares: el resumen y el cierre nombran la dimensión (canal / categoría / factor…) de lo que priorizan', re.search(r'la atención está en (la|el) (categoría|subcategoría|producto|canal|factor|sku|ciudad|sucursal|estado)', base['sumH'] + ' ' + base['sumTitle']) is not None or 'la atención está' not in (base['sumH'] + base['sumTitle']), base['sumTitle'] + base['sumH'])
+        chk('DX-11 el cierre dice qué dimensión conviene revisar primero', 'conviene revisar primero' not in base['clH'] or re.search(r'conviene revisar primero (la|el) (categoría|subcategoría|producto|canal|factor|sku|ciudad|sucursal|estado)', base['clH']) is not None, base['clH'])
+        chk('DX-11 el método de proyección no se repite en la narrativa y en la nota del mismo resumen', not ('depende del método' in base['sumN'] and 'depende del método' in base['sumNotes']), (base['sumN'][-160:], base['sumNotes'][:160]))
+        chk('DX-11 periodos de la comparación sin abreviar ni confundir mes en curso con semana', not re.search(r'\b[A-Z][a-z]{2} (\d{4}|\d{1,2}\s*[–-]\s*\d{1,2})\b', base['trCtx']), base['trCtx'])
+        chk('DX-11 el titular de clientes no usa «va al N %» ambiguo', 'el mes va al' not in base['cvH'], base['cvH'])
+        chk('DX-11 signo negativo tipográfico en porcentajes de las láminas', not re.search(r'(?<![\w−])-\d+(\.\d+)? %', base['all'] + base['sumN']), base['all'][:200])
         chk('DX-10 hay diagnóstico de factores en el escenario base', d0['drv']['st'] == 'included' and len(d0['drv']['rows']) == 3, d0['drv'])
-        NAMES = {'Tráfico': ('el tráfico', 'Tráfico'), 'CR': ('la conversión (CR)', 'Conversión'), 'AOV': ('el ticket promedio (AOV)', 'Ticket')}
+        NAMES = {'Tráfico': ('el tráfico', 'Tráfico'), 'Conversión': ('la conversión', 'Conversión'), 'Ticket': ('el ticket promedio', 'Ticket')}
         async def drv(spec, label):
             r = await run({'drv': spec}); rows = r['drv']['rows']; h = r['drv']['h']; ti = r['drv']['title']
             main = max(rows, key=lambda x: abs(x[1]))[0]

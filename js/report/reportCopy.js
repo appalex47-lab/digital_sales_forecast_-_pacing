@@ -33,12 +33,16 @@
     return { key: 'far', text: 'se aleja del plan' };
   }
 
+  /** «el canal» / «la categoría»: nombra la dimensión de una entidad para que un titular no mezcle canales, categorías y factores. */
+  const FEM = new Set(['categoría', 'subcategoría', 'ciudad', 'sucursal', 'entidad']);
+  const withDim = (type, name) => { const l = String(type || '').trim().toLowerCase(); return l ? `${FEM.has(l) ? 'la' : 'el'} ${l} ${name}` : name; };
+
   const RULES = {
     summary(p, rep) {
       const st = standing(kpi(page(rep, 'pacing'), 'compliance')); if (!st) return null;
       const per = periodOf(rep), sel = page(rep, 'pacing') && page(rep, 'pacing').selection;
       const subj = sel ? 'La selección' : (per ? per.split(' ')[0] : 'El período');
-      const ent = p.focus && p.focus.entity ? cut(p.focus.entity, 32) : null;
+      const ent = p.focus && p.focus.entity ? withDim(p.focus.level, cut(p.focus.entity, 32)) : null;
       return `${subj} ${st.text}${ent ? `; la atención está en ${ent}` : ''}`;
     },
     pacing(p, rep) {
@@ -137,7 +141,7 @@
       const down = blk('Qué resta').list && blk('Qué resta').list[0];
       if (!st) return null;
       const head = `${per ? per.split(' ')[0] : 'El período'} ${st.text}`;
-      return down && down.name ? `${head}; conviene revisar primero ${cut(down.name, 30)}` : head;
+      return down && down.name ? `${head}; conviene revisar primero ${withDim(down.type, cut(down.name, 30))}` : head;
     }
   };
 
