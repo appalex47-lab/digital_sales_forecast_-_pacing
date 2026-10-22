@@ -33,7 +33,7 @@ JS = """(spec)=>{const i=JSON.parse(JSON.stringify(window.__edIn));const CH=['ec
    cover:g('cover').headline||'',
    drv:{st:g('drivers').status,h:g('drivers').headline||'',title:(g('drivers').status==='included'?FP.reportCopy.title(g('drivers'),r):'')||'',rows:(((g('drivers').tables||[])[0]||{rows:[]}).rows||[]).map(x=>[x.driver,x.contribution])},
    trN:{h:g('trends').headline||'',kd:((g('trends').kpis||[]).find(k=>k.id==='drag')||{}).sub||'',kc:((g('trends').kpis||[]).find(k=>k.id==='comp')||{}).sub||'',td:((g('trends').tables||[])[0]||{}).total,tc:((g('trends').tables||[])[1]||{}).total,rows:((g('trends').tables||[])[0]||{rows:[]}).rows.length},
-   chs:(()=>{const m=g('movers');return {minus:m.channelSums&&m.channelSums.minus,plus:m.channelSums&&m.channelSums.plus,gaps:rows.filter(x=>!x._total).map(x=>x.gap),tot:(rows.find(x=>x._total)||{}).gap,st:m.status}})(),
+   chs:(()=>{const m=g('movers');return {minus:m.channelSums&&m.channelSums.minus,plus:m.channelSums&&m.channelSums.plus,gaps:rows.filter(x=>!x._total).map(x=>[x.channel,x.gap]),chp:(m.plus||[]).filter(i=>i.type==='Canal').map(i=>i.name),chm:(m.minus||[]).filter(i=>i.type==='Canal').map(i=>i.name),np:(m.plus||[]).length,nm:(m.minus||[]).length,tot:(rows.find(x=>x._total)||{}).gap,st:m.status}})(),
    sumNotes:(g('summary').items||[]).map(x=>x.note||'').join(' | '),trCtx:g('trends').ctx||'',cvH:g('customers').headline||'',
    sumTitle:(FP.reportCopy.title(g('summary'),r)||''),clH:(FP.reportCopy.title(g('closing'),r)||''),
    sumN:g('summary').narrative||'',sumT:(g('summary').items||[]).map(x=>x.title).join(' | '),sumH:g('summary').headline||'',
@@ -146,10 +146,12 @@ async def main():
         for nm, sp in [('base', {}), ('Llamadas ×4 (un canal que antes quedaba fuera de la lista)', {'scale': {'llamadas': 4.0}}), ('todo ×0.7', {'scale': {c: 0.7 for c in CH}}), ('todo ×1.5', {'scale': {c: 1.5 for c in CH}})]:
             r = await run(sp); cs = r['chs']
             if cs['st'] != 'included': continue
-            exp_m = sum(g for g in cs['gaps'] if g < 0); exp_p = sum(g for g in cs['gaps'] if g > 0)
+            exp_m = sum(g for _, g in cs['gaps'] if g < 0); exp_p = sum(g for _, g in cs['gaps'] if g > 0)
             chk(f'DX-13 {nm}: el total de canales que restan = suma de todos los canales negativos', (cs['minus'] is None and exp_m == 0) or abs((cs['minus'] or 0) - exp_m) < 1, (cs, exp_m))
             chk(f'DX-13 {nm}: el total de canales que suman = suma de todos los canales positivos', (cs['plus'] is None and exp_p == 0) or abs((cs['plus'] or 0) - exp_p) < 1, (cs, exp_p))
             chk(f'DX-13 {nm}: resta + suma = resultado total frente al plan', cs['tot'] is None or abs((cs['minus'] or 0) + (cs['plus'] or 0) - cs['tot']) < 1, cs)
+            chk(f'DX-13 {nm}: todo canal que suma aparece en «Lo que suma» y todo canal que resta en «Lo que resta»', sorted(cs['chp']) == sorted(c for c, g in cs['gaps'] if g > 0) and sorted(cs['chm']) == sorted(c for c, g in cs['gaps'] if g < 0), cs)
+            chk(f'DX-13 {nm}: cada lado conserva como máximo 8 filas', cs['np'] <= 8 and cs['nm'] <= 8, cs)
         chk('DX-10 sin errores de redacción conocidos: «superóron», «frente a el», mes abreviado con año, sentido del plan diario', not re.search(r'superóron|frente a el |(?<!\d )\b(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic) \d{4}\b', base['all'] + base['sumN']) and not ('no una predicción' in base['all'] and 'no una proyección' in base['sumN'] and 'no una predicción' in base['sumN']), base['sumN'][:400])
         chk('DX-8 base: el título de portada nombra el mes y su forma (cerrado → solo el mes y año, abierto → «al corte») coincide con el corte', mon0 in base['cover'].lower() and ((re.search(r': \w+ \d{4}$', base['cover']) and 'al corte' not in base['cover']) or ('al corte' in base['cover'] and 'acumulado' in base['cover'])), base['cover'])
         yr0 = str(int(re.search(r'\d{4}', json.dumps(base['cover'])) .group(0))) if re.search(r'\d{4}', base['cover']) else '2026'
