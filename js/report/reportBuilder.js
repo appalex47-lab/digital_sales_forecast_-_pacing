@@ -590,7 +590,7 @@
         kpi('target', mk ? `Plan de ${periodLow(mk)}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc),
         kpi('net', 'Falta en neto', netGap, 'moneyC', TAG.calc, { tone: netGap > 0 ? 'neg' : 'pos', sub: mk ? 'plan − real del total' : 'meta − real del total' }),
         kpi('remaining', 'Canales rezagados necesitan', h.remaining, 'moneyC', TAG.calc, { tone: 'neg', sub: 'suma de lo que falta a cada uno' }),
-        kpi('daily', 'Venta diaria requerida', reqDaily, 'moneyC', TAG.est, { sub: pr && isNum(pr.pressure) ? `${spct(pr.pressure)} sobre el plan diario` : `${moneyC(h.remaining)} ÷ ${int(days)} ${days === 1 ? 'día' : 'días'}` })
+        kpi('daily', 'Venta diaria requerida', reqDaily, 'moneyC', TAG.est, { sub: pr && isNum(pr.pressure) ? `${pct(Math.abs(pr.pressure))} ${pr.pressure < 0 ? 'por debajo del' : 'sobre el'} plan diario` : `${moneyC(h.remaining)} ÷ ${int(days)} ${days === 1 ? 'día' : 'días'}` })
       ] : [
         kpi('target', mk ? `Plan de ${periodLow(mk)}` : h.type === 'year' ? `Meta anual ${h.key}` : 'Meta del horizonte', h.target, 'moneyC', TAG.calc), kpi('remaining', 'Falta para la meta', h.remaining, 'moneyC', TAG.calc, { tone: h.remaining > 0 ? 'neg' : 'pos', sub: isNum(h.actualToDate) ? `meta − real ${moneyC(h.actualToDate)}` : null }),
         kpi('days', 'Días restantes', days, 'int', TAG.calc), kpi('daily', 'Requerimiento diario', reqDaily, 'moneyC', TAG.est, { sub: isNum(planDaily) ? `plan diario ${moneyC(planDaily)}` : null })
@@ -624,7 +624,7 @@
   }
 
   /* ---------------- foco de la caída: qué categoría pesa más, desde cuándo, dónde ---------------- */
-  const periodLabel = (k) => { const m = /^(\d{4})-(\d{2})$/.exec(k || ''); return m ? `${MONTHS[+m[2] - 1].toLowerCase()} ${m[1]}` : (k || null); };
+  const periodLabel = (k) => { const m = /^(\d{4})-(\d{2})$/.exec(k || ''); return m ? `${MONTH_FULL[+m[2] - 1]} de ${m[1]}` : (k || null); };
   const FOCUS_VS_EQUAL = 1.5;   // y al menos 1.5 veces el reparto igual entre las que caen (con 2 que caen, hace falta ≥75 %)
   const MIN_FOCUS_SHARE = 0.25;   // una entidad es «el foco» solo si concentra al menos una cuarta parte de lo que cae
   function focusInsight(s) {
@@ -738,7 +738,7 @@
         why: [focusSince(FO) ? `${FO.entity} ${focusSince(FO)}.` : null, where.length ? `Dentro de ella pesan ${where.slice(0, 2).join(' y ')}.` : null].filter(Boolean).join(' ') || `Es la ${FO.level} que más resta en el período.`, note: 'Es una lectura descriptiva; no demuestra la causa.' });
     } else if (dv && !R.sel) { const g = dv.kpis.find((k) => k.id === 'gap'); items.push({ tag: TAG.calc, certainty: 'Cálculo', text: dv.headline, source: 'Pág. Diagnóstico de motores', limit: 'Reparto aritmético, no causal.', page: 'drivers', title: 'La brecha se reparte entre tráfico, conversión y ticket', figure: g ? smoneyC(g.value) : '', figureLabel: g && g.sub ? `brecha del período (${g.sub})` : 'brecha del período', why: dv.headline, note: 'Es una descomposición aritmética; no demuestra la causa.' }); }
     const rv = by.recovery;
-    if (rv && !R.sel) items.push({ tag: TAG.est, certainty: 'Cálculo requerido', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: R.mk ? `Lo que falta para cumplir ${R.mlow}` : 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: R.mk ? `falta para el plan de ${R.mlow}` : 'falta para la meta', why: rv.headline, note: 'El ritmo diario es lo que se requiere, no una proyección.' });
+    if (rv && !R.sel) items.push({ tag: TAG.est, certainty: 'Cálculo requerido', text: rv.headline, source: 'Pág. Recuperación', limit: 'No es un pronóstico ni una meta de ejecución.', page: 'recovery', title: R.mk ? `Lo que falta para cumplir ${R.mlow}` : 'Lo que falta para llegar a la meta', figure: R.rec && isNum(R.rec.remaining) ? moneyC(R.rec.remaining) : '', figureLabel: R.mk ? `falta para el plan de ${R.mlow}` : 'falta para la meta', why: rv.headline, note: /no una predicción/.test(rv.headline || '') ? null : 'El ritmo diario es lo que se requiere, no una proyección.' });
     if (by.trends) items.push({ tag: TAG.calc, certainty: 'Señal calculada', text: by.trends.headline, source: 'Pág. Evolución y patrones', limit: by.trends.scope && by.trends.scope.partial ? 'Incluye un período parcial.' : 'Patrones descriptivos.', page: 'trends', title: 'Qué resta y qué suma en la evolución', figure: '', figureLabel: '', why: by.trends.headline, note: null });
     if (by.categories) items.push({ tag: TAG.calc, certainty: 'Cálculo', text: by.categories.headline, source: 'Pág. Categorías y productos', limit: null, page: 'categories', title: 'Dónde se concentra la venta', figure: '', figureLabel: '', why: by.categories.headline, note: null });
     const out = items.filter((i) => clean(i.text)).slice(0, 3).map((i, k) => ({ ...i, n: k + 1 }));
@@ -777,7 +777,7 @@
       : { title: 'Qué debemos mover', big: '', unit: '', text: 'Los datos disponibles no permiten sostener una prioridad comercial.' };
     const watch = [];
     if (R.material) watch.push('El cierre estimado cambia de forma importante según el método de proyección.');
-    if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} requiere ${moneyC(R.rec.daily)} por día durante ${int(R.rec.days)} ${Number(R.rec.days) === 1 ? 'día restante' : 'días restantes'}.`);
+    if (R.rec && isNum(R.rec.daily)) watch.push(`Cumplir ${R.mk ? `el plan de ${R.mlow}` : 'la meta'} requiere ${moneyC(R.rec.daily)} por día durante ${Number(R.rec.days) === 1 ? 'el día restante' : `los ${int(R.rec.days)} días restantes`}.`);
     if (s.lastActual && s.run && s.run.cutoff && s.lastActual < s.run.cutoff) watch.push(`La venta real llega al ${dateLabel(s.lastActual)}, antes del corte (${dateLabel(s.run.cutoff)}); falta cargar esos días.`);
     if (s.quality && s.quality.status && s.quality.status !== 'ok') {
       const qt = s.quality.totals || {}, qp = [];
