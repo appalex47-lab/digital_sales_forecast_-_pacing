@@ -24,13 +24,22 @@
     const f = state.dataFilters;
     const key = `${FP.dataStore.signature(state.store, f.dataType)}|${f.dataType}|${f.channel}|${f.status}|${f.from}|${f.to}`;
     if (lastFilter.key === key) return lastFilter.list;
-    const order = new Map(C().channels.map((c) => [c.id, FP.dataModel.getChannel(c.id).order]));
+    const order = {};
+    const channels = C().channels;
+    for (let i = 0; i < channels.length; i++) {
+      const c = channels[i];
+      order[c.id] = FP.dataModel.getChannel(c.id).order;
+    }
     const list = FP.dataStore.records(state.store, f.dataType).filter((r) =>
       (!f.channel || r.channel === f.channel) &&
       (f.status === 'all' || r.status === f.status) &&
       (!f.from || r.date >= f.from) &&
       (!f.to || r.date <= f.to)
-    ).sort((a, b) => (a.date === b.date ? order.get(a.channel) - order.get(b.channel) : a.date < b.date ? -1 : 1));
+    ).sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return (order[a.channel] || 0) - (order[b.channel] || 0);
+    });
     lastFilter = { key, list };
     return list;
   }
