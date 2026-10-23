@@ -110,7 +110,21 @@
     const rejected = bats.reduce((a, b) => a + b.rejected, 0);
     let valid = 0, warning = 0, error = 0, quarantined = 0;          // una sola pasada para los cuatro conteos
     for (let i = 0; i < recs.length; i++) { const st = recs[i].status; if (st === 'valid') valid++; else if (st === 'warning') warning++; else if (st === 'error') error++; else if (st === 'quarantined') quarantined++; }
-    const issues = bats.flatMap((b) => b.issues);
+
+    // Bolt ⚡: Single-pass issue aggregation across all batches without array allocations (flatMap / filter / reduce).
+    let issueErrors = 0, issueWarnings = 0;
+    const issuesByType = {};
+    for (let i = 0; i < bats.length; i++) {
+      const issuesList = bats[i].issues;
+      if (!issuesList) continue;
+      for (let j = 0; j < issuesList.length; j++) {
+        const iss = issuesList[j];
+        if (iss.severity === 'error') issueErrors++;
+        else if (iss.severity === 'warning') issueWarnings++;
+        if (iss.type) issuesByType[iss.type] = (issuesByType[iss.type] || 0) + 1;
+      }
+    }
+
     const out = {
       dataType,
       label: C().dataTypes[dataType].label,
@@ -124,8 +138,8 @@
       missingDates: coverage.missingDates.length,
       missingChannels: coverage.missingChannels.length,
       datesWithMissingChannels: coverage.datesWithMissingChannels,
-      issueCounts: { error: issues.filter((i) => i.severity === 'error').length, warning: issues.filter((i) => i.severity === 'warning').length },
-      issuesByType: issues.reduce((acc, i) => { acc[i.type] = (acc[i.type] || 0) + 1; return acc; }, {}),
+      issueCounts: { error: issueErrors, warning: issueWarnings },
+      issuesByType,
       coverage
     };
     // Segmentos (Fase 5) son un desglose opcional de periodos elegidos: los huecos de fechas no degradan el estado.
