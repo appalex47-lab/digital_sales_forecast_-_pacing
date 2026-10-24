@@ -2,7 +2,7 @@
  * analistaStory.js — Fase 2 · «La historia del periodo» del Analista de Números.
  *
  * En vez de una lista suelta de hallazgos, arma una historia en tres partes (qué se cae, qué crece, dónde revisar primero) y una ruta de
- * 5 preguntas para entenderla. Todo es código determinista: LEE los detectores del Analista (canales contra el plan, drivers, calidad) y el
+ * 5 preguntas para entenderla. Todo es código determinista: LEE los detectores del Analista (canales contra el plan, drivers, confianza del cierre) y el
  * análisis de productos (categorías contra el periodo anterior, subcategorías y geografía). La IA, si hay, solo ordena y redacta tarjetas;
  * nunca calcula ni escribe la historia ni la ruta.
  *
@@ -190,24 +190,14 @@
   }
 
   // ---------- Confianza ----------
+  /** Alcance de la lectura: solo dice qué NO pudo leer (archivo de productos). Ya no hay «Dato confiable» ni avisos de calidad: eso vive en la pill de calidad y en Configuración. */
   function gateOf(state, det, cat, sc) {
-    const f = F(), items = [];
-    const dist = det.findings.find((x) => x.id === 'datos_distorsionan');
-    let level = 'ok';
-    // Los avisos de calidad ya salen como hallazgo en «Dónde revisar primero»: no se repiten en un banner arriba.
+    const items = []; let level = 'ok';
     if (cat.status === 'sin_producto') items.push('No hay archivo de productos cargado: la historia se queda en canales y no baja a categorías.');
     else if (cat.status === 'sin_mes') items.push(`El archivo de productos no cubre ${sc.W.este}: la historia se queda en canales.`);
     else if (cat.status === 'error') { level = 'warn'; items.push('No pude leer el archivo de productos; la historia se queda en canales.'); }
-    const q = state.quality && state.quality.totals ? state.quality.totals : null;
-    const flagged = q ? (q.warning || 0) + (q.error || 0) + (q.rejected || 0) : 0;
-    const cut = dayLabel(sc.lastActual);
-    // Con avisos de calidad no se afirma «Dato confiable»; tampoco se pone banner de aviso (el hallazgo lo dice abajo).
-    if (dist && !items.length) return null;
-    const title = level === 'ok' ? 'Dato confiable' : 'Dato con avisos';
-    const text = level === 'ok'
-      ? `Venta real cargada hasta el ${cut} y plan ${sc.W.del} completo${dist ? '' : flagged ? `; ${flagged} aviso(s) de calidad en otras cargas` : '; sin avisos de calidad'}.${items.length ? ` ${items.join(' ')}` : ''}`
-      : items.join(' ');
-    return { level, title, text, items, flagged, view: dist ? 'calidad' : null };
+    if (!items.length) return null;
+    return { level, title: 'Alcance de esta lectura', text: items.join(' '), items, flagged: 0, view: null };
   }
 
   // ---------- Historia, KPIs, ruta ----------

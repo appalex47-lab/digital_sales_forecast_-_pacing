@@ -236,14 +236,6 @@
       ${waiting ? '' : '<p class="field__hint nbs__how">Cómo sigue: el botón abre el módulo con tu canal y periodo. Allí verás una barra con este paso; al terminar lo confirmas (o se completa solo con los datos) y regresas aquí para ver la ruta avanzada.</p>'}${others}</section>`;
   }
 
-  /** Aviso corto ANTES de las cifras cuando los datos no están al día o están incompletos (no bloquea el resto de la página). */
-  function bannerHtml(att) {
-    const d = att.findings.find((f) => f.kind === 'data' && (f.severity === 'blocking' || f.severity === 'warning'));
-    if (!d) return '';
-    const { esc } = H();
-    return `<div class="att__banner att__banner--compact att__banner--${esc(d.severity)}" role="status" data-banner="${esc(d.id)}"><button type="button" class="att__banner-line" data-action="banner-toggle" aria-expanded="false"><span class="att__banner-ico" aria-hidden="true">⚠</span><span class="att__banner-txt"><strong class="att__banner-pre">Antes de leer las cifras: </strong>${esc(d.title)}.</span></button><span class="att__banner-what"> ${esc(d.what)}</span> <button type="button" class="link-btn att__banner-go" data-action="scroll-to" data-target="att">Ver detalle</button></div>`;
-  }
-
   /* ---------- Origen de la navegación: de qué hallazgo y paso vengo, y cómo volver ---------- */
   const OKEY = 'fp.route.origin.v1';
   const snaps = {};
@@ -329,7 +321,7 @@
     const p = att.route.primary;
     snapshot(state, key, att, S, f);
     const next = { label: p.cta || p.title, reason: p.why || '', view: p.view, step: p.id, attrs: attrs(p, S, key), title: p.title };
-    return { att, key, html: attentionHtml(att, S, key), nextHtml: nextStepHtml(att, S, key), banner: bannerHtml(att), next };
+    return { att, key, html: attentionHtml(att, S, key), nextHtml: nextStepHtml(att, S, key), banner: '', next };
   }
 
   FP.attentionView = { build, markStarted, progressFor, ctxKey, STATE_LABEL, setOrigin, clearOrigin, renderOrigin, originHtml, markReviewed, dataSig, saveStatus, retrySave };

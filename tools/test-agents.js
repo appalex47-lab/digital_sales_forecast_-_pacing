@@ -106,20 +106,20 @@ ok('A3 sin venta real → no_data', A.detect({ fc: { run: { plan: { source: 'fil
   });
   const st = mkState({ ecommerce: [1000, 900], app: [500, 450] }, { quality: { totals: { warning: 2 } } });
   const r = A.detect(st, d); const ids = r.findings.map((x) => x.id);
-  ['meta_en_riesgo', 'driver_dominante', 'contradiccion_capas', 'forecast_divergente', 'datos_distorsionan'].forEach((id) => ok(`D1 detecta ${id}`, ids.includes(id), ids));
+  ['meta_en_riesgo', 'driver_dominante', 'contradiccion_capas', 'forecast_divergente'].forEach((id) => ok(`D1 detecta ${id}`, ids.includes(id), ids));
+  ok('D1b ya no hay hallazgo de calidad de datos en el asistente (vive en la pill y en Configuración), aunque haya avisos y días excluidos', !ids.includes('datos_distorsionan') && !r.findings.some((x) => x.view === 'calidad'), ids);
   ok('D2 ordenados de mayor a menor score', r.findings.every((f, i, a) => !i || a[i - 1].score >= f.score));
   ok('D3 ids únicos', new Set(ids).size === ids.length);
   ok('D4 contradicción trae traspaso al Auditor', !!r.findings.find((x) => x.id === 'contradiccion_capas').handoff && r.findings.find((x) => x.id === 'contradiccion_capas').handoff.to === 'auditor');
   ok('D5 el traspaso apunta a un agente del registro', !!FP.agents.registry.AGENTS[r.findings.find((x) => x.id === 'contradiccion_capas').handoff.to]);
   ok('D6 driver dominante = tráfico', /tráfico/.test(r.findings.find((x) => x.id === 'driver_dominante').title));
   ok('D7 meta en riesgo menciona 93.0%', /93\.0%/.test(r.findings.find((x) => x.id === 'meta_en_riesgo').title));
-  ok('D8 días excluidos aparecen en datos', /2 día/.test(r.findings.find((x) => x.id === 'datos_distorsionan').resumen));
   ok('D9 todos los detectores reportados en la corrida', r.detectors === A.DETECTOR_COUNT);
 }
 
 // ---- un detector que falla no tumba al resto ----
-{ const d = dep({ home: { goal: () => { throw new Error('boom'); }, excluded: () => ({ days: 3, revenue: 10 }) } });
-  const st1 = mkState({ ecommerce: [1000, 1000], llamadas: [300, 100] }); Object.defineProperty(st1, 'quality', { get() { throw new Error('boom'); } });
+{ const d = dep({ home: { goal: () => { throw new Error('boom'); }, excluded: () => ({ days: 3, revenue: 10 }) }, confidence: { assess: () => { throw new Error('boom'); } } });
+  const st1 = mkState({ ecommerce: [1000, 1000], llamadas: [300, 100] });
   const r = A.detect(st1, d);
   ok('E1 detector que lanza se omite y se reporta', r.status === 'ok' && r.errors.some((e) => /boom/.test(e)) && r.findings.some((x) => x.id === 'brecha_concentrada'), r);
   const r2 = A.detect(mkState({ ecommerce: [1000, 1000], llamadas: [300, 100] }), { home: null, advisor: null });
@@ -127,7 +127,7 @@ ok('A3 sin venta real → no_data', A.detect({ fc: { run: { plan: { source: 'fil
 
 // ---- ejecutor con IA simulada ----
 const baseState = () => mkState({ ecommerce: [1000, 1000], app: [500, 500], llamadas: [300, 100] }, { quality: { totals: { warning: 2 } } });
-const D = dep({ home: { excluded: () => ({ days: 2, revenue: 400000 }) } });
+const D = dep({ home: { goal: () => ({ status: 'not_reached', attainment: 0.93, goal: 30e6, cumulative: 27.9e6 }), excluded: () => ({ days: 2, revenue: 400000 }) } });
 FP.cohereConnection = { isConfigured: () => true };
 let calls = 0, reply = null;
 FP.cohereClient.chatJson = async () => { calls++; return typeof reply === 'function' ? reply() : reply; };
