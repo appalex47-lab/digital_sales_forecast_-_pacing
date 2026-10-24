@@ -70,8 +70,7 @@ async def main():
         # datos desactualizados → aviso antes de las cifras
         await openref(q); await q.fill('#topbar-date', '2026-10-20'); await q.dispatch_event('#topbar-date', 'change'); await q.wait_for_timeout(1500)
         bn = await q.evaluate("""()=>{const b=document.querySelector('.att__banner');const k=document.querySelector('[data-block=key]');return {has:!!b,txt:b?b.innerText:'',before:b&&k?!!(b.compareDocumentPosition(k)&4):false,finding:!!document.querySelector('#att [data-finding=data_stale]')}}""")
-        chk('A8 con la venta real vieja respecto a «Datos al», un aviso aparece ANTES de las cifras y hay un hallazgo de datos desactualizados', bn['has'] and bn['before'] and bn['finding'] and 'Antes de leer las cifras' in bn['txt'], bn)
-        await q.click('.att__banner [data-action="scroll-to"]'); await q.wait_for_timeout(600)
+        chk('A8 con la venta real vieja respecto a «Datos al» ya NO hay banner de aviso antes de las cifras (Fase 3.1), y el hallazgo de datos desactualizados sigue en la lista', (not bn['has']) and bn['finding'], bn)
         await openref(q); await q.click('#topbar-status .hdate__b[data-action="fc-ref-today"]'); await q.wait_for_timeout(1200)
         # accesibilidad básica
         a11 = await q.evaluate("""()=>{const out=[];document.querySelectorAll('#att button,#nbs button').forEach(b=>{if(!(b.innerText||'').trim()&&!b.getAttribute('aria-label'))out.push('btn sin nombre')});

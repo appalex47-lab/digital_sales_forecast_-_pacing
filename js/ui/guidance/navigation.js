@@ -248,7 +248,6 @@
      Mismo orden en las 21 vistas: ceja (grupo · pregunta) → título (nombre del menú) + frase de estado → «Qué hay aquí» → «Qué hago aquí» →
      «Detalle» (el título y la descripción propios de la pantalla, sin perder texto) → contexto → aviso de calidad. El siguiente paso va al final de la página. */
   const CTX_VIEWS = ['inicio', 'pacing', 'reforecast', 'diagnostico', 'recovery'];
-  const NO_QUALITY = ['inicio', 'ayuda', 'ajustes', 'negocio'];     // en Inicio el enlace vive en «Respaldo»; en Ayuda y Configuración el aviso no aplica
   const NO_NEXT = ['inicio', 'ayuda', 'ajustes', 'negocio'];         // Inicio ya trae «¿Qué hago hoy?»; Ayuda y Configuración no son parte del recorrido
   const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, ' ').trim();
   let learnOpenView = null, lastCtxView = null, helpOpen = false;
@@ -339,7 +338,6 @@
     const extra = state.ux.crumbExtra && state.ux.crumbExtra[view] ? state.ux.crumbExtra[view] : [];
     const v = G().VIEWS[view] || {};
     const next = d.nextStep;
-    const q = status.data.quality;
     const grp = G().GROUPS.find((g) => g.id === v.group && g.id !== 'ayuda');
     // título y descripción propios de la pantalla (marcados con data-own-head en su HTML): se muestran aquí, en «Detalle», y ahí se ocultan
     const own = document.querySelector('main:not([hidden]) [data-own-head]');
@@ -353,7 +351,6 @@
     const what = [term(d.whatAmISeeing), rest].filter(Boolean).join(' ');
     const tone = /por debajo|debajo del plan|requiere/i.test(headline) ? 'neg' : /por encima|encima del plan/i.test(headline) ? 'pos' : 'info';
     const detail = ownDesc && !norm(what).includes(norm(ownDesc).slice(0, 60)) ? `${ownTitle && norm(ownTitle) !== norm(v.title) ? `${ownTitle}. ` : ''}${ownDesc}` : '';
-    const showQuality = (q === 'invalid' || q === 'warnings') && !NO_QUALITY.includes(view);
     const showNext = next.view !== view && !NO_NEXT.includes(view);
     const inlineCtx = view === 'inicio' && CTX_VIEWS.includes(view);
     const chipCtx = inlineCtx ? { ...state.ux.ctx, periodType: state.ux.home.periodType, periodKey: state.ux.home.periodKey || state.ux.ctx.periodKey } : state.ux.ctx;   // Inicio: el contexto va junto al título (chip corto); el párrafo solo queda si hay nota
@@ -376,8 +373,6 @@
         ${detail ? `<p class="ux-head__line ux-head__line--detail"><b>Detalle</b> ${esc(detail)}</p>` : ''}
         </div>
         ${ctxHtml}
-        ${showQuality ? `<p class="ux-context__warn ux-head__warn" data-quality="${q}" role="status">
-          Algunos cálculos pueden estar incompletos. <a href="#calidad">Revisar calidad de datos</a></p>` : ''}
       </div>
       ${state.ux.mode === 'learner' ? FP.help.learningBar(view, next, status, { todo: d.whatToDo, showNext, open: learnOpenView === view }) : ''}
       ${state.ux.mode === 'learner' && state.ux.lesson ? FP.help.lessonCard(state.ux.lesson) : ''}</div>`;

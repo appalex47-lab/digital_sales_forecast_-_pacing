@@ -123,8 +123,6 @@
     if (agent === 'auditor') {
       const how = { ok: 'Puedes usar el embudo para decidir qué fichas revisar primero.', warn: 'Revisa en GA4 el etiquetado de compras (evento de compra) antes de comparar productos entre sí.', low: 'Antes de cambiar fichas, revisa el etiquetado de GA4 y la carga de unidades. Mientras tanto usa los hallazgos como dirección, no como cifra.', unknown: 'Carga las unidades vendidas por producto en el mismo periodo para poder verificar el cuadre.' }[g.level] || '';
       extra = `<button type="button" class="ag-link" data-ag="gate" aria-expanded="${S.gateOpen}">Ver cómo se calculó el cuadre${CHEV}</button>${S.gateOpen ? `<div class="ag-det"><div><span class="ag-k">Cómo se calcula</span><div>Compras de GA4 ÷ unidades vendidas en tu archivo de productos, por producto y en los mismos días.</div></div><div><span class="ag-k">Qué hacer con esto</span><div>${esc(how)}</div></div></div>` : ''}`;
-    } else if (g.view) {
-      extra = `<a class="ag-a" href="#${esc(g.view)}" data-ag="go">Ver en Calidad de datos</a>`;
     }
     return `<div class="ag-gate ${cls}" role="status"><b>${esc(g.title)}</b><p>${esc(g.text)}</p>${extra}</div>`;
   }
@@ -191,7 +189,7 @@
     }
     const chips = `<div class="ag-chiprow">${scopeChips(run, 'analista')}</div>`;
     const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
-    const empty = !run.findings.length ? `<div class="ag-card"><h3>Nada fuera de lo normal</h3><p>Revisé ${esc(run.detectors)} puntos del pacing, el forecast, las categorías y la calidad de datos y ninguno pasa el umbral. Cuando algo cambie, aquí aparece primero.</p></div>` : '';
+    const empty = !run.findings.length ? `<div class="ag-card"><h3>Nada fuera de lo normal</h3><p>Revisé ${esc(run.detectors)} puntos del pacing, el forecast y las categorías y ninguno pasa el umbral. Cuando algo cambie, aquí aparece primero.</p></div>` : '';
     return `${chips}${aiChip(run)}${aiWarn(run)}${gateBlock(run, 'analista')}${lect}${storyBlock(run)}${empty || sectionsBlock(run)}${routeBlock(run)}${S.busy.analista ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
   }
   const errNote = (run) => (run && run.errors && run.errors.length ? `<div class="ag-note">Nota: no pude calcular ${run.errors.length} parte(s) y las omití (${esc(run.errors.map((e) => String(e).split(':')[0]).join(', '))}).</div>` : '');

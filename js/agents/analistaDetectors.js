@@ -1,7 +1,7 @@
 /**
  * analistaDetectors.js — Fase 1 · Detectores del Analista de Números.
  *
- * Código determinista: LEE los motores que ya existen (Pacing/Forecast, Diagnóstico, Calidad de datos) y devuelve «candidatos a hallazgo»
+ * Código determinista: LEE los motores que ya existen (Pacing/Forecast, Diagnóstico) y devuelve «candidatos a hallazgo»
  * con cifras, evidencia y texto base. NO calcula métricas nuevas y NO usa IA: si Cohere no está disponible, el panel muestra estos
  * mismos textos. Cuando hay IA, solo recibe estos candidatos para ordenarlos y redactarlos (agentRunner.js).
  *
@@ -306,36 +306,6 @@
     };
   }
 
-  /** D6 · Datos que pueden distorsionar el cumplimiento (días fuera del total, canales sin plan o sin real, advertencias). */
-  function datosDistorsionan(sc, deps) {
-    const issues = [], evid = []; let score = 20;
-    const miss = sc.channels.filter((c) => !c.m.plan || !fin(c.m.plan.revenue));
-    if (miss.length) { issues.push(`${miss.map((c) => c.label).join(', ')} sin plan ${sc.W.del}`); evid.push({ k: `Canales sin plan ${sc.W.del}`, v: miss.map((c) => c.label).join(', ') }); score += 25; }
-    const noAct = sc.channels.filter((c) => c.m.plan && !c.m.countedDays);
-    if (noAct.length) { issues.push(`${noAct.map((c) => c.label).join(', ')} sin venta real`); evid.push({ k: 'Canales con plan y sin venta real', v: noAct.map((c) => c.label).join(', ') }); score += 20; }
-    let ex = null; try { ex = deps.home.excluded(deps.state, sc.channel, sc.period); } catch (e) { ex = null; }
-    if (ex && ex.days > 0) { issues.push(`${ex.days} día(s) cerrados no entran al total porque falta algún canal`); evid.push({ k: 'Días cerrados que no entran al total', v: String(ex.days) }); evid.push({ k: 'Venta de los otros canales que queda fuera', v: money(ex.revenue) }); score += Math.min(25, ex.days * 4); }
-    const q = deps.state.quality, flagged = q && q.totals ? (q.totals.warning || 0) + (q.totals.error || 0) + (q.totals.rejected || 0) : 0;
-    if (flagged > 0) { issues.push(`${flagged} aviso(s) de calidad de datos`); evid.push({ k: 'Avisos de calidad de datos', v: String(flagged) }); score += Math.min(15, flagged * 3); }
-    if (!issues.length) return null;
-    score = clamp(score, 0, 60);
-    return {
-      id: 'datos_distorsionan', detector: 'Calidad de datos · cobertura de plan y real', score, prio: prioOf(score), owner: 'Ecommerce',
-      title: 'Hay datos que pueden distorsionar el cumplimiento',
-      resumen: `${issues.join('; ')}. Esas cifras pueden inflar o recortar el cumplimiento que ves.`,
-      que: 'El pacing solo cuenta los días con plan y con venta real. Si faltan, el cumplimiento se calcula sobre menos días.',
-      section: 'revisar', tag: 'Calidad del dato',
-      big: { value: `${issues.length} ${issues.length === 1 ? 'aviso' : 'avisos'}`, tone: '', sub: 'que pueden mover el cumplimiento que ves' },
-      hipotesis: 'El cumplimiento se calcula sobre menos días o menos canales de los que parece.',
-      validar: 'Abre Calidad de datos y completa la carga que falta; luego vuelve a leer el cumplimiento.',
-      accion: 'Completar la carga de plan o venta que falta.',
-      evid, pregunta: '¿Se puede completar la carga que falta antes de leer el cumplimiento?',
-      limites: 'No sé cuánto cambiaría el cumplimiento con la carga completa.',
-      fuente: 'Calidad de datos', view: 'calidad', viewLabel: 'Calidad de datos',
-      facts: { flagged, excludedDays: ex ? ex.days : 0, excludedRevenue: ex ? ex.revenue : 0 }
-    };
-  }
-
   /** D7 · Un canal va por encima de su plan: qué compensa de lo que cae en otros (la parte «qué crece» de la historia). */
   function canalCompensa(sc, deps) {
     const t = rev(sc.tot);
@@ -425,7 +395,7 @@
     };
   }
 
-  const DETECTORS = [brechaConcentrada, canalesBajoPlan, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa, forecastConfianza, capasNoCoinciden];
+  const DETECTORS = [brechaConcentrada, canalesBajoPlan, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, canalCompensa, forecastConfianza, capasNoCoinciden];
 
   /**
    * Corre todos los detectores. Nunca lanza: un detector que falla se omite y se reporta en `errors`.
