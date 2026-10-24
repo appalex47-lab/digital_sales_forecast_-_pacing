@@ -50,8 +50,8 @@
     const where = [sum.scopeLabel, sum.channelLabel].filter(Boolean).join(' y ');
     const t = document.createElement('span'); t.className = 'ag-line__t';
     t.textContent = `El Analista encontró ${sum.n} ${sum.n === 1 ? 'cosa' : 'cosas'}${where ? ` con ${where}` : ''}: ${parts}.`;
-    const go = document.createElement('button'); go.type = 'button'; go.className = 'ag-line__go'; go.setAttribute('data-ag-line', 'open'); go.textContent = 'Abrir en Asistentes';
-    const x = document.createElement('button'); x.type = 'button'; x.className = 'ag-line__x'; x.setAttribute('data-ag-line', 'close'); x.setAttribute('aria-label', 'Cerrar este aviso'); x.textContent = '×';
+    const go = document.createElement('button'); go.type = 'button'; go.className = 'ag-line__go'; go.setAttribute('data-ag-line', 'open'); go.setAttribute('aria-controls', 'ag-panel'); go.textContent = 'Abrir en Asistentes';
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'ag-line__x'; x.setAttribute('data-ag-line', 'close'); x.setAttribute('aria-controls', 'ag-line'); x.setAttribute('aria-label', 'Cerrar este aviso'); x.textContent = '×';
     el.append(t, go, x);
     go.addEventListener('click', () => { load().then(() => FP.agentPanel.open(fab)).catch(() => { /* sin panel */ }); });
     x.addEventListener('click', () => { dismissed.add(sum.key); el.remove(); });
