@@ -137,13 +137,13 @@
 
       </div></details>
     <details class="ds-accordion pacing-more rs-more" data-rs-more="engine">
-      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Pruebas del motor</h3><p class="ds-accordion__d">Se ejecutan al abrir la app; si una falla, un cambio rompió algo que ya funcionaba</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Pruebas del motor</h3><p class="ds-accordion__d">Se ejecutan al pulsar «Ejecutar pruebas del motor»; si una falla, un cambio rompió algo que ya funcionaba</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
       <div class="ds-accordion__body">
     <section class="panel" aria-labelledby="t-engine">
       <div class="panel__head">
         <div>
           <h2 class="panel__title" id="t-engine">Pruebas del motor</h2>
-          <p class="panel__desc">Se ejecutan al abrir la app. Si alguna falla después de un cambio, ese cambio rompió algo que ya funcionaba.</p>
+          <p class="panel__desc">Se ejecutan al pulsar «Ejecutar pruebas del motor». Si alguna falla después de un cambio, ese cambio rompió algo que ya funcionaba.</p>
         </div>
         <span id="engine-summary"></span>
       </div>
@@ -642,6 +642,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Orden de carga = orden de dependencias (ver ARCHITECTURE.md §4) -->
+  <script src="js/lazy.js?v=20261022z25"></script>
   <script src="js/config/businessContext.js?v=20261022z25"></script>
   <script src="js/config/config.js?v=20261022z25"></script>
   <script src="js/config/guidanceConfig.js?v=20261022z25"></script>
@@ -746,8 +747,8 @@
   <script src="js/data/mock-data.js?v=20261022z25"></script>
   <script src="js/data/mock-csv.js?v=20261022z25"></script>
   <script src="js/data/mock-products.js?v=20261022z25"></script>
-  <script src="js/calculations/self-test.js?v=20261022z25"></script>
-  <script src="js/storage/storage-tests.js?v=20261022z25"></script>
+  <script src="js/calculations/self-test.js?v=20261022z25" type="text/plain" data-lazy="selftest"></script>
+  <script src="js/storage/storage-tests.js?v=20261022z25" type="text/plain" data-lazy="storagetests"></script>
   <script src="js/ui/format.js?v=20261022z25"></script>
   <script src="js/ui/ui.js?v=20261022z25"></script>
   <script src="js/ui/progress-loader.js?v=20261022z25"></script>

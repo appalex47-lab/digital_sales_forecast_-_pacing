@@ -2286,7 +2286,10 @@
       FP.ui.toast('Datos de prueba importados por el pipeline y plan original bloqueado', { ms: 3500 });
     },
 
-    'run-tests'() {
+    async 'run-tests'() {
+      FP.ui.toast('Ejecutando pruebas del motor…', { ms: 2500 });
+      try { await FP.lazy.load('selftest'); } catch (e) { FP.ui.toast(`No se pudieron cargar las pruebas del motor: ${e.message}`, { ms: 5000 }); return; }
+      await new Promise((res) => setTimeout(res, 50));   // deja pintar el aviso antes de bloquear el hilo
       state.selfTest = FP.selfTest.run();
       render();
       FP.ui.toast(`Pruebas del motor: ${state.selfTest.passed} de ${state.selfTest.total} correctas`);
@@ -3076,6 +3079,7 @@
     },
     async 'storage-tests'() {
       state.pa.testing = true; render();
+      try { await FP.lazy.load('storagetests'); } catch (e) { state.pa.testing = false; render(); FP.ui.toast(`No se pudieron cargar las pruebas de almacenamiento: ${e.message}`, { ms: 5000 }); return; }
       state.pa.tests = await FP.storageTests.run();
       state.pa.testing = false; render();
       FP.ui.toast(`Pruebas de almacenamiento: ${state.pa.tests.passed} de ${state.pa.tests.total} correctas.`);
@@ -4516,7 +4520,7 @@
     if (migrated) saveStore();
     refresh();
     resetPeriod();
-    state.selfTest = FP.selfTest.run();
+    // Fase A: las pruebas del motor ya no corren al abrir (tardaban segundos en el hilo principal); se ejecutan con el botón y en la revisión de cada cambio.
     readHash();
     state.ux.ctxNote = FP.navigation.applyContext(state.view, state) || null;
     FP.navigation.markAnalystBlocks();

@@ -14,9 +14,9 @@ async def main():
         url = f'file://{ROOT}/index.html'
         await pg.goto(url+'#resumen'); await pg.wait_for_timeout(1000)
         # 1 motor
-        r = await pg.evaluate("(()=>{const r=FP.selfTest.run();return {p:r.passed,t:r.total}})()"); R['selftest']=r
+        r = await pg.evaluate("FP.lazy.load('selftest').then(()=>{const r=FP.selfTest.run();return {p:r.passed,t:r.total}})"); R['selftest']=r
         try:
-            r = await asyncio.wait_for(pg.evaluate("FP.storageTests.run().then(r=>({p:r.passed,t:r.total}))"), 40); R['storage']=r
+            r = await asyncio.wait_for(pg.evaluate("FP.lazy.load('storagetests').then(()=>FP.storageTests.run()).then(r=>({p:r.passed,t:r.total}))"), 40); R['storage']=r
         except Exception as e: R['storage']='TIMEOUT/ERR '+str(e)[:60]
         # 2 datos de prueba + plan + meta
         await pg.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await pg.click('[data-action="generate-mock"]', timeout=5000); await pg.wait_for_timeout(1500)
