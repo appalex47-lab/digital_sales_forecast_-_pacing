@@ -85,13 +85,10 @@
       <p class="ag-note">Todavía no está disponible. Mientras tanto el Analista de Números sigue activo.</p>
       <div class="ag-actions"><button type="button" class="ag-go" data-ag="agent" data-id="analista">Volver al Analista de Números</button></div></div>`;
   }
-  /** Estado de la conexión con IA, siempre visible abajo: conectada (y por dónde) o cómo conectarla, con enlace a Configuración. */
+  /** Estado de la IA, siempre visible abajo: «IA conectada» o «IA no conectada» con el enlace a Configuración. */
   function aiStatusLine() {
-    const server = !!(FP.cohereProxy && FP.cohereProxy.available()), key = !!(st() && st().dx && st().dx.apiKey), off = !!(st() && st().settings && st().settings.enableAI === false);
-    const link = '<a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración · Inteligencia artificial</a>';
-    if (aiReady()) return `<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b> · ${server ? 'servidor del equipo' : 'API key de este navegador'}. Ordena y redacta los hallazgos y responde tus preguntas; las cifras siempre las calcula el motor.</div>`;
-    if ((server || key) && off) return `<div class="ag-note"><b style="color:#A05A0A">● IA desactivada</b> en Configuración. Actívala para que ordene y redacte los hallazgos y responda preguntas. Sin ella ves los textos del motor.</div>${link}`;
-    return `<div class="ag-note"><b style="color:#A05A0A">● IA sin conectar.</b> Los hallazgos funcionan igual, con los textos del motor. Para conectarla:<br>1. Inicia sesión con tu cuenta del equipo (usa el servidor del equipo y no necesitas key), o<br>2. pega tu API key de Cohere en Configuración → Inteligencia artificial.</div>${link}`;
+    if (aiReady()) return '<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b></div>';
+    return '<div class="ag-note"><b style="color:#A05A0A">● IA no conectada</b></div><a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración · Inteligencia artificial</a>';
   }
   function askBlock() {
     if (S.agent !== 'analista') return '';
