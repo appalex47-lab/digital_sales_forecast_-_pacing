@@ -36,7 +36,8 @@ Fases:
   calculations/seasonality.js   Perfiles de estacionalidad por canal                         (Fase 2)
   calculations/gap.js           Gap, cumplimiento, gap forecast, semáforo de pacing           (Fase 3)
   calculations/pacing.js        Fecha de referencia, corte, estados temporales, acumulados    (Fase 3)
-  calculations/self-test.js     Pruebas del motor (red de no-regresión)
+  calculations/self-test.js     Pruebas del motor (red de no-regresión). DIFERIDO: se carga con FP.lazy.load('selftest')   (Fase A)
+  lazy.js                       Cargador bajo demanda de módulos declarados con data-lazy en index.html                  (Fase A)
   data/data-model.js            DailyRecord, Targets, Dataset, consultas y resúmenes
   data/data-store.js            Modelo canónico: colecciones, lotes, duplicados, consolidación  (Fase 1)
   data/mock-data.js             Datos de prueba determinísticos y casos límite (solo QA)
@@ -138,6 +139,7 @@ Diferencias respecto a la propuesta inicial, con motivo:
   gráficos) formatearán igual.
 - **`calculations/self-test.js`** y **`data/mock-data.js`**: permiten comprobar la
   arquitectura en el navegador sin datos reales. Nada del núcleo depende de ellos.
+  Desde la Fase A `self-test.js` (y `storage-tests.js`) son **módulos diferidos**: no se descargan al abrir la app (ver «Fase A · Arranque ligero» al final).
 - **Fase 1 agrega la carpeta `/js/quality`** (validación y cobertura) separada de `/js/import`
   (lectura y normalización): leer un dato y juzgar su calidad son responsabilidades distintas,
   y la cobertura se usará también sobre datos que no vienen de CSV.
@@ -2812,3 +2814,14 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - Carga de datos: «Actualizar todo» (`sheets-refresh-all`, `fetchAllSheets` en `app.js`) vuelve a leer todas las pestañas de Sheets guardadas, una tras otra, y las deja juntas en revisión (solo filas nuevas o cambiadas; nada se importa sin confirmar). Una pestaña que falla no detiene a las demás; el resumen queda en `state.sheets.lastAll`. Prueba: `batch_sheets_todo.py`.
 - Diagnóstico: cada hipótesis (reglas o Cohere) muestra bajo su tarjeta los botones «Evidencia» (una señal cada uno) y «Ver driver en el árbol». `dx-evidence` abre «Ver todas» si la señal está más allá de las 12 primeras, resalta la fila (`.is-evidence`), le da el foco y deja «Volver a la hipótesis» (`state.dx.evidenceFrom`); `dx-evidence-driver` abre «Ver más → árbol» y despliega la rama (`#drv-<driver>`). Prueba: `batch_evidencia.py`.
 - Limpieza: se quitaron funciones y constantes sin uso (`patternHelp`, `explanation`, `finiteLocal` y variables locales sin lectura en trend-view, cohortEngine, planning-view y segments-view) y el CSS de los desplegables de Configuración y de la ayuda de patrones.
+
+## Fase A · Arranque ligero (2026-10-23)
+Objetivo: abrir más rápido sin cambiar ninguna funcionalidad.
+- **Pruebas del motor fuera del arranque.** `init()` ya no ejecuta `FP.selfTest.run()` (tardaba segundos en el hilo principal). Se ejecutan con el botón «Ejecutar pruebas del motor» (`run-tests`) y, para la revisión de cada cambio, con `node tools/selftest-node.js` (sale con código 1 si falla alguna). Hasta que se ejecuten, la píldora del encabezado dice «Motor: Sin ejecutar» (`state.selfTest` es `null`; `ui.js` ya contemplaba ese estado).
+- **Módulos diferidos.** `index.html` sigue siendo la única lista de archivos. Un módulo diferido se declara así: `<script src="js/…?v=…" type="text/plain" data-lazy="nombre"></script>` (el navegador no descarga ni ejecuta un script `text/plain`; las pruebas que leen el orden desde `index.html` con `<script src="…` siguen viéndolo). `FP.lazy.load('nombre')` (en `js/lazy.js`) crea los `<script>` reales en el mismo orden, devuelve una promesa y reintenta si falló. Diferidos hoy: `selftest` (`calculations/self-test.js`) y `storagetests` (`storage/storage-tests.js`), 154 KB sin comprimir.
+- **Cómo agregar otro módulo diferido.** Declararlo en `index.html` con `data-lazy`, y en cada punto de uso hacer `await FP.lazy.load('nombre')` antes de llamarlo. Solo conviene para código que no interviene al dibujar la primera vista.
+- **No se difirieron** `mock-data.js`, `mock-csv.js` y `mock-products.js` (33 KB): la vista de Importación lista `FP.mockCsv` al dibujarse; el riesgo supera el beneficio.
+- **Descartado: `defer`.** Los scripts ya están al final del `<body>`; medido en Chromium con red y CPU limitadas no mejoró nada y cambiaría el momento en que se inicializan `search.js` y `responsive-tables.js` (usan `readyState`).
+- **Prueba corregida.** «Códigos estables de estado (32)…» dependía de que el arranque ya hubiera inicializado los estados; ahora corre dentro de `iso()` (que reinicia las dimensiones). Antes fallaba (223/224) al ejecutarse sin arranque; ahora 224/224.
+- **Herramientas.** `tools/regression/battery.py` y `suite.py` cargan las pruebas con `FP.lazy.load(...)` antes de llamarlas.
+
