@@ -2139,6 +2139,26 @@ body.gs-lock{overflow:hidden}
 .qstep__body > .panel { margin: 0; }
 .qfc__months { display: grid; gap: var(--ds-s2); margin: 0 0 var(--ds-s3); }
 .qfc__bar { width: 100%; max-width: 420px; height: 12px; accent-color: var(--ds-accent); }
+/* Fase 3.3 · calibración de la confianza (paso 5 de Calidad de datos) */
+.qcal__sec { display: grid; gap: var(--ds-s3); min-width: 0; padding-bottom: var(--ds-s4); margin-bottom: var(--ds-s4); border-bottom: 1px solid var(--ds-border); }
+.qcal__sec:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.qcal__sec .panel__title { margin: 0; }
+.qcal__run { display: grid; gap: var(--ds-s2); padding: var(--ds-s3) var(--ds-s4); border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); background: var(--ds-surface-2); }
+.qcal__msg { margin: 0; padding: var(--ds-s3) var(--ds-s4); border-left: 4px solid var(--ds-accent); background: var(--ds-accent-soft); border-radius: var(--ds-r-sm); font-size: var(--ds-fs-helper); overflow-wrap: anywhere; }
+.qcal__msg--bad { border-left-color: var(--ds-danger); background: var(--ds-danger-soft); }
+.qcal .btn, .qcal__sec .btn { min-height: 44px; }
+.qcal__sec input[type="checkbox"], .qcal__sw input[type="checkbox"] { width: 20px; height: 20px; }
+.qcal__sw { min-height: 44px; }
+.qcal__bars { width: 100%; max-width: 520px; height: auto; }
+.qcal__rect { fill: var(--ds-accent); }
+.qcal__val { font-size: 13px; font-weight: 650; fill: var(--ds-text); font-variant-numeric: tabular-nums; }
+.qcal__lab { font-size: 12px; fill: var(--ds-text-muted); }
+.qcal__axis { stroke: var(--ds-border-strong); stroke-width: 1; }
+.qcal__hist, .qcal__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.qcal__list { list-style: disc; padding-left: var(--ds-s5); gap: var(--ds-s2); font-size: var(--ds-fs-helper); }
+.qcal__h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-s2) var(--ds-s4); padding: var(--ds-s3) 0; border-top: 1px solid var(--ds-border); }
+.qcal__ht { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; overflow-wrap: anywhere; }
+.qcal-pointer { display: grid; gap: var(--ds-s2); }
 @media (max-width: 1024px) { .qsteps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .qsteps { grid-template-columns: minmax(0, 1fr); }
