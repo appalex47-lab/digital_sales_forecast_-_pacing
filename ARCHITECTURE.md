@@ -2907,3 +2907,11 @@ La pantalla de Calidad de datos era larga. No se quitó nada: se ordenó en **ci
 - **Paso 5 (lo que hace y lo que no):** cuenta los meses cerrados con venta real (todos los días del mes con venta) contra los 12 necesarios y muestra la regla vigente de `forecastConfidence` (pesos y umbrales). **No calibra nada todavía**: los umbrales siguen fijos. El motor de calibración (comparar cada cierre estimado contra el real, ajustar umbrales solos con ≥12 meses, historial con «Deshacer») es la Fase 3.3.
 - **Configuración:** solo un enlace a Calidad de datos · paso 5 (`#confidence-pointer`, `data-qstep`). No hay interruptor «Recalibrar sola» porque todavía no haría nada; entra con la Fase 3.3.
 - **Pruebas:** `tools/regression/batch_calidad_pasos.py` (nueva) y `openAll()` en las baterías que leen Calidad de datos (`batch_ae/af/ak/columnas/movil/tour10/w/x`, `quality_gaps_state`).
+
+## Fase 3.2b · Datos de ejemplo en el Asistente de Conversión (2026-10-24)
+Con los datos de prueba, «Conversión» y «Embudo y tráfico» solo decían «Todavía no hay productos cargados». Ahora ese aviso trae **«Probar con datos de ejemplo»**, que guarda ventas y embudo de ejemplo por producto (agosto y septiembre 2026, los de `FP.mockProducts.generate`).
+- **Regla del dueño: ejemplo y datos reales nunca conviven.** Los archivos de ejemplo llevan `EJEMPLO · ` al inicio del nombre (sin cambiar el almacén de productos). `FP.app.demoInfo()` devuelve `{ loaded, real, canOffer }`: el botón solo se ofrece si no hay datos reales (lotes de plan, venta real o productos que no sean de prueba/ejemplo) ni ejemplo cargado.
+- **Cargar lo real retira el ejemplo:** `commitProduct` y `commit-staged` (plan, venta real, Sheets) llaman a `dropDemoProducts()` antes de guardar un archivo que no es de ejemplo, con un aviso breve.
+- **Sin botón de borrar en el Asistente** (decisión del dueño). El ejemplo se puede quitar a mano con «Quitar» en Carga de datos → archivos de productos, como cualquier archivo.
+- **Franja ámbar** «Estás viendo datos de ejemplo» arriba del Auditor y del Analista mientras el ejemplo esté cargado (`.ag-demo`).
+- No cambia `generate-mock` ni los datos de prueba de las demás pantallas. Prueba: `tools/regression/batch_ejemplo_conversion.py`.

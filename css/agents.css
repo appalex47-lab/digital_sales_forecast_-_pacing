@@ -115,3 +115,8 @@ body[data-view="analisis"] .ag-fab{bottom:calc(130px + env(safe-area-inset-botto
 .ag-chipc--alta{background:#E3F1EC;border-color:#B9D8CE;color:#0A4F44}
 .ag-chipc--media{background:#FFF8E6;border-color:#E6D3A6;color:#6B4600}
 .ag-chipc--baja{background:#FBF1EF;border-color:#E3C3BF;color:#8F1C16}
+
+/* Fase 3.2b · datos de ejemplo del Asistente de Conversión */
+.ag-demo{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--ds-border-strong);border-left:4px solid var(--ds-warning);border-radius:10px;background:var(--ds-warning-soft);color:var(--ds-text);font-size:13px;line-height:1.45}
+.ag-go--alt{background:var(--ds-surface);color:var(--ds-accent);font-weight:700}
+.ag-go--alt:hover{background:var(--ds-accent-soft)}

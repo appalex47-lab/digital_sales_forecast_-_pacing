@@ -1392,11 +1392,44 @@
     if (state.view === 'calidad') render();
   }
 
+  /* ---------- Datos de ejemplo del Asistente de Conversión ----------
+   * Regla del dueño: datos de ejemplo y datos reales nunca conviven. Los archivos de ejemplo llevan «EJEMPLO · » al inicio del nombre (no se cambia el almacén).
+   * El botón solo se ofrece si no hay datos reales, y cargar cualquier archivo real retira antes los productos de ejemplo. */
+  const DEMO_PREFIX = 'EJEMPLO · ';
+  const isDemoName = (n) => String(n || '').indexOf(DEMO_PREFIX) === 0;
+  /** Estado de los datos de ejemplo: { loaded: hay productos de ejemplo, real: hay datos reales (plan/venta real/productos), canOffer: se puede ofrecer el botón }. */
+  function demoInfo() {
+    const pq = state.productQuality || [];
+    const loaded = pq.some((b) => isDemoName(b.fileName));
+    const realProducts = pq.some((b) => !isDemoName(b.fileName));
+    const realStore = ST.allBatches(state.store).some((b) => b.origin !== MOCK_ORIGIN);
+    const real = realProducts || realStore;
+    return { loaded, real, canOffer: !loaded && !real && pq.length === 0 };
+  }
+  /** Quita los productos de ejemplo (si hay). Devuelve cuántos archivos retiró. Nunca lanza. */
+  async function dropDemoProducts() {
+    const PS = FP.productStore;
+    try {
+      if (!PS || !PS.available()) return 0;
+      const demo = (await PS.listBatches()).filter((b) => isDemoName(b.fileName));
+      for (const b of demo) await PS.removeBatch(b.id);
+      if (demo.length) {
+        await refreshProductQuality();
+        state.pa = { ...state.pa, result: null, key: null, counts: null, from: null, to: null, periodType: null, drill: [], geo: {}, next: null, trace: null };
+        invalidatePlanning(); refresh();
+        if (FP.agents && FP.agents.runner) FP.agents.runner.clearCache();
+        FP.ui.toast('Retiré los productos de ejemplo: los datos de ejemplo y los reales no se mezclan.', { ms: 4000 });
+      }
+      return demo.length;
+    } catch (e) { return 0; }
+  }
+
   async function commitProduct(item) {
     if (!item.result || !item.result.canImport) return;
     item.status = 'saving'; item.progress = 0; item.t0 = Date.now(); render();
     let replaced = null;
     try {
+      if (!isDemoName(item.staged.fileName)) await dropDemoProducts();   // lo real y lo de ejemplo no conviven
       const oldId = item.replace && item.replace.batchId;
       if (oldId) {   // reemplazo: primero se quita lo del archivo anterior (en productos no hay «deshacer»)
         const ob = (state.productQuality || []).find((b) => b.id === oldId);
@@ -2711,6 +2744,7 @@
       const item = activeItem();
       if (item && FP.replaceView.blocked(state, item)) { render(); FP.ui.toast('Confirma el cambio antes de reemplazar el archivo anterior.'); return; }
       if (item && item.staged.dataType === 'products') { commitProduct(item); return; }
+      if (item) dropDemoProducts();   // un archivo real de plan, venta real o Sheets: retira antes los productos de ejemplo
       if (item && item.remote) { commitRemote(item); return; }
       // Revalida contra lo guardado en este momento SOLO si algo cambió desde la revisión. Con archivos grandes (cientos de miles de
       // filas) rehacer toda la validación duplicaba la memoria y tardaba decenas de segundos.
@@ -3021,6 +3055,29 @@
       addProductStaged(FP.productImport.stage(g.funnel, { fileName: 'productos_funnel_ago_sep_2026.csv', kind: 'funnel' }));
       location.hash = '#carga';
       FP.ui.toast('Archivos de prueba de productos en revisión (venta y funnel). Nada se guarda hasta confirmar.');
+    },
+    /** Asistente de Conversión · «Probar con datos de ejemplo»: guarda ventas y embudo de ejemplo por producto (agosto y septiembre 2026). Solo sin datos reales. */
+    async 'ag-demo-conversion'() {
+      const di = demoInfo();
+      if (!di.canOffer) { FP.ui.toast(di.real ? 'Ya hay datos reales cargados: el ejemplo no se mezcla con ellos.' : 'Los datos de ejemplo ya están cargados.'); return; }
+      try {
+        const g = FP.mockProducts.generate();
+        for (const [csv, name, kind] of [[g.sales, 'productos_venta_ago_sep_2026.csv', 'sales'], [g.funnel, 'productos_funnel_ago_sep_2026.csv', 'funnel']]) {
+          const staged = FP.productImport.stage(csv, { fileName: DEMO_PREFIX + name, kind });
+          const res = await FP.productImport.process(staged, { settings: state.settings });
+          if (!res || !res.canImport) throw new Error('el archivo de ejemplo no se pudo leer');
+          await FP.productStore.commit(res.draft, { fileName: staged.fileName, policy: 'keep' });
+        }
+        state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle';
+        await refreshProductQuality();
+        if (FP.agents && FP.agents.runner) FP.agents.runner.clearCache();
+        render();
+        FP.ui.toast('Datos de ejemplo de productos y embudo cargados. Se retiran solos cuando cargues tus archivos reales.', { ms: 4500 });
+        if (FP.agentPanel && FP.agentPanel.refresh) FP.agentPanel.refresh(false);
+      } catch (e) {
+        await dropDemoProducts();
+        FP.ui.toast(`No se pudieron cargar los datos de ejemplo (${e.message}).`);
+      }
     },
     'p-mock-quality'() {
       addProductStaged(FP.productImport.stage(FP.mockProducts.qualityCase(), { fileName: 'productos_caso_calidad.csv' }));
@@ -4849,7 +4906,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
