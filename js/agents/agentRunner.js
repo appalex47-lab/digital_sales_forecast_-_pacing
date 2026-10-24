@@ -8,6 +8,8 @@
  *    estén en el contexto, sin lenguaje causal. Si no pasan (tras un reintento) se muestran los textos del motor.
  *  - Nunca se pierde un hallazgo: los que la IA no menciona se agregan al final con su texto del motor.
  *  - Sin IA (sin sesión, sin key, apagada o con error) el panel funciona igual con los textos del motor.
+ * Fase 2: el mismo ejecutor sirve a dos agentes (Analista de Números y Auditor de Conversión). Cada uno aporta su `detect` (async) y sus reglas;
+ *  la validación, la mezcla con los candidatos del motor y el respaldo sin IA son idénticos.
  */
 (function (root) {
   'use strict';
@@ -37,6 +39,28 @@
     }
   };
 
+  const RULES_AUDITOR = [
+    'Eres el Auditor de Conversión de RevNavigator, una herramienta de pacing, plan y forecast de venta digital de una operación de ecommerce.',
+    'Recibes «candidatos» que el motor ya calculó sobre el embudo de GA4 por producto (vista, carrito, checkout, compra) y el tráfico: cada uno trae sus cifras, su evidencia y un texto base. Tu trabajo es ORDENARLOS y REDACTARLOS mejor, nada más.',
+    'Responde en español de México, claro y ejecutivo, para una persona de negocio que decide qué ficha, paso o canal revisar primero.',
+    'NO calcules, sumes, restes, promedies ni estimes. Usa SOLO cifras que aparezcan tal cual en el contexto (con el mismo formato). Si no hay cifra para algo, descríbelo sin número.',
+    'No inventes productos, canales, periodos, causas ni datos. No uses lenguaje causal («la causa es», «se debe a», «esto demuestra»): lo que explicas son hipótesis a validar, no causas.',
+    'No hables de rentabilidad, margen, costos, inventario, precios de la competencia, promociones ni descuentos: la herramienta no tiene esos datos y las ofertas son de otro asistente.',
+    'El «potencial» o la «venta por recuperar» es un escenario ilustrativo; nunca lo presentes como pronóstico, meta o ganancia. Si un hallazgo marca «muestra limitada» o la confianza del dato es baja (GA4 no cuadra), dilo y no lo presentes como ranking firme.',
+    'Devuelve únicamente JSON con: hallazgos (lista) y lectura (una o dos frases con lo más importante, empezando por la confianza del dato si no es buena).',
+    'Cada hallazgo: id (uno de los candidatos), prioridad («Alta», «Media» o «Baja»), titulo (máx. 110 caracteres), resumen (máx. 260 caracteres), siguientePregunta (una pregunta concreta) y responsable (uno de la lista «responsables»).',
+    'Ordena los hallazgos de más a menos importante. Puedes bajar la prioridad base si el hallazgo es menor, pero no inventes hallazgos nuevos ni repitas ids.'
+  ].join('\n');
+  const PURPOSE = { analista: 'Asistentes · Analista de Números', auditor: 'Asistentes · Auditor de Conversión' };
+  const RULES = { analista: SYSTEM_RULES, auditor: RULES_AUDITOR };
+  const ASK_RULES = [
+    'Responde la pregunta de una persona de negocio usando ÚNICAMENTE los candidatos y cifras del contexto. No calcules, sumes ni estimes: usa las cifras tal cual aparecen.',
+    'Si la pregunta no se puede contestar con el contexto, dilo con claridad y di qué vista de la app conviene abrir. No inventes causas ni datos; no uses lenguaje causal.',
+    'No hables de rentabilidad, margen, costos, inventario ni precios de la competencia. Las promociones son de otro asistente (Arquitecto de Ofertas).',
+    'Responde en español de México, en 2 a 5 frases. Devuelve JSON con: answer (texto) y nextQuestion (una pregunta concreta de seguimiento, opcional).'
+  ].join('\n');
+  const ASK_SCHEMA = { type: 'object', required: ['answer'], properties: { answer: { type: 'string' }, nextQuestion: { type: 'string' } } };
+
   // El motor escribe los negativos con «−» (U+2212); el validador del asistente de Análisis solo reconoce el «-» ASCII como signo.
   // Se envía y se valida con «-» para que una cifra negativa que la IA repite tal cual no se rechace como «no presente en el contexto».
   const ascii = (s) => String(s == null ? '' : s).replace(/\u2212/g, '-');
@@ -53,17 +77,56 @@
     return out;
   }
 
+  /** Textos con cifras de una tarjeta (los que la IA puede citar): base + cifra grande, visual, tabla y acción de la Fase 2. */
+  function cardTexts(f) {
+    const v = f.visual, extra = [];
+    if (f.tag) extra.push(f.tag);
+    if (f.big) extra.push(f.big.value, f.big.sub);
+    if (f.nota) extra.push(f.nota);
+    if (f.accion) extra.push(f.accion);
+    if (v && v.rows) v.rows.forEach((r) => { if (Array.isArray(r)) extra.push(...r); else extra.push(r.label, r.text, r.aText, r.bText); });
+    return [f.title, f.resumen, f.que, ...f.evid.map((e) => e.v), ...extra.filter((x) => typeof x === 'string')];
+  }
   /** Contexto que se envía a la IA: solo texto y cifras ya calculadas de los candidatos. Sin filas crudas ni datos personales. */
-  function buildContext(det, owners) {
+  function buildContext(det, owners, agent = 'analista') {
+    const gate = det.gate ? { nivel: det.gate.level, titulo: ascii(det.gate.title), texto: ascii(det.gate.text) } : null;
     return {
-      alcance: { canal: 'Total digital', periodo: det.scope && det.scope.period ? det.scope.period.key : null, ultimaVentaReal: det.scope ? det.scope.lastActual : null },
+      alcance: agent === 'auditor'
+        ? { canal: 'Embudo de GA4 por producto', periodo: det.scope && det.scope.period ? det.scope.period.key : null, hasta: det.scope ? det.scope.to || det.scope.lastActual : null }
+        : { canal: 'Total digital', periodo: det.scope && det.scope.period ? det.scope.period.key : null, ultimaVentaReal: det.scope ? det.scope.lastActual : null },
+      ...(gate ? { confianzaDelDato: gate } : {}),
       responsables: owners,
       candidatos: det.findings.map((f) => ({
         id: f.id, scoreBase: Math.round(f.score), prioridadBase: f.prio, responsableBase: f.owner, titulo: ascii(f.title), resumen: ascii(f.resumen), queVi: ascii(f.que),
         evidencia: f.evid.map((e) => ascii(`${e.k}: ${e.v}`)), siguientePreguntaBase: ascii(f.pregunta), fuente: f.fuente,
-        cifras: [...new Set([f.title, f.resumen, f.que, ...f.evid.map((e) => e.v)].flatMap(valuesIn))]
+        ...(f.muestraLimitada ? { muestraLimitada: true } : {}), ...(f.confianza === 'baja' ? { confianza: 'baja' } : {}),
+        cifras: [...new Set([...cardTexts(f), ...(gate ? [det.gate.text] : [])].flatMap(valuesIn))]
       }))
     };
+  }
+
+  // ---------- Detección por agente (con caché por firma de datos) ----------
+  const detCache = new Map();
+  let sigIds = new WeakMap(), sigN = 0;
+  const objId = (o) => { if (!o || typeof o !== 'object') return 0; if (!sigIds.has(o)) sigIds.set(o, ++sigN); return sigIds.get(o); };
+  /** Firma barata de los datos de los que dependen los agentes: si no cambia, no se vuelve a leer IndexedDB. */
+  function signature(state) {
+    const s = state || {}, m = (FP.productStore && FP.productStore.meta) || {}, q = s.quality && s.quality.totals ? s.quality.totals : {};
+    return [objId(s.fc && s.fc.run), s.fc && s.fc.lastActualDate, objId(s.store), m.batches, m.funnelBatches, m.dateMax, m.skus, q.warning, q.error, q.rejected, s.year].join('|');
+  }
+  const DETECT = {
+    analista: (state, deps) => (FP.agents.story ? FP.agents.story.build(state, { deps }) : Promise.resolve(FP.agents.analista.detect(state, deps))),
+    auditor: (state, deps) => FP.agents.auditor.detect(state, { deps })
+  };
+  /** Resultado determinista de un agente (sin IA). Nunca lanza. Cachea por firma de datos; `force` lo recalcula. */
+  async function detect(agent, state, opts = {}) {
+    const key = `${agent}|${signature(state)}`;
+    if (!opts.force && !opts.deps && detCache.has(key)) return detCache.get(key);
+    let det;
+    try { det = await DETECT[agent](state, opts.deps); }
+    catch (e) { det = { status: 'no_data', scope: null, findings: [], errors: [String(e && e.message || e)], detectors: 0 }; }
+    if (!opts.deps && det.status !== 'no_data') { if (detCache.size > 12) detCache.delete(detCache.keys().next().value); detCache.set(key, det); }
+    return det;
   }
   const keyOf = (ctx) => { const s = JSON.stringify(ctx); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return `${s.length}:${h}`; };
 
@@ -96,9 +159,9 @@
   }
 
   async function callAI(ctx, opts) {
-    const owners = ctx.responsables, user = JSON.stringify(ctx, null, 2);
+    const owners = ctx.responsables, user = JSON.stringify(ctx, null, 2), agent = opts.agent || 'analista';
     const call = async (extra) => {
-      const r = await FP.cohereClient.chatJson({ audit: { purpose: 'Asistentes · Analista de Números' }, system: SYSTEM_RULES, user: extra ? `${user}\n\n${extra}` : user, schema: RESPONSE_SCHEMA, apiKey: opts.apiKey, model: opts.model, fetchImpl: opts.fetchImpl });
+      const r = await FP.cohereClient.chatJson({ audit: { purpose: PURPOSE[agent] }, system: RULES[agent], user: extra ? `${user}\n\n${extra}` : user, schema: RESPONSE_SCHEMA, apiKey: opts.apiKey, model: opts.model, fetchImpl: opts.fetchImpl });
       if (!r.ok) return { fail: { status: r.status || 'unavailable', errors: r.errors || ['No se pudo consultar la IA.'], errorKind: r.errorKind || null } };
       const p = FP.cohereClient.parseJson(r.text);
       if (!p.ok) return { fail: { status: 'invalid', errors: ['La IA respondió en un formato no válido.'] } };
@@ -112,23 +175,26 @@
     return t.v.ok ? { status: 'ok', items: t.v.items, lectura: t.v.lectura, model: t.r.model } : { status: 'rejected', errors: t.v.errors };
   }
 
+  const aiOn = (state) => !!(FP.cohereConnection && FP.cohereConnection.isConfigured() && !(state && state.settings && state.settings.enableAI === false));
+
   /**
-   * Resultado completo del Analista. Nunca lanza.
-   * @returns {Promise<{status, scope, findings, lectura, detectors, errors, ai:{status, model?, errors?}}>}
-   *   status: 'ok' | 'no_data'; ai.status: 'off' (sin IA configurada o apagada) | 'ok' | 'none' (sin hallazgos que redactar) | 'unavailable' | 'invalid' | 'rejected'
+   * Resultado completo de un agente. Nunca lanza.
+   * @param {object} opts { agent: 'analista'|'auditor' (por defecto analista), useAI, force, deps, fetchImpl }
+   * @returns {Promise<{status, scope, findings, lectura, detectors, errors, ai:{status, model?, errors?}, ...extras del agente (gate, headline, kpis, route)}>}
+   *   status: 'ok' | 'no_data' | 'sin_embudo' | 'sin_mes'; ai.status: 'off' (sin IA configurada o apagada) | 'ok' | 'none' (sin hallazgos que redactar) | 'unavailable' | 'invalid' | 'rejected'
    */
   async function run(state, opts = {}) {
-    const det = FP.agents.analista.detect(state, opts.deps);
-    const base = { status: det.status, scope: det.scope, detectors: det.detectors, errors: det.errors, lectura: '' };
-    if (det.status !== 'ok') return { ...base, findings: [], ai: { status: 'none' } };
-    if (!det.findings.length) return { ...base, findings: [], ai: { status: 'none' } };
+    const agent = opts.agent === 'auditor' ? 'auditor' : 'analista';
+    const det = await detect(agent, state, { deps: opts.deps, force: !!opts.force });
+    const { findings: _f, sections: _s, ...extras } = det;
+    const base = { ...extras, status: det.status, scope: det.scope, detectors: det.detectors, errors: det.errors || [], lectura: '', agent };
+    if (det.status !== 'ok' || !det.findings.length) return { ...base, findings: [], ai: { status: 'none' } };
     const det0 = { ...base, findings: det.findings.map((f) => ({ ...f, ai: false })) };
-    const wantsAI = opts.useAI !== false && FP.cohereConnection && FP.cohereConnection.isConfigured() && !(state.settings && state.settings.enableAI === false);
-    if (!wantsAI) return { ...det0, ai: { status: 'off' } };
-    const ctx = buildContext(det, FP.agents.analista.OWNERS), key = keyOf(ctx);
+    if (opts.useAI === false || !aiOn(state)) return { ...det0, ai: { status: 'off' } };
+    const ctx = buildContext(det, FP.agents.analista.OWNERS, agent), key = `${agent}|${keyOf(ctx)}`;
     if (!opts.force && cache.has(key)) return cache.get(key);
     let r;
-    try { r = await callAI(ctx, { apiKey: state.dx && state.dx.apiKey, model: state.dx && state.dx.model, fetchImpl: opts.fetchImpl }); }
+    try { r = await callAI(ctx, { agent, apiKey: state.dx && state.dx.apiKey, model: state.dx && state.dx.model, fetchImpl: opts.fetchImpl }); }
     catch (e) { r = { status: 'unavailable', errors: [String(e && e.message || e)] }; }
     if (r.status !== 'ok') return { ...det0, ai: { status: r.status, errors: r.errors || [], errorKind: r.errorKind || null } };
     const m = merge(det, r.items, r.lectura);
@@ -137,5 +203,52 @@
     return out;
   }
 
-  FP.agents.runner = { run, buildContext, validate, merge, SYSTEM_RULES, RESPONSE_SCHEMA, clearCache: () => cache.clear() };
+  // ---------- Pregunta libre: a quién le toca ----------
+  const NORM = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  /**
+   * Antes de gastar una llamada de IA: ¿esta pregunta es de otro asistente o de algo que la herramienta no tiene?
+   * Devuelve { type: 'refuse'|'handoff', to?, text } o null si el agente actual puede intentar contestarla.
+   */
+  function routeQuestion(agent, q) {
+    const s = NORM(q);
+    if (/rentab|margen|ganancia|utilidad|costo|profit|cuanto gano|cuanto pierdo dinero/.test(s)) return { type: 'refuse', text: 'La herramienta no tiene costos ni margen, así que no puedo hablar de rentabilidad ni de ganancia. Solo hablo de venta, pedidos, ticket, unidades y conversión.' };
+    if (/promoci|oferta|descuent|cupon|rebaja|2x1|bundle|precio de la competencia|competencia/.test(s)) return { type: 'handoff', to: 'arquitecto', text: 'Las promociones y ofertas las ve el Arquitecto de Ofertas (Fase 4, todavía no disponible). Aquí puedo decirte qué se mueve en la venta y dónde se queda la conversión, sin hablar de descuentos.' };
+    if (agent === 'analista' && /embudo|ficha|carrito|checkout|ga4|vistas? de|conversion de (la )?(ficha|producto)|por producto/.test(s)) return { type: 'handoff', to: 'auditor', text: 'Eso es del embudo por producto: el Auditor de Conversión lo ve mejor (fichas, carrito, checkout y brecha web contra app).' };
+    if (agent === 'auditor' && /\b(plan|meta|forecast|pronostico|pacing|cumplimiento|cierre del mes)\b/.test(s)) return { type: 'handoff', to: 'analista', text: 'Eso es del plan, la meta y el forecast: el Analista de Números lo ve mejor.' };
+    return null;
+  }
+
+  /**
+   * Responde una pregunta con lo que el motor ya calculó del agente (candidatos, gate y cifras). La respuesta se valida igual que el resto:
+   * sin cifras que no estén en el contexto y sin lenguaje causal. Nunca lanza.
+   * @returns {Promise<{ok, local?, answer, nextQuestion?, to?, errors?}>}
+   */
+  async function ask(agent, question, state, opts = {}) {
+    const q = String(question || '').trim();
+    if (!q) return { ok: false, errors: ['Escribe una pregunta.'] };
+    const route = routeQuestion(agent, q);
+    if (route) return { ok: true, local: true, answer: route.text, to: route.to || null, type: route.type };
+    if (!aiOn(state)) return { ok: false, errors: ['Para preguntar necesito la IA conectada (Configuración → IA).'] };
+    const det = await detect(agent, state, { deps: opts.deps });
+    if (det.status !== 'ok') return { ok: false, errors: ['Todavía no hay datos suficientes para responder (carga plan y venta, o el embudo de productos).'] };
+    const ctx = { pregunta: q, ...buildContext(det, FP.agents.analista.OWNERS, agent) };
+    const user = JSON.stringify(ctx, null, 2);
+    const call = async (extra) => {
+      const r = await FP.cohereClient.chatJson({ audit: { purpose: `${PURPOSE[agent]} · pregunta` }, system: ASK_RULES, user: extra ? `${user}\n\n${extra}` : user, schema: ASK_SCHEMA, apiKey: state.dx && state.dx.apiKey, model: state.dx && state.dx.model, fetchImpl: opts.fetchImpl });
+      if (!r.ok) return { fail: { ok: false, errors: r.errors || ['No se pudo consultar la IA.'] } };
+      const p = FP.cohereClient.parseJson(r.text);
+      if (!p.ok || !p.value || typeof p.value.answer !== 'string') return { fail: { ok: false, errors: ['La IA respondió en un formato no válido.'] } };
+      const v = FP.cohereAnalysisAssistant ? FP.cohereAnalysisAssistant.validateResponse({ answer: ascii(`${p.value.answer}\n${p.value.nextQuestion || ''}`), evidence: [] }, ctx) : { ok: true, errors: [] };
+      return { p: p.value, v };
+    };
+    let t = await call(null); if (t.fail) return t.fail;
+    if (!t.v.ok && /cifras|subida|causal/.test(t.v.errors[0] || '')) {
+      const t2 = await call(`Tu respuesta anterior fue rechazada: ${t.v.errors.join(' ')} Responde de nuevo usando ÚNICAMENTE cifras que aparezcan tal cual en el contexto, sin calcular nada y sin lenguaje causal.`);
+      if (t2.fail) return t2.fail; t = t2;
+    }
+    if (!t.v.ok) return { ok: false, errors: ['La respuesta de la IA no coincide con las cifras del motor y se descartó.'] };
+    return { ok: true, answer: String(t.p.answer).trim(), nextQuestion: String(t.p.nextQuestion || '').trim() };
+  }
+
+  FP.agents.runner = { run, detect, ask, routeQuestion, signature, buildContext, validate, merge, SYSTEM_RULES, RULES, ASK_RULES, RESPONSE_SCHEMA, clearCache: () => { cache.clear(); detCache.clear(); } };
 })(typeof window !== 'undefined' ? window : globalThis);
