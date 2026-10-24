@@ -36,7 +36,7 @@ async def main():
         # ---------- datos limpios: la salud sí llega a 100 ----------
         c=await b.new_context(viewport={'width':1280,'height':900});q=await c.new_page();q.on('pageerror',lambda e:errs.append(str(e)))
         await q.clock.set_fixed_time(dt.datetime(2026,10,2,9,0));u=f'http://127.0.0.1:{port}/index.html';await q.goto(u)
-        await up(q,u,'actual','limpio.csv',CLEAN);await q.goto(u+'#calidad');await q.wait_for_timeout(600)
+        await up(q,u,'actual','limpio.csv',CLEAN);await q.goto(u+'#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()");await q.wait_for_timeout(600)
         h=await q.evaluate("FP.dataHealth.overview(FP.app.state.store).score");t=await q.evaluate("document.getElementById('quality-health').innerText")
         chk('C-1 con datos sin incidencias la salud general es 100 y la tarjeta dice «Sin incidencias»',h==100 and 'Sin incidencias' in t,(h,t[:200]))
         await c.close()
@@ -44,7 +44,7 @@ async def main():
         c=await b.new_context(viewport={'width':1280,'height':900});q=await c.new_page();q.on('pageerror',lambda e:errs.append(str(e)))
         await q.clock.set_fixed_time(dt.datetime(2026,10,2,9,0));await q.goto(u)
         await up(q,u,'actual','real.csv',REAL);await up(q,u,'segments','seg.csv',CSV)
-        await q.goto(u+'#calidad');await q.wait_for_timeout(700)
+        await q.goto(u+'#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()");await q.wait_for_timeout(700)
         ov=await q.evaluate("FP.dataHealth.overview(FP.app.state.store)")
         parts=[x['score'] for x in ov['collections']];raw=sum(parts)/len(parts)
         chk(f"C-2 con incidencias la salud general nunca es 100: promedio {raw:.1f} → {ov['score']} (antes se redondeaba a 100)",ov['score']<100 and ov['score']==min(99,round(raw)),(ov['score'],parts))

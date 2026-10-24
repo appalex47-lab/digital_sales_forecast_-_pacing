@@ -42,7 +42,7 @@ async def main():
         await q.set_input_files('input[data-action="pick-files"][data-type="actual"]', files=[{'name': 'real.csv', 'mimeType': 'text/csv', 'buffer': ('fecha,canal,venta,pedidos,traffic_volume\n' + '\n'.join(f'2026-09-{d:02d},ecommerce,{"-500" if d == 3 else 1000 + d},10,100' for d in range(1, 11)) + '\n').encode()}])
         await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000); await q.click('[data-action="commit-staged"]')
         await q.wait_for_function("document.querySelectorAll('#view-carga .staging__head').length === 0", timeout=60000); await q.wait_for_timeout(400)
-        await q.goto(u + '#calidad'); await q.wait_for_selector('table[aria-label="Valores en cuarentena"]', timeout=20000)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_selector('table[aria-label="Valores en cuarentena"]', timeout=20000)
         TABLE = "[...document.querySelectorAll('table[aria-label=\"Valores en cuarentena\"] tbody tr')].map(r=>[...r.cells].map(c=>c.innerText.trim()))"
         rows = await q.evaluate(TABLE); head = await q.evaluate("document.getElementById('quality-quarantine').innerText")
         prod = sorted((r[1], r[4], r[5], r[6].split('\n')[0]) for r in rows if r[0] == 'productos.csv')
@@ -62,14 +62,14 @@ async def main():
         chk('AF-3 el puntaje de Productos es menor que 100 con incidencias (nunca 100 si algo bajó puntos)', 0 < score < 100, score)
         # persistencia
         await q.reload(); await q.wait_for_function("window.FP && FP.app && FP.app.state && FP.app.state.productQuality && FP.app.state.productQuality.length > 0", timeout=30000)
-        await q.goto(u + '#calidad'); await q.wait_for_selector('table[aria-label="Valores en cuarentena"]', timeout=20000)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_selector('table[aria-label="Valores en cuarentena"]', timeout=20000)
         head2 = await q.evaluate("document.getElementById('quality-quarantine').innerText")
         chk('AF-4 al recargar la página la cuarentena de Productos sigue (lo lee de IndexedDB)', 'Venta negativa (3)' in head2 and 'Unidades: valor no numérico (1)' in head2, head2[:200])
         # quitar el archivo de Productos
         await q.evaluate("window.confirm=()=>true")
         bid = await q.evaluate("FP.app.state.productQuality[0].id")
         await q.evaluate(f"FP.app.actions['remove-product-batch']({{dataset:{{id:'{bid}'}}}})"); await q.wait_for_function("FP.app.state.productQuality.length === 0", timeout=30000)
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(500)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(500)
         head3 = await q.evaluate("document.getElementById('quality-quarantine').innerText")
         chk('AF-4 al quitar el archivo de Productos desaparece de la cuarentena (queda solo el de Venta real)', 'Unidades' not in head3 and head3.startswith('1 valor en cuarentena'), head3[:200])
         chk('Sin errores de página', not errs, errs[:2])

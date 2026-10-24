@@ -52,7 +52,7 @@ async def main():
         b = await p.chromium.launch(args=['--no-sandbox']); u = f'http://127.0.0.1:{port}/index.html'; errs = []
         # ---------- 15 · fuente sin datos ----------
         c, q = await fresh(b); q.on('pageerror', lambda e: errs.append(str(e)))
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(600)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(600)
         t = await q.evaluate("[document.getElementById('quality-health').innerText, document.getElementById('quality-quarantine').innerText, document.getElementById('quality-log').innerText]")
         chk('15 sin datos: Salud, Cuarentena y Registro lo dicen sin romper', 'Sin datos cargados' in t[0] and 'No hay valores en cuarentena' in t[1] and 'Todavía no hay importaciones' in t[2], t)
         chk('Decisión: la API key de Cohere es solo de sesión por defecto («recordar» desactivado)', await q.evaluate("FP.app.state.dx.rememberKey") is False)
@@ -67,7 +67,7 @@ async def main():
         # KPIs: la cuarentena no suma (venta de Ecommerce en el Diagnóstico por canal y día)
         tot = await q.evaluate("FP.dataStore.records(FP.app.state.store,'actual').filter(r=>r.channel==='ecommerce'&&r.metrics.revenue.source==='observed').reduce((a,r)=>a+r.metrics.revenue.value,0)")
         chk(f'7 la venta de Ecommerce que entra a los KPIs = {EXP_ECOM:,} (sin el −500), calculado aparte del CSV', tot == EXP_ECOM, (tot, EXP_ECOM))
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(700)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(700)
         hv = await q.evaluate("FP.dataHealth.collection(FP.app.state.store,'actual')")
         comp = {x['key']: x for x in hv['components']}
         recsN = 4 * 10 - 1 + 1   # 39 del periodo + el duplicado
@@ -138,7 +138,7 @@ async def main():
         if btn and not btn['dis']:
             await q.click('[data-action="commit-staged"]'); await q.wait_for_timeout(800)
         n = await q.evaluate("FP.dataStore.records(FP.app.state.store,'actual').length")
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(500)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(500)
         hv2 = await q.evaluate("FP.dataHealth.collection(FP.app.state.store,'actual')")
         chk('20 dataset totalmente inválido: no entra ningún registro, no se rompe nada y, si se confirma, Estructura = 0', n == 0 and (hv2['empty'] or {x['key']: x for x in hv2['components']}['structure']['score'] == 0), (n, hv2.get('score'), btn))
         await c.close()

@@ -131,7 +131,7 @@ async def main():
         chk('15 integración: el AOV se deriva sin la venta en cuarentena (sus pedidos sí cuentan), con la fórmula registrada', ma['s'] == 'derived' and ma['f'] == 'revenue / orders' and abs(ma['v'] - exp_ok) < 1e-9, (ma, exp_ok))
         mu = await q.evaluate("FP.availability.metric(FP.app.state.store,'users',{current:{start:'2026-09-01',end:'2026-09-30'}}).status")
         chk('users: «not_applicable» porque no se puede sumar (decisión de arquitectura)', mu == 'not_applicable', mu)
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(600)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(600)
         qa = await q.evaluate("(()=>{const t=document.querySelector('table[aria-label=\"Qué puedes analizar\"]');return t?[...t.tBodies[0].rows].map(r=>[r.cells[0].innerText,r.cells[1].innerText]):null})()")
         chk('Calidad muestra «Qué puedes analizar» con los 13 análisis y su estado', bool(qa) and len(qa) == 13, qa)
         await c.close()

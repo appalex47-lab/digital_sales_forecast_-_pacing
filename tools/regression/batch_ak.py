@@ -69,7 +69,7 @@ async def main():
         pr = ds['Productos · venta']
         chk('AK-2 Productos · venta: 1 archivo, 60 registros aceptados y 5 valores en cuarentena (3 negativos y 2 no numéricos)', pr[1] == '1' and pr[2] == '60' and pr[6] == '5', pr)
         # ---------- cuarentena ----------
-        await q.goto(u + '#calidad'); await q.wait_for_selector('table[aria-label="Cuarentena por sección"]', timeout=20000)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_selector('table[aria-label="Cuarentena por sección"]', timeout=20000)
         head = await q.evaluate("document.getElementById('quality-quarantine').innerText.replace(/\\s+/g,' ')")
         total = nneg + 5
         chk(f'AK-3 el encabezado da el total exacto ({total} valores: {nneg} de Venta real y 5 de Productos) y sigue yendo antes que las tablas', head.startswith(f'{total} valores en cuarentena'), head[:120])
@@ -112,7 +112,7 @@ async def main():
                 x = await q.evaluate("document.documentElement.scrollWidth-innerWidth")
                 if x > 0: bad.append((view, w, x))
         chk('AK-5 sin desborde de página de 320 a 1920 px en Calidad de datos y Configuración', not bad, bad)
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(400)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(400)
         unl = await q.evaluate("[...document.querySelectorAll('#quality-quarantine select')].filter(i=>!(i.id&&document.querySelector('label[for=\"'+i.id+'\"]'))).map(i=>i.id)")
         chk('AK-5 los filtros del consolidado tienen etiqueta asociada', not unl, unl)
         chk('Sin errores de página', not errs, errs[:2])

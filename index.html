@@ -274,49 +274,83 @@
   <!-- ===================== Vista: Calidad de datos (Fase 1) ===================== -->
   <main class="app-main" data-view="calidad" id="view-calidad" hidden>
     <div id="quality-banner"></div>
-    <!-- Fase A · salud de los datos (puntaje desglosado) -->
-    <section class="panel" aria-labelledby="t-health">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-health">Salud de los datos</h2>
-        <p class="panel__desc">Puntaje de 0 a 100 por archivo cargado. Cada componente dice cuánto vale, cuántos casos lo bajaron y por qué; el total es el promedio de los que aplican.</p>
-      </div></div>
-      <div class="panel__body" id="quality-health"></div>
-    </section>
-    <section class="panel" aria-labelledby="t-quality">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-quality">Resumen de calidad</h2>
-        <p class="panel__desc">Registros cargados = filas que entraron al modelo. Filas rechazadas = filas leídas que no entraron (sin fecha o canal válidos, o con errores).</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-summary"></div>
-    </section>
-    <section class="panel"><div class="panel__body" id="quality-coverage"></div></section>
-    <section class="panel" aria-labelledby="t-qissues">
-      <div class="panel__head"><div><h2 class="panel__title" id="t-qissues">Problemas por tipo</h2></div></div>
-      <div class="panel__body" id="quality-issues"></div>
-    </section>
-    <!-- Fase B · matriz de compatibilidad de análisis -->
-    <section class="panel" aria-labelledby="t-analyses">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-analyses">Qué puedes analizar con tus datos</h2>
-        <p class="panel__desc">Para el mismo periodo y canal del Diagnóstico. Cada análisis dice qué le falta y qué hacer; nada se da por disponible sin datos.</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-analyses"></div>
-    </section>
-    <!-- Fase A · cuarentena y registro de importaciones (auditoría) -->
-    <section class="panel" aria-labelledby="t-quarantine">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-quarantine">Cuarentena</h2>
-        <p class="panel__desc">Valores que no entran a los KPIs (no numéricos o negativos). Nada se borra ni se cambia: se conserva el valor original, la regla, el archivo y la fila.</p>
-      </div></div>
-      <div class="panel__body" id="quality-quarantine"></div>
-    </section>
-    <section class="panel" aria-labelledby="t-implog">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-implog">Registro de importaciones</h2>
-        <p class="panel__desc">Cada carga con su fuente, filas recibidas, aceptadas, en cuarentena y rechazadas, columnas usadas y salud resultante.</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-log"></div>
-    </section>
+    <!-- Fase 3.2 · recorrido de cinco pasos: «Qué hacer ahora» + los pasos. Nada de lo que ya había se quitó: cada bloque sigue con su id, dentro de su paso (plegado). -->
+    <div id="quality-guide"></div>
+    <details class="qstep" id="qstep-1" data-step="1">
+      <summary class="qstep__sum" id="qstep-1-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-quality">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-quality">Resumen de calidad</h2>
+            <p class="panel__desc">Registros cargados = filas que entraron al modelo. Filas rechazadas = filas leídas que no entraron (sin fecha o canal válidos, o con errores).</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-summary"></div>
+        </section>
+        <section class="panel"><div class="panel__body" id="quality-coverage"></div></section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-2" data-step="2">
+      <summary class="qstep__sum" id="qstep-2-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-qissues">
+          <div class="panel__head"><div><h2 class="panel__title" id="t-qissues">Problemas por tipo</h2></div></div>
+          <div class="panel__body" id="quality-issues"></div>
+        </section>
+        <!-- Fase A · cuarentena (auditoría) -->
+        <section class="panel" aria-labelledby="t-quarantine">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-quarantine">Cuarentena</h2>
+            <p class="panel__desc">Valores que no entran a los KPIs (no numéricos o negativos). Nada se borra ni se cambia: se conserva el valor original, la regla, el archivo y la fila.</p>
+          </div></div>
+          <div class="panel__body" id="quality-quarantine"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-3" data-step="3">
+      <summary class="qstep__sum" id="qstep-3-sum"></summary>
+      <div class="qstep__body">
+        <!-- Fase A · salud de los datos (puntaje desglosado) -->
+        <section class="panel" aria-labelledby="t-health">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-health">Salud de los datos</h2>
+            <p class="panel__desc">Puntaje de 0 a 100 por archivo cargado. Cada componente dice cuánto vale, cuántos casos lo bajaron y por qué; el total es el promedio de los que aplican.</p>
+          </div></div>
+          <div class="panel__body" id="quality-health"></div>
+        </section>
+        <section class="panel" aria-labelledby="t-implog">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-implog">Registro de importaciones</h2>
+            <p class="panel__desc">Cada carga con su fuente, filas recibidas, aceptadas, en cuarentena y rechazadas, columnas usadas y salud resultante.</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-log"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-4" data-step="4">
+      <summary class="qstep__sum" id="qstep-4-sum"></summary>
+      <div class="qstep__body">
+        <!-- Fase B · matriz de compatibilidad de análisis -->
+        <section class="panel" aria-labelledby="t-analyses">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-analyses">Qué puedes analizar con tus datos</h2>
+            <p class="panel__desc">Para el mismo periodo y canal del Diagnóstico. Cada análisis dice qué le falta y qué hacer; nada se da por disponible sin datos.</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-analyses"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-5" data-step="5">
+      <summary class="qstep__sum" id="qstep-5-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-qforecast">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-qforecast">Confianza del forecast</h2>
+            <p class="panel__desc">Cómo se decide hoy la etiqueta Alta, Media o Baja del cierre estimado, y cuántos meses cerrados tiene la app para calibrarla con tu historial.</p>
+          </div></div>
+          <div class="panel__body" id="quality-forecast"></div>
+        </section>
+      </div>
+    </details>
   </main>
 
   <!-- ===================== Vista: Datos normalizados (Fase 1) ===================== -->
@@ -769,6 +803,7 @@
   <script src="js/analytics/cohortEngine.js?v=20261022z25"></script>
   <script src="js/analytics/analysisNarrativeEngine.js?v=20261022z25"></script>
   <script src="js/quality/coverage.js?v=20261022z25"></script>
+  <script src="js/quality/qualitySteps.js?v=20261022z25"></script>
   <script src="js/quality/rules.js?v=20261022z25"></script>
   <script src="js/quality/health.js?v=20261022z25"></script>
   <script src="js/quality/dataSources.js?v=20261022z25"></script>
