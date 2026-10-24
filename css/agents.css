@@ -2,7 +2,7 @@
 .ag-fab{position:fixed;right:16px;bottom:calc(68px + env(safe-area-inset-bottom,0px));z-index:81;min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px 0 12px;border-radius:999px;border:1px solid var(--ds-border-strong,#CAD5E4);background:var(--ds-surface,#fff);box-shadow:0 6px 18px rgba(15,30,61,.18);font:600 14px/1 inherit;font-family:inherit;color:var(--ds-text,#14213D);cursor:pointer}
 .ag-fab:hover{background:var(--ds-bg,#F5F8FC)}
 .ag-fab[hidden]{display:none}
-.ag-fab[aria-expanded=true]{visibility:hidden}   /* el panel lo cubre: no queda un botón fantasma detrás */
+.ag-fab[aria-expanded=true],body.nav-open .ag-fab,body:has(dialog[open]) .ag-fab,body:has(.tour-bar:not([hidden])) .ag-fab{visibility:hidden}   /* el panel lo cubre: no queda un botón fantasma detrás */
 body[data-view="analisis"] .ag-fab{bottom:calc(130px + env(safe-area-inset-bottom,0px))}   /* arriba del «Asistente de análisis» que aún vive en esa vista */
 .ag-badge{min-width:22px;height:22px;border-radius:999px;background:var(--ds-accent,#1F5FE0);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;padding:0 6px;box-sizing:border-box}
 .ag-panel{position:fixed;z-index:90;top:var(--ds-header-h,56px);right:0;bottom:0;width:min(540px,100vw);color-scheme:light;box-sizing:border-box;background:var(--ds-surface,#fff);border-left:1px solid var(--ds-border,#E1E8F2);box-shadow:-8px 0 24px rgba(15,30,61,.12);display:flex;flex-direction:column;font-family:inherit;color:var(--ds-text,#14213D)}
