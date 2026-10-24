@@ -85,6 +85,14 @@
       <p class="ag-note">Todavía no está disponible. Mientras tanto el Analista de Números sigue activo.</p>
       <div class="ag-actions"><button type="button" class="ag-go" data-ag="agent" data-id="analista">Volver al Analista de Números</button></div></div>`;
   }
+  /** Estado de la conexión con IA, siempre visible abajo: conectada (y por dónde) o cómo conectarla, con enlace a Configuración. */
+  function aiStatusLine() {
+    const server = !!(FP.cohereProxy && FP.cohereProxy.available()), key = !!(st() && st().dx && st().dx.apiKey), off = !!(st() && st().settings && st().settings.enableAI === false);
+    const link = '<a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración · Inteligencia artificial</a>';
+    if (aiReady()) return `<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b> · ${server ? 'servidor del equipo' : 'API key de este navegador'}. Ordena y redacta los hallazgos y responde tus preguntas; las cifras siempre las calcula el motor.</div>`;
+    if ((server || key) && off) return `<div class="ag-note"><b style="color:#A05A0A">● IA desactivada</b> en Configuración. Actívala para que ordene y redacte los hallazgos y responda preguntas. Sin ella ves los textos del motor.</div>${link}`;
+    return `<div class="ag-note"><b style="color:#A05A0A">● IA sin conectar.</b> Los hallazgos funcionan igual, con los textos del motor. Para conectarla:<br>1. Inicia sesión con tu cuenta del equipo (usa el servidor del equipo y no necesitas key), o<br>2. pega tu API key de Cohere en Configuración → Inteligencia artificial.</div>${link}`;
+  }
   function askBlock() {
     if (S.agent !== 'analista') return '';
     const run = S.run, qs = run && run.findings ? run.findings.map((f) => f.pregunta).filter(Boolean).slice(0, 4) : [];
@@ -98,9 +106,9 @@
         ans = `<div class="ag-ans" role="status"><span class="ag-k">Respuesta</span>${esc(r.answer || '')}${Array.isArray(r.evidence) && r.evidence.length ? r.evidence.slice(0, 4).map((e) => `<div class="ag-note"><b>${esc(e.entity)}</b> · ${esc(e.reason)} <i>(${esc(e.source)})</i></div>`).join('') : ''}${r.nextQuestion ? `<div class="ag-note">Siguiente pregunta: ${esc(r.nextQuestion)}</div>` : ''}${Array.isArray(r.limitations) && r.limitations.length ? `<div class="ag-note">Límites: ${esc(r.limitations.join(' · '))}</div>` : ''}</div>`;
       }
     }
-    if (!aiReady()) return `<div class="ag-note">Para preguntarle a tus datos conecta la IA en Configuración de RevNavigator. Los hallazgos de arriba funcionan sin ella.</div>`;
-    if (!hasAnalysis()) return `${sug}<div class="ag-note">Para preguntar, abre primero <a href="#analisis" data-ag="go">Análisis</a>: ahí se calculan los resultados que uso para responder.</div>`;
-    return `${sug}${ans}<div style="display:flex;gap:8px"><label for="ag-q" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Pregúntale a tus datos</label><input id="ag-q" class="ag-in" type="text" placeholder="Pregúntale a tus datos…" value="${esc(S.q)}" data-ag="q" autocomplete="off"><button type="button" class="ag-go" data-ag="ask" ${S.ask && S.ask.status === 'busy' ? 'disabled' : ''}>Preguntar</button></div>`;
+    if (!aiReady()) return aiStatusLine();
+    if (!hasAnalysis()) return `${aiStatusLine()}${sug}<div class="ag-note">Para preguntar, abre primero <a href="#analisis" data-ag="go">Análisis</a>: ahí se calculan los resultados que uso para responder.</div>`;
+    return `${aiStatusLine()}${sug}${ans}<div style="display:flex;gap:8px"><label for="ag-q" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Pregúntale a tus datos</label><input id="ag-q" class="ag-in" type="text" placeholder="Pregúntale a tus datos…" value="${esc(S.q)}" data-ag="q" autocomplete="off"><button type="button" class="ag-go" data-ag="ask" ${S.ask && S.ask.status === 'busy' ? 'disabled' : ''}>Preguntar</button></div>`;
   }
   function html() {
     const { AGENTS } = reg();
