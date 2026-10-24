@@ -36,7 +36,8 @@ Fases:
   calculations/seasonality.js   Perfiles de estacionalidad por canal                         (Fase 2)
   calculations/gap.js           Gap, cumplimiento, gap forecast, semáforo de pacing           (Fase 3)
   calculations/pacing.js        Fecha de referencia, corte, estados temporales, acumulados    (Fase 3)
-  calculations/self-test.js     Pruebas del motor (red de no-regresión)
+  calculations/self-test.js     Pruebas del motor (red de no-regresión). DIFERIDO: se carga con FP.lazy.load('selftest')   (Fase A)
+  lazy.js                       Cargador bajo demanda de módulos declarados con data-lazy en index.html                  (Fase A)
   data/data-model.js            DailyRecord, Targets, Dataset, consultas y resúmenes
   data/data-store.js            Modelo canónico: colecciones, lotes, duplicados, consolidación  (Fase 1)
   data/mock-data.js             Datos de prueba determinísticos y casos límite (solo QA)
@@ -138,6 +139,7 @@ Diferencias respecto a la propuesta inicial, con motivo:
   gráficos) formatearán igual.
 - **`calculations/self-test.js`** y **`data/mock-data.js`**: permiten comprobar la
   arquitectura en el navegador sin datos reales. Nada del núcleo depende de ellos.
+  Desde la Fase A `self-test.js` (y `storage-tests.js`) son **módulos diferidos**: no se descargan al abrir la app (ver «Fase A · Arranque ligero» al final).
 - **Fase 1 agrega la carpeta `/js/quality`** (validación y cobertura) separada de `/js/import`
   (lectura y normalización): leer un dato y juzgar su calidad son responsabilidades distintas,
   y la cobertura se usará también sobre datos que no vienen de CSV.
@@ -2605,6 +2607,7 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 
 ## Worker de importación
 - `js/workers/import-worker.js`: `importScripts` de los mismos módulos que la página; mensajes `stage`, `reprocess`, `retype`, `commit`, `drop`, `stats`. Mantiene por trabajo el archivo en revisión y su resultado; `commit` envía los registros en bloques de 4,000.
+- `js/workers/selftest-worker.js` (Fase A): ejecuta `FP.selfTest.run()` aislado en segundo plano; ver «Fase A · Arranque ligero».
 - `FP.importWorker` (`js/import/workerClient.js`): `start`, `stage`, `reprocess`, `retype`, `commit`, `drop`, `existingOf`, `minBytes/setMinBytes`.
 - `FP.dataStore.commitRemote`, `FP.importer.stageParsed`, `FP.ga4Segments.translateRows`; en `app.js`: `stageViaWorker`, `reprocessRemote`, `commitRemote`, `finishCommit`. Los elementos remotos de `state.staging.items` llevan `remote: { jobId }` y su resultado `remote: true`.
 
@@ -2812,3 +2815,15 @@ La API key se reutiliza desde la configuración existente de Cohere (`state.dx.a
 - Carga de datos: «Actualizar todo» (`sheets-refresh-all`, `fetchAllSheets` en `app.js`) vuelve a leer todas las pestañas de Sheets guardadas, una tras otra, y las deja juntas en revisión (solo filas nuevas o cambiadas; nada se importa sin confirmar). Una pestaña que falla no detiene a las demás; el resumen queda en `state.sheets.lastAll`. Prueba: `batch_sheets_todo.py`.
 - Diagnóstico: cada hipótesis (reglas o Cohere) muestra bajo su tarjeta los botones «Evidencia» (una señal cada uno) y «Ver driver en el árbol». `dx-evidence` abre «Ver todas» si la señal está más allá de las 12 primeras, resalta la fila (`.is-evidence`), le da el foco y deja «Volver a la hipótesis» (`state.dx.evidenceFrom`); `dx-evidence-driver` abre «Ver más → árbol» y despliega la rama (`#drv-<driver>`). Prueba: `batch_evidencia.py`.
 - Limpieza: se quitaron funciones y constantes sin uso (`patternHelp`, `explanation`, `finiteLocal` y variables locales sin lectura en trend-view, cohortEngine, planning-view y segments-view) y el CSS de los desplegables de Configuración y de la ayuda de patrones.
+
+## Fase A · Arranque ligero (2026-10-23)
+Objetivo: abrir más rápido sin cambiar ninguna funcionalidad.
+- **Pruebas del motor fuera del arranque, en segundo plano.** `init()` ya no ejecuta `FP.selfTest.run()` en el hilo principal (tardaba segundos y congelaba la pantalla). Se ejecutan **solas** ~4 s después de abrir y cuando el navegador está libre (`scheduleEngineTests` en `app.js`), dentro de un Worker aislado (`js/workers/selftest-worker.js`). El Worker carga su propia copia de los módulos (lista tomada de los `<script src>` de `index.html`, incluidos los diferidos, sin `app.js` ni `lazy.js`), así que **no toca el estado, el almacenamiento ni los datos** de la sesión abierta (comprobado: datos idénticos antes y después). Devuelve `{ ok, passed, total, results }`, que se guarda en `state.selfTest` y repinta solo la píldora y la lista (`renderStatus` + `renderEngine`). Hasta que termina (unos segundos) la píldora dice «Motor: Sin ejecutar». Si el navegador no permite Workers (p. ej. `index.html` abierto como archivo) se queda en «Sin ejecutar»: **nunca** se corren en el hilo principal con la sesión abierta, porque las pruebas reinician catálogos internos. El botón pasó a «Volver a ejecutar pruebas del motor» (`run-tests`, mismo Worker). Para la revisión de cada cambio, `node tools/selftest-node.js` (sale con código 1 si falla alguna). `ajustes › Estado` dice «motor sin ejecutar» mientras `state.selfTest` es `null` (antes decía «con fallas»).
+- **Pantalla de arranque.** Antes la página quedaba en blanco mientras se descargaban y ejecutaban los ~167 scripts. Ahora `index.html` trae, como primer elemento de `<body>`, `#boot` (logo con aro girando, nombre, frase y 4 puntos de avance), con su CSS en un `<style id="boot-css">` del `<head>` y un `<script>` en línea: se pinta antes de descargar scripts y hojas de estilo. Cuatro etapas (motor → data → venta → insights); en cada carga se elige al azar una frase por etapa y avanzan cada 0.9 s (es acompañamiento visual, no mide avance real). `init()` termina → `start()` (final de `app.js`) llama `window.__boot.done()`: desvanece (0.25 s) y quita el nodo. Si `init()` falla o un `<script>`/`<link>` no descarga, `window.__boot.fail()` cambia a «No se pudo arrancar» con botón «Recargar»; a los 20 s sin terminar avisa que tarda más de lo normal. Con `prefers-reduced-motion` no gira ni dibuja la línea. El script en línea no lleva `src`, así que las pruebas que leen `index.html` con `<script src="…` no lo cuentan.
+- **Módulos diferidos.** `index.html` sigue siendo la única lista de archivos. Un módulo diferido se declara así: `<script src="js/…?v=…" type="text/plain" data-lazy="nombre"></script>` (el navegador no descarga ni ejecuta un script `text/plain`; las pruebas que leen el orden desde `index.html` con `<script src="…` siguen viéndolo). `FP.lazy.load('nombre')` (en `js/lazy.js`) crea los `<script>` reales en el mismo orden, devuelve una promesa y reintenta si falló. Diferidos hoy: `selftest` (`calculations/self-test.js`) y `storagetests` (`storage/storage-tests.js`), 154 KB sin comprimir.
+- **Cómo agregar otro módulo diferido.** Declararlo en `index.html` con `data-lazy`, y en cada punto de uso hacer `await FP.lazy.load('nombre')` antes de llamarlo. Solo conviene para código que no interviene al dibujar la primera vista.
+- **No se difirieron** `mock-data.js`, `mock-csv.js` y `mock-products.js` (33 KB): la vista de Importación lista `FP.mockCsv` al dibujarse; el riesgo supera el beneficio.
+- **Descartado: `defer`.** Los scripts ya están al final del `<body>`; medido en Chromium con red y CPU limitadas no mejoró nada y cambiaría el momento en que se inicializan `search.js` y `responsive-tables.js` (usan `readyState`).
+- **Prueba corregida.** «Códigos estables de estado (32)…» dependía de que el arranque ya hubiera inicializado los estados; ahora corre dentro de `iso()` (que reinicia las dimensiones). Antes fallaba (223/224) al ejecutarse sin arranque; ahora 224/224.
+- **Herramientas.** `tools/regression/battery.py` y `suite.py` cargan las pruebas con `FP.lazy.load(...)` antes de llamarlas.
+

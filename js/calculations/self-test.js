@@ -1041,8 +1041,10 @@
       const agg = (parts, groupBy, filter) => { const m = new Map(); parts.forEach((p) => PG.accumulateJoint(m, p, null, { groupBy, filter })); return m; };
       const G = FP.mockProducts.geoCase().split('\n').slice(1);
 
-      test('Fase 8.4: modelo', 'Códigos estables de estado (32) alineados con el catálogo', () =>
-        C.products.stateCodes.length === C.products.states.length && PG.stateCode(PG.stateIdx('Jalisco')) === 'JAL' && PG.stateCode(PG.stateIdx('cdmx')) === 'CDMX');
+      test('Fase 8.4: modelo', 'Códigos estables de estado (32) alineados con el catálogo', iso(() => {
+        // Fase A: dentro de iso() los estados se inicializan solos (_resetCatalog → resetDims); antes dependía de que el arranque ya lo hubiera hecho.
+        return C.products.stateCodes.length === C.products.states.length && PG.stateCode(PG.stateIdx('Jalisco')) === 'JAL' && PG.stateCode(PG.stateIdx('cdmx')) === 'CDMX';
+      }));
       test('Fase 8.4: jerarquía', 'Sucursal → ciudad → estado → región con ruta completa e IDs estables', iso(() => {
         loadGeo(G);
         const b = PG.entity('branch', '025'), c = PG.entity('city', 'Guadalajara, JAL');
