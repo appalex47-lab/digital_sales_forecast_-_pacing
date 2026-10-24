@@ -2092,3 +2092,17 @@ body.gs-lock{overflow:hidden}
 .rcs__pill { font-size: .7rem; font-weight: 700; padding: .05rem .4rem; border-radius: 6px; white-space: nowrap; }
 .rcs__pill--bad { background: #fbe9e8; color: #8f1f23; } .rcs__pill--ok { background: #e6f4ec; color: #0d5c33; }
 .rcs__ok { margin: .6rem 0 .2rem; font-size: .8rem; display: flex; flex-wrap: wrap; gap: .3rem .4rem; align-items: center; }
+
+/* Tarea en segundo plano (js/ui/bg-task.js): píldora fija abajo a la izquierda, visible en cualquier vista mientras corre una operación de nube. */
+.bg-task { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 82; max-width: min(360px, calc(100vw - 100px)); min-height: 44px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 10px; padding: 8px 14px; border: 1px solid var(--ds-border-strong); border-radius: 14px; background: var(--ds-surface); color: var(--ds-text); box-shadow: var(--ds-shadow-2, 0 4px 14px rgba(15, 30, 60, .18)); font: inherit; font-size: var(--ds-fs-helper, 13px); text-align: left; cursor: pointer; }
+.bg-task[hidden] { display: none; }
+.bg-task__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ds-accent); animation: bg-pulse 1.2s ease-in-out infinite; }
+.bg-task__txt { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-task__pct { font-variant-numeric: tabular-nums; color: var(--ds-text-muted); }
+.bg-task__bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--ds-border); overflow: hidden; }
+.bg-task__bar i { display: block; height: 100%; width: 0; background: var(--ds-accent); transition: width .3s ease; }
+.bg-task--ind .bg-task__bar i { width: 40%; animation: bg-slide 1.4s ease-in-out infinite; }
+.bg-task:focus-visible { outline: 3px solid var(--ds-accent); outline-offset: 2px; }
+@keyframes bg-pulse { 50% { opacity: .35; } }
+@keyframes bg-slide { from { margin-left: -40%; } to { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .bg-task__dot, .bg-task--ind .bg-task__bar i { animation: none; } }
