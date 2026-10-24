@@ -8,6 +8,10 @@
  * Alcance de la Fase 1: Total digital, mes de la última fecha con venta real. Cada detector devuelve un candidato o null.
  * Cada candidato: { id, detector, agent, score 0-100, prio 'Alta'|'Media'|'Baja', owner, title, resumen, que, evid[{k,v}], pregunta,
  *                   limites, fuente, view, viewLabel, handoff?{to,reason}, facts{ números sin formato, para validar a Cohere } }
+ * Fase 2 (tarjeta compartida con el Auditor de Conversión), todos opcionales:
+ *   section 'cae'|'crece'|'revisar' (en qué parte de la historia va), tag (etiqueta corta), big {value, tone 'dn'|'up'|'', sub} (cifra grande),
+ *   visual {type:'bars', rows[{label,value,text}]} | {type:'table', head[], rows[[]]} | {type:'steps', rows[{label,a,b,aText,bText}]},
+ *   hipotesis (a validar, nunca causa), validar (cómo comprobarla), accion (qué hacer esta semana; el responsable es `owner`), muestraLimitada.
  */
 (function (root) {
   'use strict';
@@ -19,6 +23,7 @@
   const OWNERS = ['Ecommerce', 'Comercial', 'Catálogo / Contenido', 'Contenido / SEO', 'Producto / UX', 'Pagos / Operaciones', 'Marketing', 'CRM', 'Contact center'];
   const CHANNEL_OWNER = { ecommerce: 'Ecommerce', app: 'Ecommerce', whatsapp: 'Contact center', llamadas: 'Contact center' };
   const DRIVER_LABEL = { traffic: 'tráfico', cr: 'conversión', aov: 'ticket promedio' };
+  const DRIVER_ACTION = { traffic: 'Revisar de dónde viene y a dónde va el tráfico del canal.', cr: 'Revisar en qué paso del embudo se queda la compra (el Auditor de Conversión lo desglosa).', aov: 'Revisar la mezcla de productos y el tamaño de carrito.' };
 
   // ---- formato (mismo estilo que la app: «96.9%», «$4.6 M») ----
   const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
@@ -31,6 +36,12 @@
   }
   const prioOf = (score) => (score >= 70 ? 'Alta' : score >= 40 ? 'Media' : 'Baja');
   const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
+  /** Mini-visual de barras: rows [{label, value}] con `text` ya formateado; el ancho lo calcula el panel contra el mayor valor absoluto. */
+  const barsOf = (rows, rest) => {
+    const out = rows.map((r) => ({ label: r.label, value: r.value, text: money(r.value) }));
+    if (rest && rest.n > 0) out.push({ label: `Otros (${rest.n})`, value: rest.value, text: money(rest.value) });
+    return { type: 'bars', rows: out };
+  };
 
   /** Mes de trabajo, serie total y series por canal. null si falta plan o venta real. */
   function scopeOf(state) {
@@ -80,6 +91,12 @@
       title: `${top.label} concentra la mayor parte de la brecha contra el plan`,
       resumen: `La venta va en ${pct(t.compliance)} del plan a la fecha de corte. ${top.label} va ${pct(Math.abs(top.r.gapPct))} abajo de su plan y suma ${money(top.r.gap)} de la brecha de ${money(t.gap)}.`,
       que: `${top.label} explica ${(ptsTop * 100).toFixed(1)} puntos de los ${(ptsTot * 100).toFixed(1)} que faltan para el plan${weight !== null ? `, aunque pesa ${pct(weight)} del plan del mes` : ''}.`,
+      section: 'cae', tag: `Concentrada · ${Math.round(share * 100)}% de la caída`,
+      big: { value: money(top.r.gap), tone: 'dn', sub: `de ${money(sumNeg)} que caen los canales bajo su plan · ${top.label} va ${pct(Math.abs(top.r.gapPct))} abajo de su plan` },
+      visual: barsOf(negs.slice(0, 3).map((c) => ({ label: c.label, value: c.r.gap })), { n: Math.max(0, negs.length - 3), value: negs.slice(3).reduce((s, c) => s + c.r.gap, 0) }),
+      hipotesis: `Algo propio de ${top.label} y no del negocio completo, porque ${rows.some((c) => c.r.gap >= 0) ? 'otros canales sí están en su plan' : 'la brecha se concentra ahí'}. Es una hipótesis a validar, no una causa.`,
+      validar: `Compara ${top.label} contra el mes anterior en tráfico, conversión y ticket (vista «¿Por qué?»).`,
+      accion: drv ? `${DRIVER_ACTION[drv.id]}` : `Revisar qué cambió en ${top.label} este mes (tráfico, conversión y ticket).`,
       evid,
       pregunta: drv ? `¿Por qué ${DRIVER_LABEL[drv.id]} pesa más en ${top.label}? Revisa esa vista por periodo y segmento.` : `¿La caída de ${top.label} viene de menos tráfico, menos conversión o menor ticket?`,
       limites: 'Describo dónde está la brecha y cuánto pesa; no sé el motivo. No veo margen ni promociones.',
@@ -104,7 +121,12 @@
       title: g.status === 'missed' ? `El mes cerró en ${pct(g.attainment)} de la meta` : `Al ritmo actual el mes cierra en ${pct(g.attainment)} de la meta`,
       resumen: `${g.status === 'missed' ? 'La meta del mes no se cumplió' : 'Con el forecast del método en uso no llegas a la meta del mes'}: ${pct(g.attainment)} de ${money(g.goal)}.`,
       que: gapAbs !== null ? `Faltan ${money(Math.abs(gapAbs))} para la meta del mes.` : 'No alcanza la meta del mes.',
-      evid, pregunta: '¿Qué canal tiene más margen para recuperar lo que falta en los días que quedan?',
+      section: 'cae', tag: g.status === 'missed' ? 'Mes cerrado' : 'Meta del mes',
+      big: { value: pct(g.attainment), tone: 'dn', sub: `${g.status === 'missed' ? 'de la meta' : 'de la meta al ritmo actual'} de ${money(g.goal)}${gapAbs !== null ? ` · faltan ${money(Math.abs(gapAbs))}` : ''}` },
+      hipotesis: 'El ritmo de los días recientes no alcanza para cubrir lo que falta; no sé si los días que quedan traen algo distinto (evento, campaña).',
+      validar: 'Revisa en Pacing qué canal va más lejos de su meta y cuántos días quedan.',
+      accion: 'Definir con cada canal qué se puede recuperar en los días que quedan y qué se acepta como brecha.',
+      evid, pregunta: '¿Qué canal tiene más espacio para recuperar lo que falta en los días que quedan?',
       limites: 'El forecast supone que lo que viene se parece a los días recientes; no incluye eventos que no estén en el calendario.',
       fuente: 'Pacing & Forecast', view: 'pacing', viewLabel: 'Pacing & Forecast',
       facts: { attainment: g.attainment, goal: g.goal, cumulative: g.cumulative, gap: gapAbs }
@@ -128,6 +150,12 @@
       title: `Contra el plan, ${DRIVER_LABEL[dom[0]]} es el driver que más pesa`,
       resumen: `La brecha contra el plan es ${money(w.gap)} (${spct(w.gapPct)}). El efecto de ${DRIVER_LABEL[dom[0]]} es ${money(dom[1])}${offset ? `, y ${DRIVER_LABEL[offset[0]]} lo compensa en ${money(offset[1])}` : ''}.`,
       que: `El reparto es aritmético (tráfico, conversión, ticket) y suma la brecha total; no prueba por qué pasó.`,
+      section: 'revisar', tag: 'Qué pesa más',
+      big: { value: money(dom[1]), tone: dom[1] < 0 ? 'dn' : 'up', sub: `efecto de ${DRIVER_LABEL[dom[0]]} de ${money(w.gap)} de brecha contra el plan (${spct(w.gapPct)})` },
+      visual: { type: 'bars', rows: list.map((x) => ({ label: DRIVER_LABEL[x[0]][0].toUpperCase() + DRIVER_LABEL[x[0]].slice(1), value: x[1], text: money(x[1]) })) },
+      hipotesis: `El movimiento matemático de la brecha viene sobre todo de ${DRIVER_LABEL[dom[0]]}. No prueba por qué pasó: dice por dónde empezar a mirar.`,
+      validar: 'Abre «¿Por qué?» y mira si ese efecto lo carga un canal o está repartido.',
+      accion: DRIVER_ACTION[dom[0]],
       evid, pregunta: `¿El efecto de ${DRIVER_LABEL[dom[0]]} es parejo entre canales o lo carga uno solo?`,
       limites: 'Los efectos de driver describen el movimiento matemático de la brecha; no son causas.',
       fuente: 'Diagnóstico · Nivel 1', view: 'diagnostico', viewLabel: '¿Por qué? Diagnóstico',
@@ -152,7 +180,12 @@
       evid: [{ k: `Contra el plan: ${DRIVER_LABEL[dp[0]]}`, v: money(dp[1]) }, { k: `Contra el periodo anterior: ${DRIVER_LABEL[da[0]]}`, v: money(da[1]) }, { k: 'Brecha contra el plan', v: money(p.gap) }, { k: 'Cambio contra el periodo anterior', v: money(a.delta) }],
       pregunta: `¿El plan ya suponía un cambio en ${DRIVER_LABEL[da[0]]} que no se dio?`,
       limites: 'Son dos comparaciones válidas; no hay un error, pero tampoco una sola historia.',
-      handoff: { to: 'auditor', reason: 'Si el driver es conversión, el Auditor de Conversión puede ver en qué paso del embudo se pierde (Fase 2).' },
+      section: 'revisar', tag: 'Dos lecturas',
+      big: { value: `${DRIVER_LABEL[dp[0]]} vs ${DRIVER_LABEL[da[0]]}`, tone: '', sub: 'driver que más pesa contra el plan vs contra el periodo anterior' },
+      hipotesis: 'El plan suponía un cambio que no se dio, o el negocio cambió en otra dirección que el plan no anticipaba. Se valida viendo qué suponía el plan.',
+      validar: 'Compara en «¿Por qué?» el plan contra el periodo anterior, y revisa si el plan ya traía ese cambio.',
+      accion: 'Leer las dos comparaciones juntas antes de repartir tareas por driver.',
+      handoff: { to: 'auditor', reason: 'Si el driver es conversión, el Auditor de Conversión puede ver en qué paso del embudo se pierde.' },
       fuente: 'Diagnóstico · Nivel 1 y comparación con el periodo anterior', view: 'diagnostico', viewLabel: '¿Por qué? Diagnóstico',
       facts: { planDriver: dp[1], prevDriver: da[1], gap: p.gap, delta: a.delta }
     };
@@ -170,6 +203,11 @@
       title: `Entre métodos de forecast hay ${(r.spreadPct * 100).toFixed(1)} puntos de diferencia al cierre del año`,
       resumen: `El método ${r.minMethod} cierra el año en ${money(r.min)} y el ${r.maxMethod} en ${money(r.max)}: ${money(r.max - r.min)} de diferencia.`,
       que: 'Cuando los métodos se separan, el cierre depende de cuánto pesen los días recientes frente al acumulado del año.',
+      section: 'revisar', tag: 'Antes de fiarte del cierre',
+      big: { value: money(r.max - r.min), tone: '', sub: `de diferencia entre métodos al cierre del año (${pct(r.spreadPct)} de la meta)` },
+      hipotesis: 'Los métodos pesan distinto los días recientes frente al acumulado del año, por eso se separan.',
+      validar: 'En Forecast mira cuál método ha acertado más en la prueba histórica.',
+      accion: 'Confirmar el método en uso antes de comunicar un cierre del año.',
       evid, pregunta: '¿Cuál método ha acertado más en la prueba histórica? La vista de Forecast la muestra.',
       limites: 'Los métodos suponen que lo que viene se parece a lo observado; la sugerencia sigue reglas visibles y no cambia el método en uso.',
       fuente: 'Forecast · métodos A/B/C/D', view: 'pacing', viewLabel: 'Pacing & Forecast',
@@ -195,6 +233,11 @@
       title: 'Hay datos que pueden distorsionar el cumplimiento',
       resumen: `${issues.join('; ')}. Esas cifras pueden inflar o recortar el cumplimiento que ves.`,
       que: 'El pacing solo cuenta los días con plan y con venta real. Si faltan, el cumplimiento se calcula sobre menos días.',
+      section: 'revisar', tag: 'Calidad del dato',
+      big: { value: `${issues.length} ${issues.length === 1 ? 'aviso' : 'avisos'}`, tone: '', sub: 'que pueden mover el cumplimiento que ves' },
+      hipotesis: 'El cumplimiento se calcula sobre menos días o menos canales de los que parece.',
+      validar: 'Abre Calidad de datos y completa la carga que falta; luego vuelve a leer el cumplimiento.',
+      accion: 'Completar la carga de plan o venta que falta.',
       evid, pregunta: '¿Se puede completar la carga que falta antes de leer el cumplimiento?',
       limites: 'No sé cuánto cambiaría el cumplimiento con la carga completa.',
       fuente: 'Calidad de datos', view: 'calidad', viewLabel: 'Calidad de datos',
@@ -202,7 +245,41 @@
     };
   }
 
-  const DETECTORS = [brechaConcentrada, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan];
+  /** D7 · Un canal va por encima de su plan: qué compensa de lo que cae en otros (la parte «qué crece» de la historia). */
+  function canalCompensa(sc, deps) {
+    const t = rev(sc.tot);
+    if (!t || !fin(t.plan) || !(t.plan > 0)) return null;
+    const rows = sc.channels.map((c) => ({ ...c, r: rev(c.m) })).filter((c) => c.r && fin(c.r.gap) && fin(c.r.plan) && c.r.plan > 0 && fin(c.r.gapPct));
+    const pos = rows.filter((c) => c.r.gap > 0 && c.r.gapPct >= 0.01 && c.r.gap >= 0.005 * t.plan).sort((a, b) => b.r.gap - a.r.gap);
+    if (!pos.length) return null;
+    const top = pos[0], sumNeg = rows.filter((c) => c.r.gap < 0).reduce((s, c) => s + c.r.gap, 0), covers = sumNeg < 0 ? Math.min(1, top.r.gap / -sumNeg) : null;
+    let drv = null;
+    try { const w = deps.home.whyPlan(deps.state, top.id, sc.period); if (w && w.status === 'ok' && w.effects) { const e = w.effects, rk = Object.entries({ traffic: e.traffic, cr: e.cr, aov: e.aov }).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0]; drv = { id: rk[0], value: rk[1] }; } } catch (e) { drv = null; }
+    const score = clamp(15 + (top.r.gap / t.plan) * 100 * 6 + (covers ? covers * 15 : 0), 0, 69);
+    const evid = [{ k: `${top.label}: plan / real`, v: `${money(top.r.plan)} / ${money(top.r.actual)}` }, { k: `${top.label} vs su plan`, v: spct(top.r.gapPct) }, { k: `Lo que suma ${top.label} contra su plan`, v: money(top.r.gap) }];
+    if (sumNeg < 0) evid.push({ k: 'Lo que restan los canales bajo su plan', v: money(sumNeg) });
+    if (covers !== null) evid.push({ k: `Parte de esa caída que cubre ${top.label}`, v: pct(covers, 0) });
+    if (drv) evid.push({ k: `${top.label}: driver que más pesa a favor`, v: `${DRIVER_LABEL[drv.id]} (${money(drv.value)})` });
+    return {
+      id: 'canal_compensa', detector: 'Canal por encima de su plan', score, prio: prioOf(score), owner: CHANNEL_OWNER[top.id] || 'Ecommerce',
+      title: covers !== null && covers >= 0.5 ? `${top.label} suma ${money(top.r.gap)} y cubre ${pct(covers, 0)} de lo que cae en otros canales` : `${top.label} va ${pct(top.r.gapPct)} arriba de su plan`,
+      resumen: `${top.label} lleva ${money(top.r.actual)} contra un plan de ${money(top.r.plan)} a la fecha de corte (${spct(top.r.gapPct)}).${covers !== null ? ` Eso cubre ${pct(covers, 0)} de lo que restan los canales bajo su plan.` : ''}`,
+      que: `${top.label} está por encima de su plan; ${covers !== null ? 'compensa parte de la brecha del total, no toda' : 'el total no tiene canales por debajo de su plan'}.`,
+      section: 'crece', tag: covers !== null ? 'Compensa' : 'Crece',
+      big: { value: `+${money(top.r.gap).replace(/^−/, '')}`, tone: 'up', sub: `${top.label} contra su plan · ${spct(top.r.gapPct)}` },
+      visual: { type: 'bars', rows: pos.slice(0, 3).map((c) => ({ label: c.label, value: c.r.gap, text: `+${money(c.r.gap)}` })) },
+      hipotesis: drv ? `La ventaja viene sobre todo de ${DRIVER_LABEL[drv.id]}; si depende de pocos clientes o de un empujón puntual, puede no sostenerse.` : 'No sé de qué viene la ventaja; conviene saber si es sostenible.',
+      validar: `Mira en «¿Por qué?» cuánto de ${top.label} es volumen y cuánto es ticket, y si lo sostienen clientes nuevos o recurrentes.`,
+      accion: `Identificar qué está funcionando en ${top.label} y si se puede sostener.`,
+      evid,
+      pregunta: `¿El crecimiento de ${top.label} es sostenible o depende de algo puntual?`,
+      limites: 'Describo cuánto suma y cuánto compensa; no sé si se sostiene ni de qué viene.',
+      fuente: 'Pacing & Forecast', view: 'pacing', viewLabel: 'Pacing & Forecast',
+      facts: { gap: top.r.gap, gapPct: top.r.gapPct, covers, sumNeg, plan: top.r.plan, actual: top.r.actual }
+    };
+  }
+
+  const DETECTORS = [brechaConcentrada, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa];
 
   /**
    * Corre todos los detectores. Nunca lanza: un detector que falla se omite y se reporta en `errors`.
@@ -215,8 +292,10 @@
     const findings = [], errors = [];
     DETECTORS.forEach((fn) => { try { const f = fn(sc, d); if (f) findings.push({ agent: 'analista', ...f }); } catch (e) { errors.push(`${fn.name}: ${e && e.message || e}`); } });
     findings.sort((a, b) => b.score - a.score);
-    return { status: 'ok', scope: { channel: 'total', period: sc.period, lastActual: sc.last }, findings, errors, detectors: DETECTORS.length };
+    const t = rev(sc.tot);
+    const kpi = t ? { actual: t.actual, plan: t.plan, gap: t.gap, gapPct: t.gapPct, compliance: t.compliance } : null;
+    return { status: 'ok', scope: { channel: 'total', period: sc.period, lastActual: sc.last, kpi }, findings, errors, detectors: DETECTORS.length };
   }
 
-  FP.agents.analista = { detect, OWNERS, DETECTOR_COUNT: DETECTORS.length };
+  FP.agents.analista = { detect, OWNERS, DETECTOR_COUNT: DETECTORS.length, fmt: { pct, spct, money, clamp, prioOf, fin, barsOf }, CHANNEL_OWNER, DRIVER_LABEL, DRIVER_ACTION };
 })(typeof window !== 'undefined' ? window : globalThis);

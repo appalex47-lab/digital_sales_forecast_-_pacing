@@ -1558,7 +1558,17 @@
         const good = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: det.findings[0].title, resumen: det.findings[0].resumen, siguientePregunta: det.findings[0].pregunta, responsable: 'Contact center' }] }, ctx, A.OWNERS);
         return bad.ok === false && num.ok === false && good.ok === true;
       });
-      test('Asistentes', 'El registro de agentes: Analista disponible; Auditor y Arquitecto como próximamente', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === false && g.AGENTS.arquitecto.available === false && g.defaultAgent('segmentos') === 'analista'; });
+      test('Asistentes', 'El registro de agentes: Analista y Auditor disponibles; Arquitecto como próximamente', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === true && g.AGENTS.arquitecto.available === false && g.defaultAgent('segmentos') === 'auditor' && g.defaultAgent('recovery') === 'analista'; });
+      test('Asistentes', 'El Auditor de Conversión: la puerta de GA4 y los umbrales de demanda sin conversión', () => {
+        const AU = FP.agents.auditor; if (!AU) return false;
+        const g = (a, b) => AU.cuadreGa4({ total: { trkGa4: a, trkUnits: b } }).level;
+        const sk = (n, v, c) => ({ sku: n, name: n, category: 'C', views: v, cartNum: c, cartDen: v, chkNum: 50, chkDen: 100, buyNum: 30, buyDen: 50, units: 30, revenue: 3000, purchases: 30, trkGa4: 30, trkUnits: 30, fcells: 5 });
+        const rows = Array.from({ length: 8 }, (_, i) => sk('n' + i, 2000, 80)).concat([sk('flojo', 9000, 90), sk('pocas', 4000, 40)]);
+        const r = AU.analyze({ status: 'ok', scope: { key: '2026-09' }, skuRows: rows, channels: [], total: { trkGa4: 97, trkUnits: 100 }, mix: { status: 'no_segments', dims: [] }, errors: [] });
+        const f = r.findings.find((x) => x.id === 'demanda_sin_conversion');
+        return g(95, 100) === 'ok' && g(85, 100) === 'warn' && g(60, 100) === 'low' && g(0, 0) === 'unknown' && !!f && /flojo/.test(JSON.stringify(f.visual.rows)) && !/pocas/.test(JSON.stringify(f.visual.rows));
+      });
+      test('Asistentes', 'El enrutador de preguntas: promociones al Arquitecto, rentabilidad se rechaza', () => R.routeQuestion('auditor', '¿qué descuento hago?').to === 'arquitecto' && R.routeQuestion('analista', '¿cuánto gano?').type === 'refuse' && R.routeQuestion('analista', '¿por qué cae Insulinas?') === null);
       test('Asistentes', 'Las reglas de la IA prohíben calcular, causalidad y margen', () => /NO calcules/.test(R.SYSTEM_RULES) && /causal/.test(R.SYSTEM_RULES) && /margen/.test(R.SYSTEM_RULES));
     }
 

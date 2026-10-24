@@ -1,4 +1,4 @@
-"""Fase 1 · Panel de Asistentes (Analista de Números): botón, carga diferida, estados, accesibilidad, móvil e IA simulada.
+"""Fases 1 y 2 · Panel de Asistentes (Analista de Números con historia y ruta, Auditor de Conversión): botón, carga diferida, estados, accesibilidad, móvil e IA simulada.
 Uso: python3 batch_agentes.py <raiz>"""
 import asyncio, sys, os, threading, functools, http.server, socketserver
 from playwright.async_api import async_playwright
@@ -14,7 +14,7 @@ READY = "window.FP && FP.app && FP.app.state && !document.getElementById('boot')
 # Una brecha clara en Llamadas sobre los datos de demo: el motor (Pacing) ya calculó plan y real; aquí solo se acentúa para que el detector tenga qué reportar.
 SKEW = """(()=>{const r=FP.app.state.fc.run, k=FP.app.state.fc.lastActualDate.slice(0,7);
  const bad=(m,f)=>{const t=m.toDate.revenue; t.actual=t.plan*f; t.gap=t.actual-t.plan; t.gapPct=t.gap/t.plan; t.compliance=f;};
- const mm=(s)=>s.months.find(x=>x.key===k); bad(mm(r.channels.llamadas),0.6); bad(mm(r.total),0.93); return true})()"""
+ const mm=(s)=>s.months.find(x=>x.key===k); bad(mm(r.channels.llamadas),0.6); bad(mm(r.total),0.93); if(FP.agents&&FP.agents.runner) FP.agents.runner.clearCache(); return true})()"""
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox'])
@@ -49,11 +49,11 @@ async def main():
         chk('Z10 la descripción del agente está plegada y se abre', await q.evaluate("(()=>{const b=document.querySelector('[data-ag=about]'); const was=b.getAttribute('aria-expanded'); b.click(); return was==='false'&&document.querySelector('.ag-aboutbody')!==null})()"))
         # tabs
         tabs = await q.evaluate("[...document.querySelectorAll('.ag-tab')].map(t=>[t.innerText.replace(/\\s+/g,' '),t.getAttribute('aria-pressed'),t.getBoundingClientRect().height>=44])")
-        chk('Z11 tres pestañas (Números activa, Conversión «Fase 2», Ofertas «Fase 4») de ≥44 px', len(tabs) == 3 and tabs[0][1] == 'true' and 'Fase 2' in tabs[1][0] and 'Fase 4' in tabs[2][0] and all(t[2] for t in tabs), tabs)
+        chk('Z11 tres pestañas (Números activa, Conversión disponible, Ofertas «Fase 4») de ≥44 px', len(tabs) == 3 and tabs[0][1] == 'true' and 'Fase' not in tabs[1][0] and 'Fase 4' in tabs[2][0] and all(t[2] for t in tabs), tabs)
         await q.click('.ag-tab[data-id=auditor]'); await q.wait_for_timeout(100)
         soon = await q.evaluate("document.getElementById('ag-body').innerText")
-        chk('Z12 Auditor: dice que aún no está disponible, no inventa hallazgos', 'Todavía no está disponible' in soon and not await q.evaluate("!!document.querySelector('.ag-card .ag-pp')"), soon[:160])
-        await q.click('#ag-body [data-ag=agent][data-id=analista]'); await q.wait_for_timeout(150)
+        chk('Z12 Auditor sin archivo de productos: explica qué falta y manda a Carga de datos, sin inventar hallazgos', 'Todavía no está disponible' not in soon and not await q.evaluate("!!document.querySelector('.ag-card .ag-pp')") and await q.evaluate("!!document.querySelector('#ag-body a[href=\\'#carga\\']')"), soon[:200])
+        await q.click('.ag-tab[data-id=analista]'); await q.wait_for_timeout(300)
         chk('Z13 volver al Analista restaura los hallazgos', await q.evaluate("!!document.querySelector('.ag-card .ag-pp')"))
         # enlace «Ver en…»
         href = await q.evaluate("document.querySelector('.ag-card a.ag-a').getAttribute('href')")
@@ -75,9 +75,9 @@ async def main():
         await q.evaluate("FP.agentPanel.refresh(true)"); await q.wait_for_function("document.querySelector('.ag-chip-ai.warn')", timeout=15000)
         chk('Z17 si la IA falla: aviso claro y los hallazgos del motor siguen ahí', await q.evaluate("/La IA no está disponible|No se pudo consultar/.test(document.getElementById('ag-body').innerText)&&document.querySelectorAll('.ag-card').length>=1"))
         # pregunta libre: oculta sin Análisis calculado
-        chk('Z18 «Preguntar» no aparece sin Análisis calculado y explica por qué', await q.evaluate("!document.getElementById('ag-q')&&/abre primero/.test(document.querySelector('.ag-foot').innerText)"))
+        chk('Z18 con IA conectada la caja «Preguntar» aparece siempre (el agente contesta con sus propios hallazgos)', await q.evaluate("!!document.getElementById('ag-q')&&!/abre primero/.test(document.querySelector('.ag-foot').innerText)"))
         await q.evaluate("FP.app.state.an.rows=[{entity:'x'}]; FP.agentPanel.refresh(false)"); await q.wait_for_timeout(300)
-        chk('Z19 con Análisis y IA: caja de pregunta y sugerencias ocultas tras «¿No sabes qué preguntar?»', await q.evaluate("!!document.getElementById('ag-q')&&!document.querySelector('.ag-chip')&&!!document.querySelector('[data-ag=sug]')"))
+        chk('Z19 con IA: caja de pregunta y sugerencias ocultas tras «¿No sabes qué preguntar?»', await q.evaluate("!!document.getElementById('ag-q')&&!document.querySelector('.ag-chip')&&!!document.querySelector('[data-ag=sug]')"))
         await q.click('[data-ag=sug]'); await q.wait_for_timeout(100)
         chk('Z20 el enlace despliega sugerencias y tocar una llena la pregunta', await q.evaluate("document.querySelectorAll('.ag-chip').length>=1") and await q.evaluate("(()=>{const c=document.querySelector('.ag-chip'); const t=c.dataset.q; c.click(); return document.getElementById('ag-q').value===t})()"))
         await q.keyboard.press('Escape')

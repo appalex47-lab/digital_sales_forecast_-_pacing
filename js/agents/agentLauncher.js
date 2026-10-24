@@ -10,16 +10,16 @@
   const FP = (root.FP = root.FP || {});
   FP.agents = FP.agents || {};
 
-  /** `available`: el agente ya existe. Los demás se muestran en el panel como «próximamente» (Fase 2 y 4). */
+  /** `available`: el agente ya existe. Los demás se muestran en el panel como «próximamente» (Fase 4). */
   const AGENTS = {
-    analista: { label: 'Números', sub: 'Plan y forecast', name: 'Analista de Números', available: true,
-      role: 'Revisa pacing, plan, forecast y drivers de la venta, y busca lo que no se ve a simple vista en las tablas.' },
-    auditor: { label: 'Conversión', sub: 'Embudo y tráfico', name: 'Auditor de Conversión', available: false, phase: 'Fase 2',
-      role: 'Seguirá el embudo por producto y por segmento: dónde se pierde la compra, por qué el CR sube o baja y qué es solo mezcla.' },
+    analista: { label: 'Números', sub: 'Qué se mueve', name: 'Analista de Números', available: true,
+      role: 'Te cuenta la historia del periodo: qué se cae, qué crece y dónde revisar primero, y te acompaña con una ruta de preguntas hasta que lo entiendas. Habla de venta, pedidos, ticket y unidades; no de ganancia.' },
+    auditor: { label: 'Conversión', sub: 'Embudo y tráfico', name: 'Auditor de Conversión', available: true,
+      role: 'Sigue el embudo (vista → carrito → checkout → compra) por producto, categoría y canal, y busca dónde se queda la venta. Separa «cambió la mezcla de tráfico» de «cambió la conversión dentro de cada segmento». No habla de promociones ni de rentabilidad.' },
     arquitecto: { label: 'Ofertas', sub: 'Promociones', name: 'Arquitecto de Ofertas', available: false, phase: 'Fase 4',
       role: 'Propondrá qué promocionar, dónde y cómo medirlo, con las reglas del módulo de promociones.' }
   };
-  /** Agente sugerido por vista (id de vista de la app). Hoy solo el Analista existe; el resto cae en él. */
+  /** Agente sugerido por vista (id de vista de la app). Si el sugerido aún no existe (Arquitecto), cae en el Analista. */
   const DEFAULT_BY_VIEW = { segmentos: 'auditor', producto: 'auditor', clientes: 'auditor', recovery: 'arquitecto', medir: 'arquitecto' };
   function defaultAgent(view) { const a = DEFAULT_BY_VIEW[view] || 'analista'; return AGENTS[a] && AGENTS[a].available ? a : 'analista'; }
   function suggestedAgent(view) { return DEFAULT_BY_VIEW[view] || 'analista'; }   // el que la vista pediría aunque aún no exista
