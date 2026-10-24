@@ -28,7 +28,8 @@
       home: o.home || FP.homeSummaryEngine, advisor: o.advisor || FP.methodAdvisor,
       products: o.products || FP.productAnalysis, store: o.store || FP.productStore,
       range: o.range || ((type, key) => (FP.app && FP.app.periodRange ? FP.app.periodRange(type, key) : null)),
-      traffic: o.traffic || FP.trafficConversionEngine
+      traffic: o.traffic || FP.trafficConversionEngine,
+      confidence: o.confidence !== undefined ? o.confidence : FP.forecastConfidence
     };
   }
 
@@ -218,7 +219,13 @@
       { k: 'Plan a la fecha', v: f.money(k.plan), tone: '' },
       { k: 'Brecha', v: `${f.money(k.gap)} · ${f.spct(k.gapPct)}`, tone: k.gap < 0 ? 'dn' : k.gap > 0 ? 'up' : '' }
     ];
-    out.push(g && fin(g.cumulative) ? { k: g.status === 'missed' ? `Cierre ${sc.W.del}` : `Cierre estimado ${sc.W.del}`, v: f.money(g.cumulative), tone: '' } : { k: `Cierre estimado ${sc.W.del}`, v: 's/d', tone: '' });
+    const tile = g && fin(g.cumulative) ? { k: g.status === 'missed' ? `Cierre ${sc.W.del}` : `Cierre estimado ${sc.W.del}`, v: f.money(g.cumulative), tone: '' } : { k: `Cierre estimado ${sc.W.del}`, v: 's/d', tone: '' };
+    // Fase 3: qué tan sólida es la base de ese cierre (solo si es una estimación: periodo en curso)
+    try {
+      const C = deps.confidence, a = C && state.fc && state.fc.run ? C.assess({ run: state.fc.run, channel: sc.channel, period: sc.period, advisor: deps.advisor }) : null;
+      if (a && a.status === 'ok') { tile.chip = `Confianza ${a.label}`; tile.chipLevel = a.level; }
+    } catch (e) { /* sin confianza: el cierre se muestra igual */ }
+    out.push(tile);
     return out;
   }
 

@@ -101,3 +101,17 @@ body[data-view="analisis"] .ag-fab{bottom:calc(130px + env(safe-area-inset-botto
 @media (prefers-reduced-motion:reduce){.ag-prog i{transition:none}}
 @media (max-width:720px),(pointer:coarse){.ag-more,.ag-link{min-height:44px}.ag-rq{min-height:44px;padding-top:0;display:flex;align-items:center}}
 .ag-follow{flex-basis:100%;font-size:12px;line-height:1.35;color:var(--ds-text-muted,#59677B)}
+
+/* Fase 3 · La línea del Analista en Inicio: una frase, un botón y una X. No agrega bloques; abre el panel. */
+.ag-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 12px;padding:6px 6px 6px 16px;border:1px solid var(--ds-border-strong,#CAD5E4);border-radius:10px;background:var(--ds-accent-soft,#EAF1FD);color:var(--ds-text,#14213D)}
+.ag-line__t{flex:1 1 280px;min-width:0;font-size:14px;line-height:1.4}
+.ag-line__go{min-height:44px;padding:0 16px;border:0;border-radius:8px;background:var(--ds-accent,#1F5FE0);color:#fff;font:600 14px/1 inherit;font-family:inherit;cursor:pointer}
+.ag-line__go:hover{filter:brightness(.94)}
+.ag-line__x{width:44px;height:44px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer}
+.ag-line__x:hover{background:rgba(20,33,61,.08)}
+.ag-line__go:focus-visible,.ag-line__x:focus-visible{outline:2px solid var(--ds-accent,#1F5FE0);outline-offset:2px}
+@media (max-width:720px){.ag-line{padding:10px 8px 6px 12px}.ag-line__go{flex:1}}
+.ag-chipc{display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;border:1px solid var(--ds-border-strong,#CAD5E4);font-size:11.5px;font-weight:600;background:var(--ds-surface,#fff);color:var(--ds-text,#14213D)}
+.ag-chipc--alta{background:#E3F1EC;border-color:#B9D8CE;color:#0A4F44}
+.ag-chipc--media{background:#FFF8E6;border-color:#E6D3A6;color:#6B4600}
+.ag-chipc--baja{background:#FBF1EF;border-color:#E3C3BF;color:#8F1C16}
