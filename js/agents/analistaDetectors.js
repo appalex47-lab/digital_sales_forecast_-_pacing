@@ -5,7 +5,8 @@
  * con cifras, evidencia y texto base. NO calcula métricas nuevas y NO usa IA: si Cohere no está disponible, el panel muestra estos
  * mismos textos. Cuando hay IA, solo recibe estos candidatos para ordenarlos y redactarlos (agentRunner.js).
  *
- * Alcance de la Fase 1: Total digital, mes de la última fecha con venta real. Cada detector devuelve un candidato o null.
+ * Alcance: lo que la persona tiene elegido en la app (contexto persistente: año, mes o semana, y canal); si no hay selección usable, Total digital y el mes
+ * de la última fecha con venta real. Cada detector devuelve un candidato o null.
  * Cada candidato: { id, detector, agent, score 0-100, prio 'Alta'|'Media'|'Baja', owner, title, resumen, que, evid[{k,v}], pregunta,
  *                   limites, fuente, view, viewLabel, handoff?{to,reason}, facts{ números sin formato, para validar a Cohere } }
  * Fase 2 (tarjeta compartida con el Auditor de Conversión), todos opcionales:
@@ -43,20 +44,61 @@
     return { type: 'bars', rows: out };
   };
 
-  /** Mes de trabajo, serie total y series por canal. null si falta plan o venta real. */
-  function scopeOf(state) {
+  // Cómo se llama el periodo en los textos (mes, semana o año). El mes es el caso base: sus textos no cambian.
+  const WORDS = {
+    month: { noun: 'mes', del: 'del mes', este: 'este mes', prev: 'el mes anterior', art: 'El mes', done: 'Mes cerrado' },
+    week: { noun: 'semana', del: 'de la semana', este: 'esta semana', prev: 'la semana anterior', art: 'La semana', done: 'Semana cerrada' },
+    year: { noun: 'año', del: 'del año', este: 'este año', prev: 'el año anterior', art: 'El año', done: 'Año cerrado' }
+  };
+  const wordsOf = (type) => WORDS[type] || WORDS.month;
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const DIA = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? `${+m[3]} ${MESES[+m[2] - 1].slice(0, 3)}` : String(d || ''); };
+  function periodLabel(type, key, week) {
+    if (type === 'year') return String(key);
+    if (type === 'week') return week && week.weekStart ? `semana del ${DIA(week.weekStart)} al ${DIA(week.weekEnd)}` : `semana ${key}`;
+    const m = /^(\d{4})-(\d{2})/.exec(String(key || '')); return m ? `${MESES[+m[2] - 1]} ${m[1]}` : String(key || '');
+  }
+  const channelLabel = (id) => { if (!id || id === 'total') return 'Total digital'; const c = ((FP.config && FP.config.channels) || []).find((x) => x.id === id); return c ? c.label : id; };
+
+  /**
+   * Lo que la persona tiene elegido: canal y año/mes/semana del contexto persistente de la app (`state.ux.ctx`).
+   * Si no hay una selección usable (sin periodo, día suelto, semana que no existe…) se usa el mes de la última fecha con venta real.
+   * Un día o un rango se leen como el mes de esa fecha (igual que Diagnóstico) y se avisa en `note`.
+   */
+  function selectionOf(state) {
+    const run = state && state.fc && state.fc.run, ctx = (state && state.ux && state.ux.ctx) || {};
+    const chIds = run && run.channels ? Object.keys(run.channels) : [];
+    const channel = ctx.channel && chIds.includes(ctx.channel) ? ctx.channel : 'total';
+    let type = ctx.periodType, key = ctx.periodKey, note = null;
+    if ((type === 'day' || type === 'range') && /^\d{4}-\d{2}/.test(String(key || ''))) { type = 'month'; key = String(key).slice(0, 7); note = 'El agente trabaja por año, mes o semana: usa el mes de la fecha elegida.'; }
+    const weeks = (run && run.total && run.total.weeks) || [], months = (run && run.total && run.total.months) || [];
+    let ok = false;
+    if (type === 'year') { key = String((state && state.year) || String(key || '').slice(0, 4)); ok = Boolean(key); }
+    else if (type === 'month') ok = /^\d{4}-\d{2}$/.test(String(key || '')) && months.some((m) => m.key === key);
+    else if (type === 'week') ok = weeks.some((w) => w.key === key);
+    if (!ok) { const last = (state && state.fc && state.fc.lastActualDate) || null; type = 'month'; key = last ? String(last).slice(0, 7) : null; note = null; }
+    return { channel, type, key, chosen: ok, note };
+  }
+
+  /** Periodo de trabajo, serie total (o del canal elegido) y series por canal. null si falta plan o venta real en ese periodo. */
+  function scopeOf(state, sel) {
     const run = state && state.fc && state.fc.run;
     if (!run || !run.plan || run.plan.source === 'none' || !run.total || !run.channels) return null;
     const last = (state.fc && state.fc.lastActualDate) || null;
     if (!last) return null;
-    const key = String(last).slice(0, 7);
-    const mOf = (s) => (s && Array.isArray(s.months) ? s.months.find((m) => m.key === key) : null);
-    const tot = mOf(run.total);
+    sel = sel || selectionOf(state);
+    if (!sel.key) return null;
+    const { type, key } = sel;
+    const pick = (s) => { if (!s) return null; if (type === 'year') return s.annual || null; return (Array.isArray(type === 'week' ? s.weeks : s.months) ? (type === 'week' ? s.weeks : s.months).find((m) => m.key === key) : null) || null; };
+    const single = sel.channel !== 'total' && run.channels[sel.channel];
+    const tot = pick(single ? run.channels[sel.channel] : run.total);
     if (!tot || !tot.countedDays) return null;
     const labels = {};
     ((FP.config && FP.config.channels) || []).forEach((c) => { labels[c.id] = c.label; });
-    const channels = Object.keys(run.channels).map((id) => ({ id, label: labels[id] || id, m: mOf(run.channels[id]) })).filter((c) => c.m);
-    return { run, key, period: { type: 'month', key }, tot, channels, last };
+    // Con un canal elegido no hay «qué canal»: se mira ese canal solo.
+    const channels = single ? [] : Object.keys(run.channels).map((id) => ({ id, label: labels[id] || id, m: pick(run.channels[id]) })).filter((c) => c.m);
+    const label = periodLabel(type, key, type === 'week' ? tot : null);
+    return { run, key, period: { type, key }, tot, channels, last, channel: single ? sel.channel : 'total', channelLabel: channelLabel(single ? sel.channel : 'total'), label, W: wordsOf(type), note: sel.note || null, chosen: sel.chosen };
   }
   const rev = (m) => (m && m.toDate && m.toDate.revenue) || null;
 
@@ -79,7 +121,7 @@
       { k: `${top.label} vs su plan`, v: spct(top.r.gapPct) },
       { k: 'Brecha total / brecha de ese canal', v: `${money(t.gap)} / ${money(top.r.gap)}` }
     ];
-    if (weight !== null) evid.push({ k: `Peso de ${top.label} en el plan del mes`, v: pct(weight) });
+    if (weight !== null) evid.push({ k: `Peso de ${top.label} en el plan ${sc.W.del}`, v: pct(weight) });
     if (best && best.r.gap > 0) evid.push({ k: `${best.label} vs su plan`, v: spct(best.r.gapPct) });
     // Qué driver pesa más dentro de ese canal (descriptivo: es aritmética del motor de drivers, no causa)
     let drv = null;
@@ -90,13 +132,13 @@
       id: 'brecha_concentrada', detector: 'Brecha por canal · concentración', score, prio: prioOf(score), owner: CHANNEL_OWNER[top.id] || 'Ecommerce',
       title: `${top.label} concentra la mayor parte de la brecha contra el plan`,
       resumen: `La venta va en ${pct(t.compliance)} del plan a la fecha de corte. ${top.label} va ${pct(Math.abs(top.r.gapPct))} abajo de su plan y suma ${money(top.r.gap)} de la brecha de ${money(t.gap)}.`,
-      que: `${top.label} explica ${(ptsTop * 100).toFixed(1)} puntos de los ${(ptsTot * 100).toFixed(1)} que faltan para el plan${weight !== null ? `, aunque pesa ${pct(weight)} del plan del mes` : ''}.`,
+      que: `${top.label} explica ${(ptsTop * 100).toFixed(1)} puntos de los ${(ptsTot * 100).toFixed(1)} que faltan para el plan${weight !== null ? `, aunque pesa ${pct(weight)} del plan ${sc.W.del}` : ''}.`,
       section: 'cae', tag: `Concentrada · ${Math.round(share * 100)}% de la caída`,
       big: { value: money(top.r.gap), tone: 'dn', sub: `de ${money(sumNeg)} que caen los canales bajo su plan · ${top.label} va ${pct(Math.abs(top.r.gapPct))} abajo de su plan` },
       visual: barsOf(negs.slice(0, 3).map((c) => ({ label: c.label, value: c.r.gap })), { n: Math.max(0, negs.length - 3), value: negs.slice(3).reduce((s, c) => s + c.r.gap, 0) }),
       hipotesis: `Algo propio de ${top.label} y no del negocio completo, porque ${rows.some((c) => c.r.gap >= 0) ? 'otros canales sí están en su plan' : 'la brecha se concentra ahí'}. Es una hipótesis a validar, no una causa.`,
-      validar: `Compara ${top.label} contra el mes anterior en tráfico, conversión y ticket (vista «¿Por qué?»).`,
-      accion: drv ? `${DRIVER_ACTION[drv.id]}` : `Revisar qué cambió en ${top.label} este mes (tráfico, conversión y ticket).`,
+      validar: `Compara ${top.label} contra ${sc.W.prev} en tráfico, conversión y ticket (vista «¿Por qué?»).`,
+      accion: drv ? `${DRIVER_ACTION[drv.id]}` : `Revisar qué cambió en ${top.label} ${sc.W.este} (tráfico, conversión y ticket).`,
       evid,
       pregunta: drv ? `¿Por qué ${DRIVER_LABEL[drv.id]} pesa más en ${top.label}? Revisa esa vista por periodo y segmento.` : `¿La caída de ${top.label} viene de menos tráfico, menos conversión o menor ticket?`,
       limites: 'Describo dónde está la brecha y cuánto pesa; no sé el motivo. No veo margen ni promociones.',
@@ -105,23 +147,24 @@
     };
   }
 
-  /** D2 · Con el forecast actual el mes no llega a la meta. */
+  /** D2 · Con el forecast actual el periodo no llega a la meta (solo mes y año: no hay meta semanal). */
   function metaEnRiesgo(sc, deps) {
-    let g = null; try { g = deps.home.goal(deps.state, 'total', sc.period); } catch (e) { g = null; }
+    if (sc.period.type === 'week') return null;
+    let g = null; try { g = deps.home.goal(deps.state, sc.channel, sc.period); } catch (e) { g = null; }
     if (!g || !(g.status === 'missed' || g.status === 'not_reached') || !fin(g.attainment) || g.attainment >= 0.99) return null;
     const rows = sc.channels.map((c) => ({ label: c.label, fg: c.m.forecastGap && c.m.forecastGap.revenue })).filter((c) => c.fg && fin(c.fg.gapPct));
     const worst = rows.sort((a, b) => a.fg.gapPct - b.fg.gapPct)[0];
     const gapAbs = fin(g.goal) && fin(g.cumulative) ? g.cumulative - g.goal : null;
-    const evid = [{ k: 'Meta del mes', v: money(g.goal) }, { k: g.status === 'missed' ? 'Cierre real' : 'Cierre proyectado', v: money(g.cumulative) }, { k: 'Avance contra la meta', v: pct(g.attainment) }];
+    const evid = [{ k: `Meta ${sc.W.del}`, v: money(g.goal) }, { k: g.status === 'missed' ? 'Cierre real' : 'Cierre proyectado', v: money(g.cumulative) }, { k: 'Avance contra la meta', v: pct(g.attainment) }];
     if (gapAbs !== null) evid.push({ k: 'Diferencia contra la meta', v: money(gapAbs) });
     if (worst && worst.fg.gapPct < 0) evid.push({ k: `Canal más lejos de su meta: ${worst.label}`, v: spct(worst.fg.gapPct) });
     const score = clamp(30 + (1 - g.attainment) * 100 * 9);
     return {
       id: 'meta_en_riesgo', detector: 'Meta del periodo · forecast', score, prio: prioOf(score), owner: 'Ecommerce',
-      title: g.status === 'missed' ? `El mes cerró en ${pct(g.attainment)} de la meta` : `Al ritmo actual el mes cierra en ${pct(g.attainment)} de la meta`,
-      resumen: `${g.status === 'missed' ? 'La meta del mes no se cumplió' : 'Con el forecast del método en uso no llegas a la meta del mes'}: ${pct(g.attainment)} de ${money(g.goal)}.`,
-      que: gapAbs !== null ? `Faltan ${money(Math.abs(gapAbs))} para la meta del mes.` : 'No alcanza la meta del mes.',
-      section: 'cae', tag: g.status === 'missed' ? 'Mes cerrado' : 'Meta del mes',
+      title: g.status === 'missed' ? `${sc.W.art} cerró en ${pct(g.attainment)} de la meta` : `Al ritmo actual ${sc.W.art.toLowerCase()} cierra en ${pct(g.attainment)} de la meta`,
+      resumen: `${g.status === 'missed' ? `La meta ${sc.W.del} no se cumplió` : `Con el forecast del método en uso no llegas a la meta ${sc.W.del}`}: ${pct(g.attainment)} de ${money(g.goal)}.`,
+      que: gapAbs !== null ? `Faltan ${money(Math.abs(gapAbs))} para la meta ${sc.W.del}.` : `No alcanza la meta ${sc.W.del}.`,
+      section: 'cae', tag: g.status === 'missed' ? sc.W.done : `Meta ${sc.W.del}`,
       big: { value: pct(g.attainment), tone: 'dn', sub: `${g.status === 'missed' ? 'de la meta' : 'de la meta al ritmo actual'} de ${money(g.goal)}${gapAbs !== null ? ` · faltan ${money(Math.abs(gapAbs))}` : ''}` },
       hipotesis: 'El ritmo de los días recientes no alcanza para cubrir lo que falta; no sé si los días que quedan traen algo distinto (evento, campaña).',
       validar: 'Revisa en Pacing qué canal va más lejos de su meta y cuántos días quedan.',
@@ -135,7 +178,7 @@
 
   /** D3 · Qué driver pesa más en la brecha contra el plan y si otro lo compensa. */
   function driverDominante(sc, deps) {
-    let w = null; try { w = deps.home.whyPlan(deps.state, 'total', sc.period); } catch (e) { w = null; }
+    let w = null; try { w = deps.home.whyPlan(deps.state, sc.channel, sc.period); } catch (e) { w = null; }
     if (!w || w.status !== 'ok' || !w.effects || !fin(w.gap) || !fin(w.gapPct) || Math.abs(w.gapPct) < 0.005) return null;
     const e = w.effects, list = [['traffic', e.traffic], ['cr', e.cr], ['aov', e.aov]].filter((x) => fin(x[1])).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
     if (list.length < 3) return null;
@@ -166,7 +209,7 @@
   /** D4 · Contra el plan y contra el periodo anterior el driver principal no es el mismo. */
   function contradiccionCapas(sc, deps) {
     let p = null, a = null;
-    try { p = deps.home.whyPlan(deps.state, 'total', sc.period); a = deps.home.why(deps.state, 'total', sc.period); } catch (e) { return null; }
+    try { p = deps.home.whyPlan(deps.state, sc.channel, sc.period); a = deps.home.why(deps.state, sc.channel, sc.period); } catch (e) { return null; }
     if (!p || p.status !== 'ok' || !p.effects || !a || a.status !== 'ok' || !a.effects || a.why === 'no_traffic') return null;
     const dom = (e) => Object.entries({ traffic: e.traffic, cr: e.cr, aov: e.aov }).filter((x) => fin(x[1])).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0];
     const dp = dom(p.effects), da = dom(a.effects);
@@ -193,7 +236,7 @@
 
   /** D5 · Los métodos de forecast se separan al cierre del año. */
   function forecastDivergente(sc, deps) {
-    let adv = null; try { adv = deps.advisor.advise({ run: sc.run, channel: 'total', metric: 'revenue' }); } catch (e) { adv = null; }
+    let adv = null; try { adv = deps.advisor.advise({ run: sc.run, channel: sc.channel, metric: 'revenue' }); } catch (e) { adv = null; }
     if (!adv || !adv.range || !fin(adv.range.spreadPct) || adv.range.spreadPct < 0.02) return null;
     const r = adv.range, score = clamp(25 + r.spreadPct * 100 * 6);
     const evid = [{ k: `Cierre del año con el método ${r.minMethod}`, v: money(r.min) }, { k: `Cierre del año con el método ${r.maxMethod}`, v: money(r.max) }, { k: 'Diferencia entre métodos', v: `${money(r.max - r.min)} (${pct(r.spreadPct)} de la meta)` }];
@@ -219,10 +262,10 @@
   function datosDistorsionan(sc, deps) {
     const issues = [], evid = []; let score = 20;
     const miss = sc.channels.filter((c) => !c.m.plan || !fin(c.m.plan.revenue));
-    if (miss.length) { issues.push(`${miss.map((c) => c.label).join(', ')} sin plan del mes`); evid.push({ k: 'Canales sin plan del mes', v: miss.map((c) => c.label).join(', ') }); score += 25; }
+    if (miss.length) { issues.push(`${miss.map((c) => c.label).join(', ')} sin plan ${sc.W.del}`); evid.push({ k: `Canales sin plan ${sc.W.del}`, v: miss.map((c) => c.label).join(', ') }); score += 25; }
     const noAct = sc.channels.filter((c) => c.m.plan && !c.m.countedDays);
     if (noAct.length) { issues.push(`${noAct.map((c) => c.label).join(', ')} sin venta real`); evid.push({ k: 'Canales con plan y sin venta real', v: noAct.map((c) => c.label).join(', ') }); score += 20; }
-    let ex = null; try { ex = deps.home.excluded(deps.state, 'total', sc.period); } catch (e) { ex = null; }
+    let ex = null; try { ex = deps.home.excluded(deps.state, sc.channel, sc.period); } catch (e) { ex = null; }
     if (ex && ex.days > 0) { issues.push(`${ex.days} día(s) cerrados no entran al total porque falta algún canal`); evid.push({ k: 'Días cerrados que no entran al total', v: String(ex.days) }); evid.push({ k: 'Venta de los otros canales que queda fuera', v: money(ex.revenue) }); score += Math.min(25, ex.days * 4); }
     const q = deps.state.quality, flagged = q && q.totals ? (q.totals.warning || 0) + (q.totals.error || 0) + (q.totals.rejected || 0) : 0;
     if (flagged > 0) { issues.push(`${flagged} aviso(s) de calidad de datos`); evid.push({ k: 'Avisos de calidad de datos', v: String(flagged) }); score += Math.min(15, flagged * 3); }
@@ -287,15 +330,15 @@
    */
   function detect(state, deps = {}) {
     const d = { state, home: deps.home || FP.homeSummaryEngine, advisor: deps.advisor || FP.methodAdvisor };
-    const sc = scopeOf(state);
-    if (!sc) return { status: 'no_data', scope: null, findings: [], errors: [], detectors: DETECTORS.length };
+    const sel = selectionOf(state), sc = scopeOf(state, sel);
+    if (!sc) return { status: 'no_data', scope: null, selection: sel, findings: [], errors: [], detectors: DETECTORS.length };
     const findings = [], errors = [];
     DETECTORS.forEach((fn) => { try { const f = fn(sc, d); if (f) findings.push({ agent: 'analista', ...f }); } catch (e) { errors.push(`${fn.name}: ${e && e.message || e}`); } });
     findings.sort((a, b) => b.score - a.score);
     const t = rev(sc.tot);
     const kpi = t ? { actual: t.actual, plan: t.plan, gap: t.gap, gapPct: t.gapPct, compliance: t.compliance } : null;
-    return { status: 'ok', scope: { channel: 'total', period: sc.period, lastActual: sc.last, kpi }, findings, errors, detectors: DETECTORS.length };
+    return { status: 'ok', scope: { channel: sc.channel, channelLabel: sc.channelLabel, period: sc.period, label: sc.label, lastActual: sc.last, kpi, note: sc.note }, findings, errors, detectors: DETECTORS.length };
   }
 
-  FP.agents.analista = { detect, OWNERS, DETECTOR_COUNT: DETECTORS.length, fmt: { pct, spct, money, clamp, prioOf, fin, barsOf }, CHANNEL_OWNER, DRIVER_LABEL, DRIVER_ACTION };
+  FP.agents.analista = { detect, selection: selectionOf, wordsOf, periodLabel, channelLabel, OWNERS, DETECTOR_COUNT: DETECTORS.length, fmt: { pct, spct, money, clamp, prioOf, fin, barsOf }, CHANNEL_OWNER, DRIVER_LABEL, DRIVER_ACTION };
 })(typeof window !== 'undefined' ? window : globalThis);
