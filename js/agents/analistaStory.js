@@ -6,6 +6,8 @@
  * análisis de productos (categorías contra el periodo anterior, subcategorías y geografía). La IA, si hay, solo ordena y redacta tarjetas;
  * nunca calcula ni escribe la historia ni la ruta.
  *
+ * Sigue lo que la persona tiene elegido en la app (año, mes o semana, y canal); sin selección usable, el mes de la última venta real.
+ *
  * Habla de venta, pedidos, ticket, unidades y clientes. Nunca de ganancia, margen ni costo por producto: la herramienta no los tiene.
  * `build` nunca lanza: lo que no se puede calcular se dice («sin archivo de productos»), no se inventa.
  */
@@ -35,7 +37,7 @@
   function productRange(state, sc, deps) {
     const meta = deps.store && deps.store.meta;
     if (!meta || !meta.dateMax || !meta.batches) return { status: 'sin_producto' };
-    const r = deps.range(sc.period.type, sc.period.key);
+    const r = deps.range(sc.period.type, sc.period.key);   // mes, semana o año según lo elegido
     if (!r || !r.from) return { status: 'sin_producto' };
     if (meta.dateMax < r.from || (meta.dateMin && meta.dateMin > r.to)) return { status: 'sin_mes', dateMax: meta.dateMax };
     return { status: 'ok', from: r.from, to: r.to < meta.dateMax ? r.to : meta.dateMax, dateMax: meta.dateMax };
@@ -57,15 +59,17 @@
     const info = productRange(state, sc, deps), out = { status: info.status, findings: [], ctx: null, errors: [] };
     if (info.status !== 'ok') return out;
     const P = deps.products, f = F();
-    const args = { from: info.from, to: info.to, periodType: 'month', comparison: 'previous', channel: 'total', level: 'category' };
+    const args = { from: info.from, to: info.to, periodType: sc.period.type, comparison: 'previous', channel: sc.channel || 'total', level: 'category' };
     let res; try { res = await P.run({ ...args, withGeoSignals: true }); } catch (e) { out.status = 'error'; out.errors.push(`categorías: ${e && e.message || e}`); return out; }
     if (!res || !res.rows || !res.rows.length) { out.status = 'sin_mes'; return out; }
     const baseTotal = res.total.revenue.baseline || 0, base = res.baseline || {};
     const dec = res.rows.filter((r) => r.contributionAbs < 0).sort((a, b) => a.contributionAbs - b.contributionAbs);
     const gro = res.rows.filter((r) => r.contributionAbs > 0).sort((a, b) => b.contributionAbs - a.contributionAbs);
     const sumDec = dec.reduce((s, r) => s + r.contributionAbs, 0), sumGro = gro.reduce((s, r) => s + r.contributionAbs, 0);
-    const label = base.label || 'el periodo anterior';
+    // «mes anterior (mismos días)» → «el mes anterior (mismos días)»: se lee bien después de «contra»
+    const label = (base.label || 'el periodo anterior').replace(/^(mes|año) /, 'el $1 ').replace(/^semana /, 'la semana ');
     out.ctx = { info, res, label, dec, gro, sumDec, sumGro, baseTotal };
+    const same = sc.period.type === 'week' ? 'la misma semana del año anterior' : sc.period.type === 'year' ? 'el año anterior' : 'el mismo mes del año anterior';
     const material = (v) => baseTotal > 0 && Math.abs(v) >= 0.01 * baseTotal;   // menos de 1 % de la venta base es ruido
 
     // Qué se cae
@@ -90,7 +94,7 @@
         big: { value: f.money(top.contributionAbs), tone: 'dn', sub: `de ${f.money(sumDec)} que caen las categorías · ${f.spct(top.revenue.deltaPct)} contra ${label}` },
         visual: f.barsOf(dec.slice(0, 3).map((r) => ({ label: r.key, value: r.contributionAbs })), { n: rest.length, value: rest.reduce((s, r) => s + r.contributionAbs, 0) }),
         hipotesis: `Algo propio de ${top.key} (oferta, abasto, precio o visibilidad) y no del negocio completo. La herramienta no tiene inventario ni precios de la competencia: es una hipótesis a validar, no una causa.`,
-        validar: `Revisa abajo en qué subcategorías, sucursales o entregas se concentra la caída, y compara ${top.key} contra el mismo mes del año anterior.`,
+        validar: `Revisa abajo en qué subcategorías, sucursales o entregas se concentra la caída, y compara ${top.key} contra ${same}.`,
         accion: `Revisar las subcategorías de ${top.key} que más restaron, junto con Catálogo / Contenido.`,
         evid, pregunta: `¿La caída de ${top.key} se concentra en pocas subcategorías, sucursales o entregas?`,
         limites: 'Describo dónde cae la venta contra el periodo anterior; no sé por qué. Sin inventario, costo ni margen.',
@@ -134,8 +138,9 @@
   async function drillFinding(state, sc, cat, deps) {
     if (!cat || !cat.ctx || !cat.ctx.dec.length) return { finding: null, sub: null };
     const { info, res, label, dec } = cat.ctx, top = dec[0], f = F();
+    const same = sc.period.type === 'week' ? 'la misma semana del año anterior' : sc.period.type === 'year' ? 'el año anterior' : 'el mismo mes del año anterior';
     let sub = null;
-    try { sub = await deps.products.run({ from: info.from, to: info.to, periodType: 'month', comparison: 'previous', channel: 'total', level: 'subcategory', filter: { category: top.key }, withGeoSignals: false }); } catch (e) { sub = null; }
+    try { sub = await deps.products.run({ from: info.from, to: info.to, periodType: sc.period.type, comparison: 'previous', channel: sc.channel || 'total', level: 'subcategory', filter: { category: top.key }, withGeoSignals: false }); } catch (e) { sub = null; }
     const subs = sub && sub.rows ? sub.rows.filter((r) => r.contributionAbs < 0).sort((a, b) => a.contributionAbs - b.contributionAbs).slice(0, 2) : [];
     const sigs = (res.geoSignals || []).filter((s) => s.entity === top.key && s.variation && s.variation.delta < 0)
       .sort((a, b) => (b.type === 'geo_concentration') - (a.type === 'geo_concentration') || b.explainedShare - a.explainedShare);
@@ -161,7 +166,7 @@
       que: `Es el desglose descriptivo de ${top.key} contra ${label}: dónde se mueve más la venta, no por qué.`,
       visual: { type: 'table', head: ['Dónde', 'Aporta a la caída'], rows },
       hipotesis: 'Si la caída se concentra en pocos lugares, el origen probable está en esos lugares y no en toda la categoría. A validar.',
-      validar: 'Abre Productos con esa categoría y revisa esos lugares contra el mismo mes del año anterior.',
+      validar: `Abre Productos con esa categoría y revisa esos lugares contra ${same}.`,
       accion: 'Revisar abasto y oferta en lo que muestra la tabla, y las fichas de esa subcategoría junto con Catálogo / Contenido.',
       evid: rows.map((r) => ({ k: r[0], v: r[1] })), pregunta: `¿Qué tienen en común ${parts[0]} dentro de ${top.key}?`,
       limites: 'Señal descriptiva sobre venta; no hay inventario ni precios de competencia en los datos. Entregas y sucursales no cruzan con el embudo.',
@@ -173,11 +178,11 @@
   }
 
   /** ¿Sostenido o rebote? Misma categoría contra el mismo periodo del año anterior. */
-  async function yoyOf(state, cat, deps) {
+  async function yoyOf(state, sc, cat, deps) {
     if (!cat || !cat.ctx || !cat.ctx.dec.length) return null;
     const { info, dec } = cat.ctx;
     try {
-      const r = await deps.products.run({ from: info.from, to: info.to, periodType: 'month', comparison: 'yoy', channel: 'total', level: 'category', withGeoSignals: false });
+      const r = await deps.products.run({ from: info.from, to: info.to, periodType: sc.period.type, comparison: 'yoy', channel: sc.channel || 'total', level: 'category', withGeoSignals: false });
       const row = r && r.rows ? r.rows.find((x) => x.key === dec[0].key) : null;
       return row && row.revenue && fin(row.revenue.deltaPct) && fin(row.revenue.baseline) && row.revenue.baseline > 0 ? { key: dec[0].key, deltaPct: row.revenue.deltaPct } : null;
     } catch (e) { return null; }
@@ -188,16 +193,18 @@
     const f = F(), items = [];
     const dist = det.findings.find((x) => x.id === 'datos_distorsionan');
     let level = 'ok';
-    if (dist) { level = 'warn'; items.push('Hay avisos de carga o de calidad que pueden mover el cumplimiento; el detalle está abajo, en «Dónde revisar primero».'); }
+    // Los avisos de calidad ya salen como hallazgo en «Dónde revisar primero»: no se repiten en un banner arriba.
     if (cat.status === 'sin_producto') items.push('No hay archivo de productos cargado: la historia se queda en canales y no baja a categorías.');
-    else if (cat.status === 'sin_mes') items.push('El archivo de productos no cubre este mes: la historia se queda en canales.');
+    else if (cat.status === 'sin_mes') items.push(`El archivo de productos no cubre ${sc.W.este}: la historia se queda en canales.`);
     else if (cat.status === 'error') { level = 'warn'; items.push('No pude leer el archivo de productos; la historia se queda en canales.'); }
     const q = state.quality && state.quality.totals ? state.quality.totals : null;
     const flagged = q ? (q.warning || 0) + (q.error || 0) + (q.rejected || 0) : 0;
     const cut = dayLabel(sc.lastActual);
+    // Con avisos de calidad no se afirma «Dato confiable»; tampoco se pone banner de aviso (el hallazgo lo dice abajo).
+    if (dist && !items.length) return null;
     const title = level === 'ok' ? 'Dato confiable' : 'Dato con avisos';
     const text = level === 'ok'
-      ? `Venta real cargada hasta el ${cut} y plan del mes completo${flagged ? `; ${flagged} aviso(s) de calidad en otras cargas` : '; sin avisos de calidad'}.${items.length ? ` ${items.join(' ')}` : ''}`
+      ? `Venta real cargada hasta el ${cut} y plan ${sc.W.del} completo${dist ? '' : flagged ? `; ${flagged} aviso(s) de calidad en otras cargas` : '; sin avisos de calidad'}.${items.length ? ` ${items.join(' ')}` : ''}`
       : items.join(' ');
     return { level, title, text, items, flagged, view: dist ? 'calidad' : null };
   }
@@ -205,13 +212,13 @@
   // ---------- Historia, KPIs, ruta ----------
   function kpisOf(det, deps, state, sc) {
     const k = det.scope.kpi, f = F(); if (!k) return [];
-    let g = null; try { g = deps.home.goal(state, 'total', sc.period); } catch (e) { g = null; }
+    let g = null; try { g = sc.period.type === 'week' ? null : deps.home.goal(state, sc.channel || 'total', sc.period); } catch (e) { g = null; }
     const out = [
       { k: 'Venta real al corte', v: f.money(k.actual), tone: '' },
       { k: 'Plan a la fecha', v: f.money(k.plan), tone: '' },
       { k: 'Brecha', v: `${f.money(k.gap)} · ${f.spct(k.gapPct)}`, tone: k.gap < 0 ? 'dn' : k.gap > 0 ? 'up' : '' }
     ];
-    out.push(g && fin(g.cumulative) ? { k: g.status === 'missed' ? 'Cierre del mes' : 'Cierre estimado del mes', v: f.money(g.cumulative), tone: '' } : { k: 'Cierre estimado del mes', v: 's/d', tone: '' });
+    out.push(g && fin(g.cumulative) ? { k: g.status === 'missed' ? `Cierre ${sc.W.del}` : `Cierre estimado ${sc.W.del}`, v: f.money(g.cumulative), tone: '' } : { k: `Cierre estimado ${sc.W.del}`, v: 's/d', tone: '' });
     return out;
   }
 
@@ -229,19 +236,19 @@
   }
 
   function routeOf(ctx) {
-    const { det, find, cat, drill, yoy, goal, sections, state, deps } = ctx, f = F(), k = det.scope.kpi || {}, gap = k.gap || 0;
+    const { det, find, cat, drill, yoy, goal, sections, state, deps, W } = ctx, f = F(), k = det.scope.kpi || {}, gap = k.gap || 0;
     const steps = [];
     // 1 · cuánto y contra qué
     const q1 = gap < 0 ? '¿Cuánto se pierde y contra qué?' : '¿Cuánto vamos arriba y contra qué?';
     let a1 = `${gap < 0 ? f.money(gap) : `+${f.money(gap).replace(/^−/, '')}`} contra el plan a la fecha de corte (${f.spct(k.gapPct || 0)}), comparando solo días con plan y venta real.`;
     if (goal && fin(goal.cumulative) && fin(goal.goal) && goal.goal > 0) {
       const rel = (goal.cumulative - goal.goal) / goal.goal, vs = Math.abs(rel) < 0.005 ? 'prácticamente igual a' : rel > 0 ? 'por encima de' : 'por debajo de';
-      a1 += ` Con el forecast del método en uso el mes ${goal.status === 'missed' ? 'cerró' : 'cerraría'} en ${f.money(goal.cumulative)}, ${vs} la meta del mes (${f.money(goal.goal)}).`;
+      a1 += ` Con el forecast del método en uso ${W.art.toLowerCase()} ${goal.status === 'missed' ? 'cerró' : 'cerraría'} en ${f.money(goal.cumulative)}, ${vs} la meta ${W.del} (${f.money(goal.goal)}).`;
     }
     steps.push({ q: q1, a: a1 });
     // 2 · dónde se concentra
     const parts = [];
-    const ch = find('brecha_concentrada'); if (ch) parts.push(`Por canal: ${ch.title}.`);
+    const ch = find('brecha_concentrada') || find('canales_bajo_plan'); if (ch) parts.push(`Por canal: ${ch.title}.`);
     const ct = find('categoria_cae'); if (ct) parts.push(`Por categoría: ${ct.story}.`);
     if (drill && drill.finding) parts.push(`Dentro de ${cat.ctx.dec[0].key}: ${drill.finding.evid.map((e) => `${e.k.charAt(0).toLowerCase() + e.k.slice(1)} (${e.v})`).join('; ')}.`);
     steps.push({ q: '¿Dónde se concentra?', a: parts.length ? parts.join(' ') : `No se concentra en un lugar: ningún canal ni categoría pasa el umbral.${cat.status === 'ok' ? '' : ' Sin archivo de productos no puedo bajar a categorías.'}` });
@@ -278,27 +285,27 @@
     const deps = depsOf(opts.deps || {});
     const A = FP.agents.analista;
     const det = A.detect(state, { home: deps.home, advisor: deps.advisor });
-    if (det.status !== 'ok') return { status: det.status, scope: null, gate: null, headline: null, kpis: [], findings: [], sections: { cae: [], crece: [], revisar: [] }, route: [], detectors: det.detectors, errors: det.errors || [], productStatus: 'sin_producto' };
-    const sc = { period: det.scope.period, lastActual: det.scope.lastActual };
+    if (det.status !== 'ok') return { status: det.status, scope: null, selection: det.selection || null, gate: null, headline: null, kpis: [], findings: [], sections: { cae: [], crece: [], revisar: [] }, route: [], detectors: det.detectors, errors: det.errors || [], productStatus: 'sin_producto' };
+    const sc = { period: det.scope.period, lastActual: det.scope.lastActual, channel: det.scope.channel || 'total', W: A.wordsOf(det.scope.period.type) };
     const errors = [...(det.errors || [])];
     let cat = { status: 'sin_producto', findings: [], ctx: null, errors: [] }, drill = { finding: null }, yoy = null;
     try { cat = await categoryFindings(state, sc, deps); errors.push(...cat.errors); } catch (e) { errors.push(`categorías: ${e && e.message || e}`); }
     try { drill = await drillFinding(state, sc, cat, deps); } catch (e) { errors.push(`dónde revisar: ${e && e.message || e}`); drill = { finding: null }; }
-    try { yoy = await yoyOf(state, cat, deps); } catch (e) { yoy = null; }
+    try { yoy = await yoyOf(state, sc, cat, deps); } catch (e) { yoy = null; }
     const all = [...det.findings, ...cat.findings, ...(drill.finding ? [drill.finding] : [])].map((x) => ({ ai: false, ...x })).sort((a, b) => b.score - a.score);
     const sections = { cae: [], crece: [], revisar: [] };
     all.forEach((x) => { (sections[x.section] || sections.revisar).push(x); });
     // El detector de calidad de datos va primero en «revisar» solo si hay avisos; las pistas por categoría pesan más para empezar a mirar.
     const find = (id) => all.find((x) => x.id === id) || null;
     let goal = null, whyPrev = null;
-    try { goal = deps.home.goal(state, 'total', sc.period); } catch (e) { goal = null; }
-    try { whyPrev = deps.home.why(state, 'total', sc.period); } catch (e) { whyPrev = null; }
+    try { goal = sc.period.type === 'week' ? null : deps.home.goal(state, sc.channel, sc.period); } catch (e) { goal = null; }
+    try { whyPrev = deps.home.why(state, sc.channel, sc.period); } catch (e) { whyPrev = null; }
     const out = {
-      status: 'ok', scope: { ...det.scope, label: monthLabel(sc.period.key), cut: dayLabel(sc.lastActual), compare: cat.ctx ? cat.ctx.label : null }, detectors: det.detectors + 3, errors, productStatus: cat.status,
+      status: 'ok', scope: { ...det.scope, label: det.scope.label || monthLabel(sc.period.key), channelLabel: det.scope.channelLabel || 'Total digital', cut: dayLabel(sc.lastActual), compare: cat.ctx ? cat.ctx.label : null }, detectors: det.detectors + 3, errors, productStatus: cat.status,
       gate: gateOf(state, det, cat, sc), kpis: kpisOf(det, deps, state, sc), findings: all, sections
     };
     out.headline = headlineOf(det, sections);
-    out.route = routeOf({ det, find, cat, drill, yoy, goal, sections, state, deps, whyPrev });
+    out.route = routeOf({ det, find, cat, drill, yoy, goal, sections, state, deps, whyPrev, W: sc.W });
     return out;
   }
 

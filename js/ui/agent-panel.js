@@ -121,22 +121,28 @@
     return `<div class="ag-gate ${cls}" role="status"><b>${esc(g.title)}</b><p>${esc(g.text)}</p>${extra}</div>`;
   }
 
+  /** Qué periodo y canal está leyendo el agente: lo que la persona tiene elegido en la app. */
   function scopeChips(run, agent) {
     const sc = run.scope, M = FP.agents.story;
     if (!sc || !sc.period || !M) return '';
-    const mes = M.monthLabel(sc.period.key), cap = mes.charAt(0).toUpperCase() + mes.slice(1);
+    const mes = sc.label || M.monthLabel(sc.period.key), cap = mes.charAt(0).toUpperCase() + mes.slice(1), ch = sc.channelLabel || 'Total digital';
     const a = agent === 'auditor'
-      ? `<span class="ag-chip-i">${esc(cap)}${sc.to ? ` al ${esc(M.dayLabel(sc.to))}` : ''}</span><span class="ag-chip-i">Embudo de GA4 por producto</span>`
-      : `<span class="ag-chip-i">${esc(cap)} al corte del ${esc(M.dayLabel(sc.lastActual))}</span><span class="ag-chip-i">Total digital</span>`;
-    return a;
+      ? `<span class="ag-chip-i">${esc(cap)}${sc.to ? ` al ${esc(M.dayLabel(sc.to))}` : ''}</span><span class="ag-chip-i">${esc(ch)}</span><span class="ag-chip-i">Embudo de GA4 por producto</span>`
+      : `<span class="ag-chip-i">${esc(cap)} al corte del ${esc(M.dayLabel(sc.lastActual))}</span><span class="ag-chip-i">${esc(ch)}</span>`;
+    return `${a}<span class="ag-follow">Sigo el periodo y el canal que tienes elegido; cámbialos en la vista y esto se actualiza.${sc.note ? ` ${esc(sc.note)}` : ''}</span>`;
+  }
+  /** Texto del periodo elegido (para los avisos de «sin datos»). */
+  function chosenLabel(sel) {
+    const A = FP.agents.analista;
+    if (!sel || !sel.key || !A) return null;
+    return `${A.periodLabel(sel.type, sel.key, null)}${sel.channel && sel.channel !== 'total' ? ` · ${A.channelLabel(sel.channel)}` : ''}`;
   }
 
-  // ---------- Analista de Números ----------
   function storyBlock(run) {
     const h = run.headline; if (!h) return '';
-    const mes = FP.agents.story.monthLabel(run.scope.period.key);
+    const mes = run.scope.label || FP.agents.story.monthLabel(run.scope.period.key);
     const kp = (run.kpis || []).map((k) => `<div class="ag-kpi"><small>${esc(k.k)}</small><b class="${esc(k.tone)}">${esc(k.v)}</b></div>`).join('');
-    return `<section class="ag-story" aria-label="Historia del periodo"><h2>La historia de ${esc(mes)} en 20 segundos</h2>
+    return `<section class="ag-story" aria-label="Historia del periodo"><h2>La historia de ${/^semana/.test(mes) ? 'la ' : ''}${esc(mes)} en 20 segundos</h2>
       <p class="ag-lead">${esc(h.lead)}</p><ul class="ag-points">${h.items.map((i) => `<li><b>${esc(i.k)}:</b> ${esc(i.text)}</li>`).join('')}</ul>
       ${kp ? `<div class="ag-kpis">${kp}</div>` : ''}</section>`;
   }
@@ -145,7 +151,7 @@
     run.findings.forEach((f) => { (by[f.section] || by.revisar).push(f); });
     return SECTIONS.map((s) => `<h2 class="ag-sec">${esc(s.title)}</h2>${by[s.id].length ? by[s.id].map((f) => findingCard(f)).join('') : `<div class="ag-empty">${esc(s.empty)}</div>`}`).join('');
   }
-  function routeKey(run) { return run && run.scope ? `${run.scope.period.key}|${run.scope.lastActual}` : null; }
+  function routeKey(run) { return run && run.scope ? `${run.scope.period.type}|${run.scope.period.key}|${run.scope.channel || 'total'}|${run.scope.lastActual}` : null; }
   function routeBlock(run) {
     const steps = run.route || []; if (!steps.length) return '';
     const key = routeKey(run);
@@ -167,6 +173,10 @@
     const run = S.runs.analista;
     if (S.busy.analista && !run) return '<div class="ag-skel"></div><div class="ag-skel"></div><div class="ag-note" role="status">Revisando tus datos…</div>';
     if (!run) return '';
+    if (run.status === 'no_data' && run.selection && run.selection.chosen) {
+      return `<div class="ag-card"><h3>No hay venta real en lo que elegiste</h3><p>Elegiste ${esc(chosenLabel(run.selection))}, pero ahí todavía no hay venta real cargada o falta el plan. Cambia el periodo o el canal en la vista, o carga lo que falta.</p>
+        <div class="ag-actions"><a class="ag-go" data-ag="go" href="#carga" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Carga de datos</a></div></div>`;
+    }
     if (run.status === 'no_data') {
       return `<div class="ag-card"><h3>Todavía no hay con qué comparar</h3><p>Necesito el plan del mes y la venta real cargada para revisar el pacing. Sin eso no puedo decir si algo se sale de lo normal.</p>
         <div class="ag-actions"><a class="ag-go" data-ag="go" href="#carga" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Carga de datos</a></div></div>`;
@@ -186,7 +196,7 @@
     const go = (href, label) => `<div class="ag-actions"><a class="ag-go" data-ag="go" href="${href}" style="display:inline-flex;align-items:center;text-decoration:none">${label}</a></div>`;
     if (run.status === 'no_data') return `<div class="ag-card"><h3>Todavía no hay productos cargados</h3><p>El Auditor necesita el archivo de ventas por producto y el embudo de GA4 por producto para ver dónde se queda la compra. Sin eso no puedo seguir el embudo.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
     if (run.status === 'sin_embudo') return `<div class="ag-card"><h3>Faltan los datos del embudo</h3><p>Hay ventas por producto, pero no el embudo de GA4 (vistas, carrito, checkout y compras) para este mes. Sin él no puedo decir en qué paso se pierde la compra.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
-    if (run.status === 'sin_mes') return `<div class="ag-card"><h3>El archivo de productos no llega a este mes</h3><p>Tus productos están cargados hasta ${esc(FP.agents.story.dayLabel(run.dateMax || ''))}, pero el último mes con venta real es otro. Carga el periodo que falta para revisar el embudo de ese mes.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
+    if (run.status === 'sin_mes') { const lab = run.scope ? chosenLabel({ type: run.scope.type, key: run.scope.key }) : null; return `<div class="ag-card"><h3>El archivo de productos no llega a lo que elegiste</h3><p>Tus productos están cargados hasta ${esc(FP.agents.story.dayLabel(run.dateMax || ''))}${lab ? `, pero elegiste ${esc(lab)}` : ''}. Cambia el periodo en la vista o carga el periodo que falta para revisar el embudo.</p>${go('#carga', 'Ir a Carga de datos')}</div>`; }
     const chips = `<div class="ag-chiprow">${scopeChips(run, 'auditor')}</div>`;
     const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
     const list = run.findings.length ? run.findings.map((f, i) => findingCard(f, i + 1)).join('')
@@ -324,6 +334,17 @@
   }
   function toggle(opener) { if (S.open) close(); else open(opener); }
   /** El agente por defecto sigue a la vista mientras la persona no haya elegido otro a mano. */
+  /** La persona cambió el año/mes/semana o el canal: lo que lee el agente cambia, así que se recalcula (el panel abierto se actualiza solo). */
+  function onContextChange() {
+    const R = FP.agents && FP.agents.runner; if (!R) return;   // el módulo diferido todavía no se descargó: nada que actualizar
+    const k = R.selectionKey(st());
+    if (k === S.selKey) return;
+    const first = S.selKey === undefined; S.selKey = k;
+    if (first) return;
+    if (!S.open) S.runs = {};   // cerrado: al abrir se recalcula con lo elegido
+    else { AGENT_IDS.forEach((a) => { if (a !== S.agent) delete S.runs[a]; }); refresh(false, S.agent); }
+    if (FP.agentLauncher) FP.agentLauncher.refreshBadge();
+  }
   function onViewChange() {
     if (S.open && !S.picked) { const next = reg().defaultAgent(FP.agentLauncher.curView()); if (next !== S.agent) { S.agent = next; paint(); if (!S.runs[next]) refresh(false, next); } }
     if (FP.agentLauncher) FP.agentLauncher.refreshBadge();
@@ -351,5 +372,5 @@
     if (el) { try { el.focus({ preventScroll: false }); el.scrollIntoView({ block: 'nearest' }); } catch (e) { /* sin foco */ } }
   }
 
-  FP.agentPanel = { open, close, toggle, onViewChange, countFindings, refresh, _state: S, _findingCard: findingCard, _countOf: countOf };
+  FP.agentPanel = { open, close, toggle, onViewChange, onContextChange, countFindings, refresh, _state: S, _findingCard: findingCard, _countOf: countOf };
 })(typeof window !== 'undefined' ? window : globalThis);

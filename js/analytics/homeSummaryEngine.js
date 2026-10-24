@@ -177,11 +177,11 @@
   function excluded(state, ch, period) {
     const run = state.fc && state.fc.run;
     if (ch !== 'total' || !run || !run.total || !run.channels) return null;
-    const inPeriod = (d) => (period && period.type === 'month' ? d.slice(0, 7) === period.key : true);
+    const inPeriod = (d) => (period && period.type === 'month' ? d.date.slice(0, 7) === period.key : period && period.type === 'week' ? d.weekKey === period.key : true);
     const ids = Object.keys(run.channels);
     const dates = [], missing = {}; let revenue = 0;
     run.total.days.forEach((d, i) => {
-      if (!d.closed || d.counted || !inPeriod(d.date)) return;
+      if (!d.closed || d.counted || !inPeriod(d)) return;
       let any = false;
       ids.forEach((id) => {
         const cd = run.channels[id].days[i];

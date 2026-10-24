@@ -31,7 +31,7 @@ async def main():
         q.on('pageerror', lambda e: errs.append(str(e)[:200])); q.on('console', lambda m: errs.append(m.text[:200]) if m.type == 'error' else None)
         await prep(q)
         t = await q.evaluate("document.getElementById('ag-body').innerText")
-        chk('F1 Números: puerta de confianza, historia en 20 segundos y 4 KPIs', await q.evaluate("!!document.querySelector('.ag-gate')") and 'en 20 segundos' in t and await q.evaluate("document.querySelectorAll('.ag-kpi').length")==4, t[:200])
+        chk('F1 Números: historia en 20 segundos y 4 KPIs, y sin el banner «Dato con avisos»', await q.evaluate("!/Dato con avisos/.test(document.getElementById('ag-body').innerText)") and 'en 20 segundos' in t and await q.evaluate("document.querySelectorAll('.ag-kpi').length")==4, t[:200])
         chk('F2 hay las tres secciones: Qué se cae, Qué crece, Dónde revisar primero', all(x in t.upper() for x in ['QUÉ SE CAE', 'QUÉ CRECE', 'DÓNDE REVISAR PRIMERO']), t[:100])
         chk('F3 las categorías aparecen cuando hay archivo de productos', await q.evaluate("/categor/i.test(document.getElementById('ag-body').innerText)"))
         chk('F4 «Qué se cae» trae cifra grande y mini-visual', await q.evaluate("!!document.querySelector('.ag-card .ag-big') && !!document.querySelector('.ag-card .ag-bars, .ag-card .ag-tw')"))

@@ -95,7 +95,7 @@ const CATS = [row('Endocrinología', 100000, 512000), row('Cardiología', 300000
   ok('S15b sin meta: la ruta no inventa el cierre del mes', !/forecast del método/.test(s.route[0].a), s.route[0].a);
   // Puerta de confianza con datos que distorsionan
   s = await ST.build(mkState(CH, { quality: { totals: { warning: 3 } } }), { deps: deps(mkProducts(CATS)) });
-  ok('S16 avisos de calidad → «Dato con avisos» con enlace a Calidad de datos', s.gate.level === 'warn' && s.gate.title === 'Dato con avisos' && s.gate.view === 'calidad', s.gate);
+  ok('S16 avisos de calidad → sin banner «Dato con avisos» (ni «Dato confiable»); el aviso queda como hallazgo con enlace a Calidad de datos', s.gate === null && s.findings.some((f) => f.id === 'datos_distorsionan' && f.view === 'calidad'), { gate: s.gate, ids: s.findings.map((f) => f.id) });
   s = await ST.build(mkState(CH), { deps: deps(mkProducts(CATS)) });
   ok('S16b sin avisos → «Dato confiable»', s.gate.level === 'ok' && s.gate.title === 'Dato confiable', s.gate);
   // Un motor que lanza no tumba la historia

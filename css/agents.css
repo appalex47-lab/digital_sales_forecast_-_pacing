@@ -100,3 +100,4 @@ body[data-view="analisis"] .ag-fab{bottom:calc(130px + env(safe-area-inset-botto
 .ag-det dl{margin:0}
 @media (prefers-reduced-motion:reduce){.ag-prog i{transition:none}}
 @media (max-width:720px),(pointer:coarse){.ag-more,.ag-link{min-height:44px}.ag-rq{min-height:44px;padding-top:0;display:flex;align-items:center}}
+.ag-follow{flex-basis:100%;font-size:12px;line-height:1.35;color:var(--ds-text-muted,#59677B)}

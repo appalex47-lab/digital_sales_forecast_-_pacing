@@ -92,8 +92,8 @@
     const gate = det.gate ? { nivel: det.gate.level, titulo: ascii(det.gate.title), texto: ascii(det.gate.text) } : null;
     return {
       alcance: agent === 'auditor'
-        ? { canal: 'Embudo de GA4 por producto', periodo: det.scope && det.scope.period ? det.scope.period.key : null, hasta: det.scope ? det.scope.to || det.scope.lastActual : null }
-        : { canal: 'Total digital', periodo: det.scope && det.scope.period ? det.scope.period.key : null, ultimaVentaReal: det.scope ? det.scope.lastActual : null },
+        ? { canal: `Embudo de GA4 por producto · ${det.scope && det.scope.channelLabel || 'Total digital'}`, periodo: det.scope && det.scope.period ? det.scope.period.key : null, tipoDePeriodo: det.scope && det.scope.period ? det.scope.period.type : null, hasta: det.scope ? det.scope.to || det.scope.lastActual : null }
+        : { canal: det.scope && det.scope.channelLabel || 'Total digital', periodo: det.scope && det.scope.period ? det.scope.period.key : null, tipoDePeriodo: det.scope && det.scope.period ? det.scope.period.type : null, ultimaVentaReal: det.scope ? det.scope.lastActual : null },
       ...(gate ? { confianzaDelDato: gate } : {}),
       responsables: owners,
       candidatos: det.findings.map((f) => ({
@@ -110,9 +110,14 @@
   let sigIds = new WeakMap(), sigN = 0;
   const objId = (o) => { if (!o || typeof o !== 'object') return 0; if (!sigIds.has(o)) sigIds.set(o, ++sigN); return sigIds.get(o); };
   /** Firma barata de los datos de los que dependen los agentes: si no cambia, no se vuelve a leer IndexedDB. */
+  /** Lo que la persona tiene elegido (canal y año/mes/semana): cambia el resultado, así que forma parte de la firma. */
+  function selectionKey(state) {
+    const A = FP.agents && FP.agents.analista; if (!A || !A.selection) return '';
+    try { const x = A.selection(state); return `${x.channel}/${x.type}/${x.key}`; } catch (e) { return ''; }
+  }
   function signature(state) {
     const s = state || {}, m = (FP.productStore && FP.productStore.meta) || {}, q = s.quality && s.quality.totals ? s.quality.totals : {};
-    return [objId(s.fc && s.fc.run), s.fc && s.fc.lastActualDate, objId(s.store), m.batches, m.funnelBatches, m.dateMax, m.skus, q.warning, q.error, q.rejected, s.year].join('|');
+    return [objId(s.fc && s.fc.run), s.fc && s.fc.lastActualDate, objId(s.store), m.batches, m.funnelBatches, m.dateMax, m.skus, q.warning, q.error, q.rejected, s.year, selectionKey(s)].join('|');
   }
   const DETECT = {
     analista: (state, deps) => (FP.agents.story ? FP.agents.story.build(state, { deps }) : Promise.resolve(FP.agents.analista.detect(state, deps))),
@@ -250,5 +255,5 @@
     return { ok: true, answer: String(t.p.answer).trim(), nextQuestion: String(t.p.nextQuestion || '').trim() };
   }
 
-  FP.agents.runner = { run, detect, ask, routeQuestion, signature, buildContext, validate, merge, SYSTEM_RULES, RULES, ASK_RULES, RESPONSE_SCHEMA, clearCache: () => { cache.clear(); detCache.clear(); } };
+  FP.agents.runner = { run, detect, ask, routeQuestion, signature, buildContext, validate, merge, SYSTEM_RULES, RULES, ASK_RULES, RESPONSE_SCHEMA, clearCache: () => { cache.clear(); detCache.clear(); }, selectionKey };
 })(typeof window !== 'undefined' ? window : globalThis);
