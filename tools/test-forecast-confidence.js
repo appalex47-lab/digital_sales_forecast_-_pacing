@@ -67,5 +67,35 @@ r = A(mk(), 0.01);
 t('la nota aclara que no es una probabilidad', /no la probabilidad/.test(r.note), r.note);
 t('los pesos suman 1', Math.abs(Object.values(FC.WEIGHTS).reduce((s, v) => s + v, 0) - 1) < 1e-9);
 
+
+// ---- Fase 3.3 · umbrales calibrables: relabel = assess, setActive, thresholds ----
+{
+  const cases = [mk(), mk({ recent: 1.15, confidence: 'limited' }), mk({ counted: 5, lastCounted: '2026-09-05' }), mk({ recent: 1.3 }), mk({ counted: 12, lastCounted: '2026-09-12', recent: 1.08 })];
+  const spreads = [0.01, 0.03, 0.08, 0.0];
+  let same = true, detail = null;
+  cases.forEach((run, i) => spreads.forEach((sp) => {
+    const a = A(run, sp);
+    const rl = FC.relabel(a.factors, undefined);
+    if (a.status === 'ok' && (!rl || rl.level !== a.level || Math.abs(rl.score - a.score) > 1e-12)) { same = false; detail = { i, sp, a: [a.level, a.score], rl }; }
+  }));
+  t('relabel con los umbrales iniciales da EXACTAMENTE lo mismo que assess (20 combinaciones)', same, detail);
+  const base = A(mk({ recent: 1.15 }), 0.03);
+  t('estabilidad +15 % es Media con los umbrales iniciales', f(base, 'estabilidad').level === 'media');
+  const loose = FC.relabel(base.factors, { estAlta: 0.20 });
+  t('con estAlta 20 % ese mismo caso pasa a estabilidad Alta (relabel) y sube el puntaje', loose.score > base.score, [loose, base.score]);
+  const forced = A(mk({ recent: 1.15 }), 0.03).level;
+  FC.setActive({ estAlta: 0.20, estMedia: 0.40, rngAlta: 0.05, rngMedia: 0.10 });
+  const withActive = A(mk({ recent: 1.15 }), 0.03);
+  t('con umbrales calibrados activos, assess los usa y lo dice (calibrated)', withActive.calibrated === true && f(withActive, 'estabilidad').level === 'alta' && f(withActive, 'rango').level === 'alta', withActive.factors);
+  const expl = FC.assess({ run: mk({ recent: 1.15 }), channel: 'total', period: P, advisor: adv(0.03), thresholds: FC.INITIAL });
+  t('thresholds explícitos (iniciales) vuelven al resultado inicial aunque haya activos', expl.calibrated === false && f(expl, 'estabilidad').level === 'media' && expl.level === forced, expl);
+  t('getActive devuelve los umbrales completos y THRESHOLDS (iniciales) no cambia', FC.getActive().estAlta === 0.20 && FC.getActive().cobAlta === 0.60 && FC.THRESHOLDS.estAlta === 0.10);
+  FC.setActive({ estAlta: 'x', foo: 1, cobAlta: 0.6 });
+  t('setActive ignora claves raras y, si nada difiere de los iniciales, queda sin calibrar', FC.getActive() === null);
+  FC.setActive(null);
+  t('setActive(null) vuelve a los iniciales', A(mk({ recent: 1.15 }), 0.03).calibrated === false && f(A(mk({ recent: 1.15 }), 0.03), 'estabilidad').level === 'media');
+  const fixedCase = A(mk({ confidence: 'limited' }), 0.01);
+  t('la historia no depende de umbrales: relabel conserva su nivel', FC.relabel(fixedCase.factors, { estAlta: 0.5 }) !== null && f(fixedCase, 'historia').level === 'baja');
+}
 console.log(bad ? `\n✘ ${bad} de ${n} pruebas fallaron` : `\n✔ ${n}/${n} pruebas de confianza del forecast`);
 process.exit(bad ? 1 : 0);

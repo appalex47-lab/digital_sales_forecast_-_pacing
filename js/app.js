@@ -532,6 +532,121 @@
     FP.brand.set(b);
     state.brand = { draft: b ? { logo: b.logo, palette: b.palette, main: b.main, accent: b.accent, cover: b.cover } : { logo: null, palette: [], main: null, accent: null, cover: 'chart' }, sel: null, saved: Boolean(b), dirty: false, error: null };
   }
+  /* ---------- Fase 3.3: calibración de la confianza del forecast ----------
+     Compara cada cierre estimado (como se habría calculado el día 5, 10, 15, 20 y 25 de cada mes ya cerrado) contra lo que el mes cerró de verdad y ajusta
+     los UMBRALES de la etiqueta Alta/Media/Baja. No cambia el forecast ni ninguna cifra. Lo guardado vive en este navegador (localStorage `confidenceCalibration`). */
+  const CALX = () => FP.forecastCalibration;
+  const calYield = () => new Promise((res) => setTimeout(res, 0));
+  const calFresh = () => ({ saved: CALX().emptyState(), run: { status: 'idle', done: 0, total: 0, msg: null, error: null }, cache: null, last: null, stop: false, closedCount: null });
+  function applyCalibration() {
+    const s = state.cal.saved;
+    FP.forecastConfidence.setActive(s.active ? s.active.thresholds : null);
+    state.fc.run = null;   // la etiqueta se calcula al dibujar, pero lo que dependa de ella (Analista) se vuelve a pedir
+    if (FP.agents && FP.agents.runner && FP.agents.runner.clearCache) FP.agents.runner.clearCache();
+  }
+  function loadCalibration() {
+    if (state.cal) state.cal.stop = true;
+    const env = storage.load(K.confidenceCalibration);
+    state.cal = calFresh();
+    state.cal.saved = CALX().normalize(env ? env.data : null);
+    applyCalibration();
+  }
+  function saveCalibration() {
+    if (!storage.save(K.confidenceCalibration, state.cal.saved)) { FP.ui.toast('No se pudo guardar la calibración en este navegador. Los umbrales siguen en uso hasta que cierres la página.'); return false; }
+    return true;
+  }
+  /** Años con venta real (o histórico contado como real) en lo cargado. */
+  function calYears() {
+    const ys = new Set();
+    ['actual', 'historical'].forEach((t) => ST.records(state.store, t).forEach((r) => { if (r.date && r.metrics && r.metrics.revenue && r.metrics.revenue.value !== null && r.metrics.revenue.value !== undefined) ys.add(+String(r.date).slice(0, 4)); }));
+    return [...ys].filter(Number.isFinite).sort();
+  }
+  /** Plan y eventos de un año: los del año abierto vienen de la pantalla; los demás se leen de lo guardado (si no hay plan, ese año no aporta cierres estimados). */
+  function calContextFor(year) {
+    let planVersion, events;
+    if (year === state.year) { planVersion = FP.planning.getOriginalPlan(state.planning.registry); events = state.events; }
+    else {
+      const pl = storage.load(yk(K.plans, year)), reg = pl && FP.planning.hydratePlanRegistry(pl.data), ev = storage.load(yk(K.events, year));
+      planVersion = reg ? FP.planning.getOriginalPlan(reg) : null; events = ev && Array.isArray(ev.data) ? ev.data : [];
+    }
+    // Sin plan guardado, el plan importado de ese año (si lo hay) sale de lo cargado, igual que en la pantalla del año abierto.
+    const dataset = planVersion ? null : (year === state.year ? state.dataset : ST.consolidate(state.store, year, { planFallback: null }));
+    return { planVersion, events, dataset };
+  }
+  function calRunAt(year, referenceDate, ctx) {
+    const c = ctx[year] || (ctx[year] = calContextFor(year));
+    return FP.forecastEngine.runForecast({ year, store: state.store, planVersion: c.planVersion, dataset: c.dataset, events: c.events, settings: { ...state.fc.settings }, referenceDate });
+  }
+  /** Huella barata de lo que alimenta el análisis: si no cambió, se reutilizan las muestras ya calculadas. */
+  function calSignature() {
+    let n = 0, max = '';
+    ['actual', 'historical'].forEach((t) => ST.records(state.store, t).forEach((r) => { n++; if (r.date && r.date > max) max = r.date; }));
+    return `${n}|${max}|${JSON.stringify(state.fc.settings)}|${FP.planning.getOriginalPlan(state.planning.registry) ? FP.planning.getOriginalPlan(state.planning.registry).id : '-'}|${new Date().toISOString().slice(0, 10)}`;
+  }
+  /** Los meses cerrados con venta real en todos los canales, tal como los cuenta el motor. */
+  function calClosedMonths(ctx) {
+    const finals = {};
+    calYears().forEach((y) => { finals[y] = calRunAt(y, undefined, ctx); });
+    return CALX().closedMonthsOf(finals);
+  }
+  function calPaint() {
+    const r = state.cal.run, bar = document.getElementById('qcal-progress'), txt = document.getElementById('qcal-progress-txt');
+    if (bar) { bar.max = Math.max(1, r.total); bar.value = r.done; }
+    if (txt) txt.textContent = r.total ? `${r.done} de ${r.total} comparaciones` : (r.msg || '');
+  }
+  /**
+   * Recalcula el análisis y, con `apply`, ajusta los umbrales. Es asíncrono y cede el hilo entre corridas para que la pantalla siga respondiendo.
+   * `trigger`: 'manual' (botón) o 'auto' (al cerrar un mes, con el interruptor encendido).
+   */
+  async function calibrateNow({ trigger = 'manual', apply = true } = {}) {
+    const cal = state.cal; if (!cal || cal.run.status === 'running') return;
+    cal.stop = false; cal.run = { status: 'running', done: 0, total: 0, msg: 'Contando los meses cerrados…', error: null }; cal.last = null; render();
+    await calYield();
+    try {
+      const ctx = {}, closed = calClosedMonths(ctx), tdy = FP.forecastEngine.effectiveConfig(state.fc.settings).todayStatus;
+      cal.closedCount = closed.length;
+      const lastKey = closed.length ? closed[closed.length - 1].key : null;
+      if (closed.length < CALX().MIN_MONTHS) {
+        cal.last = { status: 'insufficient', monthsUsed: closed.length, needed: CALX().MIN_MONTHS, closed: closed.length, at: new Date().toISOString() };
+        cal.run = { status: 'idle', done: 0, total: 0, msg: null, error: null }; render(); return;
+      }
+      const sig = calSignature();
+      let col = cal.cache && cal.cache.sig === sig ? cal.cache : null;
+      if (!col) {
+        cal.run.msg = 'Comparando cada cierre estimado contra el cierre real…'; render();
+        let tick = 0;
+        const out = await CALX().collectSamples({
+          closed, runAt: (y, ref) => calRunAt(y, ref, ctx), todayStatus: tdy, advisor: FP.methodAdvisor,
+          onProgress: (d, t) => { cal.run.done = d; cal.run.total = t; if (++tick % 4 === 0 || d === t) calPaint(); },
+          yieldFn: calYield, shouldStop: () => cal.stop
+        });
+        if (out.stopped) { cal.run = { status: 'idle', done: 0, total: 0, msg: 'Se canceló: no se cambió nada.', error: null }; render(); return; }
+        col = cal.cache = { sig, samples: out.samples, skipped: out.skipped, skippedByYear: out.skippedByYear, total: out.total, closed: closed.length };
+      }
+      const res = CALX().calibrate(col.samples);
+      cal.last = { ...res, closed: closed.length, skipped: col.skipped, skippedByYear: col.skippedByYear, total: col.total, at: new Date().toISOString() };
+      if (res.status === 'ok' && apply) {
+        cal.saved = CALX().applyResult(cal.saved, res, { at: cal.last.at, trigger, month: trigger === 'auto' ? lastKey : null });
+        if (trigger === 'auto' && lastKey) cal.saved.lastAutoMonth = lastKey;
+        saveCalibration(); applyCalibration();
+      }
+      cal.run = { status: 'idle', done: 0, total: 0, msg: null, error: null };
+      render();
+      if (apply && res.status === 'ok') FP.ui.toast(res.changes.length ? `Confianza recalibrada con ${res.monthsUsed} meses: ${res.changes.length} umbral(es) cambiaron.` : `Confianza revisada con ${res.monthsUsed} meses: los umbrales actuales ya estaban bien.`, { ms: 4500 });
+    } catch (e) {
+      cal.run = { status: 'error', done: 0, total: 0, msg: null, error: String((e && e.message) || e) }; render();
+    }
+  }
+  /** Con el interruptor encendido: si hay un mes cerrado más nuevo que el de la última recalibración sola (y ya hay 12), recalibra. */
+  async function calAutoCheck() {
+    const cal = state.cal; if (!cal || !cal.saved.auto || cal.run.status === 'running') return;
+    try {
+      const closed = calClosedMonths({}), due = CALX().autoDue(cal.saved, closed.map((m) => m.key));
+      cal.closedCount = closed.length;
+      if (due.due) await calibrateNow({ trigger: 'auto' });
+    } catch (e) { /* sin red de seguridad que mostrar: se reintenta al abrir la app */ }
+  }
+
   function setPath(obj, path, value) {
     const parts = path.split('.');
     const last = parts.pop();
@@ -2327,6 +2442,28 @@
       await runEngineTests(true);
     },
 
+    /* Fase 3.3 · calibración de la confianza del forecast (Calidad de datos, paso 5) */
+    'cal-run'() { calibrateNow({ trigger: 'manual', apply: true }); },
+    'cal-analyze'() { calibrateNow({ trigger: 'manual', apply: false }); },
+    'cal-cancel'() { if (state.cal) { state.cal.stop = true; FP.ui.toast('Cancelando… no se cambiará nada.'); } },
+    'cal-undo'() {
+      const before = state.cal.saved, next = CALX().undo(before);
+      if (next === before) { FP.ui.toast('No hay ningún cambio que deshacer.'); return; }
+      state.cal.saved = next; saveCalibration(); applyCalibration(); state.cal.last = null; render();
+      FP.ui.toast('Se deshizo el último cambio de la calibración.');
+    },
+    'cal-reset'() {
+      const before = state.cal.saved, next = CALX().reset(before);
+      if (next === before) { FP.ui.toast('Ya se usan los umbrales iniciales.'); return; }
+      state.cal.saved = next; saveCalibration(); applyCalibration(); state.cal.last = null; render();
+      FP.ui.toast('Se volvió a los umbrales iniciales. Puedes deshacerlo en el historial.');
+    },
+    'cal-auto'(el) {
+      state.cal.saved = { ...state.cal.saved, auto: Boolean(el && el.checked) };
+      saveCalibration(); render();
+      FP.ui.toast(state.cal.saved.auto ? 'Se recalibrará sola cuando cierre cada mes (con 12 meses o más).' : 'La recalibración sola quedó apagada.');
+      if (state.cal.saved.auto) calAutoCheck();
+    },
     'clear-all'() {
       if (!root.confirm('¿Borrar todos los datos guardados de esta app en este navegador? Incluye archivos importados, metas y ajustes.')) return;
       storage.clear();
@@ -2343,7 +2480,7 @@
       loadForecastSettings();
       loadReforecastSettings();
       loadRecovery();
-      loadBusinessContext(); loadBrand();
+      loadBusinessContext(); loadBrand(); loadCalibration();
       state.rc.draft = emptyDraft(); state.rc.selected = []; state.rc.imported = null;
       loadDiagnosticSettings();
       state.rf.simDate = null;
@@ -4619,6 +4756,7 @@
     loadDiagnosticSettings();
     loadRecovery();
     loadBusinessContext();
+    loadCalibration();
     loadUx();
     loadStore();
     loadYearScoped(C.defaultYear);
@@ -4637,6 +4775,7 @@
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
     scheduleEngineTests();
+    setTimeout(() => { if (root.requestIdleCallback) root.requestIdleCallback(() => calAutoCheck(), { timeout: 20000 }); else calAutoCheck(); }, 8000);   // Fase 3.3: solo hace algo si «Recalibrar sola» está encendido
     if (FP.agentLauncher) FP.agentLauncher.init();   // Fase 1: botón «Asistentes» (el panel se carga al usarlo)
   }
 
@@ -4906,7 +5045,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, calibrateNow, calAutoCheck, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(

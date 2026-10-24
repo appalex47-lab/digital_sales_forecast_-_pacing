@@ -50,13 +50,13 @@ async def main():
         await q.evaluate("FP.qualityView.openAll()")
         txt = await q.evaluate("document.getElementById('view-calidad').textContent")
         chk('A10 con todo abierto se leen los contenidos originales', all(x in txt for x in ['Cobertura','Salud']) and await q.evaluate("document.getElementById('quality-analyses').innerText.length>20 && document.getElementById('quality-health').innerText.length>20"), txt[:200])
-        chk('A11 el paso 5 muestra la regla vigente (umbrales y pesos) y dice que hoy no se calibra solo', all(x in txt for x in ['Cobertura','Estabilidad','Alta','Media','Baja']) and 'no cambian solos' in txt, '')
+        chk('A11 el paso 5 muestra la regla vigente (umbrales y pesos), el estado de la calibración y la salvaguarda de 12 meses', all(x in txt for x in ['Cobertura','Estabilidad','Alta','Media','Baja']) and 'Estado: Aprendiendo' in txt and 'No calibra con menos de 12 meses' in txt, '')
         sz = await q.evaluate("[...document.querySelectorAll('.qstep__sum,.qsteps__b,.qnow .btn')].map(e=>Math.round(e.getBoundingClientRect().height))")
         chk('A12 todo lo que se toca mide al menos 44 px', sz and min(sz) >= 44, sz)
-        # Configuración: solo un enlace al paso 5 (sin interruptor que todavía no hace nada)
+        # Configuración: el interruptor «Recalibrar sola» (apagado por defecto) y el enlace al paso 5
         await q.evaluate("FP.qualityView.openAll(false)")
         await q.evaluate("location.hash='#configuracion'"); await q.wait_for_timeout(800)
-        chk('C1 Configuración trae el enlace a Calidad de datos · paso 5 y nada de interruptor de recalibración', await q.evaluate("!!document.querySelector('#confidence-pointer a[data-qstep=\"5\"]') && !document.querySelector('#view-configuracion [data-action*=recalib]')"))
+        chk('C1 Configuración trae el enlace a Calidad de datos · paso 5 y el interruptor «Recalibrar sola», apagado', await q.evaluate("!!document.querySelector('#confidence-pointer a[data-qstep=\"5\"]') && (()=>{const c=document.querySelector('#confidence-pointer input[data-action=cal-auto]'); return !!c && c.checked===false})()"))
         await q.click('#confidence-pointer a[data-qstep="5"]'); await q.wait_for_timeout(800)
         chk('C2 el enlace lleva a Calidad de datos con el paso 5 abierto', await q.evaluate("location.hash")=='#calidad' and (await q.evaluate(OPEN))[4] is True, [await q.evaluate("location.hash"), await q.evaluate(OPEN)])
         # Móvil

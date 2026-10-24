@@ -336,14 +336,19 @@
 
   /** Meses cerrados con venta real: todos los días del mes tienen venta (en cualquier canal), con venta real o histórica cargada. */
   function closedMonths(state) {
-    const days = new Set();
+    // Igual que el motor: un día cuenta solo si TODOS los canales tienen venta real; un mes cerrado, si todos sus días cuentan.
+    const chs = C().channelIds, seen = new Map();
     ['actual', 'historical'].forEach((t) => FP.dataStore.records(state.store, t).forEach((r) => {
-      if (r.date && r.metrics && r.metrics.revenue && r.metrics.revenue.value !== null && r.metrics.revenue.value !== undefined) days.add(String(r.date).slice(0, 10));
+      if (!r.date || !r.channel || !r.metrics || !r.metrics.revenue || r.metrics.revenue.value === null || r.metrics.revenue.value === undefined) return;
+      const d = String(r.date).slice(0, 10);
+      if (!seen.has(d)) seen.set(d, new Set());
+      seen.get(d).add(r.channel);
     }));
     const byMonth = new Map();
-    days.forEach((d) => byMonth.set(d.slice(0, 7), (byMonth.get(d.slice(0, 7)) || 0) + 1));
+    seen.forEach((set, d) => { if (chs.every((c) => set.has(c))) byMonth.set(d.slice(0, 7), (byMonth.get(d.slice(0, 7)) || 0) + 1); });
+    const today = new Date().toISOString().slice(0, 10);
     let n = 0;
-    byMonth.forEach((count, key) => { if (count >= new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7), 0)).getUTCDate()) n++; });
+    byMonth.forEach((count, key) => { if (key < today.slice(0, 7) && count >= new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7), 0)).getUTCDate()) n++; });
     return n;
   }
 
@@ -363,23 +368,156 @@
     };
   }
 
-  /** Regla vigente de la confianza del cierre estimado (la de forecastConfianza.js, sin calibrar) y los meses cerrados con que cuenta la app. */
-  function forecastBlock(m) {
-    const FC = FP.forecastConfidence, esc = H().esc;
-    const cm = m.forecast.closedMonths, min = m.forecast.min;
-    const bar = `<p class="qfc__months"><label for="qfc-bar">Meses cerrados con venta real: <b>${cm}</b> de <b>${min}</b> necesarios para calibrar</label><progress id="qfc-bar" class="qfc__bar" max="${min}" value="${Math.min(cm, min)}">${cm} de ${min}</progress></p>`;
-    if (!FC) return `${bar}<p class="field__hint">La regla de confianza no está disponible en esta carga.</p>`;
-    const T = FC.THRESHOLDS, W = FC.WEIGHTS, N = FC.NAMES, pc = (v) => `${Math.round(v * 100)} %`;
-    const rows = [
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const mesDe = (key) => (key ? `${MES[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}` : '');
+  const diaDe = (iso) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+  const pc1 = (v) => (Number.isFinite(v) ? `${(v * 100).toFixed(1)} %` : '—');
+
+  /** Estado de la calibración en una sola mirada (para el encabezado del paso 5 y para las pruebas). */
+  function calStatus(state, m) {
+    const cal = state.cal, CAL = FP.forecastCalibration, min = CAL.MIN_MONTHS;
+    const closed = Number.isFinite(cal.closedCount) ? cal.closedCount : m.forecast.closedMonths;
+    if (cal.run.status === 'running') return { key: 'running', closed, min };
+    if (cal.saved.active) return { key: 'calibrated', closed, min };
+    if (closed < min) return { key: 'learning', closed, min };
+    return { key: 'ready', closed, min };
+  }
+
+  /** Años (y casos) que no se pudieron estimar: casi siempre porque ese año no tiene plan cargado. */
+  function sinEstimar(last) {
+    const ys = Object.keys(last.skippedByYear || {}).filter((y) => last.skippedByYear[y] > 0).sort();
+    if (!ys.length) return '';
+    return ` No se pudo estimar ${ys.map((y) => `${y} (${last.skippedByYear[y]} comparaciones)`).join(' ni ')}: casi siempre es porque ese año no tiene plan cargado. Con su plan diario en «Carga» esos meses también cuentan.`;
+  }
+
+  /** Paso 5 · Confianza del forecast: estado, qué significa cada etiqueta en tu historial, umbrales, historial de cambios y reglas. */
+  function calibrationBlock(state, m) {
+    const FC = FP.forecastConfidence, CAL = FP.forecastCalibration, esc = H().esc, pill = H().pill;
+    if (!FC || !CAL || !state.cal) return '<p class="field__hint">La calibración de la confianza no está disponible en esta carga.</p>';
+    const cal = state.cal, saved = cal.saved, st = calStatus(state, m), min = st.min, closed = st.closed, run = cal.run;
+    const busy = st.key === 'running', falta = Math.max(0, min - closed), last = cal.last;
+    const T = FC.getActive() || FC.THRESHOLDS, W = FC.WEIGHTS, N = FC.NAMES, pc = (v) => `${Math.round(v * 100)} %`;
+
+    /* --- Estado --- */
+    const same = Boolean(saved.active) && !FC.getActive();
+    const head = {
+      running: ['Calculando…', pill('na', 'En proceso')],
+      calibrated: same ? ['Revisada con tu historial: los umbrales iniciales ya estaban bien', pill('ok', 'Usando umbrales iniciales (revisados)')] : ['Calibrada con tu historial', pill('ok', 'Usando umbrales calibrados')],
+      learning: ['Aprendiendo: todavía no hay suficiente historial', pill('warning', 'Usando umbrales iniciales')],
+      ready: ['Lista para calibrar', pill('na', 'Usando umbrales iniciales')]
+    }[st.key];
+    const when = saved.active && saved.active.at ? ` · última recalibración: ${esc(diaDe(saved.active.at))}${saved.active.monthsUsed ? ` con ${saved.active.monthsUsed} meses` : ''}` : '';
+    const bar = `<p class="qfc__months"><label for="qfc-bar">Meses cerrados con venta real: <b>${closed}</b> de <b>${min}</b> necesarios para calibrar</label><progress id="qfc-bar" class="qfc__bar" max="${min}" value="${Math.min(closed, min)}">${closed} de ${min}</progress></p>`;
+    const prog = busy
+      ? `<div class="qcal__run" role="status" aria-live="polite"><label for="qcal-progress">Comparando cada cierre estimado contra lo que el mes cerró de verdad</label>
+          <progress id="qcal-progress" class="qfc__bar" max="${Math.max(1, run.total)}" value="${run.done}">${run.done} de ${run.total}</progress>
+          <span id="qcal-progress-txt" class="field__hint">${esc(run.total ? `${run.done} de ${run.total} comparaciones` : (run.msg || 'Contando los meses cerrados…'))}</span>
+          <div class="btn-row"><button type="button" class="btn" data-action="cal-cancel">Cancelar</button></div></div>` : '';
+    const dis = (cond) => (cond ? ' disabled' : '');
+    const canRun = !busy && closed >= min;
+    const whyRun = busy ? 'Ya hay un cálculo en proceso.' : `Todavía no hay suficiente historial: faltan ${falta} ${falta === 1 ? 'mes cerrado' : 'meses cerrados'}.`;
+    const whyReset = busy ? 'Ya hay un cálculo en proceso.' : 'Ya se usan los umbrales iniciales: no hay nada que restablecer.';
+    const ttl = (cond, why) => (cond ? ` title="${esc(why)}"` : '');
+    const btns = `<div class="btn-row">
+        <button type="button" class="btn btn--primary" data-action="cal-run"${dis(!canRun)}${ttl(!canRun, whyRun)}>${closed >= min || busy ? 'Recalibrar ahora' : `Recalibrar ahora (faltan ${falta} ${falta === 1 ? 'mes' : 'meses'})`}</button>
+        <button type="button" class="btn" data-action="cal-analyze"${dis(!canRun)}${ttl(!canRun, whyRun)}>Actualizar el análisis sin cambiar nada</button>
+        <button type="button" class="btn" data-action="cal-reset"${dis(busy || !saved.active)}${ttl(busy || !saved.active, whyReset)}>Volver a los umbrales iniciales</button></div>`;
+    const sw = `<div class="field field--check"><label class="qcal__sw"><input type="checkbox" data-action="cal-auto"${saved.auto ? ' checked' : ''}${dis(busy)}${ttl(busy, 'Ya hay un cálculo en proceso.')}> Recalibrar sola cuando cierra cada mes</label>
+        <p class="field__hint">Apagada por defecto. Si la enciendes, al abrir la app y haber un mes cerrado nuevo (con ${min} meses o más) se vuelve a comparar y, si hace falta, se mueven los umbrales. Cada cambio queda en el historial y se puede deshacer.</p></div>`;
+    let msg = '';
+    if (run.status === 'error') msg = `<p class="qcal__msg qcal__msg--bad" role="alert">No se pudo calcular: ${esc(run.error)}. No se cambió nada.</p>`;
+    else if (run.msg && !busy) msg = `<p class="qcal__msg" role="status">${esc(run.msg)}</p>`;
+    else if (last && last.status === 'insufficient') {
+      const unusable = last.closed > last.monthsUsed;
+      msg = `<p class="qcal__msg" role="status">${unusable
+        ? `Hay ${last.closed} meses cerrados, pero solo ${last.monthsUsed} se pudieron comparar contra un cierre estimado.${sinEstimar(last)} Se necesitan ${last.needed}; los umbrales siguen siendo los iniciales.`
+        : `Todavía no hay suficiente historial: ${last.monthsUsed} de ${last.needed} meses cerrados. Los umbrales siguen siendo los iniciales.`}</p>`;
+    } else if (last && last.status === 'ok') {
+      msg = `<p class="qcal__msg" role="status">${last.changes.length ? `Se compararon ${last.monthsUsed} meses (${last.cases} casos). ${last.changes.length === 1 ? 'Cambió 1 umbral' : `Cambiaron ${last.changes.length} umbrales`}: ${esc(last.changes.map((c) => c.text).join('; '))}.` : `Se compararon ${last.monthsUsed} meses (${last.cases} casos): los umbrales actuales ya estaban bien, no se movió nada.`}${sinEstimar(last)}</p>`;
+    }
+    const estado = `<section class="qcal__sec" aria-labelledby="qcal-h-estado"><div class="subhead"><h3 class="panel__title" id="qcal-h-estado">Estado: ${esc(head[0])}</h3>${head[1]}</div>
+        <p class="field__hint">${closed} meses cerrados con venta real${when}.</p>${bar}${prog}${msg}${btns}${sw}</section>`;
+
+    /* --- Qué significa cada etiqueta en tu historial --- */
+    const samples = cal.cache ? cal.cache.samples : null, an = CAL.analysisOf(saved, samples);
+    const TG = CAL.TARGETS;
+    let tabla;
+    if (!an) {
+      tabla = `<p class="field__hint">${closed >= min ? 'Aún no hay un análisis guardado en este navegador. «Actualizar el análisis sin cambiar nada» lo calcula (tarda unos segundos) y no mueve ningún umbral.' : `Todavía no se puede medir: faltan ${falta} ${falta === 1 ? 'mes cerrado' : 'meses cerrados'}.`}</p>`;
+    } else {
+      const lab = { alta: ['Alta', 'ok'], media: ['Media', 'warning'], baja: ['Baja', 'error'] };
+      const rows = ['alta', 'media', 'baja'].map((l) => {
+        const g = an.labels[l], few = !g || g.n < CAL.MIN_CASES;
+        let band, verdict;
+        if (l === 'baja') {
+          band = `> ${pc(TG.media)}`;
+          const ref = an.labels.media;
+          verdict = few ? `Pocos casos (${g ? g.n : 0})` : (ref && ref.n >= CAL.MIN_CASES && !(g.p80 > ref.p80)) ? `No: Baja no se equivocó más que Media (${pc1(g.p80)} contra ${pc1(ref.p80)})` : `Sí: Baja sí avisa que la estimación es más débil (${pc1(g.p80)})`;
+        } else {
+          band = `≤ ${pc(TG[l])}`;
+          verdict = few ? `Pocos casos (${g ? g.n : 0}) para decir algo` : g.p80 <= TG[l] ? `Sí: 8 de 10 quedan en ${pc1(g.p80)}` : g.p80 <= TG[l] * 1.25 ? `Casi: 8 de 10 quedan en ${pc1(g.p80)}` : `No: 8 de 10 quedan en ${pc1(g.p80)}`;
+        }
+        return `<tr><th scope="row">${pill(lab[l][1], lab[l][0])}</th><td class="num">${g ? g.n : 0}</td><td class="num">${few ? '—' : pc1(g.typical)}</td><td class="num">${few ? '—' : pc1(g.p80)}</td><td class="num">${esc(band)}</td><td>${esc(verdict)}</td></tr>`;
+      }).join('');
+      tabla = `<div class="table-wrap"><table class="table ds-table" aria-label="Qué pasó cada vez que salió Alta, Media o Baja"><thead><tr><th scope="col">Etiqueta</th><th scope="col" class="num">Veces que salió</th><th scope="col" class="num">Error típico del cierre</th><th scope="col" class="num">En 8 de 10 casos, menos de</th><th scope="col" class="num">Banda propuesta</th><th scope="col">¿Se cumple?</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="field__hint">${an.source === 'saved' ? `Resultado guardado de la última recalibración (${an.months} meses, ${an.cases} casos). ` : `${an.months} meses, ${an.cases} casos. `}«Veces que salió» cuenta cada mes cerrado en cada corte (días 5, 10, 15, 20 y 25). Las bandas de ${pc(TG.alta)} y ${pc(TG.media)} son una propuesta inicial, no una garantía: lo que cuenta es lo que muestra tu historial.</p>`;
+    }
+    const significado = `<section class="qcal__sec" aria-labelledby="qcal-h-sig"><h3 class="panel__title" id="qcal-h-sig">Qué significa cada etiqueta en tu historial</h3>
+        <p class="field__hint">Cada vez que el cierre estimado salió Alta, Media o Baja, se compara con lo que el mes cerró de verdad.</p>${tabla}</section>`;
+
+    /* --- Error según el día del mes --- */
+    let corte = '';
+    if (an && an.byCut) {
+      const cuts = CAL.CUTS.map((c) => an.byCut[c]).filter((x) => x && Number.isFinite(x.typical));
+      if (cuts.length) {
+        const mx = Math.max(...cuts.map((x) => x.typical), 0.0001);
+        const alt = cuts.map((x) => `día ${x.cut}: ${pc1(x.typical)}`).join('; ');
+        corte = `<section class="qcal__sec" aria-labelledby="qcal-h-cut"><h3 class="panel__title" id="qcal-h-cut">Error del cierre estimado según el día</h3>
+          <p class="field__hint">Cuanto más avanza el mes, menos se proyecta y menos se equivoca la estimación (error típico).</p>
+          <svg class="qcal__bars" viewBox="0 0 400 190" role="img" aria-label="Error típico del cierre estimado. ${esc(alt)}.">${cuts.map((x, i) => { const h = Math.max(4, Math.round((x.typical / mx) * 120)), cx = i * 80 + 40; return `<rect class="qcal__rect" x="${cx - 26}" y="${150 - h}" width="52" height="${h}"></rect><text class="qcal__val" x="${cx}" y="${150 - h - 8}" text-anchor="middle">${pc1(x.typical)}</text><text class="qcal__lab" x="${cx}" y="172" text-anchor="middle">Día ${x.cut}</text>`; }).join('')}<line class="qcal__axis" x1="8" y1="150" x2="392" y2="150"></line></svg></section>`;
+      }
+    }
+
+    /* --- Umbrales --- */
+    const ini = FC.INITIAL, cur = FC.getActive() || ini;
+    const trow = ['cobAlta', 'cobMedia', 'estAlta', 'estMedia', 'rngAlta', 'rngMedia'].map((k) => {
+      const fct = { cobAlta: 'cobertura', cobMedia: 'cobertura', estAlta: 'estabilidad', estMedia: 'estabilidad', rngAlta: 'rango', rngMedia: 'rango' }[k];
+      const changed = Math.abs(cur[k] - ini[k]) > 1e-9;
+      return `<tr><th scope="row">${esc(N[fct])}</th><td>${k.endsWith('Alta') ? 'Alta' : 'Media'}</td><td class="num">${esc(CAL.fmtThr(k, ini[k]))}</td><td class="num">${changed ? `<strong>${esc(CAL.fmtThr(k, cur[k]))}</strong> <span class="field__hint">cambió</span>` : 'sin cambio'}</td></tr>`;
+    }).join('');
+    const umbrales = `<section class="qcal__sec" aria-labelledby="qcal-h-umb"><h3 class="panel__title" id="qcal-h-umb">Umbrales que se movieron</h3>
+        <div class="table-wrap"><table class="table ds-table" aria-label="Umbrales iniciales y en uso"><thead><tr><th scope="col">Factor</th><th scope="col">Nivel</th><th scope="col" class="num">Inicial</th><th scope="col" class="num">En uso</th></tr></thead><tbody>${trow}
+          <tr><th scope="row">${esc(N.historia)}</th><td>—</td><td class="num">≥ ${T.hisAlta} días</td><td class="num">no se calibra</td></tr></tbody></table></div>
+        <p class="field__hint">Solo se mueven los umbrales de estos tres factores. Los pesos de los cuatro factores, la regla que los combina y la historia disponible no cambian.</p></section>`;
+
+    /* --- Historial --- */
+    const hist = saved.history, undoIdx = hist.map((h) => !h.undone && h.kind !== 'undo').lastIndexOf(true);
+    const titulo = (h) => (h.kind === 'reset' ? 'Vuelta a los umbrales iniciales' : h.kind === 'undo' ? 'Cambio deshecho' : `${h.trigger === 'auto' ? 'Recalibración automática' : 'Recalibración manual'} · ${h.monthsUsed} meses${h.month ? ` (al cerrar ${esc(mesDe(h.month))})` : ''}`);
+    const items = hist.length ? hist.map((h, i) => ({ h, i })).reverse().map(({ h, i }) => `<li class="qcal__h"><div class="qcal__ht"><b>${titulo(h)} · ${esc(diaDe(h.at))}</b>${h.undone ? ' <span class="field__hint">(deshecho)</span>' : ''}<span class="field__hint">${esc((h.text || []).join('. '))}</span></div>
+        ${i === undoIdx ? '<button type="button" class="btn" data-action="cal-undo">Deshacer este cambio</button>' : ''}</li>`).join('')
+      : '<li class="field__hint">Todavía no hay recalibraciones. Cada cambio de umbrales quedará aquí con su fecha y los meses usados.</li>';
+    const historial = `<section class="qcal__sec" aria-labelledby="qcal-h-hist"><h3 class="panel__title" id="qcal-h-hist">Historial de recalibraciones</h3><ul class="qcal__hist">${items}</ul></section>`;
+
+    /* --- Regla vigente --- */
+    const rrows = [
       ['cobertura', `≥ ${pc(T.cobAlta)}`, `≥ ${pc(T.cobMedia)}`, 'menos'],
       ['estabilidad', `± ${pc(T.estAlta)} o menos`, `± ${pc(T.estMedia)} o menos`, 'más'],
       ['rango', `menos de ${pc(T.rngAlta)}`, `menos de ${pc(T.rngMedia)}`, 'más'],
       ['historia', `≥ ${T.hisAlta} días`, `${T.hisMedia} a ${T.hisAlta - 1} días`, 'menos']
     ].map(([k, a, me, b]) => `<tr><th scope="row">${esc(N[k])}</th><td class="num">${pc(W[k])}</td><td>${esc(a)}</td><td>${esc(me)}</td><td>${esc(b)}</td></tr>`).join('');
-    return `${bar}
-      <div class="table-wrap"><table class="table ds-table" aria-label="Regla de la confianza del cierre estimado"><thead><tr><th scope="col">Factor</th><th scope="col" class="num">Peso</th><th scope="col">Alta</th><th scope="col">Media</th><th scope="col">Baja</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="field__hint">Alta = 1, Media = 0.5, Baja = 0; promedio ponderado. Desde ${Math.round(T.cutAlta * 100)} % es Alta y desde ${Math.round(T.cutMedia * 100)} % es Media. Con un factor en Baja no pasa de Media; con dos o más es Baja.</p>
-      <p class="field__hint">Estos son los umbrales iniciales y hoy no cambian solos. Calibrarlos con tu historial (comparar cada cierre estimado contra lo que realmente cerró) llega en una fase posterior. La etiqueta mide qué tan sólida es la base de la estimación, no la probabilidad de acertar.</p>`;
+    const regla = `<section class="qcal__sec" aria-labelledby="qcal-h-regla"><h3 class="panel__title" id="qcal-h-regla">Cómo se decide la etiqueta${saved.active ? ' (con los umbrales calibrados)' : ' (umbrales iniciales)'}</h3>
+        <div class="table-wrap"><table class="table ds-table" aria-label="Regla de la confianza del cierre estimado"><thead><tr><th scope="col">Factor</th><th scope="col" class="num">Peso</th><th scope="col">Alta</th><th scope="col">Media</th><th scope="col">Baja</th></tr></thead><tbody>${rrows}</tbody></table></div>
+        <p class="field__hint">Alta = 1, Media = 0.5, Baja = 0; promedio ponderado. Desde ${Math.round(T.cutAlta * 100)} % es Alta y desde ${Math.round(T.cutMedia * 100)} % es Media. Con un factor en Baja no pasa de Media; con dos o más es Baja. La etiqueta mide qué tan sólida es la base de la estimación, no la probabilidad de acertar.</p></section>`;
+
+    const salvaguardas = `<section class="qcal__sec" aria-labelledby="qcal-h-salv"><h3 class="panel__title" id="qcal-h-salv">Para que no se mueva a ciegas</h3><ul class="qcal__list">
+        <li>No calibra con menos de ${min} meses cerrados; mientras tanto, umbrales iniciales.</li>
+        <li>Cada cambio queda en el historial con la fecha y los meses usados, y se puede deshacer.</li>
+        <li>Solo cambia la etiqueta de confianza; no toca el forecast ni ninguna cifra.</li>
+        <li>Con pocos meses los umbrales pueden ajustarse a casualidades de esos meses; por eso conviene revisarlos cada mes y deshacer lo que no convenza.</li>
+        <li>Solo mide el Total digital y los cierres de mes. La etiqueta por canal y la del cierre anual no se han medido.</li>
+        <li>Se guarda en este navegador. En otro navegador o equipo se calcula de nuevo con «Recalibrar ahora»; el interruptor se enciende por separado.</li></ul></section>`;
+
+    return `${estado}${significado}${corte}${umbrales}${historial}${regla}${salvaguardas}`;
   }
 
   const USER_OPEN = {};   // lo que la persona abrió o cerró a mano; manda sobre el paso abierto por omisión
@@ -429,7 +567,7 @@
         ${s.note ? `<span class="qstep__note">${esc(s.note)}</span>` : ''}
         <span class="qstep__chev" aria-hidden="true"></span>`;
     });
-    if ($('quality-forecast')) $('quality-forecast').innerHTML = forecastBlock(m);
+    if ($('quality-forecast')) $('quality-forecast').innerHTML = calibrationBlock(state, m);
     bindEvents();
     applyOpen(now ? now.n : 0);
   }
