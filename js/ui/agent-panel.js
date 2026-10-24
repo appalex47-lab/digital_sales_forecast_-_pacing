@@ -31,16 +31,24 @@
   const isMobile = () => !!(root.matchMedia && root.matchMedia('(max-width: 720px)').matches);
   const curRun = () => S.runs[S.agent] || null;
 
-  /** Cuántos hallazgos piden atención: lo que se cae o hay que revisar (no lo que crece) y las alertas del embudo (no «sin alerta»). Solo detectores, sin IA. */
-  function countOf(runs) {
+  /**
+   * Hallazgos que piden atención: lo que se cae o hay que revisar (no lo que crece) y las alertas del embudo (no «sin alerta»), solo de prioridad Alta o Media
+   * (los de Baja siguen en el panel, pero no mueven el contador ni la línea de Inicio). Solo detectores, sin IA.
+   */
+  function summaryOf(runs) {
     const a = runs.analista, u = runs.auditor;
-    return (a && a.status === 'ok' ? a.findings.filter((f) => f.section !== 'crece').length : 0) + (u && u.status === 'ok' ? u.findings.filter((f) => !f.sinAlerta).length : 0);
+    const list = [].concat(a && a.status === 'ok' ? a.findings.filter((f) => f.section !== 'crece') : [], u && u.status === 'ok' ? u.findings.filter((f) => !f.sinAlerta) : []);
+    const alta = list.filter((f) => f.prio === 'Alta').length, media = list.filter((f) => f.prio === 'Media').length;
+    return { n: alta + media, alta, media };
   }
-  async function countFindings() {
+  const countOf = (runs) => summaryOf(runs).n;
+  async function summary() {
     const state = st(), runs = {};
     for (const a of AGENT_IDS) { try { runs[a] = await FP.agents.runner.run(state, { agent: a, useAI: false }); } catch (e) { runs[a] = null; } }
-    return countOf(runs);
+    const s = summaryOf(runs), an = runs.analista && runs.analista.status === 'ok' ? runs.analista : null;
+    return { ...s, scopeLabel: an && an.scope ? an.scope.label : null, channelLabel: an && an.scope ? an.scope.channelLabel : null, key: FP.agents.runner.selectionKey(state) };
   }
+  async function countFindings() { return (await summary()).n; }
 
   // ---------- Piezas ----------
   function aiChip(run) {
@@ -141,7 +149,7 @@
   function storyBlock(run) {
     const h = run.headline; if (!h) return '';
     const mes = run.scope.label || FP.agents.story.monthLabel(run.scope.period.key);
-    const kp = (run.kpis || []).map((k) => `<div class="ag-kpi"><small>${esc(k.k)}</small><b class="${esc(k.tone)}">${esc(k.v)}</b></div>`).join('');
+    const kp = (run.kpis || []).map((k) => `<div class="ag-kpi"><small>${esc(k.k)}</small><b class="${esc(k.tone)}">${esc(k.v)}</b>${k.chip ? `<span class="ag-chipc ag-chipc--${esc(k.chipLevel || '')}">${esc(k.chip)}</span>` : ''}</div>`).join('');
     return `<section class="ag-story" aria-label="Historia del periodo"><h2>La historia de ${/^semana/.test(mes) ? 'la ' : ''}${esc(mes)} en 20 segundos</h2>
       <p class="ag-lead">${esc(h.lead)}</p><ul class="ag-points">${h.items.map((i) => `<li><b>${esc(i.k)}:</b> ${esc(i.text)}</li>`).join('')}</ul>
       ${kp ? `<div class="ag-kpis">${kp}</div>` : ''}</section>`;
@@ -372,5 +380,5 @@
     if (el) { try { el.focus({ preventScroll: false }); el.scrollIntoView({ block: 'nearest' }); } catch (e) { /* sin foco */ } }
   }
 
-  FP.agentPanel = { open, close, toggle, onViewChange, onContextChange, countFindings, refresh, _state: S, _findingCard: findingCard, _countOf: countOf };
+  FP.agentPanel = { open, close, toggle, onViewChange, onContextChange, countFindings, summary, refresh, _state: S, _findingCard: findingCard, _countOf: countOf, _summaryOf: summaryOf };
 })(typeof window !== 'undefined' ? window : globalThis);

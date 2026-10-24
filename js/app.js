@@ -1195,7 +1195,8 @@
     // El contexto persistente (canal/periodo) se sincroniza con lo que la vista tiene elegido en este momento,
     // no solo al cambiar de página; así el resumen y la barra de contexto siguen al selector de canal.
     state.ux.ctx = FP.navigation.extractContext(state.view, state);
-    if (FP.agentPanel && FP.agentPanel.onContextChange) FP.agentPanel.onContextChange();   // los asistentes siguen el periodo y el canal elegidos
+    if (FP.agentPanel && FP.agentPanel.onContextChange) FP.agentPanel.onContextChange();
+    if (FP.agentLauncher && FP.agentLauncher.onContext) FP.agentLauncher.onContext();   // Fase 3: la línea de Inicio y el contador siguen lo elegido   // los asistentes siguen el periodo y el canal elegidos
     // Accesibilidad de tablas: encabezados con alcance (solo atributos; no cambia el contenido)
     document.querySelectorAll('table thead th:not([scope])').forEach((th) => th.setAttribute('scope', 'col'));
     document.querySelectorAll('table tbody th:not([scope])').forEach((th) => th.setAttribute('scope', 'row'));

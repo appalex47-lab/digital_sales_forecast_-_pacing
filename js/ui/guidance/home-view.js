@@ -200,6 +200,7 @@ ${body}
         <div class="ds-accordion__body"><dl class="conventions">${Object.keys(FP.guidanceConfig.STATES).map((k) => `<div><dt>${FP.help.stateTag(k)}</dt><dd>${esc(FP.guidanceConfig.STATES[k].short)}</dd></div>`).join('')}</dl></div>
       </details></div>`;
     if (!f) FP.help.enhanceEmpty($('home'), FP.contextEngine.requirements('inicio', status));
+    if (FP.agentLauncher && FP.agentLauncher.paintLine) FP.agentLauncher.paintLine();   // Fase 3: la línea del Analista bajo el encabezado
   }
 
   FP.homeView = { render, periodFigures, periodStatus, journey };

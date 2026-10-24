@@ -14,7 +14,8 @@ const mkState = (chs, extra = {}) => {
 };
 const dep = (o = {}) => ({
   home: Object.assign({ goal: () => null, whyPlan: () => null, why: () => null, excluded: () => ({ days: 0, revenue: 0 }) }, o.home),
-  advisor: Object.assign({ advise: () => null }, o.advisor)
+  advisor: Object.assign({ advise: () => null }, o.advisor),
+  confidence: o.confidence
 });
 const A = FP.agents.analista, R = FP.agents.runner;
 
@@ -61,6 +62,36 @@ ok('A3 sin venta real → no_data', A.detect({ fc: { run: { plan: { source: 'fil
   // todo en plan → nada
   const r4 = A.detect(mkState({ ecommerce: [1000, 1005], app: [500, 498] }), dep());
   ok('C9h todo en plan → ningún canal bajo su plan', !r4.findings.some((x) => x.id === 'canales_bajo_plan'));
+}
+
+// ---- Fase 3: confianza del forecast y capas que no coinciden ----
+{ const st = mkState({ ecommerce: [1000, 1000], app: [500, 500] });
+  const conf = (level) => ({ assess: () => ({ status: 'ok', level, label: level === 'baja' ? 'Baja' : level === 'media' ? 'Media' : 'Alta', score: 0.5, reasons: [],
+    factors: [{ id: 'cobertura', label: 'Días con venta real', level: 'alta', levelLabel: 'Alta', detail: '22 de 30 días con venta real' }, { id: 'historia', label: 'Historia disponible', level: 'baja', levelLabel: 'Baja', detail: 'Índices con menos de 28 días comparables' }] }) });
+  let r = A.detect(st, dep({ confidence: conf('media') })), f = r.findings.find((x) => x.id === 'forecast_confianza');
+  ok('G1 confianza Media → hallazgo en «revisar», con los factores como evidencia', !!f && f.section === 'revisar' && f.evid.length === 3 && /22 de 30 días/.test(JSON.stringify(f.evid)), r.findings.map((x) => x.id));
+  ok('G1b prioridad Media (visible en la línea) y nunca Alta', f.prio === 'Media' && f.score < 70, [f.score, f.prio]);
+  ok('G1c deja claro que no es una probabilidad', /no es una probabilidad/.test(f.limites) && !/(se debe a|la causa es|garantiza|seguro)/i.test(JSON.stringify(f)), f.limites);
+  r = A.detect(st, dep({ confidence: conf('baja') })); f = r.findings.find((x) => x.id === 'forecast_confianza');
+  ok('G2 confianza Baja → puntaje mayor que Media y menciona lo flojo', f && f.score > 42 && /historia disponible/.test(f.story), f && [f.score, f.story]);
+  r = A.detect(st, dep({ confidence: conf('alta') }));
+  ok('G3 confianza Alta → no hay nada que advertir', !r.findings.some((x) => x.id === 'forecast_confianza'));
+  r = A.detect(st, dep({ confidence: { assess: () => ({ status: 'closed' }) } }));
+  ok('G4 periodo cerrado → no hay hallazgo de confianza', !r.findings.some((x) => x.id === 'forecast_confianza'));
+  r = A.detect(st, dep());
+  ok('G5 sin motor de confianza cargado → sigue sin error', r.status === 'ok' && !r.errors.length && !r.findings.some((x) => x.id === 'forecast_confianza'), r.errors);
+  // capas: arriba del plan pero abajo del periodo anterior
+  const home = (gapPct, delta) => ({ whyPlan: () => ({ status: 'ok', gap: gapPct * 1e6, gapPct }), why: () => ({ status: 'ok', delta, baseline: 1e6 }) });
+  r = A.detect(st, dep({ home: home(0.04, -60000) })); f = r.findings.find((x) => x.id === 'capas_no_coinciden');
+  ok('G6 +4 % contra el plan y −6 % contra el periodo anterior → capas que no coinciden', !!f && /arriba del plan pero abajo/.test(f.title) && f.evid.length === 2 && /\+4\.0%/.test(JSON.stringify(f.evid)), r.findings.map((x) => x.id));
+  r = A.detect(st, dep({ home: home(-0.05, 70000) })); f = r.findings.find((x) => x.id === 'capas_no_coinciden');
+  ok('G7 −5 % contra el plan y +7 % contra el anterior → el caso inverso', !!f && /abajo del plan pero arriba/.test(f.title), r.findings.map((x) => x.id));
+  r = A.detect(st, dep({ home: home(0.04, 50000) }));
+  ok('G8 las dos lecturas van a favor → sin hallazgo', !r.findings.some((x) => x.id === 'capas_no_coinciden'));
+  r = A.detect(st, dep({ home: home(0.004, -50000) }));
+  ok('G9 diferencia menor a 1 % contra el plan es ruido → sin hallazgo', !r.findings.some((x) => x.id === 'capas_no_coinciden'));
+  r = A.detect(st, dep({ home: home(0.02, -20000) })); f = r.findings.find((x) => x.id === 'capas_no_coinciden');
+  ok('G10 diferencias chicas → prioridad Baja; no entra al contador de la línea', f && f.prio === 'Baja', f && [f.score, f.prio]);
 }
 
 // ---- meta, drivers, contradicción, forecast, datos ----

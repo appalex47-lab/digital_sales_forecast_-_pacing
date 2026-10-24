@@ -370,14 +370,69 @@
     };
   }
 
-  const DETECTORS = [brechaConcentrada, canalesBajoPlan, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa];
+  /** D8 · Qué tan sólida es la base del cierre estimado (Fase 3). Solo si no es Alta: con Alta no hay nada que advertir. */
+  function forecastConfianza(sc, deps) {
+    const C = deps.confidence; if (!C) return null;
+    const a = C.assess({ run: sc.run, channel: sc.channel, period: sc.period, advisor: deps.advisor });
+    if (!a || a.status !== 'ok' || a.level === 'alta') return null;
+    const score = a.level === 'baja' ? 60 : 42;
+    const weak = a.factors.filter((x) => x.level === 'baja').map((x) => x.label.toLowerCase());
+    const evid = [{ k: 'Confianza del cierre estimado', v: a.label }].concat(a.factors.map((x) => ({ k: x.label, v: `${x.levelLabel} · ${x.detail}` })));
+    return {
+      id: 'forecast_confianza', detector: 'Confianza del forecast · base de la estimación', score, prio: prioOf(score), owner: 'Ecommerce',
+      title: `El cierre estimado ${sc.W.del} tiene confianza ${a.label}`,
+      story: `el cierre estimado tiene confianza ${a.label.toLowerCase()}${weak.length ? ` (flojo: ${weak.join(', ')})` : ''}`,
+      resumen: `La base de la estimación del cierre ${sc.W.del} es ${a.label.toLowerCase()}. ${a.factors.map((x) => `${x.label}: ${x.levelLabel.toLowerCase()}`).join('; ')}.`,
+      que: `Es una lectura de qué tan firme es la base del cierre estimado; no dice cuánto se va a desviar.${a.reasons.length ? ` ${a.reasons.join(' ')}` : ''}`,
+      section: 'revisar', tag: `Confianza ${a.label}`,
+      big: { value: a.label, tone: '', sub: 'confianza del cierre estimado, según 4 factores' },
+      hipotesis: 'Con poca venta real, días recientes que se movieron o métodos que se separan, el cierre puede cambiar más de lo habitual. Se valida mirando el forecast de cierre cuando haya más días.',
+      validar: 'Abre Pacing & Forecast y compara los métodos; revisa cuántos días con venta real hay y si los últimos 7 días se movieron.',
+      accion: 'Comunicar el cierre estimado como un rango o con esta confianza, no como un número firme.',
+      evid, pregunta: '¿Qué factor flojo se puede mejorar (cargar los días que faltan, esperar más días reales)?',
+      limites: 'Mide qué tan sólida es la base del cálculo; no es una probabilidad de acertar ni un intervalo estadístico.',
+      fuente: 'Pacing & Forecast · métodos y venta real', view: 'pacing', viewLabel: 'Pacing & Forecast',
+      facts: { score: a.score, level: a.level, weak: weak.length }
+    };
+  }
+
+  /** D9 · Contra el plan y contra el periodo anterior el total cuenta historias de signo contrario (Fase 3). */
+  function capasNoCoinciden(sc, deps) {
+    let p = null, a = null;
+    try { p = deps.home.whyPlan(deps.state, sc.channel, sc.period); a = deps.home.why(deps.state, sc.channel, sc.period); } catch (e) { return null; }
+    if (!p || p.status !== 'ok' || !fin(p.gapPct) || !a || a.status !== 'ok' || !fin(a.delta) || !fin(a.baseline) || !(a.baseline > 0)) return null;
+    const prevPct = a.delta / a.baseline;
+    const up = p.gapPct >= 0.01 && prevPct <= -0.01, down = p.gapPct <= -0.01 && prevPct >= 0.01;
+    if (!up && !down) return null;
+    const score = clamp(25 + Math.min(Math.abs(p.gapPct), 0.1) * 100 * 3 + Math.min(Math.abs(prevPct), 0.1) * 100 * 3);
+    const planTxt = up ? 'arriba del plan' : 'abajo del plan', prevTxt = up ? 'abajo del' : 'arriba del';
+    return {
+      id: 'capas_no_coinciden', detector: 'Contradicciones entre capas · plan vs periodo anterior', score, prio: prioOf(score), owner: 'Ecommerce',
+      title: up ? 'Va arriba del plan pero abajo del periodo anterior' : 'Va abajo del plan pero arriba del periodo anterior',
+      story: up ? 'va arriba del plan pero abajo del periodo anterior' : 'va abajo del plan pero arriba del periodo anterior',
+      resumen: `Contra el plan la venta va ${spct(p.gapPct)} (${planTxt}); contra ${sc.W.prev} va ${spct(prevPct)} (${prevTxt} periodo anterior).`,
+      que: 'Son dos comparaciones válidas que apuntan a lados contrarios. El plan mide lo que esperabas; el periodo anterior, cuánto cambió el negocio. No hay un error, pero tampoco una sola historia.',
+      evid: [{ k: 'Contra el plan', v: `${spct(p.gapPct)} (${money(p.gap)})` }, { k: `Contra ${sc.W.prev}`, v: `${spct(prevPct)} (${money(a.delta)})` }],
+      pregunta: up ? '¿El plan se fijó bajo, o el periodo anterior fue inusualmente alto?' : '¿El plan se fijó alto, o el negocio viene recuperándose?',
+      limites: 'Describo dos comparaciones; no sé cuál refleja mejor el momento del negocio ni por qué difieren.',
+      section: 'revisar', tag: 'Dos lecturas opuestas',
+      big: { value: `${spct(p.gapPct)} vs ${spct(prevPct)}`, tone: '', sub: 'contra el plan y contra el periodo anterior' },
+      hipotesis: up ? 'El plan pudo fijarse por debajo de lo que el negocio ya venía vendiendo, o el periodo anterior tuvo algo extraordinario. A validar.' : 'El plan pudo fijarse por encima de lo realista, o el negocio viene recuperándose de un periodo flojo. A validar.',
+      validar: 'Compara en «¿Por qué?» ambas comparaciones y revisa qué suponía el plan para este periodo.',
+      accion: 'Leer las dos comparaciones juntas antes de decidir si el periodo va bien o mal.',
+      fuente: 'Pacing & Forecast · Diagnóstico', view: 'diagnostico', viewLabel: '¿Por qué? Diagnóstico',
+      facts: { gapPct: p.gapPct, prevPct }
+    };
+  }
+
+  const DETECTORS = [brechaConcentrada, canalesBajoPlan, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa, forecastConfianza, capasNoCoinciden];
 
   /**
    * Corre todos los detectores. Nunca lanza: un detector que falla se omite y se reporta en `errors`.
    * `deps` (opcional) permite inyectar los motores en pruebas: { home, advisor }.
    */
   function detect(state, deps = {}) {
-    const d = { state, home: deps.home || FP.homeSummaryEngine, advisor: deps.advisor || FP.methodAdvisor };
+    const d = { state, home: deps.home || FP.homeSummaryEngine, advisor: deps.advisor || FP.methodAdvisor, confidence: deps.confidence !== undefined ? deps.confidence : FP.forecastConfidence };
     const sel = selectionOf(state), sc = scopeOf(state, sel);
     if (!sc) return { status: 'no_data', scope: null, selection: sel, findings: [], errors: [], detectors: DETECTORS.length };
     const findings = [], errors = [];
