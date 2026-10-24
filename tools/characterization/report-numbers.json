@@ -237,8 +237,8 @@
   "recovery": {
    "kpis[0].value": 344,
    "kpis[1].value": 11,
-   "kpis[2].value": 73,
-   "kpis[3].value": 0.150684932,
+   "kpis[2].value": 35.9,
+   "kpis[3].value": 0.491780822,
    "net.daily": 0.150684932,
    "net.dailyChannels": 0.491780822,
    "net.gap": 11,
@@ -372,8 +372,12 @@
    "tables[0].rows[0].relative": -0.2,
    "tables[0].rows[1].impact": -300,
    "tables[0].rows[1].relative": -0.1,
+   "tables[0].sum": -1100,
+   "tables[0].total": 2,
    "tables[1].rows[0].impact": 500,
-   "tables[1].rows[0].relative": 0.2
+   "tables[1].rows[0].relative": 0.2,
+   "tables[1].sum": 500,
+   "tables[1].total": 1
   },
   "movers": {},
   "customers": {},
@@ -668,7 +672,8 @@
    "returns[1].rate": 0.8,
    "tables[0].rows[0].ltv": 800,
    "tables[0].rows[0].mature": 100,
-   "tables[0].rows[0].repeat": 0.2
+   "tables[0].rows[0].repeat": 0.2,
+   "tables[0].rows[1].mature": 0
   },
   "traffic": {},
   "campaigns": {},

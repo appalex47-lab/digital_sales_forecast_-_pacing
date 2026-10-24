@@ -164,6 +164,8 @@ body { padding-left: var(--ds-sidebar-w); }
 /* Badges */
 .ds-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: var(--ds-r-pill); font-size: var(--ds-fs-badge); font-weight: 650;
   line-height: 1.6; background: var(--ds-surface-2); color: var(--ds-text-2); border: 1px solid var(--ds-border); white-space: nowrap; }
+/* En pantallas angostas una etiqueta larga (p. ej. «0 % · Probablemente incompleto para resultados útiles») baja de renglón en lugar de ensanchar la página */
+@media (max-width: 600px) { .ds-badge { white-space: normal; max-width: 100%; text-align: left; border-radius: 12px; } }
 .ds-badge--plan { background: var(--ds-plan-soft); color: var(--ds-plan); border-color: transparent; }
 .ds-badge--actual { background: var(--ds-actual-soft); color: var(--ds-actual); border-color: transparent; }
 .ds-badge--forecast { background: var(--ds-forecast-soft); color: var(--ds-forecast); border: 1px dashed currentColor; }
