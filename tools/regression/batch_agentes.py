@@ -95,7 +95,7 @@ async def main():
         chk('Z26 con la IA desactivada en Configuración dice «IA no conectada» y da el enlace', 'IA no conectada' in foot and await q.evaluate("!!document.querySelector('.ag-foot a[data-section=ia]')"), foot[:200])
         await q.evaluate("FP.app.state.dx.apiKey=''; FP.app.state.settings.enableAI=true; FP.cohereConnection.isConfigured=()=>false; FP.agentPanel.refresh(false)"); await q.wait_for_timeout(300)
         foot = await q.evaluate("document.querySelector('.ag-foot').innerText")
-        chk('Z27 sin IA: solo «IA no conectada» y el enlace, sin instrucciones largas', 'IA no conectada' in foot and 'Inicia sesión' not in foot and 'Ir a Configuración' in foot, foot[:300])
+        chk('Z27 sin IA: solo «IA no conectada» y el enlace, sin instrucciones largas', 'IA no conectada' in foot and 'Inicia sesión' not in foot and 'Ir a Configuración' in foot and await q.evaluate("(()=>{const n=document.querySelector('.ag-foot .ag-note b').getBoundingClientRect(), l=document.querySelector('.ag-foot a[data-section=ia]').getBoundingClientRect(); return Math.abs((n.top+n.bottom)/2-(l.top+l.bottom)/2)<8})()"), foot[:300])
         await q.click('.ag-foot a[data-section=ia]'); await q.wait_for_timeout(900)
         chk('Z28 el enlace abre Configuración en la pestaña de Inteligencia artificial', await q.evaluate("location.hash")=='#ajustes' and await q.evaluate("FP.app.state.stTab")=='ia' and await q.evaluate("!!document.getElementById('st-ia')"), [await q.evaluate("location.hash"), await q.evaluate("FP.app.state.stTab")])
         await ctx.close()

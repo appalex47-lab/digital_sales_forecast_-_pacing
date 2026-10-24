@@ -88,7 +88,7 @@
   /** Estado de la IA, siempre visible abajo: «IA conectada» o «IA no conectada» con el enlace a Configuración. */
   function aiStatusLine() {
     if (aiReady()) return '<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b></div>';
-    return '<div class="ag-note"><b style="color:#A05A0A">● IA no conectada</b></div><a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración · Inteligencia artificial</a>';
+    return '<div class="ag-note" style="display:flex;align-items:center;justify-content:space-between;gap:10px;white-space:nowrap"><b style="color:#A05A0A">● IA no conectada</b><a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración</a></div>';
   }
   function askBlock() {
     if (S.agent !== 'analista') return '';
