@@ -6,7 +6,7 @@
  * El navegador NO descarga ni ejecuta un script con type="text/plain". FP.lazy.load('nombre') crea los <script> reales,
  * en el mismo orden en que aparecen en index.html, y resuelve cuando el último terminó de cargar.
  *
- * Módulos diferidos hoy: 'selftest' (pruebas del motor) y 'storagetests' (pruebas de almacenamiento).
+ * Módulos diferidos hoy: 'selftest' (pruebas del motor), 'storagetests' (pruebas de almacenamiento) y 'agentes' (panel de asistentes, Fase 1).
  * Nunca lanza de forma síncrona: devuelve una promesa. Si un archivo falla, la promesa se rechaza y un nuevo intento vuelve a cargarlo.
  */
 (function (root) {
