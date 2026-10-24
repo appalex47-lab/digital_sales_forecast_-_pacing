@@ -206,10 +206,11 @@
     if (!run) return '';
     const go = (href, label) => `<div class="ag-actions"><a class="ag-go" data-ag="go" href="${href}" style="display:inline-flex;align-items:center;text-decoration:none">${label}</a></div>`;
     if (run.status === 'no_data') {
-      const offer = demoInfo().canOffer;
+      const di = demoInfo(), offer = di.canOffer;
       return `<div class="ag-card"><h3>Todavía no hay productos cargados</h3><p>El Auditor necesita el archivo de ventas por producto y el embudo de GA4 por producto para ver dónde se queda la compra. Sin eso no puedo seguir el embudo.</p>
         <div class="ag-actions"><a class="ag-go" data-ag="go" href="#carga" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Carga de datos</a>${offer ? '<button type="button" class="ag-go ag-go--alt" data-ag="demo">Probar con datos de ejemplo</button>' : ''}</div>
-        ${offer ? '<p class="ag-note">Ejemplo: agosto y septiembre de 2026, 600 productos, 4 canales. No son tus datos. Este botón no sale si ya cargaste datos reales.</p>' : ''}</div>`;
+        ${offer ? '<p class="ag-note">Ejemplo: agosto y septiembre de 2026, 600 productos, 4 canales. No son tus datos. Este botón no sale si ya cargaste datos reales.</p>'
+          : di.real ? '<p class="ag-note" data-ag-demo-why>No se ofrece un ejemplo porque ya hay datos reales cargados: los datos de ejemplo y los reales no se mezclan. Para ver el Auditor, carga tus productos y el embudo de GA4 en Carga de datos.</p>' : ''}</div>`;
     }
     if (run.status === 'sin_embudo') return `<div class="ag-card"><h3>Faltan los datos del embudo</h3><p>Hay ventas por producto, pero no el embudo de GA4 (vistas, carrito, checkout y compras) para este mes. Sin él no puedo decir en qué paso se pierde la compra.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
     if (run.status === 'sin_mes') { const lab = run.scope ? chosenLabel({ type: run.scope.type, key: run.scope.key }) : null; return `<div class="ag-card"><h3>El archivo de productos no llega a lo que elegiste</h3><p>Tus productos están cargados hasta ${esc(FP.agents.story.dayLabel(run.dateMax || ''))}${lab ? `, pero elegiste ${esc(lab)}` : ''}. Cambia el periodo en la vista o carga el periodo que falta para revisar el embudo.</p>${go('#carga', 'Ir a Carga de datos')}</div>`; }

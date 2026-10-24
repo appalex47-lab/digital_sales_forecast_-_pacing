@@ -63,6 +63,15 @@ async def main():
         await r.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000); await r.click('[data-action="commit-staged"]'); await r.wait_for_timeout(5000)
         chk('E11 al importar venta real se retira el ejemplo de productos', await r.evaluate("FP.app.demoInfo().loaded === false && FP.app.demoInfo().real === true"), await r.evaluate("FP.app.demoInfo()"))
         await c3.close()
+        # Con datos reales, el aviso explica por qué no hay botón
+        r2 = await b.new_context(viewport={'width': 1360, 'height': 900}); w2 = await r2.new_page()
+        await w2.goto(f'http://127.0.0.1:{port}/index.html#inicio'); await w2.wait_for_function(READY, timeout=60000)
+        await w2.evaluate("FP.app.actions['generate-mock']()"); await w2.wait_for_timeout(2500)
+        await w2.evaluate("FP.dataStore.allBatches(FP.app.state.store)[0].origin='real'")
+        await open_panel(w2); await tab(w2, 'Conversión')
+        t2 = await w2.evaluate(BODY)
+        chk('E12 con datos reales no hay botón y el aviso explica por qué (no se mezclan)', not await w2.evaluate("!!document.querySelector('[data-ag=demo]')") and 'no se mezclan' in t2, t2[:300])
+        await r2.close()
         # Móvil
         m = await b.new_context(viewport={'width': 390, 'height': 800}); mp = await m.new_page()
         await mp.goto(f'http://127.0.0.1:{port}/index.html#inicio'); await mp.wait_for_function(READY, timeout=60000)
