@@ -4565,6 +4565,7 @@
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
     scheduleEngineTests();
+    if (FP.agentLauncher) FP.agentLauncher.init();   // Fase 1: botón «Asistentes» (el panel se carga al usarlo)
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
