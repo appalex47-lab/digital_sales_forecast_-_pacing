@@ -418,9 +418,9 @@
     const now = r.now;
     const guide = now
       ? `<section class="qnow" aria-label="Qué hacer ahora"><div class="qnow__txt"><span class="qnow__k">Qué hacer ahora</span><strong class="qnow__t">Paso ${now.n} · ${esc(now.question)}</strong><span class="qnow__d">${esc(now.text)}</span></div>
-          <div class="btn-row"><button type="button" class="btn btn--primary" data-qgo="${now.n}">Ir al paso ${now.n}</button>${now.view ? `<a class="btn" href="#${esc(now.view)}" data-nav="${esc(now.view)}">Ir a Carga</a>` : ''}</div></section>`
+          <div class="btn-row"><button type="button" class="btn btn--primary" data-qgo="${now.n}" aria-controls="qstep-${now.n}">Ir al paso ${now.n}</button>${now.view ? `<a class="btn" href="#${esc(now.view)}" data-nav="${esc(now.view)}">Ir a Carga</a>` : ''}</div></section>`
       : `<section class="qnow qnow--ok" aria-label="Qué hacer ahora"><div class="qnow__txt"><span class="qnow__k">Qué hacer ahora</span><strong class="qnow__t">Todo en orden</strong><span class="qnow__d">Los pasos 1 a 4 están en Listo. El paso 5 solo se mira: no pide nada todavía.</span></div></section>`;
-    const strip = `<ol class="qsteps" aria-label="Los cinco pasos">${r.steps.map((s) => `<li class="qsteps__i"><button type="button" class="qsteps__b" data-qgo="${s.n}" aria-label="Ir al paso ${s.n}: ${esc(s.question)}. ${esc(s.label)}"><span class="qsteps__n">Paso ${s.n}</span><b class="qsteps__q">${esc(s.question)}</b>${pill(s.tone, s.label)}</button></li>`).join('')}</ol>`;
+    const strip = `<ol class="qsteps" aria-label="Los cinco pasos">${r.steps.map((s) => `<li class="qsteps__i"><button type="button" class="qsteps__b" data-qgo="${s.n}" aria-controls="qstep-${s.n}" aria-label="Ir al paso ${s.n}: ${esc(s.question)}. ${esc(s.label)}"><span class="qsteps__n">Paso ${s.n}</span><b class="qsteps__q">${esc(s.question)}</b>${pill(s.tone, s.label)}</button></li>`).join('')}</ol>`;
     $('quality-guide').innerHTML = `${guide}${strip}`;
     r.steps.forEach((s) => {
       const el = $(`qstep-${s.n}-sum`); if (!el) return;
