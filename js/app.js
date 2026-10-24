@@ -2287,12 +2287,8 @@
     },
 
     async 'run-tests'() {
-      FP.ui.toast('Ejecutando pruebas del motor…', { ms: 2500 });
-      try { await FP.lazy.load('selftest'); } catch (e) { FP.ui.toast(`No se pudieron cargar las pruebas del motor: ${e.message}`, { ms: 5000 }); return; }
-      await new Promise((res) => setTimeout(res, 50));   // deja pintar el aviso antes de bloquear el hilo
-      state.selfTest = FP.selfTest.run();
-      render();
-      FP.ui.toast(`Pruebas del motor: ${state.selfTest.passed} de ${state.selfTest.total} correctas`);
+      FP.ui.toast('Ejecutando pruebas del motor en segundo plano…', { ms: 2500 });
+      await runEngineTests(true);
     },
 
     'clear-all'() {
@@ -4489,6 +4485,44 @@
     if (FP.productStore) { await FP.productStore.init(repo); if (FP.customerStore) FP.customerStore.reset(); await refreshProductQuality(); }
   }
 
+  /* ----- Fase A: pruebas del motor en segundo plano (Worker aislado; no congela la pantalla ni toca tus datos) ----- */
+  const SELFTEST_WORKER = 'js/workers/selftest-worker.js';
+  let engineTestsBusy = false;
+  function engineTestsInWorker() {
+    return new Promise((resolve, reject) => {
+      if (typeof Worker === 'undefined') { reject(new Error('Este navegador no permite procesos en segundo plano.')); return; }
+      // La lista de archivos sale de index.html (única fuente de verdad), con los diferidos incluidos y sin app.js ni lazy.js.
+      const files = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src'))
+        .filter((f) => !/^js\/(app|lazy)\.js(\?|$)/.test(f)).map((f) => new URL(f, document.baseURI).href);
+      let w;
+      try { w = new Worker(SELFTEST_WORKER); } catch (e) { reject(e); return; }
+      const finish = (fn, v) => { clearTimeout(timer); try { w.terminate(); } catch (e) { /* ya cerrado */ } fn(v); };
+      const timer = setTimeout(() => finish(reject, new Error('tiempo agotado')), 90000);
+      w.onmessage = (e) => (e.data && e.data.error ? finish(reject, new Error(e.data.error)) : finish(resolve, e.data));
+      w.onerror = (e) => finish(reject, new Error((e && e.message) || 'error del proceso en segundo plano'));
+      w.postMessage({ files });
+    });
+  }
+  /** Corre las pruebas del motor en segundo plano y repinta solo la píldora y la lista (sin tocar el resto de la pantalla). */
+  async function runEngineTests(announce) {
+    if (engineTestsBusy) return;
+    engineTestsBusy = true;
+    try {
+      state.selfTest = await engineTestsInWorker();
+      FP.ui.renderStatus(state); FP.ui.renderEngine(state);
+      if (announce) FP.ui.toast(`Pruebas del motor: ${state.selfTest.passed} de ${state.selfTest.total} correctas`);
+    } catch (e) {
+      // Sin Worker (p. ej. index.html abierto como archivo) la píldora se queda en «Sin ejecutar»; nunca se corren en el hilo principal
+      // porque las pruebas reinician catálogos internos y podrían alterar la sesión abierta.
+      if (announce) FP.ui.toast(`No se pudieron ejecutar las pruebas del motor: ${e.message}`, { ms: 5000 });
+    } finally { engineTestsBusy = false; }
+  }
+  /** Programa la primera ejecución: unos segundos después de abrir y cuando el navegador esté libre. */
+  function scheduleEngineTests() {
+    const go = () => runEngineTests(false);
+    setTimeout(() => { if (root.requestIdleCallback) root.requestIdleCallback(go, { timeout: 15000 }); else go(); }, 4000);
+  }
+
   async function init() {
     try { await initStorage(); } catch (e) { state.storage = { mode: 'unavailable', migration: migrationState, error: String(e && e.message || e) }; }
     // S3: ¿volvemos del enlace de un correo de Supabase? (antes de que el router lea el hash)
@@ -4520,7 +4554,7 @@
     if (migrated) saveStore();
     refresh();
     resetPeriod();
-    // Fase A: las pruebas del motor ya no corren al abrir (tardaban segundos en el hilo principal); se ejecutan con el botón y en la revisión de cada cambio.
+    // Fase A: las pruebas del motor ya no corren al abrir (tardaban segundos en el hilo principal); corren en segundo plano unos segundos después (scheduleEngineTests).
     readHash();
     state.ux.ctxNote = FP.navigation.applyContext(state.view, state) || null;
     FP.navigation.markAnalystBlocks();
@@ -4530,6 +4564,7 @@
     maybePromptLogin();   // el acceso se decide antes que la bienvenida (la bienvenida de render() espera si hay acceso abierto)
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
+    scheduleEngineTests();
   }
 
   // Expuesto solo para depuración en consola (FP.app.state).
