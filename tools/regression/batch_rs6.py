@@ -50,6 +50,7 @@ async def main():
         v = await q.evaluate("(()=>({tf:document.querySelector('#targets-form').checkVisibility(), val:document.querySelector('#validation-table').checkVisibility(), gm:document.querySelector('[data-action=generate-mock]').checkVisibility(), clr:document.querySelector('[data-action=clear-all]').checkVisibility(), rt:document.querySelector('[data-action=run-tests]').checkVisibility()}))()")
         chk('Y3 la meta y la validación se ven; generar datos, correr pruebas y borrar datos quedan plegados', v['tf'] and v['val'] and not v['gm'] and not v['clr'] and not v['rt'], v)
         # Y4 · abierto: todo el contenido sigue ahí
+        await q.wait_for_function("FP.app.state.selfTest", timeout=90000)   # Fase A: las pruebas del motor corren solas en segundo plano unos segundos después de abrir
         n = await q.evaluate("(()=>{document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true); return {btn:['generate-mock','run-tests','clear-all'].map(a=>!!document.querySelector('[data-action='+a+']')), facts:document.querySelector('#dataset-facts').textContent.trim().length, edge:document.querySelectorAll('#edge-table tbody tr').length, eng:document.querySelector('#engine-tests').textContent.trim().length, sum:document.querySelector('#engine-summary').textContent.trim().length, contract:!!document.querySelector('#export-preview')}})()")
         chk('Y4 abierto: 3 botones, datos cargados, casos límite con filas, pruebas del motor y su resumen, y el contrato de forecast_export', all(n['btn']) and n['facts'] > 10 and n['edge'] > 0 and n['eng'] > 100 and n['sum'] > 0 and n['contract'], n)
         # Y5 · cuenta aparte: la suma de las metas por canal = meta total
@@ -57,7 +58,7 @@ async def main():
         t = await q.evaluate("(()=>{const i=[...document.querySelectorAll('#targets-form input')].slice(0,5).map(x=>+String(x.value).replace(/[^0-9.]/g,'')); return i})()")
         chk('Y5 la meta total = suma de las metas por canal (98 + 74 + 54 + 35 millones)', len(t) == 5 and t[0] == sum(t[1:]) == 261000000, t)
         # Y6 · «Ejecutar pruebas del motor» sigue funcionando desde «Ver más»
-        await q.click('[data-action="run-tests"]'); await q.wait_for_timeout(900)
+        await q.evaluate("FP.app.state.selfTest=null"); await q.click('[data-action="run-tests"]'); await q.wait_for_function("FP.app.state.selfTest", timeout=90000); await q.wait_for_timeout(300)
         s2 = await q.evaluate("document.querySelector('#engine-summary').textContent.trim()")
         chk('Y6 «Ejecutar pruebas del motor» sigue dando el resumen sin fallas', len(s2) > 0 and 'fall' not in s2.lower().replace('0 fall', ''), s2)
         chk('Sin errores de página', not errs, errs[:3])
