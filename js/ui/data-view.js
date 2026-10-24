@@ -25,12 +25,23 @@
     const key = `${FP.dataStore.signature(state.store, f.dataType)}|${f.dataType}|${f.channel}|${f.status}|${f.from}|${f.to}`;
     if (lastFilter.key === key) return lastFilter.list;
     const order = new Map(C().channels.map((c) => [c.id, FP.dataModel.getChannel(c.id).order]));
-    const list = FP.dataStore.records(state.store, f.dataType).filter((r) =>
-      (!f.channel || r.channel === f.channel) &&
-      (f.status === 'all' || r.status === f.status) &&
-      (!f.from || r.date >= f.from) &&
-      (!f.to || r.date <= f.to)
-    ).sort((a, b) => (a.date === b.date ? order.get(a.channel) - order.get(b.channel) : a.date < b.date ? -1 : 1));
+    const allRecords = FP.dataStore.records(state.store, f.dataType);
+    const hasChan = Boolean(f.channel);
+    const statusAll = f.status === 'all';
+    const hasFrom = Boolean(f.from);
+    const hasTo = Boolean(f.to);
+
+    // Si no hay filtros activos, se omiten las evaluaciones de callback por registro
+    const rawList = (!hasChan && statusAll && !hasFrom && !hasTo)
+      ? allRecords.slice()
+      : allRecords.filter((r) =>
+          (!hasChan || r.channel === f.channel) &&
+          (statusAll || r.status === f.status) &&
+          (!hasFrom || r.date >= f.from) &&
+          (!hasTo || r.date <= f.to)
+        );
+
+    const list = rawList.sort((a, b) => (a.date === b.date ? order.get(a.channel) - order.get(b.channel) : a.date < b.date ? -1 : 1));
     lastFilter = { key, list };
     return list;
   }
