@@ -1167,6 +1167,7 @@
     if (rendering) { renderAgain = true; return; }   // se vuelve a dibujar al terminar, no en medio del dibujo
     rendering = true;
     try { renderNow(); } finally { rendering = false; }
+    if (FP.bgTask) FP.bgTask.sync();
     if (renderAgain) { renderAgain = false; render(); }
   }
 
@@ -4488,33 +4489,45 @@
   /* ----- Fase A: pruebas del motor en segundo plano (Worker aislado; no congela la pantalla ni toca tus datos) ----- */
   const SELFTEST_WORKER = 'js/workers/selftest-worker.js';
   let engineTestsBusy = false;
-  function engineTestsInWorker() {
+  /** Un intento: `blobSrc` null = el archivo del Worker directo; con texto = Worker armado desde un Blob (cuando el sitio no deja arrancar el archivo, p. ej. otro origen o una política de seguridad). */
+  function engineTestsAttempt(files, blobSrc) {
     return new Promise((resolve, reject) => {
-      if (typeof Worker === 'undefined') { reject(new Error('Este navegador no permite procesos en segundo plano.')); return; }
-      // La lista de archivos sale de index.html (única fuente de verdad), con los diferidos incluidos y sin app.js ni lazy.js.
-      const files = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src'))
-        .filter((f) => !/^js\/(app|lazy)\.js(\?|$)/.test(f)).map((f) => new URL(f, document.baseURI).href);
-      let w;
-      try { w = new Worker(SELFTEST_WORKER); } catch (e) { reject(e); return; }
-      const finish = (fn, v) => { clearTimeout(timer); try { w.terminate(); } catch (e) { /* ya cerrado */ } fn(v); };
-      const timer = setTimeout(() => finish(reject, new Error('tiempo agotado')), 90000);
+      let w, url = null;
+      try { if (blobSrc) { url = URL.createObjectURL(new Blob([blobSrc], { type: 'text/javascript' })); w = new Worker(url); } else w = new Worker(SELFTEST_WORKER); } catch (e) { if (url) URL.revokeObjectURL(url); reject(Object.assign(new Error(e && e.message || 'no se pudo iniciar el proceso en segundo plano'), { start: true })); return; }
+      const finish = (fn, v) => { clearTimeout(timer); try { w.terminate(); } catch (e) { /* ya cerrado */ } if (url) URL.revokeObjectURL(url); fn(v); };
+      const timer = setTimeout(() => finish(reject, new Error('tiempo agotado (3 min)')), 180000);   // un celular lento tarda más que una laptop
       w.onmessage = (e) => (e.data && e.data.error ? finish(reject, new Error(e.data.error)) : finish(resolve, e.data));
-      w.onerror = (e) => finish(reject, new Error((e && e.message) || 'error del proceso en segundo plano'));
+      w.onerror = (e) => finish(reject, Object.assign(new Error((e && e.message) || 'el proceso en segundo plano no arrancó'), { start: true }));
       w.postMessage({ files });
     });
   }
+  async function engineTestsInWorker() {
+    if (typeof Worker === 'undefined') throw new Error('Este navegador no permite procesos en segundo plano.');
+    // La lista de archivos sale de index.html (única fuente de verdad), con los diferidos incluidos y sin app.js ni lazy.js.
+    const files = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src'))
+      .filter((f) => !/^js\/(app|lazy)\.js(\?|$)/.test(f)).map((f) => new URL(f, document.baseURI).href);
+    try { return await engineTestsAttempt(files, null); } catch (e1) {
+      if (!e1.start) throw e1;   // falló corriendo las pruebas: no tiene caso repetir
+      // No arrancó el archivo del Worker: se baja su texto y se arranca desde un Blob (mismas pruebas, mismo aislamiento).
+      let src; try { const r = await fetch(SELFTEST_WORKER, { cache: 'no-store' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); src = await r.text(); } catch (e2) { throw new Error(`${e1.message} · y no pude bajar el archivo de pruebas (${e2.message})`); }
+      return engineTestsAttempt(files, src);
+    }
+  }
   /** Corre las pruebas del motor en segundo plano y repinta solo la píldora y la lista (sin tocar el resto de la pantalla). */
-  async function runEngineTests(announce) {
+  async function runEngineTests(announce, retried) {
     if (engineTestsBusy) return;
     engineTestsBusy = true;
     try {
-      state.selfTest = await engineTestsInWorker();
+      state.selfTest = await engineTestsInWorker(); state.selfTestError = null;
       FP.ui.renderStatus(state); FP.ui.renderEngine(state);
       if (announce) FP.ui.toast(`Pruebas del motor: ${state.selfTest.passed} de ${state.selfTest.total} correctas`);
     } catch (e) {
-      // Sin Worker (p. ej. index.html abierto como archivo) la píldora se queda en «Sin ejecutar»; nunca se corren en el hilo principal
-      // porque las pruebas reinician catálogos internos y podrían alterar la sesión abierta.
-      if (announce) FP.ui.toast(`No se pudieron ejecutar las pruebas del motor: ${e.message}`, { ms: 5000 });
+      // Nunca se corren en el hilo principal: las pruebas reinician catálogos internos y podrían alterar la sesión abierta.
+      // La causa queda a la vista (píldora y Configuración) en lugar de un «Sin ejecutar» mudo; la corrida automática se reintenta una vez.
+      state.selfTestError = String(e && e.message || e).slice(0, 200);
+      FP.ui.renderStatus(state); FP.ui.renderEngine(state);
+      if (announce) FP.ui.toast(`No se pudieron ejecutar las pruebas del motor: ${state.selfTestError}`, { ms: 5000 });
+      else if (!retried) setTimeout(() => runEngineTests(false, true), 20000);
     } finally { engineTestsBusy = false; }
   }
   /** Programa la primera ejecución: unos segundos después de abrir y cuando el navegador esté libre. */
@@ -4810,12 +4823,18 @@
   function cloudProg(label, pct) {
     state.cloud.progress = { label, pct };
     const ind = pct === null || pct === undefined;   // sin porcentaje conocido: barra indeterminada (solo texto de la etapa)
-    if (!FP.ui.loader.update('cloud-progress', { label, pct: ind ? null : pct })) render();
+    if (FP.bgTask) FP.bgTask.update(label, ind ? null : pct);
+    // Si el avance grande no está en pantalla: solo se dibuja la vista cuando la persona está en Cuenta; en otra pantalla basta la píldora (redibujar aquí borraría lo que esté escribiendo).
+    if (!FP.ui.loader.update('cloud-progress', { label, pct: ind ? null : pct }) && cloudInView()) render();
   }
+  /** ¿Está a la vista el avance grande de la nube (Configuración → Cuenta)? */
+  const cloudInView = () => state.view === 'ajustes' && state.stTab === 'cuenta';
+  const cloudGo = () => { state.stTab = 'cuenta'; if (root.location.hash === '#ajustes') render(); else root.location.hash = 'ajustes'; };
   /** `op` ('upload' | 'restore' | 'delete') y `label` encienden el loader desde el primer instante, con reloj. */
   async function cloudRun(fn, op, label) {
     if (state.cloud.busy) return;
     state.cloud.busy = true; state.cloud.op = op || null; state.cloud.t0 = op ? Date.now() : null; state.cloud.progress = op ? { label: label || 'Trabajando', pct: null } : null; cloudNote('Trabajando…'); render();
+    if (op && FP.bgTask) FP.bgTask.start(label || 'Trabajando', { here: cloudInView, goTo: cloudGo });
     if (op) {
       // Un fallo temporal de Supabase (502/520/521 o de red) se reintenta solo: se avisa en el propio loader.
       FP.cloud.setRetryHook(({ attempt, of, status }) => { const t = document.querySelector('#cloud-progress .ldr__label'); if (t) t.textContent = `${(state.cloud.progress || {}).label || 'Trabajando'} — reintentando (${attempt} de ${of})${status ? ` · error ${status}` : ''}…`; });
@@ -4825,6 +4844,7 @@
     const took = state.cloud.t0 ? Date.now() - state.cloud.t0 : 0;
     if (op && state.cloud.msg && took > 1500) state.cloud.msg += ` (${mmss(took)})`;
     state.cloud.busy = false; state.cloud.op = null; state.cloud.t0 = null; state.cloud.progress = null; cloudRefreshSession(); render();
+    if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
   FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
