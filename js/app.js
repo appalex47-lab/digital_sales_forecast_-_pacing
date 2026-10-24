@@ -4828,6 +4828,10 @@
 
   FP.app = { cloudProvider, state, actions, render, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
+  const start = () => init().then(
+    () => { if (root.__boot) root.__boot.done(); },
+    (e) => { if (root.__boot) root.__boot.fail('Falló el arranque de la app.'); throw e; });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })(typeof window !== 'undefined' ? window : globalThis);
