@@ -191,11 +191,17 @@
   /* ---------- Fase A ---------- */
   const SOURCE_LABEL = { csv: 'CSV', xlsx: 'Excel (.xlsx)', 'ga4-csv': 'CSV de GA4 (convertido)' };
 
-  function healthBlock(state) {
-    const esc = H().esc, hv0 = FP.dataHealth.overview(state.store);
+  /** Salud por colección y total (la misma que pinta «Salud de los datos»; la reutiliza el paso 3 del recorrido). */
+  function healthModel(state) {
+    const hv0 = FP.dataHealth.overview(state.store);
     const prod = FP.dataHealth.products(state.productQuality);   // Productos: mismos componentes, calculados desde lo que guarda cada lote
     const hv = { collections: [...hv0.collections, ...prod], score: null };
     { const sc = hv.collections.filter((c) => c.score !== null); hv.score = sc.length ? Math.round(sc.reduce((a, c) => a + c.score, 0) / sc.length) : null; if (hv.score === 100 && sc.some((c) => c.score < 100)) hv.score = 99; }
+    return hv;
+  }
+
+  function healthBlock(state) {
+    const esc = H().esc, hv = healthModel(state);
     if (!hv.collections.length) return '<p class="field__hint">Sin datos cargados todavía.</p>';
     const tone = (v) => (v === null ? 'na' : v >= 90 ? 'ok' : v >= 70 ? 'warning' : 'danger');
     const card = (c) => {
@@ -293,16 +299,23 @@
   }
 
   /** Fase B · matriz de compatibilidad de análisis para el periodo y canal del Diagnóstico. */
-  function analysesBlock(state) {
-    const esc = H().esc, sx = state.dx.settings;
+  /** Análisis disponibles para el periodo y canal del Diagnóstico (el mismo cálculo que pinta «Qué puedes analizar»; lo reutiliza el paso 4). */
+  function analysesModel(state) {
+    const sx = state.dx.settings;
     // sin mes elegido en Diagnóstico: el último mes con venta real (o el mes actual)
     const lastReal = FP.dataStore.records(state.store, 'actual').map((r) => r.date).sort().pop();
     const pType = sx.periodKey ? (sx.periodType || 'month') : 'month';
     const rg = FP.app.periodRange(pType, sx.periodKey || (lastReal || new Date().toISOString()).slice(0, 7));
     const cur = rg ? { start: rg.from, end: rg.to } : null;
-    if (!cur) return '<div class="panel__body"><p class="field__hint">Elige un periodo en Diagnóstico.</p></div>';
+    if (!cur) return { cur: null, list: [] };
     const kind = sx.comparison === 'actual_vs_previous' ? 'previous' : 'yoy';
-    const list = FP.availability.analyses(state.store, { current: cur, channel: sx.channel || 'total', comparisonKind: kind });
+    return { cur, list: FP.availability.analyses(state.store, { current: cur, channel: sx.channel || 'total', comparisonKind: kind }) };
+  }
+
+  function analysesBlock(state) {
+    const esc = H().esc;
+    const { cur, list } = analysesModel(state);
+    if (!cur) return '<div class="panel__body"><p class="field__hint">Elige un periodo en Diagnóstico.</p></div>';
     const ST = { available: ['ok', 'Disponible'], partial: ['warning', 'Parcial'], missing: ['na', 'Falta información'], unavailable: ['na', 'No se puede'], unavailable_source: ['na', 'Fuente no cargada'],
       invalid: ['error', 'Datos inválidos'], quarantined: ['warning', 'En cuarentena'], incomplete_period: ['warning', 'Periodo incompleto'], non_comparable: ['warning', 'No comparable'], not_applicable: ['na', 'No aplica'] };
     const okN = list.filter((a) => a.status === 'available').length, noN = list.filter((a) => ['missing', 'unavailable', 'unavailable_source'].includes(a.status)).length;
@@ -311,6 +324,121 @@
       <thead><tr><th scope="col">Análisis</th><th scope="col">Estado</th><th scope="col">Por qué</th><th scope="col">Qué hacer</th></tr></thead>
       <tbody>${list.map((a) => { const [t, l] = ST[a.status] || ['na', a.status]; const r = a.recommendations;
         return `<tr><th scope="row">${esc(a.label)}</th><td>${H().pill(t, l)}</td><td class="wrap">${r.length ? r.slice(0, 2).map((x) => esc(x.text)).join(' ') : `Disponible para ${esc(cur.start)} a ${esc(cur.end)}.`}</td><td class="wrap">${r.length ? esc(r[0].todo) : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+  }
+
+  /* ---------- Fase 3.2 · recorrido de cinco pasos ---------- */
+
+  /** Valores en cuarentena (conteo exacto, el mismo que dice «Cuarentena»). */
+  function quarantineTotal(state) {
+    const QR = FP.qualityRules;
+    return quarantineLines(state).filter((x) => !x.examplesOnly).length + QR.productQuarantineTotals(state.productQuality).total;
+  }
+
+  /** Meses cerrados con venta real: todos los días del mes tienen venta (en cualquier canal), con venta real o histórica cargada. */
+  function closedMonths(state) {
+    const days = new Set();
+    ['actual', 'historical'].forEach((t) => FP.dataStore.records(state.store, t).forEach((r) => {
+      if (r.date && r.metrics && r.metrics.revenue && r.metrics.revenue.value !== null && r.metrics.revenue.value !== undefined) days.add(String(r.date).slice(0, 10));
+    }));
+    const byMonth = new Map();
+    days.forEach((d) => byMonth.set(d.slice(0, 7), (byMonth.get(d.slice(0, 7)) || 0) + 1));
+    let n = 0;
+    byMonth.forEach((count, key) => { if (count >= new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7), 0)).getUTCDate()) n++; });
+    return n;
+  }
+
+  /** Lo que ya calcula la pantalla, en la forma que entiende FP.qualitySteps. */
+  function stepsModel(state, q) {
+    const t = q.totals, hv = healthModel(state), an = analysesModel(state);
+    let worst = null;
+    hv.collections.forEach((c) => c.components.forEach((x) => { if (x.score !== null && x.score < 100 && (!worst || x.score < worst.score)) worst = { score: x.score, text: `${c.label} · ${x.label} ${x.score}: ${x.detail}` }; }));
+    const missing = an.list.filter((a) => ['missing', 'unavailable', 'unavailable_source', 'partial', 'incomplete_period', 'non_comparable', 'quarantined', 'invalid'].includes(a.status));
+    const fm = missing[0] ? { label: missing[0].label, todo: missing[0].recommendations && missing[0].recommendations[0] ? missing[0].recommendations[0].todo : '' } : null;
+    return {
+      empty: q.status === 'empty', loaded: C().dataTypeIds.filter((x) => q.byType[x].status !== 'empty').map((x) => q.byType[x].label), gaps: gapSentences(q),
+      missingDates: t.missingDates, rejected: t.rejected, errors: t.error, warnings: t.warning, duplicates: t.duplicateKeys, quarantined: quarantineTotal(state),
+      health: { score: hv.score, worst: worst ? worst.text : null },
+      analyses: { total: an.list.length, available: an.list.filter((a) => a.status === 'available').length, firstMissing: fm },
+      forecast: { closedMonths: closedMonths(state), min: 12 }
+    };
+  }
+
+  /** Regla vigente de la confianza del cierre estimado (la de forecastConfianza.js, sin calibrar) y los meses cerrados con que cuenta la app. */
+  function forecastBlock(m) {
+    const FC = FP.forecastConfidence, esc = H().esc;
+    const cm = m.forecast.closedMonths, min = m.forecast.min;
+    const bar = `<p class="qfc__months"><label for="qfc-bar">Meses cerrados con venta real: <b>${cm}</b> de <b>${min}</b> necesarios para calibrar</label><progress id="qfc-bar" class="qfc__bar" max="${min}" value="${Math.min(cm, min)}">${cm} de ${min}</progress></p>`;
+    if (!FC) return `${bar}<p class="field__hint">La regla de confianza no está disponible en esta carga.</p>`;
+    const T = FC.THRESHOLDS, W = FC.WEIGHTS, N = FC.NAMES, pc = (v) => `${Math.round(v * 100)} %`;
+    const rows = [
+      ['cobertura', `≥ ${pc(T.cobAlta)}`, `≥ ${pc(T.cobMedia)}`, 'menos'],
+      ['estabilidad', `± ${pc(T.estAlta)} o menos`, `± ${pc(T.estMedia)} o menos`, 'más'],
+      ['rango', `menos de ${pc(T.rngAlta)}`, `menos de ${pc(T.rngMedia)}`, 'más'],
+      ['historia', `≥ ${T.hisAlta} días`, `${T.hisMedia} a ${T.hisAlta - 1} días`, 'menos']
+    ].map(([k, a, me, b]) => `<tr><th scope="row">${esc(N[k])}</th><td class="num">${pc(W[k])}</td><td>${esc(a)}</td><td>${esc(me)}</td><td>${esc(b)}</td></tr>`).join('');
+    return `${bar}
+      <div class="table-wrap"><table class="table ds-table" aria-label="Regla de la confianza del cierre estimado"><thead><tr><th scope="col">Factor</th><th scope="col" class="num">Peso</th><th scope="col">Alta</th><th scope="col">Media</th><th scope="col">Baja</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="field__hint">Alta = 1, Media = 0.5, Baja = 0; promedio ponderado. Desde ${Math.round(T.cutAlta * 100)} % es Alta y desde ${Math.round(T.cutMedia * 100)} % es Media. Con un factor en Baja no pasa de Media; con dos o más es Baja.</p>
+      <p class="field__hint">Estos son los umbrales iniciales y hoy no cambian solos. Calibrarlos con tu historial (comparar cada cierre estimado contra lo que realmente cerró) llega en una fase posterior. La etiqueta mide qué tan sólida es la base de la estimación, no la probabilidad de acertar.</p>`;
+  }
+
+  const USER_OPEN = {};   // lo que la persona abrió o cerró a mano; manda sobre el paso abierto por omisión
+  let eventsOn = false;
+
+  function applyOpen(activeN) {
+    document.querySelectorAll('#view-calidad details.qstep').forEach((d) => {
+      const n = d.dataset.step, want = USER_OPEN[n] !== undefined ? USER_OPEN[n] : Number(n) === activeN;
+      if (d.open !== want) d.open = want;
+    });
+  }
+
+  function goStep(n) {
+    USER_OPEN[n] = true;
+    const d = document.getElementById(`qstep-${n}`); if (!d) return;
+    d.open = true;
+    if (d.scrollIntoView) d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const sum = document.getElementById(`qstep-${n}-sum`); if (sum && sum.focus) sum.focus({ preventScroll: true });
+  }
+
+  function bindEvents() {
+    if (eventsOn) return; eventsOn = true;
+    document.addEventListener('click', (e) => {
+      const ext = e.target.closest && e.target.closest('[data-qstep]');   // enlace desde otra pantalla: deja que navegue y abre ese paso
+      if (ext) USER_OPEN[Number(ext.dataset.qstep)] = true;
+      const go = e.target.closest && e.target.closest('[data-qgo]');
+      if (go) { e.preventDefault(); goStep(Number(go.dataset.qgo)); return; }
+      const sum = e.target.closest && e.target.closest('#view-calidad summary.qstep__sum');
+      if (sum) { const d = sum.parentElement; USER_OPEN[d.dataset.step] = !d.open; }   // el clic aún no ha cambiado `open`
+    });
+  }
+
+  function renderSteps(state, q) {
+    const esc = H().esc, pill = H().pill;
+    const m = stepsModel(state, q), r = FP.qualitySteps.build(m);
+    const now = r.now;
+    const guide = now
+      ? `<section class="qnow" aria-label="Qué hacer ahora"><div class="qnow__txt"><span class="qnow__k">Qué hacer ahora</span><strong class="qnow__t">Paso ${now.n} · ${esc(now.question)}</strong><span class="qnow__d">${esc(now.text)}</span></div>
+          <div class="btn-row"><button type="button" class="btn btn--primary" data-qgo="${now.n}">Ir al paso ${now.n}</button>${now.view ? `<a class="btn" href="#${esc(now.view)}" data-nav="${esc(now.view)}">Ir a Carga</a>` : ''}</div></section>`
+      : `<section class="qnow qnow--ok" aria-label="Qué hacer ahora"><div class="qnow__txt"><span class="qnow__k">Qué hacer ahora</span><strong class="qnow__t">Todo en orden</strong><span class="qnow__d">Los pasos 1 a 4 están en Listo. El paso 5 solo se mira: no pide nada todavía.</span></div></section>`;
+    const strip = `<ol class="qsteps" aria-label="Los cinco pasos">${r.steps.map((s) => `<li class="qsteps__i"><button type="button" class="qsteps__b" data-qgo="${s.n}" aria-label="Ir al paso ${s.n}: ${esc(s.question)}. ${esc(s.label)}"><span class="qsteps__n">Paso ${s.n}</span><b class="qsteps__q">${esc(s.question)}</b>${pill(s.tone, s.label)}</button></li>`).join('')}</ol>`;
+    $('quality-guide').innerHTML = `${guide}${strip}`;
+    r.steps.forEach((s) => {
+      const el = $(`qstep-${s.n}-sum`); if (!el) return;
+      el.innerHTML = `<span class="qstep__top"><b class="qstep__title">${s.n} · ${esc(s.question)}</b>${pill(s.tone, s.label)}</span>
+        <span class="qstep__line"><b>Qué mirar:</b> ${esc(s.look)} <b>Qué hacer:</b> ${esc(s.todo)}</span>
+        ${s.note ? `<span class="qstep__note">${esc(s.note)}</span>` : ''}
+        <span class="qstep__chev" aria-hidden="true"></span>`;
+    });
+    if ($('quality-forecast')) $('quality-forecast').innerHTML = forecastBlock(m);
+    bindEvents();
+    applyOpen(now ? now.n : 0);
+  }
+
+  /** Para pruebas y para quien quiera ver todo junto: abre (o cierra) todos los pasos y lo recuerda. */
+  function openAll(open) {
+    const want = open !== false;
+    for (let n = 1; n <= 5; n++) USER_OPEN[n] = want;
+    document.querySelectorAll('#view-calidad details.qstep').forEach((d) => { d.open = want; });
   }
 
   function render(state) {
@@ -324,7 +452,11 @@
     if ($('quality-quarantine')) $('quality-quarantine').innerHTML = quarantineBlock(state);
     if ($('quality-log')) $('quality-log').innerHTML = logBlock(state);
     if ($('quality-analyses')) $('quality-analyses').innerHTML = analysesBlock(state);
+    // Fase 3.2 · el recorrido de cinco pasos (si falla, la pantalla de siempre sigue completa)
+    try { if (FP.qualitySteps && $('quality-guide')) renderSteps(state, q); } catch (e) { if (typeof console !== 'undefined') console.error('Calidad de datos paso a paso:', e); document.querySelectorAll('#view-calidad details.qstep').forEach((d) => { d.open = true; }); }
   }
 
-  FP.qualityView = { render };
+  if (typeof document !== 'undefined') bindEvents();   // también atiende los enlaces «paso 5» que salen desde Configuración
+
+  FP.qualityView = { render, openAll };
 })(typeof window !== 'undefined' ? window : globalThis);

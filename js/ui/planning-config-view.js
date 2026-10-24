@@ -60,6 +60,7 @@
         ${COMPONENTS.map(([k, l]) => numberField(`pc-w-${k}`, l, cfg.componentWeights[k], { key: 'componentWeights', sub: k, min: 0, max: 1, step: 0.1 })).join('')}
       </div>
       <p class="field__hint">1 = factor histórico completo; 0 = sin efecto. Se aplica como exponente (f<sup>α</sup>); en el mensual, como mezcla con la distribución por días.</p>
+      <p class="field__hint" id="confidence-pointer">La <strong>confianza del cierre estimado</strong> (Alta, Media o Baja) se revisa en <a href="#calidad" data-nav="calidad" data-qstep="5">Calidad de datos · paso 5</a>. Hoy usa umbrales iniciales fijos; la recalibración automática con tu historial llega en una fase posterior.</p>
       <div class="btn-row"><button type="button" class="btn btn--quiet" data-action="plan-settings-reset">Restablecer valores por defecto</button></div>`;
 
     FP.startupAssumptionsView.bind();

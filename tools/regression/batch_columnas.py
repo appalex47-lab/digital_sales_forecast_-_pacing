@@ -39,7 +39,7 @@ async def main():
         await q.click('[data-action="commit-staged"]')
         await q.wait_for_function("document.querySelectorAll('#view-carga .staging__head').length === 0", timeout=60000); await q.wait_for_timeout(800)
         # 3) Calidad de datos: componente «Columnas», puntaje y tabla
-        await q.goto(u + '#calidad'); await q.wait_for_selector('#quality-health .dhealth__card', timeout=30000); await q.wait_for_timeout(800)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_selector('#quality-health .dhealth__card', timeout=30000); await q.wait_for_timeout(800)
         cerrada = await q.evaluate("(()=>{const d=document.querySelector('#quality-health [data-block=columns-quality]');return d?!d.open:null})()")
         chk('C3a en Calidad de datos «Calidad por columna» inicia cerrada (el detalle se abre a voluntad)', cerrada is True, cerrada)
         await q.evaluate("document.querySelectorAll('#quality-health [data-block=columns-quality]').forEach(d=>d.open=true)"); await q.wait_for_timeout(200)
