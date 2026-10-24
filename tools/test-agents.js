@@ -43,6 +43,26 @@ ok('A3 sin venta real → no_data', A.detect({ fc: { run: { plan: { source: 'fil
   ok('C8 brecha repartida entre canales → sin hallazgo de concentración', !r2.findings.some((x) => x.id === 'brecha_concentrada'), r2.findings.map((x) => x.id));
 }
 
+// ---- canales bajo su plan aunque el total vaya arriba (caso octubre: Ecommerce y WhatsApp caen, Llamadas compensa) ----
+{ const st = mkState({ ecommerce: [1000, 950], whatsapp: [400, 360], llamadas: [300, 450], app: [500, 500] });
+  const r = A.detect(st, dep());
+  const f = r.findings.find((x) => x.id === 'canales_bajo_plan');
+  ok('C9 total arriba del plan pero Ecommerce y WhatsApp bajo su plan → los reporta en «Se cae»', !!f && f.section === 'cae' && /Ecommerce/.test(f.title) && /WhatsApp/.test(f.title) && !/Llamadas/.test(f.title), r.findings.map((x) => [x.id, x.title]));
+  ok('C9b no se reporta como concentración (el total no está bajo el plan)', !r.findings.some((x) => x.id === 'brecha_concentrada'));
+  ok('C9c evidencia con plan/real y contra su plan de cada canal, y el total', f && ['Ecommerce: plan / real', 'WhatsApp vs su plan', 'Total contra el plan a la fecha de corte'].every((k) => f.evid.some((e) => e.k === k)), f && f.evid);
+  ok('C9d con el total arriba del plan no sube a prioridad Alta', f && f.prio !== 'Alta' && f.score <= 69, f && [f.score, f.prio]);
+  ok('C9e no afirma causas ni habla de margen (salvo el límite que aclara que no lo ve)', f && !/(se debe a|la causa es|esto demuestra|margen|ganancia)/i.test(JSON.stringify({ ...f, limites: '' })), f);
+  // canal levemente abajo (<1 % de su plan) → ruido, no se reporta
+  const r2 = A.detect(mkState({ ecommerce: [1000, 995], llamadas: [300, 330] }), dep());
+  ok('C9f un canal apenas abajo de su plan (<1 %) no es hallazgo', !r2.findings.some((x) => x.id === 'canales_bajo_plan'), r2.findings.map((x) => x.id));
+  // si D1 ya concentra la brecha, no se duplica
+  const r3 = A.detect(mkState({ ecommerce: [1000, 1000], app: [500, 500], llamadas: [300, 100] }), dep());
+  ok('C9g si ya sale «brecha concentrada» no se repite como canales bajo su plan', r3.findings.some((x) => x.id === 'brecha_concentrada') && !r3.findings.some((x) => x.id === 'canales_bajo_plan'), r3.findings.map((x) => x.id));
+  // todo en plan → nada
+  const r4 = A.detect(mkState({ ecommerce: [1000, 1005], app: [500, 498] }), dep());
+  ok('C9h todo en plan → ningún canal bajo su plan', !r4.findings.some((x) => x.id === 'canales_bajo_plan'));
+}
+
 // ---- meta, drivers, contradicción, forecast, datos ----
 { const d = dep({
     home: {

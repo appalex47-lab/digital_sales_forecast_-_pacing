@@ -147,6 +147,54 @@
     };
   }
 
+  /**
+   * D1b · Canales por debajo de su propio plan, aunque el total vaya bien.
+   * D1 solo mira cuando el total está bajo el plan; si otro canal compensa (p. ej. Llamadas), Ecommerce o WhatsApp podían caer sin que «Se cae» dijera nada.
+   * Mismo umbral que «Canal por encima de su plan» (≥1 % bajo su plan y ≥0.5 % del plan total a la fecha). Si D1 ya reporta la concentración, no se repite.
+   */
+  function canalesBajoPlan(sc, deps) {
+    const t = rev(sc.tot);
+    if (!t || !fin(t.plan) || !(t.plan > 0)) return null;
+    if (brechaConcentrada(sc, deps)) return null;
+    const rows = sc.channels.map((c) => ({ ...c, r: rev(c.m) })).filter((c) => c.r && fin(c.r.gap) && fin(c.r.plan) && c.r.plan > 0 && fin(c.r.gapPct));
+    const neg = rows.filter((c) => c.r.gap < 0 && c.r.gapPct <= -0.01 && -c.r.gap >= 0.005 * t.plan).sort((a, b) => a.r.gap - b.r.gap);
+    if (!neg.length) return null;
+    const sumNeg = neg.reduce((s, c) => s + c.r.gap, 0), top = neg[0];
+    const names = neg.length > 1 ? `${neg.slice(0, -1).map((c) => c.label).join(', ')} y ${neg[neg.length - 1].label}` : top.label;
+    const totalUp = fin(t.gap) && t.gap >= 0;
+    const pos = rows.filter((c) => c.r.gap > 0).sort((a, b) => b.r.gap - a.r.gap)[0] || null;
+    const evid = [];
+    neg.forEach((c) => {
+      evid.push({ k: `${c.label}: plan / real`, v: `${money(c.r.plan)} / ${money(c.r.actual)}` });
+      evid.push({ k: `${c.label} vs su plan`, v: `${spct(c.r.gapPct)} (${money(c.r.gap)})` });
+      let w = null; try { w = deps.home.why(deps.state, c.id, sc.period); } catch (e) { w = null; }
+      if (w && w.status === 'ok' && fin(w.delta) && fin(w.baseline) && w.baseline > 0) evid.push({ k: `${c.label} vs ${sc.W.prev}`, v: `${spct(w.delta / w.baseline)} (${money(w.delta)})` });
+    });
+    evid.push({ k: 'Total contra el plan a la fecha de corte', v: `${spct(t.gapPct)} (${money(t.gap)})` });
+    if (pos && totalUp) evid.push({ k: `${pos.label} vs su plan`, v: spct(pos.r.gapPct) });
+    const raw = 25 + (-sumNeg / t.plan) * 100 * 6;
+    const score = clamp(totalUp ? Math.min(raw, 69) : raw);
+    const verb = neg.length > 1 ? 'van' : 'va';
+    return {
+      id: 'canales_bajo_plan', detector: 'Canales bajo su plan', score, prio: prioOf(score), owner: CHANNEL_OWNER[top.id] || 'Ecommerce',
+      title: `${names} ${verb} bajo su plan`,
+      story: `${names} ${verb} bajo su plan (${money(sumNeg)})${totalUp && pos ? `, aunque el total va arriba porque ${pos.label} compensa` : ''}`,
+      resumen: `${neg.map((c) => `${c.label} va ${pct(Math.abs(c.r.gapPct))} abajo de su plan (${money(c.r.gap)})`).join('; ')}.${totalUp ? ` El total va ${spct(t.gapPct)} contra el plan, así que esa caída queda tapada por otros canales.` : ''}`,
+      que: `${neg.length > 1 ? 'Esos canales restan' : `${top.label} resta`} ${money(sumNeg)} contra su plan a la fecha de corte${totalUp ? '; el total no lo muestra porque otro canal suma más' : ''}.`,
+      section: 'cae', tag: totalUp ? 'Tapado por el total' : 'Repartida entre canales',
+      big: { value: money(sumNeg), tone: 'dn', sub: `lo que ${neg.length > 1 ? 'restan' : 'resta'} ${names} contra su plan${totalUp ? ` · el total va ${spct(t.gapPct)}` : ''}` },
+      visual: barsOf(neg.slice(0, 3).map((c) => ({ label: c.label, value: c.r.gap })), { n: Math.max(0, neg.length - 3), value: neg.slice(3).reduce((s, c) => s + c.r.gap, 0) }),
+      hipotesis: `Algo propio de ${neg.length > 1 ? 'esos canales' : top.label} y no del negocio completo. Es una hipótesis a validar, no una causa.`,
+      validar: `Compara ${neg.length > 1 ? 'cada canal' : top.label} contra ${sc.W.prev} en tráfico, conversión y ticket (vista «¿Por qué?»).`,
+      accion: `Revisar qué cambió en ${names} ${sc.W.este} (tráfico, conversión y ticket) aunque el total vaya en plan.`,
+      evid,
+      pregunta: `¿La caída de ${top.label} viene de menos tráfico, menos conversión o menor ticket?`,
+      limites: 'Describo qué canales van bajo su plan y cuánto restan; no sé el motivo. No veo margen ni promociones.',
+      fuente: 'Pacing & Forecast', view: 'pacing', viewLabel: 'Pacing & Forecast',
+      facts: { sumNeg, totalGapPct: t.gapPct, channels: neg.length, topGap: top.r.gap, topGapPct: top.r.gapPct }
+    };
+  }
+
   /** D2 · Con el forecast actual el periodo no llega a la meta (solo mes y año: no hay meta semanal). */
   function metaEnRiesgo(sc, deps) {
     if (sc.period.type === 'week') return null;
@@ -322,7 +370,7 @@
     };
   }
 
-  const DETECTORS = [brechaConcentrada, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa];
+  const DETECTORS = [brechaConcentrada, canalesBajoPlan, metaEnRiesgo, driverDominante, contradiccionCapas, forecastDivergente, datosDistorsionan, canalCompensa];
 
   /**
    * Corre todos los detectores. Nunca lanza: un detector que falla se omite y se reporta en `errors`.

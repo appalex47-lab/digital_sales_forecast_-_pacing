@@ -2865,6 +2865,12 @@ Decisión de Alejandro: la historia, la ruta y el Auditor trabajan **a la fecha 
 - **Pruebas.** `tools/test-agents-seleccion.js` (48: selección, detectores por tipo de periodo y canal, historia, Auditor, umbrales, firma) y `tools/regression/batch_agentes_seleccion.py` (G0–G12, navegador: semana/año/mes sin venta/canal, con el panel abierto y en celular).
 - **Límite conocido.** El Analista por canal único no usa la mezcla por canal (no aplica); `contradiccion_capas` con el año no tiene «periodo anterior» y se omite sola.
 
+### Fase 2.1b · «Se cae» ya no depende de que el total vaya bajo el plan
+- **Qué pasaba:** `brecha_concentrada` solo se activaba con el total ≥1 % bajo el plan. Si un canal (p. ej. Llamadas) compensaba y el total iba arriba, Ecommerce o WhatsApp podían estar bajo su propio plan y «Se cae» decía «Nada relevante».
+- **Qué hace ahora:** nuevo detector `canales_bajo_plan` (sección «cae»): canales con venta ≥1 % bajo su plan y ≥0.5 % del plan total a la fecha. Muestra plan/real, contra su plan y contra el periodo anterior de cada canal. Si `brecha_concentrada` ya reporta, no se repite. Con el total arriba del plan nunca sube a prioridad Alta (tope 69).
+- **Banner «Dato con avisos» fuera:** los avisos de calidad ya salen como hallazgo en «Dónde revisar primero» (`datos_distorsionan`); el banner superior se queda solo para lo de archivo de productos (sin archivo, sin mes, no se pudo leer).
+- Pruebas: `tools/test-agents.js` C9–C9h; `test-agents-fase2.js` S16; batería F1.
+
 ## Correcciones · celular, aro del arranque, pruebas viejas y CI chico (2026-10-24)
 - **Celular sin desborde.** En `Inicio`, la etiqueta de «Preparación de datos» (`.ds-badge` con `white-space:nowrap`) ensanchaba la página a 382 px en una pantalla de 360 y se podía deslizar de lado. Ahora `.ds-badge` baja de renglón en ≤600 px (`css/design-system.css`). Además la lista del árbol de causas (`.tree-branch li`, Diagnóstico) usa `minmax(0,1fr) auto` y ya no se sale a 320 px (`css/styles.css`). Prueba nueva: `tools/regression/batch_movil_sin_desborde.py` (23 vistas × 320/360/390 px, sin datos y con datos de demo; sin el arreglo falla).
 - **Aro del arranque.** El giro vive en un `div.boot__ring` propio con `will-change:transform` (capa de la GPU) y no en el `<svg>` directamente; el logo queda quieto, solo gira el aro. Medido en Chromium con CPU 6× más lenta; no pude medirlo en un iPhone real (Safari es donde más se notaba).
