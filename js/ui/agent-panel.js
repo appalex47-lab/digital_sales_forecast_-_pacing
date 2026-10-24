@@ -187,12 +187,17 @@
       return `<div class="ag-card"><h3>Todavía no hay con qué comparar</h3><p>Necesito el plan del mes y la venta real cargada para revisar el pacing. Sin eso no puedo decir si algo se sale de lo normal.</p>
         <div class="ag-actions"><a class="ag-go" data-ag="go" href="#carga" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Carga de datos</a></div></div>`;
     }
-    const chips = `<div class="ag-chiprow">${scopeChips(run, 'analista')}</div>`;
+    const chips = `${demoStrip()}<div class="ag-chiprow">${scopeChips(run, 'analista')}</div>`;
     const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
     const empty = !run.findings.length ? `<div class="ag-card"><h3>Nada fuera de lo normal</h3><p>Revisé ${esc(run.detectors)} puntos del pacing, el forecast y las categorías y ninguno pasa el umbral. Cuando algo cambie, aquí aparece primero.</p></div>` : '';
     return `${chips}${aiChip(run)}${aiWarn(run)}${gateBlock(run, 'analista')}${lect}${storyBlock(run)}${empty || sectionsBlock(run)}${routeBlock(run)}${S.busy.analista ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
   }
   const errNote = (run) => (run && run.errors && run.errors.length ? `<div class="ag-note">Nota: no pude calcular ${run.errors.length} parte(s) y las omití (${esc(run.errors.map((e) => String(e).split(':')[0]).join(', '))}).</div>` : '');
+
+  // ---------- Datos de ejemplo (Fase 3.2b) ----------
+  const demoInfo = () => (FP.app && FP.app.demoInfo ? FP.app.demoInfo() : { loaded: false, real: true, canOffer: false });
+  /** Franja ámbar mientras haya productos de ejemplo cargados; sin botón de borrar (se retiran al cargar datos reales). */
+  const demoStrip = () => (demoInfo().loaded ? '<div class="ag-demo" role="note"><b>Estás viendo datos de ejemplo</b><span>Productos y embudo de ejemplo; no son tus ventas. Se reemplazan solos en cuanto cargues tus archivos reales.</span></div>' : '');
 
   // ---------- Auditor de Conversión ----------
   function bodyAuditor() {
@@ -200,10 +205,16 @@
     if (S.busy.auditor && !run) return '<div class="ag-skel"></div><div class="ag-skel"></div><div class="ag-note" role="status">Revisando el embudo de tus productos…</div>';
     if (!run) return '';
     const go = (href, label) => `<div class="ag-actions"><a class="ag-go" data-ag="go" href="${href}" style="display:inline-flex;align-items:center;text-decoration:none">${label}</a></div>`;
-    if (run.status === 'no_data') return `<div class="ag-card"><h3>Todavía no hay productos cargados</h3><p>El Auditor necesita el archivo de ventas por producto y el embudo de GA4 por producto para ver dónde se queda la compra. Sin eso no puedo seguir el embudo.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
+    if (run.status === 'no_data') {
+      const di = demoInfo(), offer = di.canOffer;
+      return `<div class="ag-card"><h3>Todavía no hay productos cargados</h3><p>El Auditor necesita el archivo de ventas por producto y el embudo de GA4 por producto para ver dónde se queda la compra. Sin eso no puedo seguir el embudo.</p>
+        <div class="ag-actions"><a class="ag-go" data-ag="go" href="#carga" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Carga de datos</a>${offer ? '<button type="button" class="ag-go ag-go--alt" data-ag="demo">Probar con datos de ejemplo</button>' : ''}</div>
+        ${offer ? '<p class="ag-note">Ejemplo: agosto y septiembre de 2026, 600 productos, 4 canales. No son tus datos. Este botón no sale si ya cargaste datos reales.</p>'
+          : di.real ? '<p class="ag-note" data-ag-demo-why>No se ofrece un ejemplo porque ya hay datos reales cargados: los datos de ejemplo y los reales no se mezclan. Para ver el Auditor, carga tus productos y el embudo de GA4 en Carga de datos.</p>' : ''}</div>`;
+    }
     if (run.status === 'sin_embudo') return `<div class="ag-card"><h3>Faltan los datos del embudo</h3><p>Hay ventas por producto, pero no el embudo de GA4 (vistas, carrito, checkout y compras) para este mes. Sin él no puedo decir en qué paso se pierde la compra.</p>${go('#carga', 'Ir a Carga de datos')}</div>`;
     if (run.status === 'sin_mes') { const lab = run.scope ? chosenLabel({ type: run.scope.type, key: run.scope.key }) : null; return `<div class="ag-card"><h3>El archivo de productos no llega a lo que elegiste</h3><p>Tus productos están cargados hasta ${esc(FP.agents.story.dayLabel(run.dateMax || ''))}${lab ? `, pero elegiste ${esc(lab)}` : ''}. Cambia el periodo en la vista o carga el periodo que falta para revisar el embudo.</p>${go('#carga', 'Ir a Carga de datos')}</div>`; }
-    const chips = `<div class="ag-chiprow">${scopeChips(run, 'auditor')}</div>`;
+    const chips = `${demoStrip()}<div class="ag-chiprow">${scopeChips(run, 'auditor')}</div>`;
     const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
     const list = run.findings.length ? run.findings.map((f, i) => findingCard(f, i + 1)).join('')
       : `<div class="ag-card"><h3>Nada fuera de lo normal en el embudo</h3><p>Revisé ${esc(run.detectors)} puntos del embudo (fuga por paso, demanda sin conversión, web contra app, concentración y mezcla de tráfico) y ninguno pasa el umbral.</p></div>`;
@@ -370,6 +381,7 @@
     else if (k === 'ask') ask();
     else if (k === 'rnext') { S.route = { ...S.route, cur: Math.max(S.route.cur, +t.dataset.n + 1) }; paint(false); focusRoute(); }
     else if (k === 'rq') { const n = +t.dataset.n; if (n < S.route.cur) { S.route = { ...S.route, open: { ...S.route.open, [n]: !S.route.open[n] } }; paint(); } }
+    else if (k === 'demo') { t.disabled = true; Promise.resolve(FP.app.actions['ag-demo-conversion']()).catch(() => { t.disabled = false; }); }
     else if (k === 'go') { if (isMobile()) close(); }   // el enlace #vista navega solo; en celular el panel ocupa toda la pantalla
   }
   /** Tras «Entendido, sigamos» el foco pasa a la pregunta que sigue, para que el lector de pantalla y el teclado no se pierdan. */
