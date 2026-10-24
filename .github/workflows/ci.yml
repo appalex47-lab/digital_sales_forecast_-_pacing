@@ -1,0 +1,38 @@
+# CI chico: AVISO, no bloquea. Corre las pruebas de cálculo/reportes/asistentes que no necesitan navegador
+# (≈1 min) y, si alguna falla, deja un aviso amarillo en el PR con el nombre de la prueba.
+# Las baterías con navegador (tools/regression/*.py) NO corren aquí: se corren a mano antes de cada PR.
+name: Pruebas rápidas (aviso)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pruebas de Node (tools/test-*.js y motor)
+        shell: bash
+        run: |
+          fallidas=()
+          for f in tools/test-*.js tools/selftest-node.js; do
+            if ! timeout 300 node "$f" > "/tmp/$(basename "$f").log" 2>&1; then
+              fallidas+=("$f")
+              echo "::warning file=$f,title=Prueba fallida::$f terminó con error (aviso, no bloquea). Mira el registro de este paso."
+              echo "----- $f -----"; grep -E "✘|FALLA|Error" "/tmp/$(basename "$f").log" | head -15
+            fi
+          done
+          {
+            echo "### Pruebas rápidas"
+            if [ ${#fallidas[@]} -eq 0 ]; then echo "Todas pasan ✔"; else echo "Con aviso (${#fallidas[@]}):"; printf -- '- `%s`\n' "${fallidas[@]}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0

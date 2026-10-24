@@ -32,7 +32,10 @@ async def main():
             v = await q.evaluate(VIS); chk(f'S-3 [{w}] pasando el 35 % aparece, de 44 px, a la derecha y dentro de pantalla', v['shown'] and v['w'] == 44 and v['h'] == 44 and 8 <= v['right'] <= 24 and v['bottom'] >= 8, v)
             lab = await q.get_attribute('#back-top', 'aria-label'); chk(f'S-4 [{w}] tiene nombre accesible «Volver arriba»', lab == 'Volver arriba', lab)
             await q.evaluate("window.scrollTo(0,99999)"); await q.wait_for_timeout(300)
-            await q.click('#back-top'); await q.wait_for_timeout(1200)
+            await q.click('#back-top')
+            try: await q.wait_for_function('window.scrollY <= 2', timeout=8000)   # el desplazamiento es suave: con la máquina ocupada tarda más de 1.2 s (antes fallaba a ratos)
+            except Exception: pass
+            await q.wait_for_timeout(400)
             v = await q.evaluate(VIS); chk(f'S-5 [{w}] al tocarlo regresa arriba y se oculta', v['y'] <= 2 and not v['shown'], v)
             await q.evaluate(f"window.scrollTo(0,{int(h * 0.6)})"); await q.wait_for_timeout(300)
             await q.click('.menu-toggle'); await q.wait_for_timeout(500)
