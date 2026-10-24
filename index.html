@@ -16,7 +16,7 @@
     .boot__track{fill:none;stroke:#DCE1E8;stroke-width:3}
     .boot__arc{fill:none;stroke:#0E5E6F;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:72 205}
     .boot__logo{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;filter:drop-shadow(0 4px 10px rgba(14,94,111,.25))}
-    .boot__line{stroke-dasharray:100;stroke-dashoffset:100;animation:boot-draw 1.8s ease-in-out infinite}
+    .boot__line{stroke-dasharray:100;stroke-dashoffset:0}   /* el logo queda quieto: solo gira el aro */
     .boot__name{font-size:1.35rem;font-weight:650;letter-spacing:.01em}
     .boot__msg{margin:0;min-height:1.5em;font-size:1rem;color:#3B4757;transition:opacity .14s ease}
     .boot__msg.is-out{opacity:0}
@@ -28,12 +28,12 @@
     .boot__slow button{padding:6px 12px;border:1px solid #0E5E6F;border-radius:8px;background:#fff;color:#0E5E6F;font:inherit;cursor:pointer}
     .boot--error .boot__dots{display:none}.boot__slow button{display:block;margin:10px auto 0}.boot--error .boot__ring{animation:none}.boot--error .boot__arc{stroke:#B3261E;stroke-dasharray:276 0}.boot--error .boot__line{animation:none;stroke-dashoffset:0}
     @keyframes boot-spin{to{transform:rotate(360deg)}}
-    @keyframes boot-draw{0%{stroke-dashoffset:100}55%,100%{stroke-dashoffset:0}}
     @media (prefers-reduced-motion:reduce){.boot__ring{animation:none}.boot__arc{stroke-dasharray:276 0;opacity:.35}.boot__line{animation:none;stroke-dashoffset:0}.boot,.boot__msg,.boot__dots i{transition:none}}
   </style>
   <link rel="stylesheet" href="css/styles.css?v=20261022z25">
   <link rel="stylesheet" href="css/design-system.css?v=20261022z25">
   <link rel="stylesheet" href="css/report.css?v=20261022z25">
+  <link rel="stylesheet" href="css/agents.css?v=20261022z25">
 </head>
 <body>
 
@@ -826,6 +826,9 @@
   <script src="js/data/mock-products.js?v=20261022z25"></script>
   <script src="js/calculations/self-test.js?v=20261022z25" type="text/plain" data-lazy="selftest"></script>
   <script src="js/storage/storage-tests.js?v=20261022z25" type="text/plain" data-lazy="storagetests"></script>
+  <script src="js/agents/analistaDetectors.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/agents/agentRunner.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/ui/agent-panel.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
   <script src="js/ui/format.js?v=20261022z25"></script>
   <script src="js/ui/ui.js?v=20261022z25"></script>
   <script src="js/ui/progress-loader.js?v=20261022z25"></script>
@@ -886,6 +889,7 @@
   <script src="js/ui/projection-view.js?v=20261022z25"></script>
   <script src="js/cloud/cloudSync.js?v=20261022z25"></script>
   <script src="js/cloud/productSync.js?v=20261022z25"></script>
+  <script src="js/agents/agentLauncher.js?v=20261022z25"></script>
   <script src="js/app.js?v=20261022z25"></script>
 </body>
 </html>

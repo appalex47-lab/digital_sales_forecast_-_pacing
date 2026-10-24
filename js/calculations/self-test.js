@@ -1539,6 +1539,29 @@
       });
     }
 
+    // Fase 1 · Asistentes (Analista de Números): detectores deterministas, registro y reglas de seguridad de la IA
+    if (FP.agents && FP.agents.analista && FP.agents.runner) {
+      const A = FP.agents.analista, R = FP.agents.runner;
+      const rv = (plan, actual) => ({ plan, actual, gap: actual - plan, gapPct: (actual - plan) / plan, compliance: actual / plan });
+      const mo = (plan, actual) => ({ key: '2026-09', countedDays: 22, plan: { revenue: plan }, toDate: { revenue: rv(plan, actual) }, forecastGap: { revenue: { gapPct: 0 } } });
+      const mk = (chs) => { const t = Object.values(chs).reduce((x, c) => [x[0] + c[0], x[1] + c[1]], [0, 0]); const channels = {}; Object.keys(chs).forEach((id) => { channels[id] = { months: [mo(chs[id][0], chs[id][1])] }; });
+        return { fc: { lastActualDate: '2026-09-22', run: { plan: { source: 'file' }, total: { months: [mo(t[0], t[1])] }, channels } }, quality: { totals: {} }, settings: {}, dx: {} }; };
+      const noHome = { home: { goal: () => null, whyPlan: () => null, why: () => null, excluded: () => ({ days: 0, revenue: 0 }) }, advisor: { advise: () => null } };
+      test('Asistentes', 'Sin datos de plan y venta el Analista dice «no_data» y no inventa', () => A.detect({}, noHome).status === 'no_data');
+      test('Asistentes', 'Con todo en plan no reporta hallazgos', () => { const r = A.detect(mk({ ecommerce: [1000, 1005], llamadas: [300, 298] }), noHome); return r.status === 'ok' && r.findings.length === 0; });
+      test('Asistentes', 'Detecta la brecha concentrada en un canal con cifras del motor', () => { const r = A.detect(mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }), noHome); const f = r.findings.find((x) => x.id === 'brecha_concentrada'); return !!f && /Llamadas/.test(f.title) && A.OWNERS.includes(f.owner) && f.evid.length >= 3; });
+      test('Asistentes', 'Un detector que falla no tumba a los demás', () => { const st = mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }); Object.defineProperty(st, 'quality', { get() { throw new Error('x'); } }); const r = A.detect(st, noHome); return r.errors.length === 1 && r.findings.some((x) => x.id === 'brecha_concentrada'); });
+      test('Asistentes', 'La respuesta de la IA con ids inventados o cifras que el motor no calculó se rechaza', () => {
+        const det = A.detect(mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }), noHome), ctx = R.buildContext(det, A.OWNERS), id = det.findings[0].id;
+        const bad = R.validate({ hallazgos: [{ id: 'inventado', prioridad: 'Alta', titulo: 'x', resumen: 'y', siguientePregunta: 'z', responsable: 'Comercial' }] }, ctx, A.OWNERS);
+        const num = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: 'Llamadas cae 77.7%', resumen: 'Pérdida de $9.9 M', siguientePregunta: '¿?', responsable: 'Comercial' }] }, ctx, A.OWNERS);
+        const good = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: det.findings[0].title, resumen: det.findings[0].resumen, siguientePregunta: det.findings[0].pregunta, responsable: 'Contact center' }] }, ctx, A.OWNERS);
+        return bad.ok === false && num.ok === false && good.ok === true;
+      });
+      test('Asistentes', 'El registro de agentes: Analista disponible; Auditor y Arquitecto como próximamente', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === false && g.AGENTS.arquitecto.available === false && g.defaultAgent('segmentos') === 'analista'; });
+      test('Asistentes', 'Las reglas de la IA prohíben calcular, causalidad y margen', () => /NO calcules/.test(R.SYSTEM_RULES) && /causal/.test(R.SYSTEM_RULES) && /margen/.test(R.SYSTEM_RULES));
+    }
+
     const passed = results.filter((r) => r.pass).length;
     return { results, passed, total: results.length, ok: passed === results.length };
   }
