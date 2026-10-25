@@ -134,11 +134,15 @@
     return Number.isNaN(d.getTime()) ? String(n) : d.toISOString().slice(0, 10);
   }
 
-  function workbookSheetTarget(workbookDoc) {
-    const sheets = Array.from(workbookDoc.getElementsByTagName('*')).filter((n) => n.localName === 'sheet');
+  const sheetNodes = (workbookDoc) => Array.from(workbookDoc.getElementsByTagName('*')).filter((n) => n.localName === 'sheet');
+
+  /** Ruta de la hoja elegida por nombre; sin nombre (o si no existe) es la primera, como siempre. */
+  function workbookSheetTarget(workbookDoc, sheetName, relsDoc) {
+    const sheets = sheetNodes(workbookDoc);
     if (!sheets.length) throw new Error('El XLSX no contiene hojas.');
-    const relId = sheets[0].getAttribute('r:id') || sheets[0].getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
-    const rels = Array.from(workbookDoc.getElementsByTagName('*')).filter((n) => n.localName === 'Relationship');
+    const chosen = (sheetName && sheets.find((n) => n.getAttribute('name') === sheetName)) || sheets[0];
+    const relId = chosen.getAttribute('r:id') || chosen.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const rels = Array.from((relsDoc || workbookDoc).getElementsByTagName('*')).filter((n) => n.localName === 'Relationship');
     const rel = rels.find((r) => r.getAttribute('Id') === relId);
     const target = rel ? rel.getAttribute('Target') : null;
     if (!target) return 'xl/worksheets/sheet1.xml';
@@ -147,7 +151,16 @@
       : `xl/${target.replace(/^\/+/, '').replace(/^\.\//, '')}`;
   }
 
-  async function parse(arrayBuffer) {
+  /** Nombres de las hojas del libro, en orden. */
+  async function sheetNames(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.length < 4 || u32(bytes, 0) !== 0x04034b50) throw new Error('El archivo no parece ser un XLSX válido.');
+    const wb = localEntries(bytes).find((e) => e.name === 'xl/workbook.xml');
+    if (!wb) throw new Error('XLSX inválido: falta xl/workbook.xml.');
+    return sheetNodes(xml(await readEntry(bytes, wb))).map((n) => n.getAttribute('name'));
+  }
+
+  async function parse(arrayBuffer, options) {
     const bytes = new Uint8Array(arrayBuffer);
     if (bytes.length < 4 || u32(bytes, 0) !== 0x04034b50) throw new Error('El archivo no parece ser un XLSX válido.');
     const entries = localEntries(bytes);
@@ -156,7 +169,10 @@
     if (!workbookEntry) throw new Error('XLSX inválido: falta xl/workbook.xml.');
 
     const workbookDoc = xml(await readEntry(bytes, workbookEntry));
-    const sheetTarget = workbookSheetTarget(workbookDoc);
+    // Las rutas de las hojas viven en xl/_rels/workbook.xml.rels. Sin hoja pedida se conserva el comportamiento de siempre (primera hoja).
+    const relsEntry = byName.get('xl/_rels/workbook.xml.rels');
+    const relsDoc = options && options.sheet && relsEntry ? xml(await readEntry(bytes, relsEntry)) : null;
+    const sheetTarget = workbookSheetTarget(workbookDoc, options && options.sheet, relsDoc);
     const sheetEntry = byName.get(sheetTarget) || byName.get('xl/worksheets/sheet1.xml');
     if (!sheetEntry) throw new Error('XLSX inválido: no se encontró la primera hoja.');
 
@@ -227,5 +243,5 @@
     };
   }
 
-  FP.xlsx = { parse };
+  FP.xlsx = { parse, sheetNames };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -81,6 +81,8 @@
       if (fin(pct) && Math.abs(pct) >= 0.05) factors.push(`${C().metrics[k].label} también se movió ${(pct * 100).toFixed(1)} % vs la base aunque el escenario no lo cambiaba.`);
     });
     if (windowDays > n) factors.push(`${windowDays - n} días de la ventana aún no tienen real.`);
+    const promoNote = win && FP.promotionNotes ? FP.promotionNotes.forRange([win.start, win.end], action && action.channel ? action.channel : null) : null;
+    if (promoNote) factors.push(promoNote);   // aditivo: sin promociones registradas no cambia nada
     factors.push('Otros factores posibles no medidos aquí: mix, promociones, cambios de precio o de canal.');
 
     return {

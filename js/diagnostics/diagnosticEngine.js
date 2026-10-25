@@ -87,7 +87,10 @@
     // 3. Señales
     const signals = FP.signalEngine.detectSignals({ level1: l1, dims, pairs: built.pairs, settings: p.settings || {} });
     // 4. Hipótesis (solo con evidencia)
-    const hypotheses = FP.hypothesisEngine.generateHypotheses({ level1: l1, signals });
+    let hypotheses = FP.hypothesisEngine.generateHypotheses({ level1: l1, signals });
+    // Promociones registradas en el periodo (solo suma una línea a «qué validar»; sin registro, el resultado no cambia)
+    const promoNote = FP.promotionNotes ? FP.promotionNotes.forRange(built.currentRange, ctx.channel) : null;
+    if (promoNote) hypotheses = hypotheses.map((h) => ({ ...h, validationNeeded: [...(h.validationNeeded || []), promoNote] }));
 
     // Recuperación: requerido vs forecast expresado en drivers (Fase 4)
     let recovery = null;

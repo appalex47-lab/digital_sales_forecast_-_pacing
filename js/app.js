@@ -21,13 +21,20 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
     productQuality: [],
     replace: { undo: null },   // reemplazo de archivos: instantánea para deshacer el último reemplazo
     cx: { mode: 'ayer', sync: null, key: null },
+    pm: { reg: null, sel: null, creating: false, actor: '', msg: null, tab: 'resumen' },
+    cg: { reg: null, form: {}, msg: null, live: {}, data: null, loading: false },   // metas por campaña (Resumen)
+    sm: { reg: null, group: 'cat', campaign: '', msg: null },   // pestaña «Resumen» + registro de propuestas exportadas
+    ac: { reg: null, sel: null, msg: null },   // «Activación sugerida» (columnas de Ofertas recibidas y Oportunidades)
+    of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
+    op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
+    rs: { promoId: '', loading: false, result: null, msg: null, f: { q: '', status: '', objective: '', space: '', mechanic: '', category: '', rec: '', from: '', to: '' } },   // «Resultados e historial»   // «Ofertas recibidas» (pestaña de Promociones)   // «Promociones» (registro compartido del equipo)
     cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
@@ -683,6 +690,155 @@
   }
   function saveRecoverySettings() { storage.save(K.recoverySettings, { settings: state.rc.settings, constraints: state.rc.constraints }); }
   function saveScenarios() { return saveOk(storage.save(yk(K.scenarios, state.year), state.rc.scenarioStore), 'los escenarios'); }
+  /* ---------- Promociones (propuesta B, fase 1): registro global del equipo; clave pequeña con sincronización automática ---------- */
+  const PM_ACTOR = 'fp.promoActor';
+  function loadPromotions() {
+    const env = storage.load(K.promotions);
+    state.pm.reg = FP.promotions.hydrate(env && env.data);
+    try { state.pm.actor = root.localStorage.getItem(PM_ACTOR) || state.pm.actor || ''; } catch (e) { /* sin storage */ }
+  }
+  FP.promotionNotes.provider = () => state.pm.reg;
+  function savePromotions() { return saveOk(storage.save(K.promotions, state.pm.reg), 'las promociones'); }
+  /** Congela la venta de referencia de los SKU de la promoción con la venta cargada hoy. */
+  async function freezePromoBaseline(id, note) {
+    const p = FP.promotions.find(state.pm.reg, id); if (!p) return { ok: false, error: 'la promoción no existe.' };
+    try {
+      const daily = await FP.promotionEvaluation.dailyFor(p, {});
+      const fz = FP.promotionEvaluation.freeze(p, daily, { promotions: state.pm.reg.promotions, events: state.events || [] });
+      const r = FP.promotions.setBaseline(state.pm.reg, id, fz, { by: state.pm.actor, note });
+      if (r.ok) {
+        const empty = !fz.rows;
+        state.pm.msg = { kind: 'ok', text: empty ? 'Línea base guardada, pero no hay venta cargada antes del inicio: sin datos que congelar.' : `Línea base congelada: ${fz.rows} días-SKU de venta de referencia.`, warnings: empty ? ['Carga la venta de los 56 días previos al inicio y vuelve a congelar mientras la promoción siga aprobada o publicada.'] : [] };
+        savePromotions(); render();
+      }
+      return r;
+    } catch (e) { return { ok: false, error: 'no se pudo leer la venta para congelar la línea base.' }; }
+  }
+  function pmMsg(r, okText) {
+    state.pm.msg = r.ok ? { kind: 'ok', text: okText, warnings: r.warnings || [] } : { kind: 'bad', text: r.error };
+    if (r.ok) savePromotions();
+    render();
+    return r;
+  }
+  function loadOffers() { const env = storage.load(K.offers); state.of.reg = FP.offers.hydrate(env && env.data); state.of.sel = null; state.of.pending = null; state.of.checked = {}; }
+  function loadProposals() { const env = storage.load(K.proposals); state.sm.reg = FP.summary.hydrate(env && env.data); state.sm.msg = null; }
+  function loadGoals() { const env = storage.load(K.goals); state.cg.reg = FP.goals.hydrate(env && env.data); state.cg.msg = null; }
+  function saveGoals() { return saveOk(storage.save(K.goals, state.cg.reg), 'las metas por campaña'); }
+  /** SKU de una campaña: los de sus ofertas recibidas y los de sus promociones. */
+  function cgCampaignSkus(campaign) {
+    const c = String(campaign || '').trim().toLowerCase(), set = new Set();
+    const lots = new Set(state.of.reg.batches.filter((b) => String(b.campaign || '').trim().toLowerCase() === c).map((b) => b.batchId));
+    state.of.reg.offers.forEach((o) => { if (lots.has(o.batchId) && o.sku) set.add(o.sku); });
+    state.pm.reg.promotions.forEach((pr) => { if (String(pr.campaign || '').trim().toLowerCase() === c) (pr.skus || []).forEach((x) => set.add(x.sku)); });
+    return [...set];
+  }
+  /** Ofertas recibidas de los lotes de una campaña (para el descuento promedio). */
+  function cgCampaignOffers(campaign) {
+    const c = String(campaign || '').trim().toLowerCase(), lots = new Set(state.of.reg.batches.filter((b) => String(b.campaign || '').trim().toLowerCase() === c).map((b) => b.batchId));
+    return state.of.reg.offers.filter((o) => lots.has(o.batchId));
+  }
+  /**
+   * Prepara lo que el panel de metas necesita de la venta por producto: (1) la evaluación al día de cada promoción medible de una campaña con meta
+   * y (2) el ticket por unidad (venta ÷ unidades) de los últimos 56 días, por categoría, para orientar si la meta principal va en venta o en unidades.
+   * Si no hay venta por producto cargada, el avance cae al último corte guardado.
+   */
+  async function cgLoad() {
+    const cg = state.cg, PS = FP.productStore;
+    if (cg.loading) return;
+    cg.loading = true; render();
+    try {
+      cg.live = {}; cg.data = null;
+      if (PS && PS.available() && PS.meta && PS.meta.batches && PS.meta.dateMax) {
+        const to = PS.meta.dateMax, from = FP.promotionEvaluation.addDays(to, -55), weeks = [], tot = new Map();
+        for (let w = 0; w < 8; w++) {   // 8 semanas: el total da el ticket y cada semana da cuánto se mueve el precio por unidad (tolerancia que se ajusta sola)
+          const wf = FP.promotionEvaluation.addDays(from, 7 * w), wt = FP.promotionEvaluation.addDays(wf, 6), wr = [];
+          (await PS.aggregate({ from: wf, to: wt, channel: null, groupBy: 'sku' })).forEach((acc, sku) => {
+            const f = PS.finalize(acc), revenue = f.revenue.value, units = f.units.value; wr.push({ sku, revenue, units });
+            const t = tot.get(sku) || { revenue: 0, units: 0 }; t.revenue += Number.isFinite(revenue) ? revenue : 0; t.units += Number.isFinite(units) ? units : 0; tot.set(sku, t);
+          });
+          weeks.push(wr);
+        }
+        const rows = [...tot.entries()].map(([sku, t]) => { const m = PS.catalog.bySku.get(sku); return { sku, category: m ? m.category : '', revenue: t.revenue, units: t.units }; });
+        cg.data = { from, to, rows, weeks, stats: FP.goals.ticketStats(rows) };
+        const camps = new Set(cg.reg.goals.map((g) => g.campaign.toLowerCase()));
+        for (const pr of state.pm.reg.promotions) {
+          if (!['published', 'measuring', 'closed'].includes(pr.status) || !pr.campaign || !camps.has(pr.campaign.toLowerCase())) continue;
+          try { cg.live[pr.promoId] = await FP.promotionEvaluation.evaluate(pr, { promotions: state.pm.reg.promotions, events: state.events || [] }); } catch (e) { /* esa promoción cae a su último corte */ }
+        }
+      }
+    } catch (e) { cg.live = {}; cg.data = null; cg.msg = { kind: 'bad', text: `No pude calcular el avance al día (${e.message || e}). Se usa el último corte guardado.` }; }
+    cg.loading = false; render();
+  }
+  if (FP.goalsView) { FP.goalsView.campaignSkus = cgCampaignSkus; FP.goalsView.campaignOffers = cgCampaignOffers; }
+  function saveProposals() { return saveOk(storage.save(K.proposals, state.sm.reg), 'las propuestas exportadas'); }
+  function loadActivation() { const env = storage.load(K.activation); state.ac.reg = FP.activation.hydrate(env && env.data); state.ac.sel = null; state.ac.msg = null; }
+  function saveActivation() { return saveOk(storage.save(K.activation, state.ac.reg), 'la activación'); }
+  const acV = (id) => FP.activationView.val(id);
+  /** Filas para exportar el plan de activación de una pestaña ('offer' = Ofertas recibidas; 'potential' = Oportunidades). */
+  function acRows(tab) {
+    const ac = state.ac, map = FP.activationView.recs(state), CMP = FP.activation.COMPARE, rows = [];
+    const stateInfo = (key) => { const st = FP.activation.stateOf(ac.reg, key), it = ac.reg.items[key]; return { stateLabel: FP.activation.STATES[st], by: it ? it.by : '', at: it ? it.at : '' }; };
+    const extOf = (sku, rec) => { const e = FP.activationView.extFor(state, sku); return e ? { space: e.space, comment: e.comment, cmpLabel: CMP[FP.activation.compare(rec, e.space)] || '' } : null; };
+    const pctTxt = (d) => (typeof d === 'number' ? `${(d * 100).toFixed(1).replace(/\.0$/, '')} %` : '');
+    if (tab === 'offer') {
+      const reg = state.of.reg, an = FP.offers.analyze(reg);
+      FP.offers.filter(reg, an, state.of.f).forEach((o) => {
+        const rec = map.get(`offer:${o.offerId}`); if (!rec) return;
+        rows.push(Object.assign({ sku: o.sku, name: o.name, category: o.category, lab: o.lab, origin: 'Oferta recibida', offer: [pctTxt(o.discount), o.mechanic].filter(Boolean).join(' · '), program: o.program, rec, ext: extOf(o.sku, rec) }, stateInfo(rec.key)));
+      });
+      return { rows, total: reg.offers.length };
+    }
+    const list = FP.opportunityView.visible(state.op, state);
+    list.forEach((i) => {
+      const o = i.offers.slice().sort((a, b) => (b.discount || 0) - (a.discount || 0))[0], rec = map.get(o ? `offer:${o.offerId}` : `sku:${i.sku}`); if (!rec) return;
+      const full = o ? state.of.reg.offers.find((x) => x.offerId === o.offerId) : null;
+      rows.push(Object.assign({ sku: i.sku, name: i.name, category: i.category, lab: i.brand, origin: o ? 'Oportunidad con oferta recibida' : 'Oportunidad', offer: o ? [pctTxt(o.discount), full && full.mechanic].filter(Boolean).join(' · ') : '', program: full ? full.program : '', rec, ext: extOf(i.sku, rec) }, stateInfo(rec.key)));
+    });
+    return { rows, total: state.op.result ? state.op.result.counts.total : 0 };
+  }
+  function saveOffers() { return saveOk(storage.save(K.offers, state.of.reg), 'las ofertas recibidas'); }
+  function ofMsg(r, okText) { state.of.msg = r.ok ? { kind: 'ok', text: okText, warnings: [r.warning].filter(Boolean) } : { kind: 'bad', text: r.error }; if (r.ok) saveOffers(); render(); return r; }
+  const ofV = (id) => FP.offerView.val(id);
+  const opV = (id) => FP.opportunityView.val(id);
+  const rsV = (id) => FP.resultsView.val(id);
+  /** Evaluación de una promoción: lee la venta diaria por SKU del almacén de productos y compara contra su línea base. */
+  async function rsRun() {
+    const rs = state.rs, p = rs.promoId ? FP.promotions.find(state.pm.reg, rs.promoId) : null;
+    if (!p) { rs.msg = { kind: 'bad', text: 'Elige una promoción.' }; render(); return; }
+    rs.loading = true; rs.msg = null; rs.result = null; render();
+    try { rs.result = await FP.promotionEvaluation.evaluate(p, { promotions: state.pm.reg.promotions, events: state.events || [] }); }
+    catch (e) { rs.msg = { kind: 'bad', text: `No pude calcular la evaluación: ${e.message || e}` }; }
+    rs.loading = false; render();
+  }
+  /** Oportunidades del canal: reglas explícitas sobre la comparación por SKU que ya calcula Categoría → Producto. */
+  async function opRun(force) {
+    const op = state.op, m = FP.productStore.meta;
+    if (!FP.productStore.available() || !m || !m.batches) { op.result = null; render(); return; }
+    if (!op.f.from || !op.f.to) { op.f.to = m.dateMax; op.f.from = `${m.dateMax.slice(0, 7)}-01`; }
+    if (!force && op.result) return;
+    if (op.f.from > op.f.to) { op.msg = { kind: 'bad', text: 'La fecha de inicio es posterior a la de fin.' }; render(); return; }
+    op.loading = true; op.msg = null; render();
+    try {
+      const res = await FP.productAnalysis.run({ from: op.f.from, to: op.f.to, periodType: 'month', comparison: op.f.comparison, channel: op.f.channel, level: 'sku', withGeoSignals: false });
+      const out = FP.opportunities.analyze(res.rows, { catalog: (sku) => FP.productStore.catalog.bySku.get(sku) || null, offers: state.of.reg.offers });
+      out.period = res.period; out.baseline = res.baseline; op.result = out; op.checked = {}; op.sel = null; op.limit = 50;
+      if (!out.counts.total) op.msg = { kind: 'ok', text: 'Con las reglas actuales ningún SKU califica en este periodo.' };
+    } catch (e) { op.result = null; op.msg = { kind: 'bad', text: `No pude calcular las oportunidades: ${e.message || e}` }; }
+    op.loading = false; render();
+  }
+  let ofBuffer = null;   // archivo XLSX en revisión (se descarta al guardar o cancelar)
+  function ofRebuild() {
+    const pd = state.of.pending; if (!pd) return;
+    pd.built = FP.offers.buildBatch(pd.headers, pd.rows, { campaign: pd.campaign });
+  }
+  async function ofLoadSheet(pd, sheet) {
+    const parsed = await FP.xlsx.parse(ofBuffer, { sheet });
+    pd.sheet = sheet; pd.headers = parsed.headers; pd.rows = parsed.rows; ofRebuild();
+  }
+  const ofOk = (b) => b && b.offers && b.offers.length > 0 && !(b.missing && b.missing.length);
+  const pmV = (id) => FP.promotionView.val(id);
+  function pmDownload(name, content, mime) { FP.exporter.download(name, content, mime); }
+
   function saveActionPlan() { return saveOk(storage.save(yk(K.actionPlan, state.year), state.rc.plan), 'el plan de acción'); }
 
   /** Cambios del borrador en unidades del motor (fracciones). */
@@ -1386,6 +1542,7 @@
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }
     else if (state.view === 'clientes') FP.customersView.render(state);
     else if (state.view === 'cambios') { ensureForecast(); FP.changesView.render(state); }
+    else if (state.view === 'promociones') FP.promotionView.render(state);
     else if (state.view === 'medir') FP.measureView.render(state);
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
     else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
@@ -2480,6 +2637,10 @@
       loadForecastSettings();
       loadReforecastSettings();
       loadRecovery();
+      loadPromotions();
+      loadOffers();
+      loadActivation();
+      loadProposals(); loadGoals();
       loadBusinessContext(); loadBrand(); loadCalibration();
       state.rc.draft = emptyDraft(); state.rc.selected = []; state.rc.imported = null;
       loadDiagnosticSettings();
@@ -4143,6 +4304,321 @@
       FP.exporter.download(`${kind === 'normalized' ? 'normalized_data' : kind === 'errors' ? 'data_errors' : kind === 'quality' ? 'data_quality' : 'consolidated_data'}_${stamp}.json`, build());
     },
 
+    /* ---- Promociones (propuesta B, fase 1) ---- */
+    'pm-actor'(el) { state.pm.actor = String(el.value || '').trim(); try { root.localStorage.setItem(PM_ACTOR, state.pm.actor); } catch (e) { /* sin storage */ } },
+    'pm-new'() { state.pm.creating = true; state.pm.msg = null; render(); },
+    'pm-new-cancel'() { state.pm.creating = false; render(); },
+    'pm-create'() {
+      const r = FP.promotions.createPromotion(state.pm.reg, { name: pmV('pm-n-name'), channel: pmV('pm-n-channel'), objective: pmV('pm-n-obj'), plannedStart: pmV('pm-n-start'), plannedEnd: pmV('pm-n-end'), proposalName: pmV('pm-n-prop'), createdBy: state.pm.actor }, { year: state.year });
+      if (r.ok) { state.pm.creating = false; state.pm.sel = r.promotion.promoId; }
+      return pmMsg(r, r.ok ? `Promoción creada con el identificador ${r.promotion.promoId}.` : '');
+    },
+    async 'of-file'(el) {
+      const f = el.files && el.files[0]; el.value = ''; if (!f) return;
+      const of = state.of; of.msg = null;
+      try {
+        const pd = { fileName: f.name, sheets: [], sheet: '', headers: [], rows: [], built: null, campaign: { name: '', start: '', end: '' }, origin: 'commercial' };
+        of.pending = pd;   // ofRebuild trabaja sobre la revisión activa
+        if (/\.xlsx$/i.test(f.name)) {
+          if (!FP.xlsx) throw new Error('El lector XLSX no está disponible.');
+          ofBuffer = await f.arrayBuffer(); pd.sheets = await FP.xlsx.sheetNames(ofBuffer);
+          let pick = pd.sheets.find((n) => /productos?\s*finales?/i.test(n)) || null;
+          if (!pick) {   // la primera hoja que tenga SKU y descuento
+            for (const n of pd.sheets) { const pr = await FP.xlsx.parse(ofBuffer, { sheet: n }); const m = FP.offers.mapColumns(pr.headers).map; if (m.sku && (m.discount || (m.pmp && m.finalPrice))) { pick = n; break; } }
+          }
+          await ofLoadSheet(pd, pick || pd.sheets[0]);
+        } else if (/\.csv$/i.test(f.name)) {
+          ofBuffer = null; const parsed = FP.csv.parse(await f.text(), {}); pd.headers = parsed.headers; pd.rows = parsed.rows; pd.sheet = ''; ofRebuild();
+        } else throw new Error('Carga un archivo .xlsx o .csv.');
+        render();
+        const d = document.getElementById('of-t-pend'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } }
+      } catch (e) { of.pending = null; of.msg = { kind: 'bad', text: `No pude leer el archivo: ${e.message || e}` }; render(); }
+    },
+    async 'of-sheet'(el) {
+      const pd = state.of.pending; if (!pd || !ofBuffer) return;
+      try { await ofLoadSheet(pd, el.value); } catch (e) { state.of.msg = { kind: 'bad', text: `No pude leer esa hoja: ${e.message || e}` }; }
+      render();
+    },
+    'of-manual-open'() { state.of.manual = { v: { origin: 'commercial' }, msg: '' }; render(); try { document.getElementById('of-t-m').scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } },
+    'of-manual-close'() { state.of.manual = null; render(); },
+    'of-manual-save'() {
+      const m = state.of.manual; if (!m) return;
+      const v = {}; FP.offers.TEMPLATE.forEach((c) => { v[c[1]] = ofV(`of-m-${c[1]}`); }); ['campaignName', 'origin'].forEach((k) => { v[k] = ofV(`of-m-${k}`); });
+      m.v = v;
+      const r = FP.offers.captureManual(state.of.reg, v, { by: state.pm.actor });
+      if (!r.ok) { m.msg = r.error; render(); return; }
+      saveOffers();
+      m.v = { campaignName: v.campaignName, origin: v.origin, start: v.start, end: v.end, lab: v.lab }; m.msg = '';
+      state.of.f = { batchId: r.batch.batchId }; state.of.limit = 60;
+      state.of.msg = { kind: 'ok', text: `Oferta ${r.offer.offerId} guardada como «Recibida» en ${r.batch.batchId}. Puedes capturar otra.` }; render();
+    },
+    'of-template'() { FP.xlsxWriter.download('plantilla_ofertas.xlsx', FP.xlsxWriter.build(FP.promotionExport.buildOfferTemplateBook())); },
+    'of-camp'() {
+      const pd = state.of.pending; if (!pd) return;
+      pd.campaign = { name: ofV('of-p-name'), start: ofV('of-p-start'), end: ofV('of-p-end') }; pd.origin = ofV('of-p-origin') || 'commercial'; ofRebuild(); render();
+    },
+    'of-cancel'() { state.of.pending = null; ofBuffer = null; render(); },
+    'of-commit'() {
+      const pd = state.of.pending; if (!pd || !ofOk(pd.built)) return;
+      const r = FP.offers.commitBatch(state.of.reg, pd.built, { by: state.pm.actor, fileName: pd.fileName, sheet: pd.sheet, campaign: pd.campaign, origin: pd.origin });
+      if (r.ok) { state.of.pending = null; ofBuffer = null; state.of.f = { batchId: r.batch.batchId }; state.of.limit = 60; state.of.checked = {}; }
+      return ofMsg(r, r.ok ? `${r.batch.imported} ofertas guardadas en ${r.batch.batchId} como «Recibida».${r.batch.rejected.length ? ` Se omitieron ${r.batch.rejected.length} filas sin SKU.` : ''}` : '');
+    },
+    'of-batch'(el) { const f = state.of.f; f.batchId = f.batchId === el.dataset.id ? '' : el.dataset.id; state.of.limit = 60; render(); },
+    'of-filter'() {
+      state.of.f = Object.assign({}, state.of.f.batchId ? { batchId: state.of.f.batchId } : {}, { q: ofV('of-f-q'), state: ofV('of-f-state'), lab: ofV('of-f-lab'), category: ofV('of-f-cat'), issue: ofV('of-f-issue') });
+      state.of.limit = 60; render();
+    },
+    'of-more'() { state.of.limit += 60; render(); },
+    'of-chk'(el) { if (el.checked) state.of.checked[el.dataset.id] = true; else delete state.of.checked[el.dataset.id]; render(); },
+    'of-check-all'() {
+      const an = FP.offers.analyze(state.of.reg); FP.offers.filter(state.of.reg, an, state.of.f).slice(0, state.of.limit).forEach((o) => { state.of.checked[o.offerId] = true; }); render();
+    },
+    'of-check-none'() { state.of.checked = {}; render(); },
+    'of-bulk'(el) {
+      const to = el.dataset.to, ids = Object.keys(state.of.checked).filter((k) => state.of.checked[k]); let okN = 0; const bad = [];
+      ids.forEach((id) => { const r = FP.offers.setState(state.of.reg, id, to, { by: state.pm.actor }); if (r.ok) okN += 1; else bad.push(`${id}: ${r.error}`); });
+      if (okN) { state.of.checked = {}; saveOffers(); }
+      state.of.msg = { kind: okN ? 'ok' : 'bad', text: `${okN} de ${ids.length} pasaron a «${FP.offers.STATE[to]}».${bad.length ? ` No pasaron ${bad.length}:` : ''}`, warnings: bad.slice(0, 6).concat(bad.length > 6 ? [`…y ${bad.length - 6} más`] : []) };
+      render();
+    },
+    'of-to-promo'() {
+      const promoId = ofV('of-b-promo'); const reg = state.pm.reg; const p = FP.promotions.find(reg, promoId);
+      if (!p) { state.of.msg = { kind: 'bad', text: 'Elige la promoción destino.' }; render(); return; }
+      let added = 0; const skipped = [];
+      state.of.reg.offers.filter((o) => o.state === 'selected').forEach((o) => {
+        const r = FP.promotions.addSku(reg, promoId, FP.offers.toPromotionSku(o), state.pm.actor);
+        if (r.ok) { added += 1; FP.offers.addNote(state.of.reg, o.offerId, `Agregada a la promoción ${promoId}`, state.pm.actor); } else skipped.push(`${o.sku}: ${r.error}`);
+      });
+      if (added) { savePromotions(); saveOffers(); }
+      state.of.msg = { kind: added ? 'ok' : 'bad', text: `${added} ofertas seleccionadas se agregaron a ${promoId}.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6) };
+      render();
+    },
+    'of-open'(el) { state.of.sel = el.dataset.id; state.of.msg = null; render(); const d = document.getElementById('of-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
+    'of-close'() { state.of.sel = null; render(); },
+    'of-edit'(el) { const r = FP.offers.editOffer(state.of.reg, el.dataset.id, el.dataset.field, ofV(`of-e-${el.dataset.field}`), state.pm.actor); return ofMsg(r, r.unchanged ? 'No hay cambios.' : 'Cambio guardado; el valor anterior queda en el historial.'); },
+    'of-state'(el) { const r = FP.offers.setState(state.of.reg, el.dataset.id, el.dataset.to, { by: state.pm.actor, note: ofV('of-s-note') }); return ofMsg(r, r.ok ? `${el.dataset.id} ahora está «${FP.offers.STATE[el.dataset.to]}».` : ''); },
+    'of-note'(el) { const r = FP.offers.addNote(state.of.reg, el.dataset.id, ofV('of-n-text'), state.pm.actor); return ofMsg(r, 'Nota guardada en el historial.'); },
+    'sm-group'(el) { state.sm.group = FP.summary.GROUPS[el.dataset.g] ? el.dataset.g : 'cat'; state.sm.msg = null; render(); },
+    'sm-filter'() { state.sm.campaign = FP.summaryView.val('sm-camp'); state.sm.msg = null; render(); },
+    'sm-go'(el) { state.pm.tab = 'ofertas'; state.of.f = { state: ['received', 'validated'].includes(el.dataset.to) ? el.dataset.to : '' }; if (!state.op.result && !state.op.loading) opRun(false); render(); },
+    async 'dm-load'() {
+      const sm = state.sm; sm.msg = null;
+      if (!state.pm.actor) { sm.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: las capturas guardan quién las hizo.' }; render(); return; }
+      let note = '';
+      sm.msg = { kind: 'ok', text: 'Cargando los datos de ejemplo… puede tardar unos segundos.' }; render();
+      try {
+        const has = FP.productStore.available() && (FP.productStore.meta || {}).batches;
+        if (!has && FP.productStore.available() && FP.mockProducts) {
+          const gen = FP.mockProducts.generate({ from: '2026-08-15', to: '2026-09-30', skus: 48, channels: ['ecommerce', 'app'] });
+          const r1 = await FP.productImport.process(FP.productImport.stage(gen.sales, { fileName: 'EJEMPLO_venta.csv', kind: 'sales' }), {});
+          await FP.productStore.commit(r1.draft, { fileName: 'EJEMPLO_venta.csv' });
+          const r2 = await FP.productImport.process(FP.productImport.stage(gen.funnel, { fileName: 'EJEMPLO_funnel.csv', kind: 'funnel' }), {});
+          await FP.productStore.commit(r2.draft, { fileName: 'EJEMPLO_funnel.csv' });
+          note = ' Se cargó venta y funnel ficticios de 48 productos (del 15 de agosto al 30 de septiembre de 2026, Ecommerce y App).';
+        } else if (has) note = ' Ya tenías venta por producto: no se agregó venta ficticia.';
+        else note = ' Este navegador no permite guardar venta por producto: se cargó solo lo demás.';
+      } catch (e) { note = ` No se pudo cargar la venta ficticia (${String(e && e.message || e).slice(0, 100)}).`; }
+      const cat = FP.productStore.available() && FP.productStore.catalog ? [...FP.productStore.catalog.bySku.entries()].map(([sku, c]) => ({ sku, name: c.product || sku, category: c.category || '', brand: c.brand || '' })) : [];
+      const skus = cat.length >= 8 ? cat : FP.mockProducts.catalog(12).map((c) => ({ sku: c.sku, name: c.product, category: c.category, brand: c.brand }));
+      const r = FP.demo.load({ offers: state.of.reg, promos: state.pm.reg, proposals: sm.reg, goals: state.cg.reg, skus, by: state.pm.actor });
+      if (r.ok && r.approved) {
+        try { await freezePromoBaseline(r.approved, 'Promoción de ejemplo.'); FP.demo.advance({ promos: state.pm.reg, by: state.pm.actor });
+          const pe = FP.promotions.find(state.pm.reg, r.approved), ev = pe && await FP.promotionEvaluation.evaluate(pe, { promotions: state.pm.reg.promotions, events: state.events || [] });
+          if (ev && ev.counts.evaluable) FP.promotions.addEvaluation(state.pm.reg, r.approved, ev, state.pm.actor); } catch (e) { note += ' No se pudo congelar la línea base del ejemplo.'; }
+      }
+      if (r.ok) { saveOffers(); savePromotions(); saveProposals(); saveGoals(); cgLoad(); state.op.result = null; sm.msg = { kind: 'ok', text: `Se cargaron ${r.offers} ofertas de ejemplo en ${r.batches} lotes, la propuesta ${r.proposal}, la promoción ${r.promotion} (en propuesta)${r.approved ? ` y la promoción ${r.approved} (en medición, con línea base congelada)` : ''}.${note}` }; }
+      else sm.msg = { kind: 'bad', text: r.error + note };
+      render();
+    },
+    async 'dm-clear'() {
+      const sm = state.sm; sm.msg = { kind: 'ok', text: 'Quitando los datos de ejemplo…' }; render();
+      const n = FP.demo.clear({ offers: state.of.reg, promos: state.pm.reg, proposals: sm.reg, goals: state.cg.reg });
+      saveOffers(); savePromotions(); saveProposals(); saveGoals();
+      let prod = 0;
+      try { if (FP.productStore.available()) for (const b of await FP.productStore.listBatches()) if (/^EJEMPLO_/.test(b.fileName || '')) { await FP.productStore.removeBatch(b.id); prod += 1; } } catch (e) { /* se queda la venta de ejemplo */ }
+      state.op.result = null;
+      sm.msg = { kind: 'ok', text: `Se quitaron ${n.offers} ofertas, ${n.proposals} propuesta(s) y ${n.promotions} promoción(es) de ejemplo${prod ? ` y ${prod} archivo(s) de venta ficticia` : ''}. Tus datos reales no se tocaron.` };
+      render();
+    },
+    'sm-export-xlsx'() {
+      const r = FP.summaryView.compute(state);
+      if (!r.rows.length) { state.sm.msg = { kind: 'bad', text: 'No hay datos que exportar.' }; render(); return; }
+      FP.xlsxWriter.download(`resumen_promociones_${FP.promotionExport.fileStamp()}.xlsx`, FP.xlsxWriter.build(FP.promotionExport.buildSummaryBook(r)));
+      state.sm.msg = { kind: 'ok', text: `Se exportó el resumen (${r.rows.length} filas) a Excel. El archivo no cambia ningún dato de la herramienta.` }; render();
+    },
+    'ac-open'(el) { state.ac.sel = el.dataset.key; state.ac.msg = null; render(); const d = document.getElementById('ac-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
+    'ac-close'() { state.ac.sel = null; render(); },
+    'ac-param'() {
+      const r = FP.activation.setParams(state.ac.reg, { discountHigh: acV('ac-p-disc'), bannerSlots: acV('ac-p-slots'), bannerMode: acV('ac-p-mode'), chronicCategories: acV('ac-p-chronic') });
+      state.ac.paramsOpen = true;
+      state.ac.msg = r.ok ? { kind: 'ok', text: 'Parámetros guardados; las sugerencias se recalcularon.' } : { kind: 'bad', text: r.error };
+      if (r.ok) saveActivation(); render();
+    },
+    'ac-state'(el) {
+      const r = FP.activation.setState(state.ac.reg, el.dataset.key, el.dataset.to, state.pm.actor, acV('ac-s-note'));
+      state.ac.msg = r.ok ? { kind: 'ok', text: `Estado: ${FP.activation.STATES[el.dataset.to]}.` } : { kind: 'bad', text: r.ok === false && !state.pm.actor ? 'Escribe tu nombre arriba para registrar quién cambia el estado.' : r.error };
+      if (r.ok) saveActivation(); render();
+    },
+    'ac-export-xlsx'(el) {
+      const tab = el.dataset.tab === 'offer' ? 'offer' : 'potential', out = acRows(tab);
+      if (!out.rows.length) { state.ac.msg = { kind: 'bad', text: 'No hay filas que exportar con estos filtros.' }; render(); return; }
+      const book = FP.promotionExport.buildActivationBook(out.rows, { tabLabel: tab === 'offer' ? 'Ofertas recibidas' : 'Oportunidades', total: out.total, params: state.ac.reg.params, externalFile: state.ac.reg.external && state.ac.reg.external.fileName });
+      FP.xlsxWriter.download(`plan_activacion_${tab === 'offer' ? 'ofertas' : 'oportunidades'}_${FP.promotionExport.fileStamp()}.xlsx`, FP.xlsxWriter.build(book));
+      state.ac.msg = { kind: 'ok', text: `Se exportaron ${out.rows.length} filas a Excel. El archivo no cambia ningún dato de la herramienta.` }; render();
+    },
+    'ac-export-csv'(el) {
+      const tab = el.dataset.tab === 'offer' ? 'offer' : 'potential', out = acRows(tab);
+      if (!out.rows.length) { state.ac.msg = { kind: 'bad', text: 'No hay filas que exportar con estos filtros.' }; render(); return; }
+      pmDownload(`plan_activacion_${tab === 'offer' ? 'ofertas' : 'oportunidades'}_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildActivationCsv(out.rows), 'text/csv');
+    },
+    async 'ac-ext-file'(el) {
+      const f = el.files && el.files[0]; el.value = ''; if (!f) return;
+      try {
+        let parsed;
+        if (/\.xlsx$/i.test(f.name)) {
+          if (!FP.xlsx) throw new Error('El lector XLSX no está disponible.');
+          const buf = await f.arrayBuffer(), names = await FP.xlsx.sheetNames(buf); parsed = await FP.xlsx.parse(buf, { sheet: names[0] });
+        } else if (/\.csv$/i.test(f.name)) parsed = FP.csv.parse(await f.text(), {});
+        else throw new Error('Carga un archivo .xlsx o .csv.');
+        const N = FP.offers.norm, hs = parsed.headers, pick = (words) => hs.find((h) => words.some((w) => N(h).includes(w)));
+        const skuH = hs.find((h) => ['sku', 'oracle', 'codigooracle'].includes(N(h))), spH = pick(['espacio', 'canal', 'ubicacion', 'coloc', 'activacion', 'sugerencia']), cmH = pick(['comentario', 'nota', 'observ', 'quehacer', 'accion']);
+        if (!skuH || !spH) throw new Error(`No encontré la columna de SKU y la del canal o espacio sugerido. Encabezados: ${hs.slice(0, 12).join(', ')}.`);
+        const rows = {}; let skipped = 0;
+        parsed.rows.forEach((r) => { const v = r.values || r; const k = FP.offers.normalizeSku(v[skuH]).sku, sp = String(v[spH] === undefined || v[spH] === null ? '' : v[spH]).trim(); if (!k || !sp) { skipped += 1; return; } rows[k] = { space: sp, comment: cmH ? String(v[cmH] === undefined || v[cmH] === null ? '' : v[cmH]).trim() : '' }; });
+        const r = FP.activation.setExternal(state.ac.reg, { fileName: f.name, by: state.pm.actor, rows });
+        state.ac.msg = r.ok ? { kind: 'ok', text: `Se cargaron sugerencias de ${r.count} SKU de ${f.name}.${skipped ? ` ${skipped} filas sin SKU o sin canal se omitieron.` : ''}` } : { kind: 'bad', text: r.error };
+        if (r.ok) saveActivation();
+      } catch (e) { state.ac.msg = { kind: 'bad', text: `No pude leer el archivo: ${e.message || e}` }; }
+      render();
+    },
+    'ac-ext-clear'() { FP.activation.clearExternal(state.ac.reg); saveActivation(); state.ac.msg = { kind: 'ok', text: 'Se quitaron las sugerencias cargadas.' }; render(); },
+    'op-field'() { const f = state.op.f; f.from = opV('op-from'); f.to = opV('op-to'); f.comparison = opV('op-cmp') || 'previous'; f.channel = opV('op-ch') || 'total'; state.op.msg = { kind: 'ok', text: 'Cambiaste el periodo o el canal: pulsa «Calcular oportunidades» para actualizar.' }; render(); },
+    async 'op-run'() { await opRun(true); },
+    'op-filter'() { const f = state.op.f; f.q = opV('op-f-q'); f.type = opV('op-f-type'); f.category = opV('op-f-cat'); f.evidence = opV('op-f-ev'); f.withOffer = opV('op-f-off'); f.origin = opV('op-f-org'); f.subcategory = opV('op-f-sub'); f.lab = opV('op-f-lab'); state.op.limit = 50; render(); },
+    'op-view'(el) { const op = state.op; op.view = ['sku', 'subcat', 'lab'].includes(el.dataset.v) ? el.dataset.v : 'sku'; op.limit = 50; render(); },
+    'op-gchk'(el) { if (el.checked) state.op.checkedG[el.dataset.id] = true; else delete state.op.checkedG[el.dataset.id]; render(); },
+    'op-gopen'(el) {
+      const op = state.op, k = el.dataset.id, f = op.f; if (op.view === 'subcat') f.subcategory = k; else if (op.view === 'lab') f.lab = k;
+      op.view = 'sku'; op.limit = 50; op.msg = { kind: 'ok', text: `Se muestran los SKU de ${k === FP.opportunityView.NONE ? 'los que no tienen dato' : '«' + k + '»'}. Quita el filtro de ${f.subcategory ? 'subcategoría' : 'laboratorio'} para volver a ver todos.` }; render();
+    },
+    'op-type'(el) { const f = state.op.f; f.type = f.type === el.dataset.type ? '' : el.dataset.type; state.op.limit = 50; render(); },
+    'op-more'() { state.op.limit += 50; render(); },
+    'op-chk'(el) { if (el.checked) state.op.checked[el.dataset.id] = true; else delete state.op.checked[el.dataset.id]; render(); },
+    'op-check-all'() {
+      const op = state.op;
+      if (op.view && op.view !== 'sku') FP.opportunityView.groupsOf(op, state).slice(0, op.limit).forEach((g) => { op.checkedG[g.key || FP.opportunityView.NONE] = true; });
+      else FP.opportunityView.visible(op, state).slice(0, op.limit).forEach((i) => { op.checked[i.sku] = true; });
+      render();
+    },
+    'op-check-none'() { state.op.checked = {}; state.op.checkedG = {}; render(); },
+    'op-open'(el) { state.op.sel = el.dataset.id; render(); const d = document.getElementById('op-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
+    'op-close'() { state.op.sel = null; render(); },
+    'op-to-promo'() {
+      const promoId = opV('op-b-promo'), reg = state.pm.reg, op = state.op;
+      if (!FP.promotions.find(reg, promoId)) { op.msg = { kind: 'bad', text: 'Elige la promoción destino.' }; render(); return; }
+      const ids = FP.opportunityView.markedSkus(op, state); let added = 0; const skipped = [];
+      ids.forEach((sku) => {
+        const i = op.result.items.find((x) => x.sku === sku); if (!i) return;
+        const reason = i.types.map((t) => `${t.label}: ${t.reason}`).join(' ');
+        const r = FP.promotions.addSku(reg, promoId, { sku: i.sku, name: i.name, origin: 'digital', reason, note: `Evidencia ${{ high: 'alta', medium: 'media', low: 'baja' }[i.evidence.level]}` }, state.pm.actor);
+        if (r.ok) added += 1; else skipped.push(`${sku}: ${r.error}`);
+      });
+      if (added) { savePromotions(); op.checked = {}; op.checkedG = {}; }
+      op.msg = { kind: added ? 'ok' : 'bad', text: `${added} SKU se agregaron al plan de ${promoId} con origen «oportunidad digital».${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6) };
+      render();
+    },
+    'op-xname'() { state.op.xname = opV('op-x-name'); },
+    'op-export-xlsx'() {
+      const op = state.op, name = String(opV('op-x-name') || op.xname || '').trim(); op.xname = name;
+      if (!name) { op.msg = { kind: 'bad', text: 'Escribe el nombre de la propuesta: encabeza el archivo y forma su nombre.' }; render(); return; }
+      const sel = FP.opportunityView.selection(op, state), list = sel.list;
+      if (!list.length) { op.msg = { kind: 'bad', text: 'No hay productos que exportar con estos filtros.' }; render(); return; }
+      const f = op.f, T = FP.opportunities.TYPES, EVL = { high: 'alta', medium: 'media', low: 'baja' };
+      const filters = [f.type && `tipo «${(T[f.type] || {}).label}»`, f.category && `categoría «${f.category}»`, f.evidence && `evidencia ${EVL[f.evidence]}`, f.withOffer && (f.withOffer === 'yes' ? 'con oferta recibida' : 'sin oferta recibida'), f.subcategory && `subcategoría «${f.subcategory === FP.opportunityView.NONE ? 'sin subcategoría' : f.subcategory}»`, f.lab && `laboratorio «${f.lab === FP.opportunityView.NONE ? 'sin laboratorio' : f.lab}»`, sel.view !== 'sku' && `agrupado por ${sel.label.toLowerCase()}${sel.marked ? ' (solo los marcados)' : ''}`, f.origin && `origen de la oferta «${(FP.offers.ORIGINS[f.origin] || f.origin)}»`, f.q && `búsqueda «${f.q}»`, sel.view === 'sku' && sel.marked && `${sel.marked} marcados a mano`].filter(Boolean).join('; ') || 'ninguno';
+      const book = FP.promotionExport.buildOpportunitiesBook(list, { name, period: op.result.period, baseline: op.result.baseline, filters, total: op.result.counts.total, offers: state.of.reg.offers, groups: sel.view === 'sku' ? null : { label: sel.label, rows: sel.groups } });
+      FP.xlsxWriter.download(`propuesta_${FP.promotionExport.slug(name) || 'sin_nombre'}_${FP.promotionExport.fileStamp()}.xlsx`, FP.xlsxWriter.build(book));
+      const reg = FP.summary.register(state.sm.reg, { name, by: state.pm.actor, skus: list.map((i) => i.sku) });
+      if (reg.ok) saveProposals();
+      op.msg = { kind: 'ok', text: `Se exportaron ${list.length} productos a Excel${reg.ok ? ` y quedó registrada como ${reg.proposal.id} en Resumen` : ''}. El archivo no cambia ningún dato de la herramienta.` }; render();
+    },
+    'op-export-csv'() {
+      const sel = FP.opportunityView.selection(state.op, state), list = sel.list; if (!list.length) { state.op.msg = { kind: 'bad', text: 'No hay oportunidades que exportar con estos filtros.' }; render(); return; }
+      if (sel.view !== 'sku') { pmDownload(`oportunidades_por_${FP.promotionExport.slug(sel.label)}_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildGroupsCsv(sel.groups, sel.label), 'text/csv'); return; }
+      pmDownload(`oportunidades_${state.op.f.from || 'periodo'}_${state.op.f.to || ''}.csv`, FP.promotionExport.buildOpportunitiesCsv(list, state.op.f, state.of.reg.offers), 'text/csv');
+    },
+    'rs-pick'() { state.rs.promoId = rsV('rs-promo'); state.rs.result = null; state.rs.msg = null; render(); },
+    async 'rs-run'() { await rsRun(); },
+    'rs-open'(el) { state.rs.promoId = el.dataset.id; state.rs.result = null; state.rs.msg = null; render(); try { document.getElementById('rs-t').scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } },
+    'rs-filter'() { const f = state.rs.f; f.q = rsV('rs-f-q'); f.status = rsV('rs-f-status'); f.objective = rsV('rs-f-obj'); f.space = rsV('rs-f-space'); f.mechanic = rsV('rs-f-mech'); f.category = rsV('rs-f-cat'); f.rec = rsV('rs-f-rec'); f.from = rsV('rs-f-from'); f.to = rsV('rs-f-to'); render(); },
+    'rs-save'() {
+      const rs = state.rs, r = FP.promotions.addEvaluation(state.pm.reg, rs.promoId, rs.result, state.pm.actor);
+      if (!r.ok) { rs.msg = { kind: 'bad', text: r.error }; render(); return; }
+      savePromotions(); rs.msg = { kind: 'ok', text: `Corte ${r.evaluation.id} guardado en el historial de ${rs.promoId}.` }; render();
+    },
+    'rs-export-csv'() { const rs = state.rs; if (!rs.result) return; pmDownload(`evaluacion_${rs.promoId}_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildEvaluationCsv(rs.result), 'text/csv'); },
+    'rs-export-history'() { const list = FP.resultsView.filtered(state); if (!list.length) { state.rs.msg = { kind: 'bad', text: 'No hay promociones que exportar con estos filtros.' }; render(); return; } pmDownload(`historial_promociones_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildHistoryCsv(list), 'text/csv'); },
+    'pm-tab'(el) { state.pm.tab = ['resumen', 'oportunidades', 'ofertas', 'resultados'].includes(el.dataset.tab) ? el.dataset.tab : 'promos'; render(); if (['resumen', 'oportunidades', 'ofertas'].includes(state.pm.tab) && !state.op.result && !state.op.loading) opRun(false); if (state.pm.tab === 'resumen') cgLoad(); },
+    'pm-open'(el) { state.pm.sel = el.dataset.id; state.pm.msg = null; render(); const d = document.getElementById('pm-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
+    'pm-close-detail'() { state.pm.sel = null; state.pm.msg = null; render(); },
+    'pm-save-head'(el) {
+      const id = el.dataset.id, p = FP.promotions.find(state.pm.reg, id); const f = { channel: pmV('pm-e-channel'), objective: pmV('pm-e-obj'), plannedStart: pmV('pm-e-start'), plannedEnd: pmV('pm-e-end'), proposalName: pmV('pm-e-prop'), campaign: pmV('pm-e-camp') };
+      if (p && ['draft', 'proposed'].includes(p.status)) f.name = pmV('pm-e-name');
+      return pmMsg(FP.promotions.updatePromotion(state.pm.reg, id, f, state.pm.actor), 'Cambios guardados.');
+    },
+    'cg-refresh'() { cgLoad(); },
+    'cg-form'() {   // se guarda lo escrito y se repinta para mostrar el ticket histórico y el aviso de precio implícito
+      const V = FP.goalsView.val; state.cg.form = { campaign: V('cg-camp'), revenue: V('cg-rev'), units: V('cg-units'), note: V('cg-note') };
+      const h = document.getElementById('cg-help'); if (h) h.innerHTML = FP.goalsView.helper(state);   // solo la ayuda: repintar todo se come el clic sobre «Guardar»
+    },
+    'cg-edit'(el) {
+      const g = FP.goals.find(state.cg.reg, el.dataset.c), f = (n) => (n ? String(n) : '');
+      state.cg.form = { campaign: el.dataset.c, revenue: g ? f(g.revenue) : '', units: g ? f(g.units) : '', note: g ? g.note || '' : '' }; state.cg.msg = null; render();
+      const i = document.getElementById('cg-rev'); if (i) { try { i.focus(); } catch (e) { /* sin foco */ } }
+    },
+    'cg-save'() {
+      const V = FP.goalsView.val, parse = FP.format.parseAmountInput, cg = state.cg;
+      const rawR = V('cg-rev'), rawU = V('cg-units'), rev = rawR ? parse(rawR) : null, un = rawU ? parse(rawU) : null;
+      cg.form = { campaign: V('cg-camp'), revenue: rawR, units: rawU, note: V('cg-note') };
+      if ((rawR && rev === null) || (rawU && un === null)) { cg.msg = { kind: 'bad', text: 'No pude leer una de las cifras. Escríbela como 1,500,000 o 1.5M.' }; render(); return; }
+      const r = FP.goals.setGoal(cg.reg, cg.form.campaign, { revenue: rev, units: un, note: cg.form.note }, state.pm.actor);
+      if (r.ok) { saveGoals(); cg.msg = { kind: 'ok', text: `Meta de «${r.goal.campaign}» guardada.` }; cg.form = {}; cgLoad(); } else cg.msg = { kind: 'bad', text: r.error };
+      render();
+    },
+    'cg-remove'(el) {
+      const r = FP.goals.removeGoal(state.cg.reg, el.dataset.c, state.pm.actor);
+      if (r.ok) { saveGoals(); state.cg.msg = { kind: 'ok', text: `Se quitó la meta de «${el.dataset.c}».` }; } else state.cg.msg = { kind: 'bad', text: r.error };
+      render();
+    },
+    'pm-sku-add'(el) {
+      const r = FP.promotions.addSku(state.pm.reg, el.dataset.id, { sku: pmV('pm-s-sku'), name: pmV('pm-s-name'), origin: pmV('pm-s-origin'), mechanic: pmV('pm-s-mech'), condition: pmV('pm-s-cond'), reason: pmV('pm-s-reason') }, state.pm.actor);
+      return pmMsg(r, 'SKU agregado.');
+    },
+    'pm-sku-del'(el) { return pmMsg(FP.promotions.removeSku(state.pm.reg, el.dataset.id, el.dataset.sku, state.pm.actor), 'SKU quitado.'); },
+    'pm-sku-dates'(el) {
+      const i = el.dataset.i; return pmMsg(FP.promotions.updateSku(state.pm.reg, el.dataset.id, el.dataset.sku, { realStart: pmV('pm-rs-' + i), realEnd: pmV('pm-re-' + i) }, state.pm.actor), 'Fechas reales guardadas.');
+    },
+    'pm-act-add'(el) {
+      return pmMsg(FP.promotions.addActivation(state.pm.reg, el.dataset.id, { space: pmV('pm-a-space'), location: pmV('pm-a-loc'), start: pmV('pm-a-start'), end: pmV('pm-a-end'), owner: pmV('pm-a-owner') }, state.pm.actor), 'Activación agregada.');
+    },
+    'pm-act-status'(el) { return pmMsg(FP.promotions.setActivationStatus(state.pm.reg, el.dataset.id, el.dataset.act, el.value, state.pm.actor), 'Estado de la activación actualizado.'); },
+    'pm-inc-add'(el) { return pmMsg(FP.promotions.addIncident(state.pm.reg, el.dataset.id, pmV('pm-i-text'), pmV('pm-i-date'), state.pm.actor), 'Incidencia registrada.'); },
+    'pm-status'(el) {
+      const to = el.dataset.to;
+      const r = FP.promotions.setStatus(state.pm.reg, el.dataset.id, to, { by: state.pm.actor, approvedBy: pmV('pm-st-approver'), conclusion: pmV('pm-st-concl'), recommendation: pmV('pm-st-rec'), note: to === 'cancelled' ? pmV('pm-st-cancel') : '', today: Cal.toISODate(new Date()) });
+      if (r.ok && to === 'approved') {
+        pmMsg(r, `Estado actualizado a «${FP.promotions.STATUS[to]}». Congelando la línea base…`);
+        return freezePromoBaseline(el.dataset.id, null).then((f) => { if (f && !f.ok) { state.pm.msg = { kind: 'bad', text: `Aprobada, pero ${f.error}` }; render(); } });
+      }
+      return pmMsg(r, `Estado actualizado a «${FP.promotions.STATUS[to]}».`);
+    },
+    async 'pm-freeze'(el) {
+      state.pm.msg = { kind: 'ok', text: 'Congelando la línea base…', warnings: [] }; render();
+      const f = await freezePromoBaseline(el.dataset.id, 'Reemplazada a petición.');
+      if (f && !f.ok) { state.pm.msg = { kind: 'bad', text: f.error }; render(); }
+    },
+    'pm-export-csv'(el) { const id = el.dataset.id || null; pmDownload(`promociones_${id || 'todas'}_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildCsv(state.pm.reg, { promoId: id }), 'text/csv'); },
+    'pm-export-json'(el) { const id = el.dataset.id || null; pmDownload(`promociones_${id || 'todas'}_${FP.promotionExport.fileStamp()}.json`, FP.promotionExport.buildJson(state.pm.reg, { promoId: id })); },
     'export-csv'() {
       const t = state.dataFilters.dataType;
       const { headers, rows } = FP.exporter.normalizedCsvRows(state.store, t);
@@ -4755,6 +5231,9 @@
     loadReforecastSettings();
     loadDiagnosticSettings();
     loadRecovery();
+    loadPromotions();
+    loadOffers();
+    loadActivation(); loadProposals(); loadGoals();
     loadBusinessContext();
     loadCalibration();
     loadUx();
@@ -4854,7 +5333,7 @@
   const SIGNOUT_KEEP = ['uxSettings', 'productSettings', 'cohereApiKey', 'storageMigration', 'onboardingDone'];
   const signout = { phase: 'idle', audit: null, busy: false, ack: false, msg: '' };
   const baseOf = (k) => String(k).split(':')[0];
-  const KEY_LABEL = { actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
+  const KEY_LABEL = { actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
   const keyName = (k) => { const b = baseOf(k), y = String(k).split(':')[1]; return `${KEY_LABEL[b] || b}${y && /^\d{4}$/.test(y) ? ' ' + y : ''}`; };
   /** Compara lo local con la nube (solo lectura). Devuelve { ok, unsynced:[texto], checked } o { ok:false, error }. */
   async function signoutAudit() {
