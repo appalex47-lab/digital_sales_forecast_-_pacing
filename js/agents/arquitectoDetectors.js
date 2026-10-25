@@ -156,13 +156,37 @@
     const it = (d.opp ? d.opp.items : []).find((x) => `sku:${x.sku}` === key); return it ? (it.name || it.sku) : key;
   };
 
+  /** Cuando ningún SKU es de prioridad Alta pero sí hay oportunidades sin oferta: se listan, con prioridad Baja, para que el panel no diga «nada» teniendo oportunidades. */
+  function sinOfertaSinAltas(d, inPromo) {
+    const f = F(), list = d.opp.items.filter((i) => { const r = d.recsFree.get(`sku:${i.sku}`); return r && !r.blocked && !inPromo.has(i.sku); });
+    if (!list.length) return null;
+    const n = list.length, rev = list.reduce((t, i) => t + (fin(i.revenue) ? i.revenue : 0), 0), evHigh = list.filter((i) => i.evidence && i.evidence.level === 'high').length;
+    const per = d.opp.period && d.opp.period.label ? d.opp.period.label : d.opp.from && d.opp.to ? `${dayLabel(d.opp.from)} al ${dayLabel(d.opp.to)}` : 'el periodo de Oportunidades';
+    return base('oportunidades_sin_oferta', 'Oportunidades sin oferta (ninguna Alta)', 25, {
+      owner: 'Comercial', tag: 'Sin oferta',
+      title: `${n} ${plural(n, 'SKU con oportunidad no tiene', 'SKU con oportunidad no tienen')} oferta; ninguno es de prioridad Alta`,
+      resumen: 'Las reglas de Activación no ponen ninguno en prioridad Alta (venta, conversión y peso en su categoría), pero siguen sin oferta ni plan de promoción.',
+      que: `${n} SKU suman ${f.money(rev)} de venta en ${per}.`,
+      big: { value: `${n} SKU`, tone: '', sub: `con oportunidad y sin oferta · ${f.money(rev)} de venta en ${per}` },
+      lista: { title: `Los ${Math.min(n, LIMITS.listMax)} SKU${n > LIMITS.listMax ? ` de mayor venta (de ${n}; el resto está en Promociones › Oportunidades)` : ''}`,
+        visual: { type: 'table', head: ['SKU', 'Producto', 'Categoría', 'Venta', 'Evidencia', 'Dónde colocarlo'], num: [3], rows: list.slice(0, LIMITS.listMax).map((i) => [i.sku, i.name || i.sku, i.category || '', f.money(fin(i.revenue) ? i.revenue : 0), ({ high: 'Alta', medium: 'Media', low: 'Baja' })[i.evidence && i.evidence.level] || '', (d.recs.get(`sku:${i.sku}`) || d.recsFree.get(`sku:${i.sku}`)).main]) } },
+      hipotesis: 'Que no sean prioridad Alta no significa que no valga la pena una oferta: depende de lo que Comercial pueda negociar. Es una hipótesis a validar.',
+      validar: 'Revisa en Promociones › Oportunidades los de mayor venta y pregunta a Comercial si hay oferta posible.',
+      accion: 'Revisar con Comercial los de mayor venta cuando arme la siguiente campaña. Responsable natural: Comercial.',
+      evid: [{ k: 'SKU con oportunidad sin oferta', v: String(n) }, { k: `Venta de esos SKU en ${per}`, v: f.money(rev) }, { k: 'SKU con evidencia alta', v: `${evHigh} de ${n}` }],
+      pregunta: '¿Cuáles de estos SKU tienen oferta posible con el laboratorio y disponibilidad?',
+      limites: 'La herramienta no tiene inventario, margen ni acuerdos con laboratorios. Las oportunidades salen de reglas sobre venta y embudo, no son un pronóstico.',
+      muestraLimitada: evHigh === 0, viewLabel: 'Promociones › Oportunidades', facts: { n, revenue: rev, urgent: false }
+    });
+  }
+
   /** 1 · Oportunidades altas sin oferta (con el reloj de la campaña que está por arrancar). */
   function oportunidadesAltas(d) {
     if (!d.opp || !d.opp.items.length) return null;
     const f = F(), inPromo = new Set();
     d.promotions.forEach((p) => { if (IN_PROMO.includes(p.status)) (p.skus || []).forEach((s) => inPromo.add(s.sku)); });
     const altas = d.opp.items.filter((i) => { const r = d.recsFree.get(`sku:${i.sku}`); return r && r.priority === 'Alta' && !r.blocked && !inPromo.has(i.sku); });   // «Alta» por reglas, sin el tope de banner
-    if (!altas.length) return null;
+    if (!altas.length) return sinOfertaSinAltas(d, inPromo);
     const n = altas.length, rev = altas.reduce((t, i) => t + (fin(i.revenue) ? i.revenue : 0), 0), evHigh = altas.filter((i) => i.evidence && i.evidence.level === 'high').length;
     const soon = soonest(d.camps, d.today), top = altas.slice(0, LIMITS.topK);
     const outside = soon ? altas.filter((i) => !soon.campaign.skus.has(i.sku)).length : 0;
@@ -292,7 +316,7 @@
     DETECTORS.forEach((fn) => { try { const r = fn(x); (Array.isArray(r) ? r : r ? [r] : []).forEach((h) => findings.push(h)); } catch (e) { errors.push(`${fn.name}: ${e && e.message || e}`); } });
     findings.sort((a, b) => b.score - a.score);
     if (!d.opp) errors.push('oportunidades: no hay venta por producto cargada, así que no pude revisar oportunidades.');
-    return { status: 'ok', scope: { channel: 'total', channelLabel: 'Promociones y ofertas', period: { type: 'promo', key: d.today }, label: null, lastActual: d.dataMax, today: d.today, campaigns: x.camps.length, offers: d.offers.length, promotions: d.promotions.length },
+    return { status: 'ok', scope: { channel: 'total', channelLabel: 'Promociones y ofertas', period: { type: 'promo', key: d.today }, label: null, lastActual: d.dataMax, today: d.today, campaigns: x.camps.length, offers: d.offers.length, promotions: d.promotions.length, opps: d.opp ? d.opp.items.length : 0 },
       findings, errors, detectors: DETECTORS.length, contexto: contextoDe(x), dateMax: d.dataMax };
   }
 

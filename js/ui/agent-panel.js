@@ -134,7 +134,7 @@
   function scopeChips(run, agent) {
     const sc = run.scope, M = FP.agents.story;
     if (agent === 'arquitecto' && sc && M) {
-      return `<span class="ag-chip-i">Promociones y ofertas</span><span class="ag-chip-i">${esc(sc.campaigns)} ${sc.campaigns === 1 ? 'campaña' : 'campañas'}</span>${sc.lastActual ? `<span class="ag-chip-i">Venta al ${esc(M.dayLabel(sc.lastActual))}</span>` : ''}<span class="ag-follow">Leo tus ofertas recibidas, promociones y metas tal como están hoy en Promociones.</span>`;
+      return `<span class="ag-chip-i">Promociones y ofertas</span>${sc.opps ? `<span class="ag-chip-i">${esc(sc.opps)} ${sc.opps === 1 ? 'oportunidad' : 'oportunidades'}</span>` : ''}${sc.campaigns ? `<span class="ag-chip-i">${esc(sc.campaigns)} ${sc.campaigns === 1 ? 'campaña' : 'campañas'}</span>` : ''}${sc.lastActual ? `<span class="ag-chip-i">Venta al ${esc(M.dayLabel(sc.lastActual))}</span>` : ''}<span class="ag-follow">Leo tus ofertas recibidas, promociones y metas tal como están hoy en Promociones.</span>`;
     }
     if (!sc || !sc.period || !M) return '';
     const mes = sc.label || M.monthLabel(sc.period.key), cap = mes.charAt(0).toUpperCase() + mes.slice(1), ch = sc.channelLabel || 'Total digital';
@@ -228,6 +228,12 @@
     return `${chips}${aiChip(run)}${aiWarn(run)}${gateBlock(run, 'auditor')}${lect}${list}<p class="ag-note">Los hallazgos salen del cálculo determinista de tu herramienta. La IA solo los ordena y los redacta; si propone una cifra que no está en el cálculo, se descarta y se muestra el texto del motor.</p>${S.busy.auditor ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
   }
   // ---------- Arquitecto de Ofertas ----------
+  /** «12 oportunidades, 2 campañas, 5 ofertas y 1 promoción»: solo lo que hay. */
+  function revisado(sc) {
+    const p = (n, one, many) => (n ? `${n} ${n === 1 ? one : many}` : '');
+    const parts = [p(sc.opps, 'oportunidad', 'oportunidades'), p(sc.campaigns, 'campaña', 'campañas'), p(sc.offers, 'oferta', 'ofertas'), p(sc.promotions, 'promoción', 'promociones')].filter(Boolean);
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : parts[0] || 'lo que hay cargado';
+  }
   function bodyArquitecto() {
     const run = S.runs.arquitecto;
     if (S.busy.arquitecto && !run) return '<div class="ag-skel"></div><div class="ag-skel"></div><div class="ag-note" role="status">Revisando tus ofertas y promociones…</div>';
@@ -240,7 +246,7 @@
     const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
     const sc = run.scope || {};
     const list = run.findings.length ? run.findings.map((f) => findingCard(f)).join('')
-      : `<div class="ag-card"><h3>Nada pide atención en ofertas por ahora</h3><p>Revisé ${esc(sc.campaigns || 0)} ${sc.campaigns === 1 ? 'campaña' : 'campañas'}, ${esc(sc.offers || 0)} ${sc.offers === 1 ? 'oferta' : 'ofertas'} y ${esc(sc.promotions || 0)} ${sc.promotions === 1 ? 'promoción' : 'promociones'}. Ninguna tiene oportunidades altas sin oferta, ni más banners de los que caben, ni un ritmo por debajo del que pide su meta.</p></div>`;
+      : `<div class="ag-card"><h3>Nada pide atención en ofertas por ahora</h3><p>Revisé ${esc(revisado(sc))}. No encontré oportunidades sin oferta, ni más banners de los que caben, ni un ritmo por debajo del que pide una meta.</p></div>`;
     return `${chips}${aiChip(run)}${aiWarn(run)}${lect}${list}<p class="ag-note">Los hallazgos salen del cálculo determinista de tu herramienta. La IA solo los ordena y los redacta; si propone una cifra que no está en el cálculo, se descarta y se muestra el texto del motor.</p>${S.busy.arquitecto ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
   }
   function bodySoon(a) {
@@ -273,7 +279,7 @@
       }
     }
     if (!aiReady()) return aiStatusLine();
-    return `${aiStatusLine()}${sug}${ans}<div style="display:flex;gap:8px"><label for="ag-q" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Pregúntale a tus datos</label><input id="ag-q" class="ag-in" type="text" placeholder="${esc(PLACEHOLDER[agent])}" value="${esc(S.q)}" data-ag="q" autocomplete="off"><button type="button" class="ag-go" data-ag="ask" ${a && a.status === 'busy' ? 'disabled' : ''}>Preguntar</button></div><div class="ag-note">Si preguntas por rentabilidad o ganancia, te aclaro que solo hablo de venta. ${agent === 'analista' ? 'Si preguntas por el embudo o por fichas, te paso al Auditor de Conversión.' : 'Si preguntas por promociones o descuentos, te llevo al Arquitecto de Ofertas (Fase 4).'}</div>`;
+    return `${aiStatusLine()}${sug}${ans}<div style="display:flex;gap:8px"><label for="ag-q" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Pregúntale a tus datos</label><input id="ag-q" class="ag-in" type="text" placeholder="${esc(PLACEHOLDER[agent])}" value="${esc(S.q)}" data-ag="q" autocomplete="off"><button type="button" class="ag-go" data-ag="ask" ${a && a.status === 'busy' ? 'disabled' : ''}>Preguntar</button></div><div class="ag-note">Si preguntas por rentabilidad o ganancia, te aclaro que solo hablo de venta. ${agent === 'analista' ? 'Si preguntas por el embudo o por fichas, te paso al Auditor de Conversión.' : agent === 'arquitecto' ? 'Si preguntas por inventario o por precios de la competencia, te aclaro que la herramienta no los tiene.' : 'Si preguntas por promociones o descuentos, te llevo al Arquitecto de Ofertas.'}</div>`;
   }
   function html() {
     const { AGENTS } = reg();
