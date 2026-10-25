@@ -43,6 +43,11 @@ async def main():
             await q.evaluate("document.querySelector('#ag-body [data-ag=more]').click()"); await q.wait_for_timeout(200)
             det = await q.evaluate("document.querySelector('#ag-body .ag-card[data-id]').innerText")
             chk('B4 el detalle trae cifras, hipótesis a validar, acción y límites', all(x in det.lower() for x in ['cifras', 'hipótesis', 'acción']) and ('qué no puedo afirmar' in det.lower() or 'muestra' in det.lower()), det[-900:])
+            have = await q.evaluate("!!document.querySelector('#ag-body .ag-card[data-id=oportunidades_altas]')")
+            if have:
+                await q.evaluate("(()=>{const c=document.querySelector('#ag-body .ag-card[data-id=oportunidades_altas]'); if(!c.querySelector('.ag-det')) c.querySelector('[data-ag=more]').click()})()"); await q.wait_for_timeout(200)
+                info = await q.evaluate("(()=>{const c=document.querySelector('#ag-body .ag-card[data-id=oportunidades_altas]'); const t=[...c.querySelectorAll('.ag-det .ag-mini')][0]; return t?{head:[...t.querySelectorAll('th')].map(x=>x.innerText),rows:t.querySelectorAll('tbody tr').length,first:[...t.querySelector('tbody tr').children].map(x=>x.innerText),n:+(c.querySelector('.ag-big b').innerText.split(' ')[0])}:null})()")
+                chk('B4b «Ver más» lista todos los SKU de oportunidad (código, producto, venta, evidencia, dónde colocarlo)', bool(info) and info['head'][0] == 'SKU' and info['rows'] == min(info['n'], 30) and info['first'][0] != '', info)
             chk('B5 ningún texto usa lenguaje causal', not any(x in det.lower() for x in ['la causa es', 'se debe a', 'esto demuestra']))
         # 3. Preguntas sugeridas (IA simulada)
         await q.evaluate("FP.cohereConnection.isConfigured = () => true; FP.agentPanel.refresh(false)"); await q.wait_for_timeout(1500)

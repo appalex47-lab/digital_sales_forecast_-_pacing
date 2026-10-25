@@ -111,6 +111,7 @@
       ${open ? `<div class="ag-det">
         ${dl('Qué vi', f.que)}
         ${rows ? `<div><span class="ag-k">Cifras</span>${rows}</div>` : ''}
+        ${f.lista ? `<div><span class="ag-k">${esc(f.lista.title)}</span>${visual(f.lista.visual)}</div>` : ''}
         ${dl('Hipótesis (a validar, no causa)', f.hipotesis)}${dl('Cómo validarlo', f.validar)}${dl('Acción esta semana', f.accion ? `${f.accion}${/Responsable natural/.test(f.accion) ? '' : ` Responsable natural: ${f.owner}.`}` : '')}
         ${dl(f.muestraLimitada ? 'Muestra' : 'Qué no puedo afirmar', f.limites)}
         ${dl('Siguiente pregunta', f.pregunta)}
