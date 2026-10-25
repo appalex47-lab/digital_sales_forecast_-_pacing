@@ -33,6 +33,9 @@ const run = (state, o = {}) => AR.detect(state, { deps: D(o) });
   r = await run(base({ op: { result: opp(mkItems(4)) } }));
   ok('B3 sin ofertas ni promociones pero con venta por producto: sí hay oportunidades altas', r.status === 'ok' && r.findings.some((f) => f.id === 'oportunidades_altas' && f.facts.n === 4), r);
   r = await run(base(), { opp: { items: [], profiles: new Map(), period: {} } });
+  { const lowItems = mkItems(3).map((i) => ({ ...i, types: [{ id: 'growing' }] })); const x = await run(base({ op: { result: { items: lowItems, profiles: new Map(lowItems.map((i) => [i.sku, { revenue: i.revenue, views: 1000, conv: 0.01, medConv: 0.02, share: 0.1, typeIds: ['growing'], evidence: 'high', hasFunnel: true }])), period: { label: 'octubre 2026' } } } }));
+    const g = x.findings.find((f) => f.id === 'oportunidades_sin_oferta');
+    ok('B3b sin ninguna Alta pero con oportunidades sin oferta: las lista con prioridad Baja y lo dice', x.status === 'ok' && !!g && g.prio === 'Baja' && /ninguno es de prioridad Alta/.test(g.title) && g.lista.visual.rows.length === 3 && x.scope.opps === 3, [x.findings.map((f) => f.id), x.scope]); }
   ok('B4 sin ofertas, promociones ni oportunidades: sin_promos', r.status === 'sin_promos');
   r = await AR.detect({}, { deps: D() });
   ok('B2 estado vacío no lanza', r.status === 'sin_promos' && r.findings.length === 0);
