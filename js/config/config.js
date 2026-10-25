@@ -245,6 +245,10 @@
         diagnosticSettings: 'diagnosticSettings', cohereApiKey: 'cohereApiKey',
         // Fase 6 (scenarios y actionPlan por año)
         recoverySettings: 'recoverySettings', scenarios: 'scenarios', actionPlan: 'actionPlan', actionLibraryCustom: 'actionLibraryCustom',
+        // Propuesta B, fase 1: registro de promociones (global, clave pequeña: se sincroniza sola con el equipo)
+        promotions: 'promotions',
+        offers: 'offers',
+        activation: 'activation', proposals: 'proposals', goals: 'goals',
         // Fase 7 (solo preferencias de navegación y guía)
         uxSettings: 'uxSettings', reportBrand: 'reportBrand',
         // Fase 8.1 (solo banderas y preferencias; los datos grandes viven en IndexedDB)

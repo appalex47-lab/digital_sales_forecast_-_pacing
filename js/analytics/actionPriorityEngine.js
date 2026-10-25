@@ -61,7 +61,7 @@
         baselinePeriod,currentPeriod,baselinePartial,currentPartial,
         reasons:[r.pattern,r.advanced?.signal,(r.consecutivePeriods||r.periodsAnalyzed||0)>=3?'persistente':null].filter(Boolean),
         evidenceBreakdown:[],evidenceSummary:null,
-        dataAvailability:{available:['venta','pedidos','unidades','periodo'],missing:['stock','precio de mercado','promociones','costos/margen']},
+        dataAvailability:(FP.promotionNotes&&FP.promotionNotes.hasAny()?{available:['venta','pedidos','unidades','periodo','promociones registradas'],missing:['stock','precio de mercado','costos/margen']}:{available:['venta','pedidos','unidades','periodo'],missing:['stock','precio de mercado','promociones','costos/margen']}),
         nextAction:type==='drag'?'Localizar dónde se concentra la caída y comprobar datos operativos antes de intervenir.':type==='compensate'?'Validar qué está impulsando el crecimiento y dónde puede sostenerse o replicarse.':'Observar persistencia y evidencia antes de actuar.'};
     }).filter(x=>x.type!=='watch' || finite(x.impact));
     const dragPool=items0.filter(x=>x.type==='drag').reduce((s,x)=>s+Math.abs(x.impact||0),0);

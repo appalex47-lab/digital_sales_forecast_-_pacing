@@ -1,0 +1,51 @@
+/* promotions.css — Promociones (Resumen, Oportunidades, Ofertas recibidas, Promociones, Resultados): solo presentación.
+ * Completa lo que el sistema visual no trae para estas pestañas: rejilla de campos, tarjetas de indicador que se pueden pulsar,
+ * ritmo vertical entre bloques, tablas anchas con desplazamiento horizontal y selectores que no desbordan en móvil. */
+
+/* Campos en rejilla: se reparten el ancho y no se apilan uno por línea en pantallas anchas */
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: var(--ds-s3) var(--ds-s4); align-items: start; }
+#pm-body .field :is(input, select) { min-height: 40px; }
+.field-grid .field :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { width: 100%; }
+.field-grid > .field--wide { grid-column: 1 / -1; }
+#pm-body :is(input, select, textarea) { max-width: 100%; min-width: 0; }
+
+/* Ritmo vertical: 16 px entre bloques, 8 px entre un bloque y su nota */
+#pm-body .panel__body > :is(.field-grid, .btn-row, .metric-grid, .note, .table-wrap, details, h3, .plain-list, .filters, p) + :is(.field-grid, .btn-row, .metric-grid, .note, .table-wrap, details, .filters, .plain-list) { margin-top: var(--ds-s4); }
+#pm-body :is(.field-grid, .btn-row, .metric-grid, .table-wrap, .filters) + :is(p, .field__hint) { margin-top: var(--ds-s2); }
+#pm-body .panel__body > h3 { margin: var(--ds-s5) 0 var(--ds-s3); font-size: var(--ds-fs-card); }
+#pm-body .panel__body > :is(.field-grid, .note, .btn-row) + h3 { margin-top: var(--ds-s5); }
+#pm-body .btn-row { align-items: center; }
+#pm-body .btn-row > :is(input[type="text"], input[type="search"]) { min-width: min(100%, 240px); }
+#pm-body .btn-row > select { min-width: 0; max-width: 100%; }
+#pm-body .btn-row > .field__hint { margin: 0; }
+#pm-body .plain-list { gap: var(--ds-s2); }
+#pm-body .plain-list > li { padding-left: 2px; }
+
+/* Indicadores */
+#pm-body .metric-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.metric-card .metric-card__label { overflow-wrap: anywhere; }
+.metric-card .metric-card__value { line-height: 1.2; }
+.metric-card .metric-card__period, .metric-card .field__hint, .metric-card .cell-sub { font-size: var(--ds-fs-caption); color: var(--ds-text-muted); }
+button.metric-card { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.metric-card:hover { border-color: var(--ds-accent); }
+button.metric-card[aria-pressed="true"] { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
+button.metric-card:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+
+/* Tablas anchas (muchas columnas): se desplazan de lado en vez de apretar el texto letra por letra.
+ * En móvil (≤ 860 px) la app ya las convierte en tarjetas, así que ahí no se fuerza ancho. */
+@media (min-width: 861px) {
+  #pm-body .pm-wide { min-width: 1120px; }
+  #pm-body .pm-wide td:not(.num), #pm-body .pm-wide td:not(.num):has(> .cell-sub) { overflow-wrap: break-word; }
+  #pm-body .pm-wide td:not(.num):has(> .cell-sub) { min-width: 12rem; }
+}
+#pm-body .pm-wide :is(th, td) { vertical-align: top; }
+#pm-body .table-wrap { border-radius: var(--ds-r-md); }
+
+/* Pestañas de Promociones: cinco pestañas en dos columnas dejaban una sola huérfana; la última ocupa todo el ancho. En pantallas anchas siguen en una fila. */
+#pm-body .sttabs { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
+@media (max-width: 560px) {
+  #pm-body .sttabs { grid-template-columns: 1fr 1fr; }
+  #pm-body .sttabs > .sttab:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+/* Selectores y campos de texto: el texto largo se ve completo (se reparte en más líneas o el campo crece) */
+#pm-body .field select { text-overflow: ellipsis; }
