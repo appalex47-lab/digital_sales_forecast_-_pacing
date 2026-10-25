@@ -77,6 +77,12 @@ async def main():
             await q.click('#ag-line [data-ag-line=open]'); await q.wait_for_selector('#ag-panel:not([hidden])'); await q.wait_for_timeout(1500)
             first = await q.evaluate("document.querySelector('.ag-tab[aria-pressed=true]').dataset.id")
             chk('F3 «Abrir en Asistentes» abre en el agente que más encontró', first == ('arquitecto' if sm['ofertas'] > sm['n'] else 'analista'), (first, sm))
+        # 6. Venta cargada pero sin ofertas ni promociones: las oportunidades salen igual
+        await q.keyboard.press('Escape')
+        await q.evaluate("(()=>{const S=FP.app.state; S.of.reg.offers=[]; S.of.reg.batches=[]; S.pm.reg.promotions=[]; S.cg.reg.goals=[]; S.op.result=null; FP.agents.runner.clearCache(); location.hash='#promociones'; })()"); await q.wait_for_timeout(600)
+        await q.click('#ag-fab'); await q.wait_for_selector('#ag-panel:not([hidden])'); await q.wait_for_timeout(4500)
+        t = await body(q)
+        chk('G1 con venta cargada y sin ofertas ni promociones el agente muestra las oportunidades altas', await q.evaluate("!!document.querySelector('#ag-body .ag-card[data-id=oportunidades_altas]')") and 'Todavía no hay ofertas ni promociones' not in t, t[:300])
         chk('E1 sin errores de consola ni excepciones', not errs, errs[:3])
         await b.close()
     print('\nFIN ' + ('OK' if not fails else f'{len(fails)} FALLAS'))
