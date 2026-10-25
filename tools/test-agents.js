@@ -216,8 +216,8 @@ const det = A.detect(baseState(), D), idList = det.findings.map((f) => f.id);
 
   // ---- registro de agentes ----
   const reg = FP.agents.registry;
-  ok('L1 Analista y Auditor disponibles (Fase 2); Arquitecto «próximamente»', reg.AGENTS.analista.available && reg.AGENTS.auditor.available && !reg.AGENTS.arquitecto.available);
-  ok('L2 vista de segmentos y de producto abren el Auditor; ofertas cae en el Analista mientras no exista el Arquitecto', reg.defaultAgent('segmentos') === 'auditor' && reg.defaultAgent('producto') === 'auditor' && reg.suggestedAgent('recovery') === 'arquitecto' && reg.defaultAgent('recovery') === 'analista');
+  ok('L1 Analista, Auditor y Arquitecto de Ofertas disponibles', reg.AGENTS.analista.available && reg.AGENTS.auditor.available && reg.AGENTS.arquitecto.available);
+  ok('L2 segmentos y producto abren el Auditor; Promociones abre el Arquitecto; el resto, el Analista', reg.defaultAgent('segmentos') === 'auditor' && reg.defaultAgent('producto') === 'auditor' && reg.defaultAgent('promociones') === 'arquitecto' && reg.defaultAgent('recovery') === 'analista' && reg.defaultAgent('inicio') === 'analista');
   ok('L3 vista cualquiera → Analista', reg.defaultAgent('pacing') === 'analista' && reg.defaultAgent('inicio') === 'analista');
 
   console.log(fails ? `\n✘ ${fails} de ${n} pruebas fallaron` : `✔ ${n}/${n} pruebas de asistentes`);

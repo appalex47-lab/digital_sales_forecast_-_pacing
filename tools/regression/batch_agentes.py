@@ -49,7 +49,7 @@ async def main():
         chk('Z10 la descripción del agente está plegada y se abre', await q.evaluate("(()=>{const b=document.querySelector('[data-ag=about]'); const was=b.getAttribute('aria-expanded'); b.click(); return was==='false'&&document.querySelector('.ag-aboutbody')!==null})()"))
         # tabs
         tabs = await q.evaluate("[...document.querySelectorAll('.ag-tab')].map(t=>[t.innerText.replace(/\\s+/g,' '),t.getAttribute('aria-pressed'),t.getBoundingClientRect().height>=44])")
-        chk('Z11 tres pestañas (Números activa, Conversión disponible, Ofertas «Fase 4») de ≥44 px', len(tabs) == 3 and tabs[0][1] == 'true' and 'Fase' not in tabs[1][0] and 'Fase 4' in tabs[2][0] and all(t[2] for t in tabs), tabs)
+        chk('Z11 tres pestañas (Números activa, Conversión y Ofertas disponibles) de ≥44 px', len(tabs) == 3 and tabs[0][1] == 'true' and 'Fase' not in tabs[1][0] and 'Fase' not in tabs[2][0] and 'Promociones' in tabs[2][0] and all(t[2] for t in tabs), tabs)
         await q.click('.ag-tab[data-id=auditor]'); await q.wait_for_timeout(100)
         soon = await q.evaluate("document.getElementById('ag-body').innerText")
         chk('Z12 Auditor sin archivo de productos: explica qué falta y manda a Carga de datos, sin inventar hallazgos', 'Todavía no está disponible' not in soon and not await q.evaluate("!!document.querySelector('.ag-card .ag-pp')") and await q.evaluate("!!document.querySelector('#ag-body a[href=\\'#carga\\']')"), soon[:200])

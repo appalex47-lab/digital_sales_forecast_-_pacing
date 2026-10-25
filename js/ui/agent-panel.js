@@ -2,7 +2,7 @@
  * agent-panel.js — Panel de asistentes (módulo diferido «agentes»; se carga al abrir el panel o al contar el botón).
  *
  * Un solo panel con selector de agente. Fase 2: Analista de Números (historia del periodo + ruta de comprensión) y Auditor de Conversión
- * (embudo por producto) comparten la MISMA tarjeta de hallazgo; Arquitecto de Ofertas (Fase 4) aparece como «próximamente». El panel nunca
+ * (embudo por producto) y Arquitecto de Ofertas (ofertas, banners y metas por campaña) comparten la MISMA tarjeta de hallazgo. El panel nunca
  * queda vacío ni inventa: siempre dice qué pasó y qué sigue.
  * Datos: FP.agents.runner.run → detectores (código) + IA opcional que ordena y redacta (agentRunner.js). La IA nunca calcula.
  * Eventos con data-ag (delegación propia): no usa el data-action de app.js.
@@ -14,7 +14,7 @@
   const CHEV = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   const CLOSE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   const SPARK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#1F5FE0" aria-hidden="true"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8z"/></svg>';
-  const AGENT_IDS = ['analista', 'auditor'];
+  const AGENT_IDS = ['analista', 'auditor', 'arquitecto'];
   const SECTIONS = [
     { id: 'cae', title: 'Qué se cae', empty: 'Nada relevante cae contra el plan ni contra el periodo anterior.' },
     { id: 'crece', title: 'Qué crece', empty: 'Nada crece lo suficiente para compensar lo que cae.' },
@@ -36,19 +36,21 @@
    * (los de Baja siguen en el panel, pero no mueven el contador ni la línea de Inicio). Solo detectores, sin IA.
    */
   function summaryOf(runs) {
-    const a = runs.analista, u = runs.auditor;
+    const a = runs.analista, u = runs.auditor, o = runs.arquitecto;
     const list = [].concat(a && a.status === 'ok' ? a.findings.filter((f) => f.section !== 'crece') : [], u && u.status === 'ok' ? u.findings.filter((f) => !f.sinAlerta) : []);
     const alta = list.filter((f) => f.prio === 'Alta').length, media = list.filter((f) => f.prio === 'Media').length;
-    return { n: alta + media, alta, media };
+    // Las ofertas se cuentan aparte: la línea de Inicio habla del Analista y el Auditor; el contador del botón suma las tres.
+    const ol = o && o.status === 'ok' ? o.findings : [], oa = ol.filter((f) => f.prio === 'Alta').length, om = ol.filter((f) => f.prio === 'Media').length, ofs = oa + om;
+    return { n: alta + media, alta, media, ofertas: ofs, ofAlta: oa, ofMedia: om, total: alta + media + ofs };
   }
-  const countOf = (runs) => summaryOf(runs).n;
+  const countOf = (runs) => summaryOf(runs).total;
   async function summary() {
     const state = st(), runs = {};
     for (const a of AGENT_IDS) { try { runs[a] = await FP.agents.runner.run(state, { agent: a, useAI: false }); } catch (e) { runs[a] = null; } }
     const s = summaryOf(runs), an = runs.analista && runs.analista.status === 'ok' ? runs.analista : null;
     return { ...s, scopeLabel: an && an.scope ? an.scope.label : null, channelLabel: an && an.scope ? an.scope.channelLabel : null, key: FP.agents.runner.selectionKey(state) };
   }
-  async function countFindings() { return (await summary()).n; }
+  async function countFindings() { return (await summary()).total; }
 
   // ---------- Piezas ----------
   function aiChip(run) {
@@ -130,8 +132,12 @@
   /** Qué periodo y canal está leyendo el agente: lo que la persona tiene elegido en la app. */
   function scopeChips(run, agent) {
     const sc = run.scope, M = FP.agents.story;
+    if (agent === 'arquitecto' && sc && M) {
+      return `<span class="ag-chip-i">Promociones y ofertas</span><span class="ag-chip-i">${esc(sc.campaigns)} ${sc.campaigns === 1 ? 'campaña' : 'campañas'}</span>${sc.lastActual ? `<span class="ag-chip-i">Venta al ${esc(M.dayLabel(sc.lastActual))}</span>` : ''}<span class="ag-follow">Leo tus ofertas recibidas, promociones y metas tal como están hoy en Promociones.</span>`;
+    }
     if (!sc || !sc.period || !M) return '';
     const mes = sc.label || M.monthLabel(sc.period.key), cap = mes.charAt(0).toUpperCase() + mes.slice(1), ch = sc.channelLabel || 'Total digital';
+    if (agent === 'arquitecto') return '';
     const a = agent === 'auditor'
       ? `<span class="ag-chip-i">${esc(cap)}${sc.to ? ` al ${esc(M.dayLabel(sc.to))}` : ''}</span><span class="ag-chip-i">${esc(ch)}</span><span class="ag-chip-i">Embudo de GA4 por producto</span>`
       : `<span class="ag-chip-i">${esc(cap)} al corte del ${esc(M.dayLabel(sc.lastActual))}</span><span class="ag-chip-i">${esc(ch)}</span>`;
@@ -220,6 +226,22 @@
       : `<div class="ag-card"><h3>Nada fuera de lo normal en el embudo</h3><p>Revisé ${esc(run.detectors)} puntos del embudo (fuga por paso, demanda sin conversión, web contra app, concentración y mezcla de tráfico) y ninguno pasa el umbral.</p></div>`;
     return `${chips}${aiChip(run)}${aiWarn(run)}${gateBlock(run, 'auditor')}${lect}${list}<p class="ag-note">Los hallazgos salen del cálculo determinista de tu herramienta. La IA solo los ordena y los redacta; si propone una cifra que no está en el cálculo, se descarta y se muestra el texto del motor.</p>${S.busy.auditor ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
   }
+  // ---------- Arquitecto de Ofertas ----------
+  function bodyArquitecto() {
+    const run = S.runs.arquitecto;
+    if (S.busy.arquitecto && !run) return '<div class="ag-skel"></div><div class="ag-skel"></div><div class="ag-note" role="status">Revisando tus ofertas y promociones…</div>';
+    if (!run) return '';
+    if (run.status !== 'ok') {
+      return `<div class="ag-card"><h3>Todavía no hay ofertas ni promociones</h3><p>El Arquitecto revisa las ofertas que recibes, las promociones que registras y las metas por campaña. Sin ninguna de ellas no tengo qué comparar.</p>
+        <div class="ag-actions"><a class="ag-go" data-ag="go" href="#promociones" style="display:inline-flex;align-items:center;text-decoration:none">Ir a Promociones</a></div></div>`;
+    }
+    const chips = `${demoStrip()}<div class="ag-chiprow">${scopeChips(run, 'arquitecto')}</div>`;
+    const lect = run.lectura ? `<div class="ag-ans"><span class="ag-k">Lectura</span>${esc(run.lectura)}</div>` : '';
+    const sc = run.scope || {};
+    const list = run.findings.length ? run.findings.map((f) => findingCard(f)).join('')
+      : `<div class="ag-card"><h3>Nada pide atención en ofertas por ahora</h3><p>Revisé ${esc(sc.campaigns || 0)} ${sc.campaigns === 1 ? 'campaña' : 'campañas'}, ${esc(sc.offers || 0)} ${sc.offers === 1 ? 'oferta' : 'ofertas'} y ${esc(sc.promotions || 0)} ${sc.promotions === 1 ? 'promoción' : 'promociones'}. Ninguna tiene oportunidades altas sin oferta, ni más banners de los que caben, ni un ritmo por debajo del que pide su meta.</p></div>`;
+    return `${chips}${aiChip(run)}${aiWarn(run)}${lect}${list}<p class="ag-note">Los hallazgos salen del cálculo determinista de tu herramienta. La IA solo los ordena y los redacta; si propone una cifra que no está en el cálculo, se descarta y se muestra el texto del motor.</p>${S.busy.arquitecto ? '<div class="ag-note" role="status">Ordenando y redactando con IA…</div>' : ''}${errNote(run)}`;
+  }
   function bodySoon(a) {
     return `<div class="ag-card"><h3>${esc(a.name)} · ${esc(a.phase || 'próximamente')}</h3><p>${esc(a.role)}</p>
       <p class="ag-note">Todavía no está disponible. Mientras tanto el Analista de Números y el Auditor de Conversión siguen activos.</p>
@@ -230,12 +252,16 @@
     if (aiReady()) return '<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b></div>';
     return '<div class="ag-note" style="display:flex;align-items:center;justify-content:space-between;gap:10px;white-space:nowrap"><b style="color:#A05A0A">● IA no conectada</b><a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración</a></div>';
   }
-  const PLACEHOLDER = { analista: 'Pregúntale al Analista (p. ej. «¿por qué cae Insulinas?»)…', auditor: 'Pregúntale al Auditor (p. ej. «¿qué producto reviso primero?»)…' };
+  /** Preguntas sugeridas del Arquitecto: cinco en escritorio y tres (1, 3 y 4) en celular. Se ven siempre, no hay que desplegarlas. */
+  const ARQ_QS = ['¿Qué campañas se pisan en fechas?', '¿Qué SKU de alta venta no tienen oferta?', '¿Cuál campaña va peor contra su meta?', '¿Qué ofertas vencen esta semana?', '¿Cómo cayó la conversión en los SKU en oferta?'];
+  const arqQs = () => (isMobile() ? [ARQ_QS[0], ARQ_QS[2], ARQ_QS[3]] : ARQ_QS);
+  const PLACEHOLDER = { arquitecto: 'Pregúntale al Arquitecto (p. ej. «¿qué campañas se pisan?»)…', analista: 'Pregúntale al Analista (p. ej. «¿por qué cae Insulinas?»)…', auditor: 'Pregúntale al Auditor (p. ej. «¿qué producto reviso primero?»)…' };
   function askBlock() {
     const agent = S.agent;
     if (!AGENT_IDS.includes(agent)) return '';
     const run = S.runs[agent], qs = run && run.findings ? run.findings.map((f) => f.pregunta).filter(Boolean).slice(0, 4) : [];
-    const sug = qs.length ? `<button type="button" class="ag-link" data-ag="sug" aria-expanded="${S.sugOpen}">¿No sabes qué preguntar?${CHEV}</button>${S.sugOpen ? `<div class="ag-chips">${qs.map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}` : '';
+    const sug = agent === 'arquitecto' ? `<div class="ag-chips ag-chips--q" role="group" aria-label="Preguntas sugeridas">${arqQs().map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>`
+      : qs.length ? `<button type="button" class="ag-link" data-ag="sug" aria-expanded="${S.sugOpen}">¿No sabes qué preguntar?${CHEV}</button>${S.sugOpen ? `<div class="ag-chips">${qs.map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}` : '';
     const a = S.asks[agent]; let ans = '';
     if (a) {
       if (a.status === 'busy') ans = '<div class="ag-note" role="status">Consultando la evidencia calculada…</div>';
@@ -253,7 +279,7 @@
     const a = AGENTS[S.agent] || AGENTS.analista;
     const tabs = Object.keys(AGENTS).map((id) => `<button type="button" class="ag-tab" data-ag="agent" data-id="${id}" aria-pressed="${id === S.agent}">${esc(AGENTS[id].label)}<small>${esc(AGENTS[id].available ? AGENTS[id].sub : AGENTS[id].phase)}</small></button>`).join('');
     const about = `<div class="ag-about"><button type="button" class="ag-aboutbtn" data-ag="about" aria-expanded="${S.aboutOpen}"><span>${esc(a.name)}</span>${CHEV}</button>${S.aboutOpen ? `<div class="ag-aboutbody">${esc(a.role)}<br><span class="ag-note">Los números los calcula el motor de la app. La IA, si está conectada, solo ordena y redacta; nunca calcula.</span></div>` : ''}</div>`;
-    const body = !a.available ? bodySoon(a) : S.agent === 'auditor' ? bodyAuditor() : bodyAnalista();
+    const body = !a.available ? bodySoon(a) : S.agent === 'auditor' ? bodyAuditor() : S.agent === 'arquitecto' ? bodyArquitecto() : bodyAnalista();
     return `<div class="ag-head"><div class="ag-actions" style="justify-content:space-between;gap:10px"><div class="ag-title">${SPARK}<span id="ag-title">Asistentes</span></div><button type="button" class="ag-x" data-ag="close" aria-label="Cerrar asistentes">${CLOSE}</button></div>
       <div class="ag-tabs" role="group" aria-label="Elegir asistente">${tabs}</div>${about}</div>
       <div class="ag-body" id="ag-body">${body}</div>
@@ -334,9 +360,11 @@
     document.body.appendChild(p);
     S.panel = p;
   }
-  function open(opener) {
+  /** `opts.agent`: abre directo en ese asistente (la línea de Inicio lo usa cuando los hallazgos son de otro agente). */
+  function open(opener, opts) {
     ensurePanel();
     S.opener = opener || S.opener;
+    if (opts && opts.agent && reg().AGENTS[opts.agent] && reg().AGENTS[opts.agent].available) { S.agent = opts.agent; S.picked = true; }
     if (!S.picked || !S.agent) S.agent = reg().defaultAgent(FP.agentLauncher ? FP.agentLauncher.curView() : 'inicio');
     S.open = true; S.panel.hidden = false;
     if (S.opener) S.opener.setAttribute('aria-expanded', 'true');
