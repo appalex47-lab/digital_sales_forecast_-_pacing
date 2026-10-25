@@ -10,17 +10,17 @@
   const FP = (root.FP = root.FP || {});
   FP.agents = FP.agents || {};
 
-  /** `available`: el agente ya existe. Los demás se muestran en el panel como «próximamente» (Fase 4). */
+  /** `available`: el agente ya existe. Si alguno no lo está, el panel lo muestra como «próximamente». */
   const AGENTS = {
     analista: { label: 'Números', sub: 'Qué se mueve', name: 'Analista de Números', available: true,
       role: 'Te cuenta la historia del periodo: qué se cae, qué crece y dónde revisar primero, y te acompaña con una ruta de preguntas hasta que lo entiendas. Habla de venta, pedidos, ticket y unidades; no de ganancia.' },
     auditor: { label: 'Conversión', sub: 'Embudo y tráfico', name: 'Auditor de Conversión', available: true,
       role: 'Sigue el embudo (vista → carrito → checkout → compra) por producto, categoría y canal, y busca dónde se queda la venta. Separa «cambió la mezcla de tráfico» de «cambió la conversión dentro de cada segmento». No habla de promociones ni de rentabilidad.' },
-    arquitecto: { label: 'Ofertas', sub: 'Promociones', name: 'Arquitecto de Ofertas', available: false, phase: 'Fase 4',
-      role: 'Propondrá qué promocionar, dónde y cómo medirlo, con las reglas del módulo de promociones.' }
+    arquitecto: { label: 'Ofertas', sub: 'Promociones', name: 'Arquitecto de Ofertas', available: true,
+      role: 'Revisa tus ofertas, promociones y metas por campaña y te dice qué mirar primero: oportunidades altas sin oferta, más SKU que piden banner de los que caben y campañas que van por debajo del ritmo que necesita su meta. No habla de margen, costo ni inventario.' }
   };
-  /** Agente sugerido por vista (id de vista de la app). Si el sugerido aún no existe (Arquitecto), cae en el Analista. */
-  const DEFAULT_BY_VIEW = { segmentos: 'auditor', producto: 'auditor', clientes: 'auditor', recovery: 'arquitecto', medir: 'arquitecto' };
+  /** Agente sugerido por vista (id de vista de la app). Si el sugerido no está disponible, cae en el Analista. */
+  const DEFAULT_BY_VIEW = { segmentos: 'auditor', producto: 'auditor', clientes: 'auditor', promociones: 'arquitecto' };
   function defaultAgent(view) { const a = DEFAULT_BY_VIEW[view] || 'analista'; return AGENTS[a] && AGENTS[a].available ? a : 'analista'; }
   function suggestedAgent(view) { return DEFAULT_BY_VIEW[view] || 'analista'; }   // el que la vista pediría aunque aún no exista
 
@@ -42,18 +42,21 @@
   function paintLine() {
     if (typeof document === 'undefined') return;
     const old = document.getElementById('ag-line'); if (old) old.remove();
-    if (!sum || !sum.n || dismissed.has(sum.key) || curView() !== 'inicio') return;
+    const tot = sum ? (sum.n || 0) + (sum.ofertas || 0) : 0;
+    if (!sum || !tot || dismissed.has(sum.key) || curView() !== 'inicio') return;
     const head = document.querySelector('#home .home__head'); if (!head) return;
     const el = document.createElement('div');
     el.id = 'ag-line'; el.className = 'ag-line'; el.setAttribute('role', 'status');
     const parts = [sum.alta ? `${sum.alta} Alta${sum.alta > 1 ? 's' : ''}` : '', sum.media ? `${sum.media} Media${sum.media > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
     const where = [sum.scopeLabel, sum.channelLabel].filter(Boolean).join(' y ');
     const t = document.createElement('span'); t.className = 'ag-line__t';
-    t.textContent = `El Analista encontró ${sum.n} ${sum.n === 1 ? 'cosa' : 'cosas'}${where ? ` con ${where}` : ''}: ${parts}.`;
+    const ofParts = [sum.ofAlta ? `${sum.ofAlta} Alta${sum.ofAlta > 1 ? 's' : ''}` : '', sum.ofMedia ? `${sum.ofMedia} Media${sum.ofMedia > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+    const ofText = sum.ofertas ? `El Arquitecto de Ofertas encontró ${sum.ofertas} ${sum.ofertas === 1 ? 'cosa' : 'cosas'} en tus promociones: ${ofParts}.` : '';
+    t.textContent = sum.n ? `El Analista encontró ${sum.n} ${sum.n === 1 ? 'cosa' : 'cosas'}${where ? ` con ${where}` : ''}: ${parts}.${ofText ? ` ${ofText}` : ''}` : ofText;
     const go = document.createElement('button'); go.type = 'button'; go.className = 'ag-line__go'; go.setAttribute('data-ag-line', 'open'); go.setAttribute('aria-controls', 'ag-panel'); go.textContent = 'Abrir en Asistentes';
     const x = document.createElement('button'); x.type = 'button'; x.className = 'ag-line__x'; x.setAttribute('data-ag-line', 'close'); x.setAttribute('aria-controls', 'ag-line'); x.setAttribute('aria-label', 'Cerrar este aviso'); x.textContent = '×';
     el.append(t, go, x);
-    go.addEventListener('click', () => { load().then(() => FP.agentPanel.open(fab)).catch(() => { /* sin panel */ }); });
+    go.addEventListener('click', () => { load().then(() => FP.agentPanel.open(fab, sum.ofertas > sum.n ? { agent: 'arquitecto' } : undefined)).catch(() => { /* sin panel */ }); });
     x.addEventListener('click', () => { dismissed.add(sum.key); el.remove(); });
     head.insertAdjacentElement('afterend', el);
   }
@@ -61,7 +64,7 @@
   function refreshBadge() {
     clearTimeout(badgeTimer);
     badgeTimer = setTimeout(() => {
-      const go = () => load().then(() => FP.agentPanel.summary()).then((s) => { sum = s; count = s.n; paint(); paintLine(); }).catch(() => { /* sin contador */ });
+      const go = () => load().then(() => FP.agentPanel.summary()).then((s) => { sum = s; count = s.total != null ? s.total : s.n; paint(); paintLine(); }).catch(() => { /* sin contador */ });
       if (root.requestIdleCallback) root.requestIdleCallback(go, { timeout: 8000 }); else go();
     }, 900);
   }

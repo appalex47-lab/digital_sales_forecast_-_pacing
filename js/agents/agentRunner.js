@@ -51,14 +51,34 @@
     'Cada hallazgo: id (uno de los candidatos), prioridad («Alta», «Media» o «Baja»), titulo (máx. 110 caracteres), resumen (máx. 260 caracteres), siguientePregunta (una pregunta concreta) y responsable (uno de la lista «responsables»).',
     'Ordena los hallazgos de más a menos importante. Puedes bajar la prioridad base si el hallazgo es menor, pero no inventes hallazgos nuevos ni repitas ids.'
   ].join('\n');
-  const PURPOSE = { analista: 'Asistentes · Analista de Números', auditor: 'Asistentes · Auditor de Conversión' };
-  const RULES = { analista: SYSTEM_RULES, auditor: RULES_AUDITOR };
+  const RULES_ARQUITECTO = [
+    'Eres el Arquitecto de Ofertas de RevNavigator, una herramienta de pacing, plan y forecast de venta digital de una operación de ecommerce.',
+    'Recibes «candidatos» que el motor ya calculó sobre las ofertas recibidas, las promociones, las metas por campaña, las oportunidades y los espacios de banner: cada uno trae sus cifras, su evidencia y un texto base. Tu trabajo es ORDENARLOS y REDACTARLOS mejor, nada más.',
+    'Responde en español de México, claro y ejecutivo, para una persona de negocio que decide qué oferta, campaña o banner revisar primero.',
+    'NO calcules, sumes, restes, promedies ni estimes. Usa SOLO cifras que aparezcan tal cual en el contexto (con el mismo formato). Si no hay cifra para algo, descríbelo sin número.',
+    'No inventes SKU, campañas, fechas, descuentos, precios, causas ni datos. No uses lenguaje causal («la causa es», «se debe a», «esto demuestra»): lo que explicas son hipótesis a validar.',
+    'No hables de margen, costos, rentabilidad ni inventario: la herramienta no tiene esos datos. No propongas un descuento ni un precio. Una meta es una cifra que decidió una persona: no digas si es buena o mala.',
+    'El ritmo requerido es aritmética (lo que falta entre los días que quedan), no un pronóstico. Si un hallazgo marca «muestra limitada», dilo y no lo presentes como firme.',
+    'Devuelve únicamente JSON con: hallazgos (lista) y lectura (una o dos frases con lo más importante).',
+    'Cada hallazgo: id (uno de los candidatos), prioridad («Alta», «Media» o «Baja»), titulo (máx. 110 caracteres), resumen (máx. 260 caracteres), siguientePregunta (una pregunta concreta) y responsable (uno de la lista «responsables»).',
+    'Ordena los hallazgos de más a menos importante. Puedes bajar la prioridad base si el hallazgo es menor, pero no inventes hallazgos nuevos ni repitas ids.'
+  ].join('\n');
+  const PURPOSE = { analista: 'Asistentes · Analista de Números', auditor: 'Asistentes · Auditor de Conversión', arquitecto: 'Asistentes · Arquitecto de Ofertas' };
+  const RULES = { analista: SYSTEM_RULES, auditor: RULES_AUDITOR, arquitecto: RULES_ARQUITECTO };
   const ASK_RULES = [
     'Responde la pregunta de una persona de negocio usando ÚNICAMENTE los candidatos y cifras del contexto. No calcules, sumes ni estimes: usa las cifras tal cual aparecen.',
     'Si la pregunta no se puede contestar con el contexto, dilo con claridad y di qué vista de la app conviene abrir. No inventes causas ni datos; no uses lenguaje causal.',
-    'No hables de rentabilidad, margen, costos, inventario ni precios de la competencia. Las promociones son de otro asistente (Arquitecto de Ofertas).',
+    'No hables de rentabilidad, margen, costos, inventario ni precios de la competencia. Las promociones son del Arquitecto de Ofertas.',
     'Responde en español de México, en 2 a 5 frases. Devuelve JSON con: answer (texto) y nextQuestion (una pregunta concreta de seguimiento, opcional).'
   ].join('\n');
+  const ASK_RULES_ARQ = [
+    'Responde la pregunta de una persona de negocio usando ÚNICAMENTE los candidatos, el contexto y el apoyo del contexto. No calcules, sumes ni estimes: usa las cifras tal cual aparecen.',
+    'Cuando una respuesta mezcle datos de Promociones con datos de Análisis o del embudo, usa los dos y cita entre paréntesis la fuente de cada cifra (por ejemplo «(Promociones)», «(Oportunidades)», «(Embudo)», «(Análisis)»), tal como vienen en el contexto.',
+    'Si la pregunta no se puede contestar con el contexto, dilo con claridad y di qué vista de la app conviene abrir. No inventes causas ni datos; no uses lenguaje causal; si piden el porqué de un cambio, da la cifra y di que los datos no lo explican.',
+    'No hables de rentabilidad, margen, costos ni inventario. No propongas descuentos ni precios.',
+    'Responde en español de México, en 2 a 5 frases. Devuelve JSON con: answer (texto) y nextQuestion (una pregunta concreta de seguimiento, opcional).'
+  ].join('\n');
+  const askRulesFor = (agent) => (agent === 'arquitecto' ? ASK_RULES_ARQ : ASK_RULES);
   const ASK_SCHEMA = { type: 'object', required: ['answer'], properties: { answer: { type: 'string' }, nextQuestion: { type: 'string' } } };
 
   // El motor escribe los negativos con «−» (U+2212); el validador del asistente de Análisis solo reconoce el «-» ASCII como signo.
@@ -89,12 +109,18 @@
   }
   /** Contexto que se envía a la IA: solo texto y cifras ya calculadas de los candidatos. Sin filas crudas ni datos personales. */
   function buildContext(det, owners, agent = 'analista') {
+    const sheet = [det.contexto, det.apoyo].filter(Boolean);
     const gate = det.gate ? { nivel: det.gate.level, titulo: ascii(det.gate.title), texto: ascii(det.gate.text) } : null;
     return {
-      alcance: agent === 'auditor'
+      alcance: agent === 'arquitecto'
+        ? { ambito: 'Promociones, ofertas y metas por campaña', hoy: det.scope && det.scope.today || null, ultimaVentaReal: det.scope ? det.scope.lastActual : null, campanas: det.scope ? det.scope.campaigns : 0, ofertasRecibidas: det.scope ? det.scope.offers : 0, promociones: det.scope ? det.scope.promotions : 0 }
+        : agent === 'auditor'
         ? { canal: `Embudo de GA4 por producto · ${det.scope && det.scope.channelLabel || 'Total digital'}`, periodo: det.scope && det.scope.period ? det.scope.period.key : null, tipoDePeriodo: det.scope && det.scope.period ? det.scope.period.type : null, hasta: det.scope ? det.scope.to || det.scope.lastActual : null }
         : { canal: det.scope && det.scope.channelLabel || 'Total digital', periodo: det.scope && det.scope.period ? det.scope.period.key : null, tipoDePeriodo: det.scope && det.scope.period ? det.scope.period.type : null, ultimaVentaReal: det.scope ? det.scope.lastActual : null },
       ...(gate ? { confianzaDelDato: gate } : {}),
+      ...(det.contexto ? { contexto: det.contexto } : {}),
+      ...(det.apoyo ? { apoyo: det.apoyo } : {}),
+      ...(sheet.length ? { cifrasDeContexto: [...new Set(sheet.flatMap((x) => valuesIn(JSON.stringify(x))))] } : {}),
       responsables: owners,
       candidatos: det.findings.map((f) => ({
         id: f.id, scoreBase: Math.round(f.score), prioridadBase: f.prio, responsableBase: f.owner, titulo: ascii(f.title), resumen: ascii(f.resumen), queVi: ascii(f.que),
@@ -115,13 +141,22 @@
     const A = FP.agents && FP.agents.analista; if (!A || !A.selection) return '';
     try { const x = A.selection(state); return `${x.channel}/${x.type}/${x.key}`; } catch (e) { return ''; }
   }
+  /** Cambios en ofertas, promociones, metas y reglas de Activación (se editan en su lugar, así que se firman por tamaño e historial). */
+  function promoSig(s) {
+    const h = (x) => (x && x.history ? x.history.length : 0), sum = (a, f) => (a || []).reduce((t, x) => t + f(x), 0);
+    try {
+      return [s.of && s.of.reg ? `${(s.of.reg.offers || []).length}:${sum(s.of.reg.offers, h)}:${(s.of.reg.batches || []).length}` : '', s.pm && s.pm.reg ? `${(s.pm.reg.promotions || []).length}:${sum(s.pm.reg.promotions, (p) => h(p) + (p.skus || []).length + (p.evaluations || []).length)}` : '',
+        s.cg && s.cg.reg ? `${(s.cg.reg.goals || []).length}:${sum(s.cg.reg.goals, h)}` : '', s.ac && s.ac.reg ? JSON.stringify(s.ac.reg.params) : '', objId(s.op && s.op.result)].join('~');
+    } catch (e) { return ''; }
+  }
   function signature(state) {
     const s = state || {}, m = (FP.productStore && FP.productStore.meta) || {}, q = s.quality && s.quality.totals ? s.quality.totals : {};
-    return [objId(s.fc && s.fc.run), s.fc && s.fc.lastActualDate, objId(s.store), m.batches, m.funnelBatches, m.dateMax, m.skus, q.warning, q.error, q.rejected, s.year, selectionKey(s)].join('|');
+    return [promoSig(s), objId(s.fc && s.fc.run), s.fc && s.fc.lastActualDate, objId(s.store), m.batches, m.funnelBatches, m.dateMax, m.skus, q.warning, q.error, q.rejected, s.year, selectionKey(s)].join('|');
   }
   const DETECT = {
     analista: (state, deps) => (FP.agents.story ? FP.agents.story.build(state, { deps }) : Promise.resolve(FP.agents.analista.detect(state, deps))),
-    auditor: (state, deps) => FP.agents.auditor.detect(state, { deps })
+    auditor: (state, deps) => FP.agents.auditor.detect(state, { deps }),
+    arquitecto: (state, deps) => FP.agents.arquitecto.detect(state, { deps })
   };
   /** Resultado determinista de un agente (sin IA). Nunca lanza. Cachea por firma de datos; `force` lo recalcula. */
   async function detect(agent, state, opts = {}) {
@@ -189,7 +224,7 @@
    *   status: 'ok' | 'no_data' | 'sin_embudo' | 'sin_mes'; ai.status: 'off' (sin IA configurada o apagada) | 'ok' | 'none' (sin hallazgos que redactar) | 'unavailable' | 'invalid' | 'rejected'
    */
   async function run(state, opts = {}) {
-    const agent = opts.agent === 'auditor' ? 'auditor' : 'analista';
+    const agent = ['auditor', 'arquitecto'].includes(opts.agent) ? opts.agent : 'analista';
     const det = await detect(agent, state, { deps: opts.deps, force: !!opts.force });
     const { findings: _f, sections: _s, ...extras } = det;
     const base = { ...extras, status: det.status, scope: det.scope, detectors: det.detectors, errors: det.errors || [], lectura: '', agent };
@@ -217,7 +252,8 @@
   function routeQuestion(agent, q) {
     const s = NORM(q);
     if (/rentab|margen|ganancia|utilidad|costo|profit|cuanto gano|cuanto pierdo dinero/.test(s)) return { type: 'refuse', text: 'La herramienta no tiene costos ni margen, así que no puedo hablar de rentabilidad ni de ganancia. Solo hablo de venta, pedidos, ticket, unidades y conversión.' };
-    if (/promoci|oferta|descuent|cupon|rebaja|2x1|bundle|precio de la competencia|competencia/.test(s)) return { type: 'handoff', to: 'arquitecto', text: 'Las promociones y ofertas las ve el Arquitecto de Ofertas (Fase 4, todavía no disponible). Aquí puedo decirte qué se mueve en la venta y dónde se queda la conversión, sin hablar de descuentos.' };
+    if (agent !== 'arquitecto' && /promoci|oferta|descuent|cupon|rebaja|2x1|bundle|banner|campan|buen fin|meta de la|precio de la competencia|competencia/.test(s)) return { type: 'handoff', to: 'arquitecto', text: 'Las promociones, ofertas, banners y metas por campaña las ve el Arquitecto de Ofertas. Aquí puedo decirte qué se mueve en la venta y dónde se queda la conversión, sin hablar de descuentos.' };
+    if (agent === 'arquitecto' && /precio de la competencia|competencia|inventario|stock|existencia/.test(s)) return { type: 'refuse', text: 'La herramienta no tiene inventario ni precios de la competencia, así que no puedo responder eso. Puedo decirte qué ofertas, campañas y metas tienes y cómo van.' };
     if (agent === 'analista' && /embudo|ficha|carrito|checkout|ga4|vistas? de|conversion de (la )?(ficha|producto)|por producto/.test(s)) return { type: 'handoff', to: 'auditor', text: 'Eso es del embudo por producto: el Auditor de Conversión lo ve mejor (fichas, carrito, checkout y brecha web contra app).' };
     if (agent === 'auditor' && /\b(plan|meta|forecast|pronostico|pacing|cumplimiento|cierre del mes)\b/.test(s)) return { type: 'handoff', to: 'analista', text: 'Eso es del plan, la meta y el forecast: el Analista de Números lo ve mejor.' };
     return null;
@@ -234,12 +270,20 @@
     const route = routeQuestion(agent, q);
     if (route) return { ok: true, local: true, answer: route.text, to: route.to || null, type: route.type };
     if (!aiOn(state)) return { ok: false, errors: ['Para preguntar necesito la IA conectada (Configuración → IA).'] };
-    const det = await detect(agent, state, { deps: opts.deps });
-    if (det.status !== 'ok') return { ok: false, errors: ['Todavía no hay datos suficientes para responder (carga plan y venta, o el embudo de productos).'] };
+    const det0 = await detect(agent, state, { deps: opts.deps });
+    if (det0.status !== 'ok') return { ok: false, errors: [agent === 'arquitecto' ? 'Todavía no hay ofertas ni promociones registradas para responder (créalas en Promociones).' : 'Todavía no hay datos suficientes para responder (carga plan y venta, o el embudo de productos).'] };
+    let det = det0;
+    if (agent === 'arquitecto') {   // apoyo: lo que ya calcularon el Auditor (embudo) y el Analista (análisis), cada cifra con su fuente
+      const apoyo = [];
+      for (const [id, label] of [['auditor', 'Embudo (Auditor de Conversión)'], ['analista', 'Análisis (Analista de Números)']]) {
+        try { const x = await detect(id, state, { deps: opts.deps }); if (x.status === 'ok' && x.findings.length) apoyo.push({ fuente: label, hallazgos: x.findings.slice(0, 3).map((f) => ({ titulo: ascii(f.title), resumen: ascii(f.resumen), evidencia: f.evid.map((e) => ascii(`${e.k}: ${e.v}`)) })) }); } catch (e) { /* sin apoyo de ese agente */ }
+      }
+      det = { ...det0, apoyo };
+    }
     const ctx = { pregunta: q, ...buildContext(det, FP.agents.analista.OWNERS, agent) };
     const user = JSON.stringify(ctx, null, 2);
     const call = async (extra) => {
-      const r = await FP.cohereClient.chatJson({ audit: { purpose: `${PURPOSE[agent]} · pregunta` }, system: ASK_RULES, user: extra ? `${user}\n\n${extra}` : user, schema: ASK_SCHEMA, apiKey: state.dx && state.dx.apiKey, model: state.dx && state.dx.model, fetchImpl: opts.fetchImpl });
+      const r = await FP.cohereClient.chatJson({ audit: { purpose: `${PURPOSE[agent]} · pregunta` }, system: askRulesFor(agent), user: extra ? `${user}\n\n${extra}` : user, schema: ASK_SCHEMA, apiKey: state.dx && state.dx.apiKey, model: state.dx && state.dx.model, fetchImpl: opts.fetchImpl });
       if (!r.ok) return { fail: { ok: false, errors: r.errors || ['No se pudo consultar la IA.'] } };
       const p = FP.cohereClient.parseJson(r.text);
       if (!p.ok || !p.value || typeof p.value.answer !== 'string') return { fail: { ok: false, errors: ['La IA respondió en un formato no válido.'] } };
@@ -255,5 +299,5 @@
     return { ok: true, answer: String(t.p.answer).trim(), nextQuestion: String(t.p.nextQuestion || '').trim() };
   }
 
-  FP.agents.runner = { run, detect, ask, routeQuestion, signature, buildContext, validate, merge, SYSTEM_RULES, RULES, ASK_RULES, RESPONSE_SCHEMA, clearCache: () => { cache.clear(); detCache.clear(); }, selectionKey };
+  FP.agents.runner = { run, detect, ask, routeQuestion, signature, buildContext, validate, merge, SYSTEM_RULES, RULES, ASK_RULES, ASK_RULES_ARQ, RESPONSE_SCHEMA, clearCache: () => { cache.clear(); detCache.clear(); }, selectionKey };
 })(typeof window !== 'undefined' ? window : globalThis);

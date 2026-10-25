@@ -1558,7 +1558,7 @@
         const good = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: det.findings[0].title, resumen: det.findings[0].resumen, siguientePregunta: det.findings[0].pregunta, responsable: 'Contact center' }] }, ctx, A.OWNERS);
         return bad.ok === false && num.ok === false && good.ok === true;
       });
-      test('Asistentes', 'El registro de agentes: Analista y Auditor disponibles; Arquitecto como próximamente', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === true && g.AGENTS.arquitecto.available === false && g.defaultAgent('segmentos') === 'auditor' && g.defaultAgent('recovery') === 'analista'; });
+      test('Asistentes', 'El registro de agentes: Analista, Auditor y Arquitecto de Ofertas disponibles; Promociones abre el Arquitecto', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === true && g.AGENTS.arquitecto.available === true && g.defaultAgent('segmentos') === 'auditor' && g.defaultAgent('promociones') === 'arquitecto' && g.defaultAgent('recovery') === 'analista'; });
       test('Asistentes', 'El Auditor de Conversión: la puerta de GA4 y los umbrales de demanda sin conversión', () => {
         const AU = FP.agents.auditor; if (!AU) return false;
         const g = (a, b) => AU.cuadreGa4({ total: { trkGa4: a, trkUnits: b } }).level;
