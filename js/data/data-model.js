@@ -18,7 +18,20 @@
 
   const recordId = (date, channel) => `${date}|${channel}`;
   const isChannel = (id) => C().channelIds.includes(id);
-  const getChannel = (id) => C().channels.find((c) => c.id === id) || null;
+
+  /**
+   * Cuentas de canal indexadas por ID (Bolt performance optimization: evita
+   * búsquedas O(N) con C().channels.find(...) en bucles de ordenamiento y renderizado).
+   */
+  let cachedChannelMap = null;
+  function getChannelMap() {
+    if (!cachedChannelMap) {
+      cachedChannelMap = new Map();
+      C().channels.forEach((c) => cachedChannelMap.set(c.id, c));
+    }
+    return cachedChannelMap;
+  }
+  const getChannel = (id) => getChannelMap().get(id) || null;
 
   function emptySources() {
     const s = {};
