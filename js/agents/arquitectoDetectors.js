@@ -26,7 +26,8 @@
     recentDays: 7,      // ventana del ritmo actual
     minRhythmDays: 4,   // días con venta mínimos en la ventana para no marcar «muestra limitada»
     weekDays: 7,        // «vencen esta semana»
-    topK: 3             // SKU que se muestran en la tarjeta
+    topK: 3,            // SKU que se muestran en la tarjeta
+    listMax: 30         // SKU que lista el detalle («Ver más»); si hay más, lo dice
   };
   const IN_PROMO = ['proposed', 'approved', 'published', 'measuring', 'closed'];
   const MEASURED = ['published', 'measuring', 'closed'];
@@ -176,6 +177,8 @@
       que: `${n} SKU suman ${f.money(rev)} de venta en ${per}.${soon ? ` La campaña «${soon.campaign.name}» tiene ${soon.campaign.skus.size} SKU y ${outside} de estos quedan fuera de ella.` : ''}`,
       big: { value: `${n} SKU`, tone: soon ? 'dn' : '', sub: `con oportunidad alta y sin oferta · ${f.money(rev)} de venta en ${per}` },
       visual: { type: 'table', head: ['Producto', 'Venta del periodo', 'Dónde colocarlo'], num: [1], rows: top.map((i) => [i.name || i.sku, f.money(fin(i.revenue) ? i.revenue : 0), (d.recs.get(`sku:${i.sku}`) || d.recsFree.get(`sku:${i.sku}`)).main]) },
+      lista: { title: `Los ${Math.min(n, LIMITS.listMax)} SKU${n > LIMITS.listMax ? ` de mayor venta (de ${n}; el resto está en Promociones › Oportunidades)` : ''}`,
+        visual: { type: 'table', head: ['SKU', 'Producto', 'Categoría', 'Venta', 'Evidencia', 'Dónde colocarlo'], num: [3], rows: altas.slice(0, LIMITS.listMax).map((i) => [i.sku, i.name || i.sku, i.category || '', f.money(fin(i.revenue) ? i.revenue : 0), ({ high: 'Alta', medium: 'Media', low: 'Baja' })[i.evidence && i.evidence.level] || '', (d.recs.get(`sku:${i.sku}`) || d.recsFree.get(`sku:${i.sku}`)).main]) } },
       hipotesis: 'Pueden faltar por disponibilidad o por no haber acuerdo con el laboratorio, no por descuido. Es una hipótesis a validar.',
       validar: 'Pregunta a Comercial si hay una oferta posible para cada uno y confirma disponibilidad antes de armarla.',
       accion: `Revisar con Comercial ${n > 10 ? 'los 10 primeros' : n === 1 ? 'este SKU' : `los ${n} SKU`} y decidir cuáles entran${soon ? ` antes de que arranque «${soon.campaign.name}»` : ' en la siguiente campaña'}. Responsable natural: Comercial.`,
@@ -209,6 +212,7 @@
       que: `Espacios de banner: ${slots}, ${modeTxt}. Compiten por venta; el descuento no da ventaja.`,
       big: { value: `${total} para ${slots}`, tone: 'dn', sub: `${over} ${plural(over, 'SKU pasa', 'SKU pasan')} a la cuadrícula Home por el tope` },
       visual: { type: 'table', head: ['Producto', 'Venta del periodo', 'Queda en'], num: [1], rows: rows.map((r) => [nameOf(d, r.key), f.money(r.revenue || 0), keep.includes(r) ? 'Banner' : 'Cuadrícula Home']) },
+      lista: { title: `Los ${total} SKU que piden banner`, visual: { type: 'table', head: ['SKU', 'Producto', 'Venta', 'Queda en'], num: [2], rows: keep.concat(lose).slice(0, LIMITS.listMax).map((r) => [r.sku, nameOf(d, r.key), f.money(r.revenue || 0), keep.includes(r) ? 'Banner' : 'Cuadrícula Home']) } },
       hipotesis: 'Con ese tope no caben todos; la lista de arriba sale solo de la venta del periodo, no de qué conviene más al negocio. Es una hipótesis a validar.',
       validar: 'Revisa con Comercial si algún SKU de los que pasan a cuadrícula debe tener banner por compromiso con el laboratorio o por fecha.',
       accion: `Decidir cuáles ${slots} ${plural(slots, 'SKU se queda', 'SKU se quedan')} en banner y confirmar el resto en cuadrícula. Responsable natural: Ecommerce.`,
@@ -263,7 +267,7 @@
     const lim = addDays(d.today, LIMITS.weekDays), by = new Map();
     d.offers.forEach((o) => { if (isISO(o.end) && o.end >= d.today && o.end <= lim) { const k = (d.batches.find((b) => b.batchId === o.batchId) || {}).campaign || 'Sin campaña'; const x = by.get(k) || { n: 0, end: o.end }; x.n += 1; if (o.end < x.end) x.end = o.end; by.set(k, x); } });
     by.forEach((x, k) => c.ofertasQueVencen.push(`${k}: ${x.n} ofertas vencen desde el ${dayLabel(x.end)}`));
-    if (d.opp) d.opp.items.filter((i) => { const r = d.recsFree.get(`sku:${i.sku}`); return r && r.priority === 'Alta' && !r.blocked; }).slice(0, 10).forEach((i) => c.altasSinOferta.push(`${i.name || i.sku}: ${f.money(fin(i.revenue) ? i.revenue : 0)}`));
+    if (d.opp) d.opp.items.filter((i) => { const r = d.recsFree.get(`sku:${i.sku}`); return r && r.priority === 'Alta' && !r.blocked; }).slice(0, LIMITS.listMax).forEach((i) => c.altasSinOferta.push(`${i.sku} ${i.name || ''}: ${f.money(fin(i.revenue) ? i.revenue : 0)}`));
     (d.rhythm || []).forEach((r) => c.avanceDeMetas.push(`${r.campaign}: ${f.pct(r.target > 0 ? r.done / r.target : 0, 0)} de la meta, termina el ${dayLabel(r.end)}`));
     if (d.opp && d.opp.profiles && d.opp.profiles.size) {
       const inOffer = new Set(d.offers.map((o) => o.sku)), acc = { on: { v: 0, c: 0, n: 0 }, off: { v: 0, c: 0, n: 0 } };
