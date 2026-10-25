@@ -6,12 +6,90 @@
   <title>RevNavigator</title>
   <meta name="description" content="Planeación, pacing y reforecast de ventas digitales">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230E5E6F'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <style id="boot-css">
+    /* Pantalla de arranque (Fase A): vive en index.html para pintarse antes de descargar scripts y estilos. Se retira sola al terminar init(). */
+    .boot{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:24px;background:#F3F5F7;color:#18212E;font-family:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Roboto,Arial,sans-serif;opacity:1;transition:opacity .25s ease}
+    .boot.is-done{opacity:0;pointer-events:none}
+    .boot__card{display:grid;justify-items:center;gap:14px;text-align:center;max-width:420px}
+    .boot__mark{position:relative;width:108px;height:108px}
+    .boot__ring{position:absolute;inset:0;will-change:transform;animation:boot-spin 1.1s linear infinite}   /* el giro va en un div propio (capa de la GPU): un <svg> animado directo se traba en iPhone mientras cargan los scripts */
+    .boot__ring svg{display:block;width:100%;height:100%}
+    .boot__track{fill:none;stroke:#DCE1E8;stroke-width:3}
+    .boot__arc{fill:none;stroke:#0E5E6F;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:72 205}
+    .boot__logo{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;filter:drop-shadow(0 4px 10px rgba(14,94,111,.25))}
+    .boot__line{stroke-dasharray:100;stroke-dashoffset:0}   /* el logo queda quieto: solo gira el aro */
+    .boot__name{font-size:1.35rem;font-weight:650;letter-spacing:.01em}
+    .boot__msg{margin:0;min-height:1.5em;font-size:1rem;color:#3B4757;transition:opacity .14s ease}
+    .boot__msg.is-out{opacity:0}
+    .boot__dots{display:flex;gap:8px}
+    .boot__dots i{width:8px;height:8px;border-radius:50%;background:#C3CAD4;transition:background .3s ease,transform .3s ease}
+    .boot__dots i.is-on{background:#0E5E6F}
+    .boot__dots i.is-now{transform:scale(1.3)}
+    .boot__slow{margin:6px 0 0;font-size:.875rem;color:#5D6778}
+    .boot__slow button{padding:6px 12px;border:1px solid #0E5E6F;border-radius:8px;background:#fff;color:#0E5E6F;font:inherit;cursor:pointer}
+    .boot--error .boot__dots{display:none}.boot__slow button{display:block;margin:10px auto 0}.boot--error .boot__ring{animation:none}.boot--error .boot__arc{stroke:#B3261E;stroke-dasharray:276 0}.boot--error .boot__line{animation:none;stroke-dashoffset:0}
+    @keyframes boot-spin{to{transform:rotate(360deg)}}
+    @media (prefers-reduced-motion:reduce){.boot__ring{animation:none}.boot__arc{stroke-dasharray:276 0;opacity:.35}.boot__line{animation:none;stroke-dashoffset:0}.boot,.boot__msg,.boot__dots i{transition:none}}
+  </style>
   <link rel="stylesheet" href="css/styles.css?v=20261022z25">
   <link rel="stylesheet" href="css/design-system.css?v=20261022z25">
   <link rel="stylesheet" href="css/promotions.css?v=20261022z25">
   <link rel="stylesheet" href="css/report.css?v=20261022z25">
+  <link rel="stylesheet" href="css/agents.css?v=20261022z25">
 </head>
 <body>
+
+  <!-- Pantalla de arranque: se retira cuando init() termina (ver js/app.js). Sin JavaScript queda el aviso de <noscript>. -->
+  <div id="boot" class="boot" role="status" aria-label="Cargando RevNavigator">
+    <div class="boot__card">
+      <div class="boot__mark" aria-hidden="true">
+        <div class="boot__ring"><svg viewBox="0 0 100 100"><circle class="boot__track" cx="50" cy="50" r="44"/><circle class="boot__arc" cx="50" cy="50" r="44"/></svg></div>
+        <svg class="boot__logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#0E5E6F"/><path class="boot__line" pathLength="100" d="M7 22l6-7 5 4 7-9" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="boot__name" aria-hidden="true">RevNavigator</div>
+      <p class="boot__msg" id="boot-msg" aria-hidden="true"></p>
+      <div class="boot__dots" id="boot-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <p class="boot__slow" id="boot-slow" role="alert" hidden></p>
+      <noscript><p class="boot__slow">RevNavigator necesita JavaScript activado para funcionar.</p></noscript>
+    </div>
+  </div>
+  <script>
+  /* Frases de arranque: una por etapa, elegida al azar en cada carga. Es solo acompañamiento visual; el avance es por tiempo. */
+  (function () {
+    var STAGES = [
+      ['Arrancando motor…', 'Encendiendo el motor de cálculo…', 'Calentando motores…', 'Afinando el motor…'],
+      ['Arrancando data…', 'Cargando tu data…', 'Ordenando los datos…', 'Leyendo tu historial de venta…'],
+      ['Procesando venta…', 'Cuadrando la venta contra el plan…', 'Calculando el pacing…', 'Sumando canales y días…'],
+      ['Generando insights…', 'Buscando lo que no se ve a simple vista…', 'Preparando el diagnóstico…', 'Casi listo…']
+    ];
+    var root = document.getElementById('boot'), msg = document.getElementById('boot-msg'), dots = document.querySelectorAll('#boot-dots i'), slow = document.getElementById('boot-slow');
+    var plan = STAGES.map(function (s) { return s[Math.floor(Math.random() * s.length)]; });
+    var timers = [], over = false;
+    function stage(n) {
+      msg.classList.add('is-out');
+      timers.push(setTimeout(function () { msg.textContent = plan[n]; msg.classList.remove('is-out'); }, n ? 140 : 0));
+      for (var i = 0; i < dots.length; i++) { dots[i].className = i <= n ? 'is-on' + (i === n ? ' is-now' : '') : ''; }
+    }
+    function stop() { over = true; timers.forEach(clearTimeout); timers = []; }
+    function reloadBtn(text) {
+      slow.textContent = text; slow.hidden = false;
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Recargar';
+      b.addEventListener('click', function () { location.reload(); }); slow.appendChild(b);
+    }
+    stage(0);
+    for (var k = 1; k < plan.length; k++) (function (n) { timers.push(setTimeout(function () { if (!over) stage(n); }, n * 900)); })(k);
+    timers.push(setTimeout(function () { if (!over) reloadBtn('Está tardando más de lo normal. Revisa tu conexión; si sigue igual, recarga la página.'); }, 20000));
+    // Un archivo que no descarga deja la app a medias: se avisa en lugar de girar para siempre.
+    window.addEventListener('error', function (e) {
+      var t = e && e.target;
+      if (over || !t || (t.tagName !== 'SCRIPT' && t.tagName !== 'LINK')) return;
+      fail('No se pudo descargar un archivo de la app.');
+    }, true);
+    function fail(text) { stop(); root.classList.add('boot--error'); msg.classList.remove('is-out'); msg.textContent = 'No se pudo arrancar'; reloadBtn(text + ' Recarga la página; si persiste, avisa a quien administra la herramienta.'); }
+    function done() { if (over) return; stop(); root.classList.add('is-done'); setTimeout(function () { if (root.parentNode) root.parentNode.removeChild(root); }, 400); }
+    window.__boot = { done: done, fail: fail };
+  })();
+  </script>
 
   <a class="skip-link" href="#contenido" data-skip="main">Saltar al contenido</a>
   <div class="visually-hidden" id="route-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -115,7 +193,7 @@
       <div class="panel__body">
         <div class="btn-row">
           <button type="button" class="btn btn--primary" data-action="generate-mock">Generar datos de prueba</button>
-          <button type="button" class="btn" data-action="run-tests">Ejecutar pruebas del motor</button>
+          <button type="button" class="btn" data-action="run-tests">Volver a ejecutar pruebas del motor</button>
           <button type="button" class="btn btn--quiet" data-action="clear-all">Borrar datos guardados</button>
         </div>
         <dl class="facts" id="dataset-facts" style="margin-top: var(--sp-4)"></dl>
@@ -138,13 +216,13 @@
 
       </div></details>
     <details class="ds-accordion pacing-more rs-more" data-rs-more="engine">
-      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Pruebas del motor</h3><p class="ds-accordion__d">Se ejecutan al abrir la app; si una falla, un cambio rompió algo que ya funcionaba</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
+      <summary><span class="ds-accordion__n" aria-hidden="true">+</span><span><h3 class="ds-accordion__t">Pruebas del motor</h3><p class="ds-accordion__d">Se ejecutan solas en segundo plano unos segundos después de abrir la app; si una falla, un cambio rompió algo que ya funcionaba</p></span><svg class="ds-accordion__chev" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></summary>
       <div class="ds-accordion__body">
     <section class="panel" aria-labelledby="t-engine">
       <div class="panel__head">
         <div>
           <h2 class="panel__title" id="t-engine">Pruebas del motor</h2>
-          <p class="panel__desc">Se ejecutan al abrir la app. Si alguna falla después de un cambio, ese cambio rompió algo que ya funcionaba.</p>
+          <p class="panel__desc">Se ejecutan solas en segundo plano unos segundos después de abrir la app (puedes repetirlas con «Volver a ejecutar pruebas del motor»). Si alguna falla después de un cambio, ese cambio rompió algo que ya funcionaba.</p>
         </div>
         <span id="engine-summary"></span>
       </div>
@@ -197,49 +275,83 @@
   <!-- ===================== Vista: Calidad de datos (Fase 1) ===================== -->
   <main class="app-main" data-view="calidad" id="view-calidad" hidden>
     <div id="quality-banner"></div>
-    <!-- Fase A · salud de los datos (puntaje desglosado) -->
-    <section class="panel" aria-labelledby="t-health">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-health">Salud de los datos</h2>
-        <p class="panel__desc">Puntaje de 0 a 100 por archivo cargado. Cada componente dice cuánto vale, cuántos casos lo bajaron y por qué; el total es el promedio de los que aplican.</p>
-      </div></div>
-      <div class="panel__body" id="quality-health"></div>
-    </section>
-    <section class="panel" aria-labelledby="t-quality">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-quality">Resumen de calidad</h2>
-        <p class="panel__desc">Registros cargados = filas que entraron al modelo. Filas rechazadas = filas leídas que no entraron (sin fecha o canal válidos, o con errores).</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-summary"></div>
-    </section>
-    <section class="panel"><div class="panel__body" id="quality-coverage"></div></section>
-    <section class="panel" aria-labelledby="t-qissues">
-      <div class="panel__head"><div><h2 class="panel__title" id="t-qissues">Problemas por tipo</h2></div></div>
-      <div class="panel__body" id="quality-issues"></div>
-    </section>
-    <!-- Fase B · matriz de compatibilidad de análisis -->
-    <section class="panel" aria-labelledby="t-analyses">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-analyses">Qué puedes analizar con tus datos</h2>
-        <p class="panel__desc">Para el mismo periodo y canal del Diagnóstico. Cada análisis dice qué le falta y qué hacer; nada se da por disponible sin datos.</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-analyses"></div>
-    </section>
-    <!-- Fase A · cuarentena y registro de importaciones (auditoría) -->
-    <section class="panel" aria-labelledby="t-quarantine">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-quarantine">Cuarentena</h2>
-        <p class="panel__desc">Valores que no entran a los KPIs (no numéricos o negativos). Nada se borra ni se cambia: se conserva el valor original, la regla, el archivo y la fila.</p>
-      </div></div>
-      <div class="panel__body" id="quality-quarantine"></div>
-    </section>
-    <section class="panel" aria-labelledby="t-implog">
-      <div class="panel__head"><div>
-        <h2 class="panel__title" id="t-implog">Registro de importaciones</h2>
-        <p class="panel__desc">Cada carga con su fuente, filas recibidas, aceptadas, en cuarentena y rechazadas, columnas usadas y salud resultante.</p>
-      </div></div>
-      <div class="panel__body panel__body--flush" id="quality-log"></div>
-    </section>
+    <!-- Fase 3.2 · recorrido de cinco pasos: «Qué hacer ahora» + los pasos. Nada de lo que ya había se quitó: cada bloque sigue con su id, dentro de su paso (plegado). -->
+    <div id="quality-guide"></div>
+    <details class="qstep" id="qstep-1" data-step="1">
+      <summary class="qstep__sum" id="qstep-1-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-quality">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-quality">Resumen de calidad</h2>
+            <p class="panel__desc">Registros cargados = filas que entraron al modelo. Filas rechazadas = filas leídas que no entraron (sin fecha o canal válidos, o con errores).</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-summary"></div>
+        </section>
+        <section class="panel"><div class="panel__body" id="quality-coverage"></div></section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-2" data-step="2">
+      <summary class="qstep__sum" id="qstep-2-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-qissues">
+          <div class="panel__head"><div><h2 class="panel__title" id="t-qissues">Problemas por tipo</h2></div></div>
+          <div class="panel__body" id="quality-issues"></div>
+        </section>
+        <!-- Fase A · cuarentena (auditoría) -->
+        <section class="panel" aria-labelledby="t-quarantine">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-quarantine">Cuarentena</h2>
+            <p class="panel__desc">Valores que no entran a los KPIs (no numéricos o negativos). Nada se borra ni se cambia: se conserva el valor original, la regla, el archivo y la fila.</p>
+          </div></div>
+          <div class="panel__body" id="quality-quarantine"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-3" data-step="3">
+      <summary class="qstep__sum" id="qstep-3-sum"></summary>
+      <div class="qstep__body">
+        <!-- Fase A · salud de los datos (puntaje desglosado) -->
+        <section class="panel" aria-labelledby="t-health">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-health">Salud de los datos</h2>
+            <p class="panel__desc">Puntaje de 0 a 100 por archivo cargado. Cada componente dice cuánto vale, cuántos casos lo bajaron y por qué; el total es el promedio de los que aplican.</p>
+          </div></div>
+          <div class="panel__body" id="quality-health"></div>
+        </section>
+        <section class="panel" aria-labelledby="t-implog">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-implog">Registro de importaciones</h2>
+            <p class="panel__desc">Cada carga con su fuente, filas recibidas, aceptadas, en cuarentena y rechazadas, columnas usadas y salud resultante.</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-log"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-4" data-step="4">
+      <summary class="qstep__sum" id="qstep-4-sum"></summary>
+      <div class="qstep__body">
+        <!-- Fase B · matriz de compatibilidad de análisis -->
+        <section class="panel" aria-labelledby="t-analyses">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-analyses">Qué puedes analizar con tus datos</h2>
+            <p class="panel__desc">Para el mismo periodo y canal del Diagnóstico. Cada análisis dice qué le falta y qué hacer; nada se da por disponible sin datos.</p>
+          </div></div>
+          <div class="panel__body panel__body--flush" id="quality-analyses"></div>
+        </section>
+      </div>
+    </details>
+    <details class="qstep" id="qstep-5" data-step="5">
+      <summary class="qstep__sum" id="qstep-5-sum"></summary>
+      <div class="qstep__body">
+        <section class="panel" aria-labelledby="t-qforecast">
+          <div class="panel__head"><div>
+            <h2 class="panel__title" id="t-qforecast">Confianza del forecast</h2>
+            <p class="panel__desc">Qué tan exigente es la etiqueta Alta, Media o Baja del cierre estimado, qué pasó en tu historial cada vez que salió cada una, y cómo se ajusta con los meses ya cerrados.</p>
+          </div></div>
+          <div class="panel__body" id="quality-forecast"></div>
+        </section>
+      </div>
+    </details>
   </main>
 
   <!-- ===================== Vista: Datos normalizados (Fase 1) ===================== -->
@@ -647,6 +759,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Orden de carga = orden de dependencias (ver ARCHITECTURE.md §4) -->
+  <script src="js/lazy.js?v=20261022z25"></script>
   <script src="js/config/businessContext.js?v=20261022z25"></script>
   <script src="js/config/config.js?v=20261022z25"></script>
   <script src="js/config/guidanceConfig.js?v=20261022z25"></script>
@@ -695,6 +808,7 @@
   <script src="js/analytics/cohortEngine.js?v=20261022z25"></script>
   <script src="js/analytics/analysisNarrativeEngine.js?v=20261022z25"></script>
   <script src="js/quality/coverage.js?v=20261022z25"></script>
+  <script src="js/quality/qualitySteps.js?v=20261022z25"></script>
   <script src="js/quality/rules.js?v=20261022z25"></script>
   <script src="js/quality/health.js?v=20261022z25"></script>
   <script src="js/quality/dataSources.js?v=20261022z25"></script>
@@ -709,6 +823,8 @@
   <script src="js/forecast/forecastMethods.js?v=20261022z25"></script>
   <script src="js/forecast/forecastEngine.js?v=20261022z25"></script>
   <script src="js/forecast/methodAdvisor.js?v=20261022z25"></script>
+  <script src="js/forecast/forecastConfidence.js?v=20261022z25"></script>
+  <script src="js/forecast/forecastCalibration.js?v=20261022z25"></script>
   <script src="js/report/reportBuilder.js?v=20261022z25"></script>
   <script src="js/report/brand.js?v=20261022z25"></script>
   <script src="js/report/reportCopy.js?v=20261022z25"></script>
@@ -761,8 +877,13 @@
   <script src="js/data/mock-data.js?v=20261022z25"></script>
   <script src="js/data/mock-csv.js?v=20261022z25"></script>
   <script src="js/data/mock-products.js?v=20261022z25"></script>
-  <script src="js/calculations/self-test.js?v=20261022z25"></script>
-  <script src="js/storage/storage-tests.js?v=20261022z25"></script>
+  <script src="js/calculations/self-test.js?v=20261022z25" type="text/plain" data-lazy="selftest"></script>
+  <script src="js/storage/storage-tests.js?v=20261022z25" type="text/plain" data-lazy="storagetests"></script>
+  <script src="js/agents/analistaDetectors.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/agents/analistaStory.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/agents/auditorDetectors.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/agents/agentRunner.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
+  <script src="js/ui/agent-panel.js?v=20261022z25" type="text/plain" data-lazy="agentes"></script>
   <script src="js/ui/format.js?v=20261022z25"></script>
   <script src="js/ui/ui.js?v=20261022z25"></script>
   <script src="js/ui/progress-loader.js?v=20261022z25"></script>
@@ -830,6 +951,8 @@
   <script src="js/ui/projection-view.js?v=20261022z25"></script>
   <script src="js/cloud/cloudSync.js?v=20261022z25"></script>
   <script src="js/cloud/productSync.js?v=20261022z25"></script>
+  <script src="js/ui/bg-task.js?v=20261022z25"></script>
+  <script src="js/agents/agentLauncher.js?v=20261022z25"></script>
   <script src="js/app.js?v=20261022z25"></script>
 </body>
 </html>

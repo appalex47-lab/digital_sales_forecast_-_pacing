@@ -43,6 +43,7 @@ async def main():
         await q.click('#sttab-ia'); await q.evaluate("FP.app.actions['ux-mode']({dataset:{value:'learner'}})"); await q.wait_for_timeout(300)
         chk('T-2 la pestaña activa se conserva al repintar', await q.evaluate("document.querySelector('.sttab[aria-selected=true]').dataset.tab")=='ia')
         # resúmenes
+        await q.wait_for_function("FP.app.state.selfTest", timeout=90000)   # Fase A: las pruebas del motor corren solas en segundo plano unos segundos después de abrir
         await q.evaluate("FP.app.state.stTab='herramienta';FP.app.render()")
         meta = await q.evaluate("(()=>Object.fromEntries([...document.querySelectorAll('#view-ajustes section.stsec')].map(d=>[d.id,((d.querySelector('.stsec__meta')||{}).textContent||'').trim()])))()")
         chk('T-4 resúmenes: modo, sin API key, 0 consultas, 0 aprendidas, 0 equivalencias, fuentes, negocio y motor', meta['st-modo']=='Aprendiz' and 'Sin API key' in meta['st-ia'] and meta['st-ia-log'].startswith('0 consultas') and meta['st-ia-aprendido'].startswith('0 columnas') and meta['st-equivalencias'].startswith('0 equivalencias') and 'fuentes con datos' in meta['st-fuentes'] and 'Sin configurar' in meta['st-negocio'] and 'motor operativo' in meta['st-estado'], meta)

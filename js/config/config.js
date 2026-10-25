@@ -256,7 +256,9 @@
         // Fase 15 (enlaces de Google Sheets publicados; solo la URL, nunca claves)
         sheetsLinks: 'sheetsLinks',
         // Fase 8.2 (configuración pequeña; config.js la lee de forma síncrona al arrancar)
-        businessContext: 'businessContext'
+        businessContext: 'businessContext',
+        // Fase 3.3 (calibración de la confianza del forecast: umbrales en uso, historial y el interruptor de recalibrar sola)
+        confidenceCalibration: 'confidenceCalibration'
       }
     },
 

@@ -26,6 +26,7 @@
   function render(state) {
     const esc = H().esc;
     const cfg = FP.seasonality.effectiveConfig(state.planning.settings);
+    const cal = state.cal;
     const hp = cfg.historicalPeriod;
 
     $('plan-config').innerHTML = `
@@ -60,6 +61,8 @@
         ${COMPONENTS.map(([k, l]) => numberField(`pc-w-${k}`, l, cfg.componentWeights[k], { key: 'componentWeights', sub: k, min: 0, max: 1, step: 0.1 })).join('')}
       </div>
       <p class="field__hint">1 = factor histórico completo; 0 = sin efecto. Se aplica como exponente (f<sup>α</sup>); en el mensual, como mezcla con la distribución por días.</p>
+      <div class="field field--check qcal-pointer" id="confidence-pointer"><label class="qcal__sw"><input type="checkbox" data-action="cal-auto" ${cal && cal.saved.auto ? 'checked' : ''}> Recalibrar sola la confianza del cierre estimado cuando cierra cada mes</label>
+        <p class="field__hint">La <strong>confianza del cierre estimado</strong> (Alta, Media o Baja) se revisa y se calibra en <a href="#calidad" data-nav="calidad" data-qstep="5">Calidad de datos · paso 5</a>. ${cal && cal.saved.active ? 'Hoy usa umbrales calibrados con tu historial.' : 'Hoy usa los umbrales iniciales; se calibra con tu historial a partir de 12 meses cerrados.'} Apagada por defecto.</p></div>
       <div class="btn-row"><button type="button" class="btn btn--quiet" data-action="plan-settings-reset">Restablecer valores por defecto</button></div>`;
 
     FP.startupAssumptionsView.bind();

@@ -114,7 +114,7 @@
           <li><h4>Vista previa (primeras ${pv.length} filas normalizadas)</h4>
             ${pv.length ? `<div class="table-wrap"><table class="table ds-table"><thead><tr><th class="num">Fila</th><th>Fecha</th><th>Canal</th><th>SKU</th>${kind === 'sales' ? '<th>Producto</th><th>Región · estado · ciudad · sucursal · entrega</th>' : ''}
               ${ms.map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}<th>Resultado</th></tr></thead><tbody>${preview}</tbody></table></div>` : '<p class="note">Asigna fecha, canal y SKU para ver la vista previa.</p>'}</li>
-          <li><h4>Validación del archivo completo</h4>${body}${kind === 'sales' && r && r.summary && r.summary.colFilled && FP.dataHealth ? (() => { const cq = FP.dataHealth.columnQuality([{ summary: r.summary, mappedKeys: Object.values(s.mapping).filter(Boolean) }]); return cq ? `<p class="field__hint" data-columns-score="${cq.score}">Calidad de columnas: <strong>${cq.score}/100</strong>. ${esc(cq.detail)}</p>${columnsTable(cq.columns)}` : ''; })() : ''}</li>
+          <li><h4>Validación del archivo completo</h4>${body}${kind === 'sales' && r && r.summary && r.summary.colFilled && FP.dataHealth ? (() => { const cq = FP.dataHealth.columnQuality([{ summary: r.summary, mappedKeys: Object.values(s.mapping).filter(Boolean) }]); return cq ? `<p class="field__hint" data-columns-score="${cq.score}">Calidad de columnas: <strong>${cq.score}/100</strong>. ${esc(cq.detail)}</p>${columnsTable(cq.columns, null, true)}` : ''; })() : ''}</li>
         </ol>
         <div class="staging__foot">
           ${FP.replaceView.block(state, item)}
@@ -310,14 +310,14 @@
     renderResult(state);
   }
 
-  /** Tabla de calidad por columna (venta): nivel, llenado y lo que se pierde si falta. Se usa en la revisión de la carga y en Calidad de datos. */
-  function columnsTable(columns, label) {
+  /** Tabla de calidad por columna (venta): nivel, llenado y lo que se pierde si falta. Se usa en la revisión de la carga (abierta: ahí decide si se guarda) y en Calidad de datos (cerrada: es detalle). */
+  function columnsTable(columns, label, open) {
     if (!columns || !columns.length) return '';
     const tone = (c) => (!c.mapped ? (c.tier === 'optional' ? 'na' : 'error') : c.pct >= 98 ? 'ok' : c.pct >= 80 ? 'warning' : 'error');
     const rows = columns.map((c) => `<tr data-col="${esc(c.key)}" data-tier="${esc(c.tier)}"><th scope="row">${esc(c.label)}</th><td>${esc(c.tierLabel)}</td>
       <td class="num">${c.mapped ? `${H().pill(tone(c), `${c.pct} %`)}` : H().pill(tone(c), 'Sin cargar')}</td>
       <td class="wrap">${c.mapped && c.pct >= 98 ? '<span class="cell-sub">Completa</span>' : esc(c.impact.charAt(0).toUpperCase() + c.impact.slice(1))}</td></tr>`).join('');
-    return `<details class="dhealth__all" data-block="columns-quality" open><summary>Calidad por columna${label ? ` · ${esc(label)}` : ''}</summary>
+    return `<details class="dhealth__all" data-block="columns-quality"${open ? ' open' : ''}><summary>Calidad por columna${label ? ` · ${esc(label)}` : ''}</summary>
       <div class="table-wrap"><table class="table ds-table" aria-label="Calidad por columna de productos"><thead><tr><th scope="col">Columna</th><th scope="col">Nivel</th><th scope="col" class="num">Filas con valor</th><th scope="col">Si falta</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }

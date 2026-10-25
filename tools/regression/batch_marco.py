@@ -34,10 +34,7 @@ async def main():
         w = await q.evaluate("""(()=>{const top=[...document.querySelectorAll('#topbar-status .pill')].map(e=>e.textContent.trim()); const warn=document.querySelector('.ux-context__warn');
           const ctxPills = warn? warn.querySelectorAll('.pill').length : -1; return {top, hasWarn:!!warn, ctxPills, text: warn? warn.textContent.replace(/\\s+/g,' ').trim(): '', link: warn? !!warn.querySelector('a[href=\"#calidad\"]') : false,
           dup: [...document.querySelectorAll('.pill')].filter(e=>/advertencias|no válidos/i.test(e.textContent) && e.offsetParent!==null).length}})()""")
-        if w['hasWarn']:
-            chk('M4 la advertencia de datos sale una sola vez como ficha (encabezado); la barra de contexto solo explica y enlaza a Calidad', w['ctxPills'] == 0 and w['dup'] == 1 and w['link'] and 'incompletos' in w['text'], w)
-        else:
-            print('   (sin advertencia de calidad en este dataset; M4 omitida)')
+        chk('M4 el encabezado ya no repite la advertencia de datos (Fase 3.1): queda solo la ficha de la barra superior y la pantalla Calidad de datos', not w['hasWarn'] and w['dup'] <= 1, w)
         chk('Sin errores de página', not errs, errs[:3])
         await b.close()
 asyncio.run(main())

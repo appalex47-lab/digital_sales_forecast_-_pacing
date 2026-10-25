@@ -921,7 +921,8 @@ td.neg { color: var(--c-err); font-weight: 600; }
 @media (max-width: 1100px) {
   .chain { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chain li::after { display: none; }
-  .tree-branch li { grid-template-columns: 1fr 110px; }
+  .tree-branch li { grid-template-columns: minmax(0, 1fr) auto; }   /* minmax(0,…): la columna de texto puede encogerse; con «1fr» a secas el renglón se salía de la pantalla a 320 px */
+  .tree-branch li > * { min-width: 0; }
   .tree-branch li .cell-sub-inline { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) { .wf-row { grid-template-columns: 1fr 110px; } .wf-track { grid-column: 1 / -1; order: 3; } }

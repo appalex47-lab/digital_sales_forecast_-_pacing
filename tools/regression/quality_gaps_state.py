@@ -30,4 +30,4 @@ async def load(q, url):
         await q.set_input_files(f'input[data-action="pick-files"][data-type="{typ}"]', files=[{'name': name, 'mimeType': 'text/csv', 'buffer': text.encode('utf-8')}])
         await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000)
         await q.click('[data-action="commit-staged"]'); await q.wait_for_function("document.querySelectorAll('#view-carga .staging__head').length === 0", timeout=60000)
-    await q.goto(url + '#calidad'); await q.wait_for_timeout(900)
+    await q.goto(url + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(900)

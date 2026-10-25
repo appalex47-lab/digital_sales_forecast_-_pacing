@@ -124,6 +124,29 @@
     return { status: 'ok', picks: picks.slice(0, 3), quality: quality.slice(0, 3), qualityTotal: quality.length, analyzed };
   }
 
+  /**
+   * 3b · Mezcla de tráfico (lo usa el Auditor de Conversión): por cada dimensión de segmentos con datos, cuánto del cambio del CR total contra el
+   * periodo anterior es «mezcla» (cambió el peso de cada fuente) y cuánto es «dentro de los segmentos» (cambió el CR de cada fuente). Solo LEE el
+   * motor de tráfico y conversión; no calcula nada propio. Devuelve { status, dims:[{dimension, dimensionLabel, mix:{cr0,cr1,delta,within,mix}, segments, minSessions}] }.
+   */
+  function mixOf(state, ch, period) {
+    if (!state.store || !state.store.segments || !(state.store.segments.records || []).length) return { status: 'no_segments', dims: [] };
+    const recs = FP.dataStore.segmentIndex(state.store), dimsCfg = C().diagnostics.dimensions;
+    const range = FP.app.periodRange(period.type, period.key) || { from: `${state.year}-01-01`, to: `${state.year}-12-31` };
+    const dims = [];
+    [...recs.byDim.keys()].filter(Boolean).filter((d) => !COMBO_DIMS.includes(d)).forEach((d) => {
+      const res = FP.dataStore.cached(state.store, `homewhere|${range.from}|${range.to}|${period.type}|${ch}|${d}`, ['segments'],
+        () => FP.segmentsView.summarize(recs, { from: range.from, to: range.to, channel: ch, dimension: d, periodType: period.type }));
+      if (!res.rows.length) return;
+      const dec = FP.dataStore.cached(state.store, `homewhere-dec|${range.from}|${range.to}|${period.type}|${ch}|${d}`, ['segments'], () => FP.trafficConversionEngine.analyze(res));
+      if (!dec || dec.status !== 'ok' || !dec.mix) return;
+      const sig = dec.allItems.filter((x) => x.grouped === 0 && x.crTest && x.crTest.significant && fin(x.crPpDelta));
+      dims.push({ dimension: d, dimensionLabel: (dimsCfg[d] && dimsCfg[d].label) || d, mix: dec.mix, segments: dec.allItems.filter((x) => x.grouped === 0).length, minSessions: dec.minSessions,
+        significant: sig.map((x) => ({ label: x.label, crPpDelta: x.crPpDelta })).slice(0, 3) });
+    });
+    return dims.length ? { status: 'ok', dims } : { status: 'no_rows', dims: [] };
+  }
+
   /** 4 · Confianza de los datos. */
   function trust(state, whyRes) {
     const q = state.quality || (FP.coverage && state.store ? FP.coverage.summarize(state.store) : null);
@@ -154,11 +177,11 @@
   function excluded(state, ch, period) {
     const run = state.fc && state.fc.run;
     if (ch !== 'total' || !run || !run.total || !run.channels) return null;
-    const inPeriod = (d) => (period && period.type === 'month' ? d.slice(0, 7) === period.key : true);
+    const inPeriod = (d) => (period && period.type === 'month' ? d.date.slice(0, 7) === period.key : period && period.type === 'week' ? d.weekKey === period.key : true);
     const ids = Object.keys(run.channels);
     const dates = [], missing = {}; let revenue = 0;
     run.total.days.forEach((d, i) => {
-      if (!d.closed || d.counted || !inPeriod(d.date)) return;
+      if (!d.closed || d.counted || !inPeriod(d)) return;
       let any = false;
       ids.forEach((id) => {
         const cd = run.channels[id].days[i];
@@ -178,5 +201,5 @@
     return { channel: ch, period, why: w, whyPlan: whyPlan(state, ch, period), where: where(state, ch, period), channels: channels(state, period), goal: goal(state, ch, period), excluded: excluded(state, ch, period), trust: trust(state, w) };
   }
 
-  FP.homeSummaryEngine = { compute, why, where, channels, trust, periodOf, goal, excluded };
+  FP.homeSummaryEngine = { compute, why, where, mixOf, channels, trust, periodOf, goal, excluded };
 })(typeof window !== 'undefined' ? window : globalThis);

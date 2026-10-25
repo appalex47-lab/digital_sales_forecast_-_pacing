@@ -1041,8 +1041,10 @@
       const agg = (parts, groupBy, filter) => { const m = new Map(); parts.forEach((p) => PG.accumulateJoint(m, p, null, { groupBy, filter })); return m; };
       const G = FP.mockProducts.geoCase().split('\n').slice(1);
 
-      test('Fase 8.4: modelo', 'Códigos estables de estado (32) alineados con el catálogo', () =>
-        C.products.stateCodes.length === C.products.states.length && PG.stateCode(PG.stateIdx('Jalisco')) === 'JAL' && PG.stateCode(PG.stateIdx('cdmx')) === 'CDMX');
+      test('Fase 8.4: modelo', 'Códigos estables de estado (32) alineados con el catálogo', iso(() => {
+        // Fase A: dentro de iso() los estados se inicializan solos (_resetCatalog → resetDims); antes dependía de que el arranque ya lo hubiera hecho.
+        return C.products.stateCodes.length === C.products.states.length && PG.stateCode(PG.stateIdx('Jalisco')) === 'JAL' && PG.stateCode(PG.stateIdx('cdmx')) === 'CDMX';
+      }));
       test('Fase 8.4: jerarquía', 'Sucursal → ciudad → estado → región con ruta completa e IDs estables', iso(() => {
         loadGeo(G);
         const b = PG.entity('branch', '025'), c = PG.entity('city', 'Guadalajara, JAL');
@@ -1535,6 +1537,39 @@
         const r=FE.analyzeMany([fr('E',[10,12,14,16])],{horizon:3});
         return /causalidad/.test(r.methodology) && /intervalos de confianza estadísticos/.test(r.methodology);
       });
+    }
+
+    // Fase 1 · Asistentes (Analista de Números): detectores deterministas, registro y reglas de seguridad de la IA
+    if (FP.agents && FP.agents.analista && FP.agents.runner) {
+      const A = FP.agents.analista, R = FP.agents.runner;
+      const rv = (plan, actual) => ({ plan, actual, gap: actual - plan, gapPct: (actual - plan) / plan, compliance: actual / plan });
+      const mo = (plan, actual) => ({ key: '2026-09', countedDays: 22, plan: { revenue: plan }, toDate: { revenue: rv(plan, actual) }, forecastGap: { revenue: { gapPct: 0 } } });
+      const mk = (chs) => { const t = Object.values(chs).reduce((x, c) => [x[0] + c[0], x[1] + c[1]], [0, 0]); const channels = {}; Object.keys(chs).forEach((id) => { channels[id] = { months: [mo(chs[id][0], chs[id][1])] }; });
+        return { fc: { lastActualDate: '2026-09-22', run: { plan: { source: 'file' }, total: { months: [mo(t[0], t[1])] }, channels } }, quality: { totals: {} }, settings: {}, dx: {} }; };
+      const noHome = { home: { goal: () => null, whyPlan: () => null, why: () => null, excluded: () => ({ days: 0, revenue: 0 }) }, advisor: { advise: () => null } };
+      test('Asistentes', 'Sin datos de plan y venta el Analista dice «no_data» y no inventa', () => A.detect({}, noHome).status === 'no_data');
+      test('Asistentes', 'Con todo en plan no reporta hallazgos', () => { const r = A.detect(mk({ ecommerce: [1000, 1005], llamadas: [300, 298] }), noHome); return r.status === 'ok' && r.findings.length === 0; });
+      test('Asistentes', 'Detecta la brecha concentrada en un canal con cifras del motor', () => { const r = A.detect(mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }), noHome); const f = r.findings.find((x) => x.id === 'brecha_concentrada'); return !!f && /Llamadas/.test(f.title) && A.OWNERS.includes(f.owner) && f.evid.length >= 3; });
+      test('Asistentes', 'Un detector que falla no tumba a los demás', () => { const st = mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }); const r = A.detect(st, { ...noHome, confidence: { assess: () => { throw new Error('x'); } } }); return r.errors.length === 1 && r.findings.some((x) => x.id === 'brecha_concentrada'); });
+      test('Asistentes', 'La respuesta de la IA con ids inventados o cifras que el motor no calculó se rechaza', () => {
+        const det = A.detect(mk({ ecommerce: [1000, 1000], llamadas: [300, 100] }), noHome), ctx = R.buildContext(det, A.OWNERS), id = det.findings[0].id;
+        const bad = R.validate({ hallazgos: [{ id: 'inventado', prioridad: 'Alta', titulo: 'x', resumen: 'y', siguientePregunta: 'z', responsable: 'Comercial' }] }, ctx, A.OWNERS);
+        const num = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: 'Llamadas cae 77.7%', resumen: 'Pérdida de $9.9 M', siguientePregunta: '¿?', responsable: 'Comercial' }] }, ctx, A.OWNERS);
+        const good = R.validate({ hallazgos: [{ id, prioridad: 'Alta', titulo: det.findings[0].title, resumen: det.findings[0].resumen, siguientePregunta: det.findings[0].pregunta, responsable: 'Contact center' }] }, ctx, A.OWNERS);
+        return bad.ok === false && num.ok === false && good.ok === true;
+      });
+      test('Asistentes', 'El registro de agentes: Analista y Auditor disponibles; Arquitecto como próximamente', () => { const g = FP.agents.registry; return g.AGENTS.analista.available === true && g.AGENTS.auditor.available === true && g.AGENTS.arquitecto.available === false && g.defaultAgent('segmentos') === 'auditor' && g.defaultAgent('recovery') === 'analista'; });
+      test('Asistentes', 'El Auditor de Conversión: la puerta de GA4 y los umbrales de demanda sin conversión', () => {
+        const AU = FP.agents.auditor; if (!AU) return false;
+        const g = (a, b) => AU.cuadreGa4({ total: { trkGa4: a, trkUnits: b } }).level;
+        const sk = (n, v, c) => ({ sku: n, name: n, category: 'C', views: v, cartNum: c, cartDen: v, chkNum: 50, chkDen: 100, buyNum: 30, buyDen: 50, units: 30, revenue: 3000, purchases: 30, trkGa4: 30, trkUnits: 30, fcells: 5 });
+        const rows = Array.from({ length: 8 }, (_, i) => sk('n' + i, 2000, 80)).concat([sk('flojo', 9000, 90), sk('pocas', 4000, 40)]);
+        const r = AU.analyze({ status: 'ok', scope: { key: '2026-09' }, skuRows: rows, channels: [], total: { trkGa4: 97, trkUnits: 100 }, mix: { status: 'no_segments', dims: [] }, errors: [] });
+        const f = r.findings.find((x) => x.id === 'demanda_sin_conversion');
+        return g(95, 100) === 'ok' && g(85, 100) === 'warn' && g(60, 100) === 'low' && g(0, 0) === 'unknown' && !!f && /flojo/.test(JSON.stringify(f.visual.rows)) && !/pocas/.test(JSON.stringify(f.visual.rows));
+      });
+      test('Asistentes', 'El enrutador de preguntas: promociones al Arquitecto, rentabilidad se rechaza', () => R.routeQuestion('auditor', '¿qué descuento hago?').to === 'arquitecto' && R.routeQuestion('analista', '¿cuánto gano?').type === 'refuse' && R.routeQuestion('analista', '¿por qué cae Insulinas?') === null);
+      test('Asistentes', 'Las reglas de la IA prohíben calcular, causalidad y margen', () => /NO calcules/.test(R.SYSTEM_RULES) && /causal/.test(R.SYSTEM_RULES) && /margen/.test(R.SYSTEM_RULES));
     }
 
     const passed = results.filter((r) => r.pass).length;

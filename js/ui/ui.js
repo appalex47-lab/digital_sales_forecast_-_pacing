@@ -49,7 +49,7 @@
 
     // Encabezado: año + «Datos al» (fecha de referencia global). Las píldoras de datos y motor viven en el menú, sobre el modo Aprendiz.
     const dataKind = q ? QPILL[q.status] : 'empty', dataText = q ? q.statusText : 'Sin datos';
-    const engineP = st ? { kind: st.ok ? 'ok' : 'error', text: st.ok ? 'Operativo' : 'Con fallas' } : { kind: 'na', text: 'Sin ejecutar' };
+    const engineP = st ? { kind: st.ok ? 'ok' : 'error', text: st.ok ? 'Operativo' : 'Con fallas' } : state.selfTestError ? { kind: 'warning', text: 'No se pudo ejecutar' } : { kind: 'na', text: 'Sin ejecutar' };
     const link = (label, kind, shown, text) => `<a class="hstatus__link" href="#ajustes" data-section="estado" aria-label="${esc(label)}: ${esc(text)}. Ver el detalle en Configuración de RevNavigator" title="Ver el detalle en Configuración de RevNavigator">${pill(kind, shown)}</a>`;
     const pills = $('snav-pills');
     if (pills) pills.innerHTML = `${link('Estado de datos', dataKind, dataText, dataText)}${link('Estado del motor', engineP.kind, `Motor: ${engineP.text}`, engineP.text)}`;
@@ -397,7 +397,7 @@
 
   function renderEngine(state) {
     const st = state.selfTest;
-    if (!st) { $('engine-tests').innerHTML = ''; $('engine-summary').innerHTML = ''; return; }
+    if (!st) { $('engine-tests').innerHTML = state.selfTestError ? `<p class="cell-sub">No se pudieron ejecutar las pruebas del motor: ${esc(state.selfTestError)}. Toca «Ejecutar pruebas del motor» para reintentar; si persiste, avisa a quien administra la herramienta.</p>` : ''; $('engine-summary').innerHTML = state.selfTestError ? pill('warning', 'No se pudo ejecutar') : ''; return; }
     $('engine-summary').innerHTML = pill(st.ok ? 'ok' : 'error', `${st.passed} de ${st.total} correctas`);
     const groups = {};
     st.results.forEach((r) => { (groups[r.group] = groups[r.group] || []).push(r); });

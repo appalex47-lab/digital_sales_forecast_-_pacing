@@ -4,7 +4,9 @@ Modelo: un usuario pertenece a **un** equipo; todos los miembros ven y escriben 
 No hay registro abierto ni sesiones anónimas. Todo el alta se hace en el panel de Supabase.
 
 ## 1. Aplicar la migración (una vez)
-SQL Editor → pegar `APLICAR_TODO.sql` (o las dos migraciones en orden) → Run. Crea `teams`, `team_members`, `team_blobs` con RLS.
+SQL Editor → pegar `APLICAR_TODO.sql` (o las dos migraciones en orden) → Run.
+
+Las migraciones de `migrations/` llevan versión con fecha y hora (`AAAAMMDD…`); Supabase las compara con el historial del proyecto. `20261012070504_cloud_blobs_s1.sql` es la que el proyecto ya tenía registrada (sirve para que ambos historiales coincidan) y todas son repetibles sin dañar datos. Crea `teams`, `team_members`, `team_blobs` con RLS.
 Incluye `20261014_alertas_historia.sql` (tablas `alert_states` y `daily_snapshots`: estado compartido de alertas y foto diaria para «Qué cambió desde ayer»; sin ellas la app guarda eso solo en el navegador).
 No toca `cloud_blobs` (copias anónimas anteriores). Cuando ya no se necesiten: `drop table public.cloud_blobs;`.
 
@@ -16,7 +18,7 @@ Authentication → Sign In / Providers:
 Si usas CAPTCHA (Turnstile), déjalo: la app ya envía el token al iniciar sesión.
 
 ## 3. Dar de alta personas (así de simple)
-Equipo inicial: **Ecommerce**; primera persona: `appalex@hotmail.es` (ya quedó invitada en la migración `20261013b`).
+Equipo inicial: **Ecommerce**; primera persona: `appalex@hotmail.es` (ya quedó invitada en la migración `20261013000100`).
 1. Invitar el correo al equipo (SQL Editor):
 ```sql
 insert into public.team_invites (email, team_id)

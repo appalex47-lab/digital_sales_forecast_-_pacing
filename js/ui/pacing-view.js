@@ -135,6 +135,16 @@
     const R = reasons(a, k);
     const fg = a.forecastGap[k];
     const additive = !['conversionRate', 'aov'].includes(k);
+    // Fase 3: qué tan sólida es la base del cierre estimado (solo ingresos; no cambia ninguna cifra)
+    let conf = null;
+    try { const C = FP.forecastConfidence, r0 = k === 'revenue' && C ? C.assess({ run, channel: 'total', period: { type: 'year', key: String(state.year) }, advisor: FP.methodAdvisor }) : null; conf = r0 && r0.status === 'ok' ? r0 : null; } catch (e) { conf = null; }
+    // Fase 3.3: lo que dice el historial de esta misma etiqueta (solo con ≥ 12 meses comparados; se midió con cierres de mes, no con el anual)
+    let calNote = '';
+    try {
+      const CAL = FP.forecastCalibration, cs = state.cal, an = conf && CAL && cs ? CAL.analysisOf(cs.saved, cs.cache && cs.cache.samples) : null, ph = an && an.months >= CAL.MIN_MONTHS ? CAL.phrase(an, conf.level) : null;
+      if (ph) calNote = ` ${esc(ph.text)} Se midió con cierres de mes, no con el cierre anual. <a href="#calidad" data-nav="calidad" data-qstep="5">Cómo se calibró</a>.`;
+    } catch (e) { calNote = ''; }
+    const confNote = conf ? ` <strong>Confianza del cierre: ${esc(conf.label)}.</strong> ${conf.factors.map((x) => `${esc(x.label)}: ${esc(x.levelLabel.toLowerCase())} (${esc(x.detail)})`).join('; ')}. Mide qué tan sólida es la base de la estimación, no la probabilidad de acertar.${calNote}` : '';
     $('fc-kpis').innerHTML = `
       <div class="subhead"><h3 class="panel__title">Total digital · ${esc(C().metrics[k].label)}</h3>
         <span class="btn-row">${pacePill(a.pacingStatus && k === 'revenue' ? a.pacingStatus : FP.gap.pacingStatus(td.compliance, run.settings.pacingThresholds))}
@@ -144,11 +154,11 @@
         ${card('Actual a la fecha', cellVal(k, a.actualToDate && a.actualToDate[k], R.actual), `vs plan a la fecha ${cellVal(k, a.planToDate && a.planToDate[k], R.planTd)} ${k === 'revenue' ? why('identity', k) : ''}`, 'actual')}
         ${card('Cumplimiento', cellPct(td.compliance, R.ratio), `${a.countedDays} días con real ${why('compliance', k)}`)}
         ${card('Gap a la fecha', cellSigned(k, td.gap, R.ratio), `${esc(spct(td.gapPct))} ${why('gap', k)}`)}
-        ${card('Forecast de cierre', cellVal(k, a.forecast && a.forecast[k], R.forecast), `Método ${esc(run.method.id)} ${why('forecast', k)}`, 'forecast')}
+        ${card('Forecast de cierre', cellVal(k, a.forecast && a.forecast[k], R.forecast), `Método ${esc(run.method.id)} ${why('forecast', k)}${conf ? ` <span class="ds-badge" data-conf-chip="${esc(conf.level)}">Confianza ${esc(conf.label)}</span>` : ''}`, 'forecast')}
         ${card('Gap forecast', cellSigned(k, fg.gap, R.fgap), `${esc(spct(fg.gapPct))} vs meta ${why('forecastGap', k)}`, 'forecast')}
       </div>
       <p class="field__hint">Gap a la fecha = actual − plan de los mismos días (plan diario ponderado). Gap forecast = forecast de cierre − meta del año. Son dos cosas distintas.
-        ${a.missingActualDays ? ` <strong>${a.missingActualDays} días cerrados no tienen real</strong> y no entran al pacing.` : ''}</p>`;
+        ${a.missingActualDays ? ` <strong>${a.missingActualDays} días cerrados no tienen real</strong> y no entran al pacing.` : ''}${confNote}</p>`;
 
     const rows = [...C().channelIds, 'total'].map((ch) => {
       const s = seriesOf(run, ch).annual;

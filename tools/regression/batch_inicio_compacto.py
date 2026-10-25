@@ -31,11 +31,7 @@ async def main():
             chk(f'I-3 [{w}] el chip de venta acumulada va debajo del título y «Qué hay aquí y qué hago» debajo del chip', g['state']['t'] >= g['title']['t'] + 20 and g['more']['t'] >= g['state']['b'], g)
             chk(f'I-4 [{w}] «Qué hay aquí y qué hago» sigue funcionando', await q.evaluate("(()=>{const b=document.querySelector('.ux-head__morebtn');b.click();return getComputedStyle(document.getElementById('ux-more')).display!=='none'})()"))
             await q.evaluate("document.querySelector('.ux-head__morebtn').click()")
-            if g['banner']:
-                chk(f'I-5 [{w}] el aviso de calidad ocupa una franja de ≤ 52 px y conserva «Ver detalle»', g['banner']['b'] - g['banner']['t'] <= 52 and 'Ver detalle' in g['banner']['txt'], g['banner'])
-                await q.click('.att__banner-line'); await q.wait_for_timeout(200)
-                chk(f'I-6 [{w}] tocar el aviso despliega el detalle', await q.evaluate("getComputedStyle(document.querySelector('.att__banner-what')).display!=='none'") and await q.get_attribute('.att__banner-line', 'aria-expanded') == 'true')
-                await q.click('.att__banner-line'); await q.wait_for_timeout(200)
+            chk(f'I-5 [{w}] ya no hay franja de aviso de calidad sobre las cifras (Fase 3.1)', not g['banner'], g['banner'])
             if w == 375:
                 chk('I-7 [375] «Lo esencial» empieza dentro de la primera pantalla y la tarjeta A asoma', g['key']['t'] <= 420 and g['keyA']['t'] < g['h'] - 100, (g['key'], g['keyA']))
             chk(f'I-8 [{w}] sin scroll horizontal de página', g['sw'] <= 0, g['sw'])

@@ -21,7 +21,7 @@ async def main():
         await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
         await q.evaluate("location.hash='#promociones'"); await q.wait_for_timeout(700)
         tabs = await q.evaluate("[...document.querySelectorAll('[data-action=\"pm-tab\"]')].map(b=>b.textContent.trim())")
-        chk('R1 cuatro pestañas, Resultados e historial al final', len(tabs) == 4 and tabs[3].startswith('Resultados e historial'), tabs)
+        chk('R1 cinco pestañas, Resultados e historial al final', len(tabs) == 5 and tabs[-1].startswith('Resultados e historial'), tabs)
         await q.click('[data-action="pm-tab"][data-tab="resultados"]'); await q.wait_for_timeout(400)
         t = await body(q)
         chk('R2 sin datos ni promociones lo dice', 'Todavía no hay datos de producto' in t and 'Historial de promociones' in t, t[:300])
@@ -47,7 +47,7 @@ async def main():
         chk('R4 calcula y deja los SKU evaluables', res and res['counts']['evaluable'] >= 1, res and res.get('counts'))
         t = await body(q)
         chk('R5 muestra los cuatro conceptos', all(k in t for k in ['Crecimiento observado', 'Cumplimiento del objetivo', 'Venta incremental estimada', 'Efecto causal demostrado']), t[:400])
-        chk('R6 dice no demostrado y sin objetivo numérico', 'No demostrado' in t and 'Sin objetivo numérico' in t)
+        chk('R6 dice no demostrado y, sin campaña, no inventa un objetivo', 'No demostrado' in t and 'Sin campaña' in t and 'Cumplimiento del objetivo' in t)
         chk('R7 cifras rotuladas como estimadas o reales', 'Estimado' in t and 'real' in t.lower())
         chk('R8 avisa inventario y falta de control', 'Inventario no verificado' in t and 'No hay grupo de control' in t)
         # coherencia: el total durante es la suma de los SKU evaluados

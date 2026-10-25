@@ -32,7 +32,7 @@
   function metaFor(state, id) {
     const esc = FP.ui.helpers.esc, ai = state.dx;
     switch (id) {
-      case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${st && st.passed === st.total ? 'operativo' : 'con fallas'}`; }
+      case 'st-estado': { const st = state.selfTest; return `Año ${state.year} · motor ${!st ? (state.selfTestError ? 'no se pudo ejecutar' : 'sin ejecutar') : st.passed === st.total ? 'operativo' : 'con fallas'}`; }
       case 'st-modo': { const m = (FP.guidanceConfig.MODES || []).find((x) => x[0] === state.ux.mode); return m ? esc(m[1]) : ''; }
       case 'st-nube': { const c = state.cloud || {}; return c.last ? `Última copia: ${c.last.keys} bloques${c.last.verified ? ' · verificada' : ''}` : (c.session ? `Equipo ${esc(c.session.teamName || '')} · ${esc(c.session.email || '')}` : 'Sin sesión'); }
       case 'st-otras': return plural(ELSEWHERE.length, 'preferencia', 'preferencias');

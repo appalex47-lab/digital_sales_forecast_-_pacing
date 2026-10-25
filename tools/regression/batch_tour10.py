@@ -92,7 +92,7 @@ async def main():
         await q.evaluate("FP.app.actions['tour-skip']()") if False else None
         await click(q, 'tour-cta')
         chk('T10 «Mostrarme dónde» oculta la tarjeta y marca «Es aquí» en la zona exacta (Calcular metas)', await q.evaluate("(()=>{const e=document.querySelector('.tour-target--here');return !!e&&e.classList.contains('targets-assist')&&!document.querySelector('#tour-bar .tour-bar__inner')})()"))
-        await q.evaluate("FP.app.actions['ta-fill']()") ; await q.wait_for_timeout(500)
+        await q.evaluate("FP.app.actions['ta-fill']()"); await q.wait_for_timeout(500)
         t = await q.evaluate(TXT)
         chk('T10 «Usar propuesta» marca hecho el micro-paso 1, reaparece la tarjeta y pide revisar el reparto', 'Hecho: Calcula tu meta desde el histórico' in t and 'Revisa el reparto por canal' in t, t[:420])
         await click(q, 'tour-micro-done')
@@ -102,7 +102,7 @@ async def main():
         t = await q.evaluate(TXT)
         chk('T10 al guardarse la meta avanza solo a Plan (micro-paso 1: generar vista previa)', 'Paso 4 de 15' in t and 'Genera la vista previa' in t, t[:300])
         # pantalla ajena a mitad
-        await q.goto(u + '#calidad'); await q.wait_for_timeout(700)
+        await q.goto(u + '#calidad'); await q.evaluate("FP.qualityView && FP.qualityView.openAll && FP.qualityView.openAll()"); await q.wait_for_timeout(700)
         t = await q.evaluate(TXT)
         chk('T11 al irte a otra pantalla el avance se conserva y el botón dice «Ir a Plan»', 'Estás en otra pantalla' in t and 'Paso 4 de 15' in t and 'Ir a Plan' in t and not await q.evaluate("!!document.querySelector('.tour-target--here')"), t[:420])
         await click(q, 'tour-cta')
