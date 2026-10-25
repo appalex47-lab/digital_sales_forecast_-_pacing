@@ -30,6 +30,10 @@ const run = (state, o = {}) => AR.detect(state, { deps: D(o) });
   // ---------- Sin nada ----------
   let r = await run(base());
   ok('B1 sin ofertas ni promociones → sin_promos, sin hallazgos', r.status === 'sin_promos' && r.findings.length === 0, r);
+  r = await run(base({ op: { result: opp(mkItems(4)) } }));
+  ok('B3 sin ofertas ni promociones pero con venta por producto: sí hay oportunidades altas', r.status === 'ok' && r.findings.some((f) => f.id === 'oportunidades_altas' && f.facts.n === 4), r);
+  r = await run(base(), { opp: { items: [], profiles: new Map(), period: {} } });
+  ok('B4 sin ofertas, promociones ni oportunidades: sin_promos', r.status === 'sin_promos');
   r = await AR.detect({}, { deps: D() });
   ok('B2 estado vacío no lanza', r.status === 'sin_promos' && r.findings.length === 0);
 

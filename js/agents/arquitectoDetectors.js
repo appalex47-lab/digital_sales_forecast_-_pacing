@@ -141,8 +141,9 @@
       if (!of || !pm || !FP.activation || !FP.opportunities) return { status: 'sin_promos', errors: ['El módulo de Promociones no está cargado.'] };
       const offers = (of.offers || []).filter((o) => o.state !== 'discarded');
       const today = deps.today(), PS = deps.store, dataMax = PS && PS.meta && PS.meta.dateMax || null;
-      if (!offers.length && !(pm.promotions || []).length) return { status: 'sin_promos', today, dataMax, errors };
       const opp = await oppFor(s, deps, errors);
+      // Sin ofertas ni promociones el agente igual sirve si hay venta por producto: las oportunidades altas salen de la venta, no de las ofertas.
+      if (!offers.length && !(pm.promotions || []).length && !(opp && opp.items && opp.items.length)) return { status: 'sin_promos', today, dataMax, errors };
       const rhythm = await rhythmFor(s, deps, today, errors);
       return { status: 'ok', today, dataMax, offers, batches: of.batches || [], promotions: pm.promotions || [], params: (s.ac && s.ac.reg && s.ac.reg.params) || FP.activation.SETTINGS, opp, rhythm, errors };
     } catch (e) { return { status: 'sin_promos', errors: [String(e && e.message || e)] }; }
