@@ -20,17 +20,39 @@
    * El orden de canal se precalcula (antes se pedía el canal en cada comparación del ordenamiento).
    */
   let lastFilter = { key: null, list: null };
+
+  /**
+   * Orden de canales precalculado (Bolt performance optimization: evita instanciar un new Map y
+   * realizar llamadas a Map.get en cada comparación de Array.sort al filtrar grandes colecciones).
+   */
+  let cachedChannelOrders = null;
+  function getChannelOrders() {
+    if (!cachedChannelOrders) {
+      const orders = {};
+      C().channels.forEach((c) => {
+        const ch = FP.dataModel.getChannel(c.id);
+        orders[c.id] = ch ? ch.order : 0;
+      });
+      cachedChannelOrders = orders;
+    }
+    return cachedChannelOrders;
+  }
+
   function filtered(state) {
     const f = state.dataFilters;
     const key = `${FP.dataStore.signature(state.store, f.dataType)}|${f.dataType}|${f.channel}|${f.status}|${f.from}|${f.to}`;
     if (lastFilter.key === key) return lastFilter.list;
-    const order = new Map(C().channels.map((c) => [c.id, FP.dataModel.getChannel(c.id).order]));
+    const order = getChannelOrders();
     const list = FP.dataStore.records(state.store, f.dataType).filter((r) =>
       (!f.channel || r.channel === f.channel) &&
       (f.status === 'all' || r.status === f.status) &&
       (!f.from || r.date >= f.from) &&
       (!f.to || r.date <= f.to)
-    ).sort((a, b) => (a.date === b.date ? order.get(a.channel) - order.get(b.channel) : a.date < b.date ? -1 : 1));
+    ).sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return (order[a.channel] || 0) - (order[b.channel] || 0);
+    });
     lastFilter = { key, list };
     return list;
   }
