@@ -29,3 +29,8 @@ Regresión: motor 206/206; lint; contraste; batería del mismo día (7 exports i
 - La base de un canal con días sin dato en un mes que sí cuenta (cobertura entre 90 y 99 %) queda algo subestimada y se avisa.
 - Los ajustes (crecimiento y participaciones) viven en la sesión: al recargar vuelven a 16 % y a la base. Las metas guardadas sí persisten.
 - No se probó con datos reales del usuario, otros navegadores ni dispositivos táctiles.
+
+## Calibración (2026-10-25)
+La proyección se calibra con el historial (`js/projection/projectionCalibration.js`, bloque «Calibración de la proyección» en la vista). Ver ARCHITECTURE.md → «Calibración de la proyección del año siguiente». La meta y el crecimiento nunca se calibran. Con menos de 24 meses cerrados en un canal se usa la regla inicial (ritmo de 2 meses).
+- Pruebas: `tools/test-projection-calibration.js` (50) y `tools/regression/batch_proyeccion_calibracion.py` (22).
+- Sigue sin probarse con datos reales del usuario.

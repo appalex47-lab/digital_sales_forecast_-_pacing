@@ -258,7 +258,9 @@
         // Fase 8.2 (configuración pequeña; config.js la lee de forma síncrona al arrancar)
         businessContext: 'businessContext',
         // Fase 3.3 (calibración de la confianza del forecast: umbrales en uso, historial y el interruptor de recalibrar sola)
-        confidenceCalibration: 'confidenceCalibration'
+        confidenceCalibration: 'confidenceCalibration',
+        // Calibración de la proyección del año siguiente (ventana de ritmo, reparto sugerido, forma de los meses; historial y interruptor)
+        projectionCalibration: 'projectionCalibration'
       }
     },
 
