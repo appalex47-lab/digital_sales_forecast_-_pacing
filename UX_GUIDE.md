@@ -698,3 +698,11 @@ La tarjeta de Inicio muestra solo la lectura contra el plan (con «Plan → Real
 
 ## Fecha de meta
 Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya ocurrió con venta real. Si no llega, se dice con qué porcentaje cierra; si no es evaluable, no se muestra nada.
+
+## Promociones: barra «Ahora haz esto» y resumen con acciones de un clic (2026-10-26)
+- La barra va arriba de las pestañas de Promociones, con un solo botón principal. Lee el estado de ofertas y promociones y muestra el paso más adelantado con trabajo pendiente: Cargar, Validar, Seleccionar, Crear promoción, Publicar, Medir. «Ver todos los pasos» muestra los seis. Solo guía: no activa nada en la web ni en la app.
+- Ofertas recibidas y Oportunidades traen el mismo resumen: matriz prioridad × confianza, estado de la oferta, alertas, contador de banners compartido y acciones de un clic.
+- Un clic para validar: solo las recibidas sin ninguna alerta. Un clic para seleccionar: solo las validadas con prioridad Alta y confianza Alta; antes de aplicar muestra la lista y qué queda fuera. Alta/Media y Alta/Baja se revisan aparte.
+- «Crear promoción con las N seleccionadas» crea un borrador con nombre y fechas tomados de las ofertas (si hay una sola campaña); las ofertas ya agregadas no se vuelven a ofrecer.
+- Cada acción masiva deja «Deshacer». «Por revisar» agrupa por motivo (sin descuento, fechas inválidas, duplicadas, abastecimiento, sin vigencia, otros).
+- Inicio muestra una sola línea con el paso pendiente de Promociones.

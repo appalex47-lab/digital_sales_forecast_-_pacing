@@ -168,6 +168,7 @@
       <p class="panel__desc">Recibe, valida y selecciona las ofertas que mandan proveedores o comercial. Los descuentos y precios son los del archivo (o la cuenta 1 − precio final ÷ PMP, marcada como calculada). Recibir una oferta no activa nada en la web ni en la app.</p></div>
       <div class="btn-row"><label class="btn btn--primary" for="of-file">Cargar archivo de ofertas</label><button type="button" class="btn" data-action="of-manual-open">Capturar una oferta</button><button type="button" class="btn btn--ghost" data-action="of-template">Descargar plantilla</button><input id="of-file" type="file" accept=".xlsx,.csv" data-action="of-file" style="position:absolute;left:-9999px"></div></div>
       <div class="panel__body">${counters(reg, an)}</div></section>
+      ${FP.guideView ? FP.guideView.offerSummary(state, an, map) : ''}
       ${manualHtml(of)}
       ${pendingHtml(of)}
       ${batchesHtml(reg, of)}

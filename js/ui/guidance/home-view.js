@@ -14,6 +14,16 @@
   const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
   /** Cifras del periodo desde las corridas existentes (solo lectura). */
+  /** Una sola línea de Promociones en Inicio: lo siguiente que pide la guía «Ahora haz esto». No aparece si no hay nada pendiente. */
+  function promoLine(state) {
+    try {
+      if (!FP.guide || !FP.guideView || !state.of || !state.of.reg || !state.pm || !state.pm.reg) return '';
+      const s = FP.guide.nextStep(FP.guideView.ctxOf(state));
+      if (s.done || s.step === 1 && !state.of.reg.offers.length) return '';
+      return `<p class="home-layer home-promo" data-block="promo-line"><strong>Promociones</strong> · ${H().esc(s.title)}. <button type="button" class="linklike" data-action="go" data-view="promociones">Ir a Promociones</button></p>`;
+    } catch (e) { return ''; }
+  }
+
   function periodFigures(state) {
     const run = state.fc.run, rf = state.rf.run, h = state.ux.home;
     if (!run || run.plan.source === 'none') return null;
@@ -170,6 +180,7 @@ ${cards}
       const sum = FP.homeSummaryView.build(state, h, f, next, { status, ready }), more = FP.homeSummaryView.more;
       body = `${sum.banner || ''}${sum.key}
       ${sum.nextStep || ''}${sum.attention || ''}
+      ${promoLine(state)}
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
       ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
       ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}

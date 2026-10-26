@@ -153,27 +153,28 @@
     const host = $('pm-body'); if (!host) return;
     const sel = pm.sel ? P().find(reg, pm.sel) : null;
     const msg = pm.msg ? `<div class="note note--${pm.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(pm.msg.text)}${(pm.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : '';
+    const bar = FP.guideView ? FP.guideView.bar(state) : '';
     const tab = ['resumen', 'oportunidades', 'ofertas', 'resultados'].includes(pm.tab) ? pm.tab : 'promos';
     const tabs = `<div class="sttabs" role="tablist" aria-label="Secciones de Promociones">${[['resumen', 'Resumen', `${state.sm ? state.sm.reg.proposals.length : 0} propuestas`], ['oportunidades', 'Oportunidades', state.op && state.op.result ? `${state.op.result.counts.total} SKU` : 'del canal digital'], ['ofertas', 'Ofertas recibidas', `${state.of ? state.of.reg.offers.length : 0} ofertas`], ['promos', 'Promociones', `${reg.promotions.length} registradas`], ['resultados', 'Resultados e historial', `${reg.promotions.filter((x) => ['published', 'measuring', 'closed'].includes(x.status)).length} para evaluar`]]
       .map(([id, l, sub]) => `<button type="button" role="tab" class="sttab" id="pmtab-${id}" data-action="pm-tab" data-tab="${id}" aria-selected="${id === tab}"><strong>${esc(l)}</strong><span class="cell-sub">${esc(sub)}</span></button>`).join('')}</div>`;
     if (tab === 'resumen' && FP.summaryView) {
-      host.innerHTML = `${tabs}${FP.summaryView.html(state)}`;
+      host.innerHTML = `${bar}${tabs}${FP.summaryView.html(state)}`;
       return;
     }
     if (tab === 'oportunidades' && FP.opportunityView) {
-      host.innerHTML = `${tabs}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda cuando agregas SKU al plan de una promoción.')}</div></section>${FP.opportunityView.html(state)}`;
+      host.innerHTML = `${bar}${tabs}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda cuando agregas SKU al plan de una promoción.')}</div></section>${FP.opportunityView.html(state)}`;
       return;
     }
     if (tab === 'resultados' && FP.resultsView) {
-      host.innerHTML = `${tabs}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda cuando guardas un corte de evaluación.')}</div></section>${FP.resultsView.html(state)}`;
+      host.innerHTML = `${bar}${tabs}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda cuando guardas un corte de evaluación.')}</div></section>${FP.resultsView.html(state)}`;
       return;
     }
     if (tab === 'ofertas' && FP.offerView) {
       const msgO = state.of && state.of.msg ? `<div class="note note--${state.of.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(state.of.msg.text)}${(state.of.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : '';
-      host.innerHTML = `${tabs}${msgO}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda con cada recepción y cada cambio de estado.')}</div></section>${FP.offerView.html(state)}`;
+      host.innerHTML = `${bar}${tabs}${msgO}<section class="panel"><div class="panel__body">${field('pm-actor', 'Tu nombre', input('pm-actor', pm.actor, 'text', 'data-action="pm-actor" autocomplete="name"'), 'Se guarda con cada recepción y cada cambio de estado.')}</div></section>${FP.offerView.html(state)}`;
       return;
     }
-    host.innerHTML = tabs + `
+    host.innerHTML = bar + tabs + `
       <section class="panel" aria-labelledby="pm-t"><div class="panel__head"><div><h2 class="panel__title" id="pm-t">Promociones</h2>
         <p class="panel__desc">Planea, aprueba, registra lo ejecutado y conserva el historial de cada promoción. Aquí no se calcula venta ni resultados: la medición llega en una fase posterior y leerá la venta del SKU en las fechas reales. Recibir o registrar una promoción no la activa en el sitio ni en la app.</p></div>
         <div class="btn-row"><button type="button" class="btn btn--primary" data-action="pm-new">Nueva promoción</button><button type="button" class="btn" data-action="pm-export-csv" data-id="">Exportar todo (CSV)</button><button type="button" class="btn" data-action="pm-export-json" data-id="">Exportar todo (JSON)</button></div></div>
