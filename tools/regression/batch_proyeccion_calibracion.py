@@ -52,6 +52,7 @@ async def main():
         await q.evaluate("FP.app.state.year = 2026; FP.app.state.pcal.cache = null; FP.app.render()"); await goto(q)
         t = await q.evaluate(VIEW)
         chk('C1 con 44 meses aparece la tabla por canal con el error y la banda', 'Error a 12 meses' in t and 'Total digital' in t and 'Banda' in t, t[:400])
+        chk('C1b el estado no dice «Calibrada» a secas y muestra la precisión del total digital', 'Precisión del total digital' in t and not __import__('re').search(r'(^|\\n)Calibrada ·', t), t[:600])
         chk('C2 el estado muestra que calibra sola (interruptor encendido por defecto)', await q.evaluate("document.querySelector('#projection-view input[data-action=pcal-auto]').checked"))
         an = await q.evaluate("(() => { const r = FP.app.pcalAnalysis(); return { st: r.status, months: r.monthsUsed, last: r.lastClosedKey }; })()")
         chk('C3 el análisis está listo y cuenta los 44 meses', an['st'] == 'ok' and an['months'] >= 40, an)

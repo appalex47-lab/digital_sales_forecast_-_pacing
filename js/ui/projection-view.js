@@ -37,7 +37,7 @@
         <button type="button" class="btn" data-action="pcal-undo" ${saved.history.some((h) => !h.undone && h.kind !== 'undo') ? '' : 'disabled'}>Deshacer el último cambio</button>
         <button type="button" class="btn" data-action="pcal-reset" ${act ? '' : 'disabled'}>Volver a la regla inicial</button></div>
       <div class="switch-row"><input type="checkbox" id="pcal-auto" data-action="pcal-auto" ${saved.auto ? 'checked' : ''}> <label for="pcal-auto">Calibrar sola cuando cierre cada mes (con 24 meses o más)</label></div>`;
-    const reviewed = saved.history.some((h) => h.kind === 'calibrate' && !h.undone), state1 = !act ? (an.status === 'ok' ? (reviewed ? 'Revisada: la regla inicial es la mejor medida' : 'Regla inicial en uso (aún no calibrada)') : 'Regla inicial') : (PC.isDefault(params, ids) ? 'Revisada: la regla inicial es la mejor medida' : 'Calibrada');
+    const reviewed = saved.history.some((h) => h.kind === 'calibrate' && !h.undone), state1 = !act ? (an.status === 'ok' ? (reviewed ? 'Revisada: la regla inicial es la mejor medida' : 'Regla inicial en uso (aún no calibrada)') : 'Regla inicial') : (PC.isDefault(params, ids) ? 'Revisada: la regla inicial es la mejor medida' : 'Calibración aplicada');
     const rule = `<p class="field__hint"><strong>Regla inicial:</strong> ritmo de los últimos 2 meses cerrados por canal, reparto de la meta según la base y meses con la forma del año base. <strong>La calibración no cambia tu meta ni el crecimiento</strong>: solo la proyección, el reparto que se sugiere y la forma de los meses.</p>`;
     if (an.status !== 'ok') {
       const why = an.status === 'insufficient' ? `Todavía no calibra: el canal con más historia tiene ${an.monthsUsed} meses cerrados y se necesitan ${an.needed} para comparar año contra año. Mientras tanto se usa la regla inicial.` : 'No se pudo calcular la calibración con lo cargado.';
@@ -49,7 +49,7 @@
       const cmp = c.rows && c.rows.length ? c.rows.map((r) => `${r.w} m: ${bad(r.score)}`).join(' · ') : '';
       return `<tr><th scope="row">${esc(lab(id))}</th><td class="num">${c.months}</td><td class="num">${w} meses${w !== PC.DEFAULT_WINDOW ? '' : ' <span class="cell-sub">regla inicial</span>'}</td>
         <td class="num">${c.h12.n >= PC.MIN_CASES ? `${bad(c.h12.typical)}<span class="cell-sub">8 de 10: ${bad(c.h12.p80)}</span>` : (c.h6.n ? `<span class="cell-sub">a 6 meses: ${bad(c.h6.p80)} (8 de 10)</span>` : '—')}</td>
-        <td class="num">≤ ${plain(c.band, 0)}</td><td>${H().pill(vd[0], vd[1])}<span class="cell-sub">${c.h12.n >= PC.MIN_CASES ? `${c.h12.n} casos a 12 meses` : c.status === 'insufficient' ? 'sin 24 meses: regla inicial' : 'pocos casos a 12 meses'}</span></td>
+        <td class="num">≤ ${plain(c.band, 0)}</td><td>${H().pill(vd[0], vd[1])}<span class="cell-sub">${c.h12.n >= PC.MIN_CASES ? `${c.h12.n} casos a 12 meses` : c.status === 'insufficient' ? (c.months >= PC.MIN_MONTHS ? 'pocos casos a 12 meses: se queda la regla inicial' : 'sin 24 meses: regla inicial') : 'pocos casos a 12 meses'}</span></td>
         <td class="cell-sub">${esc(cmp)}</td></tr>`;
     }).join('');
     const t = an.total, tv = VERDICT[t.verdict] || VERDICT.pocos, tvl = t.verdict === 'pocos' ? VERDICT[t.verdict6] || VERDICT.pocos : tv;
@@ -76,7 +76,9 @@
       : `<p>${params.shapeMethod === 'base' ? 'La mejor forma medida fue la del <strong>año base</strong>' : `La mejor forma medida fue el <strong>${esc(PC.SHAPE_LABEL[params.shapeMethod])}</strong>`} (${sp.commonCases} casos; desvío medio de la forma: ${sp.rows.map((r) => `${esc(PC.SHAPE_LABEL[r.method])} ${plain(r.score)}`).join(' · ')}).${Object.values(used).some((x) => x === 'base') && params.shapeMethod !== 'base' ? ' Los canales sin años completos suficientes usan la forma del año base.' : ''}</p>`;
     // historial
     const hist = saved.history.slice().reverse().slice(0, 8).map((h) => `<li><span class="cell-sub">${esc(h.at.slice(0, 10))} · ${h.kind === 'undo' ? 'Deshacer' : h.kind === 'reset' ? 'Regla inicial' : h.trigger === 'auto' ? 'Automática' : 'Manual'}${h.undone ? ' · deshecha' : ''}</span> ${esc(h.text.join(' '))}</li>`).join('');
-    const body = `<div class="note note--info" role="status"><strong>${esc(state1)}</strong>${act ? ` · ${act.monthsUsed} meses, ${esc(act.at.slice(0, 10))}` : ''}${saved.auto ? ' · calibra sola al cerrar cada mes' : ''}</div>
+    const prec = t.verdict !== 'pocos' ? t.verdict : t.verdict6, pv = VERDICT[prec] || VERDICT.pocos, horizon = t.verdict !== 'pocos' ? 'a 12 meses' : 'a 6 meses';
+    const precNote = prec === 'no' || prec === 'casi' ? `<div class="note note--warn" role="status"><strong>La proyección todavía no cumple la banda de precisión</strong> (${esc(pv[1])} ${horizon}). Calibrar elige la mejor regla que hay, no vuelve exacta la proyección: úsala como orientación y compárala con la meta con cautela.</div>` : '';
+    const body = `<div class="note note--info" role="status"><strong>${esc(state1)}</strong>${act ? ` · ${act.monthsUsed} meses, ${esc(act.at.slice(0, 10))}` : ''}${saved.auto ? ' · calibra sola al cerrar cada mes' : ''}<br>Precisión del total digital ${horizon}: ${H().pill(pv[0], pv[1])}</div>${precNote}
       ${rule}${table}
       <h3 class="subhead">Reparto sugerido entre canales</h3>${shareHtml}
       <h3 class="subhead">Forma de los meses del reparto mensual</h3>${shapeHtml}
@@ -85,7 +87,8 @@
       <details><summary>Límites que conviene saber</summary><ul class="field__hint projnotes">
         <li>Con menos de 24 meses cerrados en un canal no se calibra ese canal: usa la regla inicial.</li>
         <li>Los casos se traslapan (orígenes consecutivos comparten meses): 6 casos no son 6 observaciones independientes. Con pocos años, la calibración puede ajustarse a casualidades.</li>
-        <li>Un cambio exige mejorar al menos 10 % sobre la regla inicial; si no, se queda la inicial.</li>
+        <li>Una ventana distinta de 2 meses solo puede elegirse con al menos 6 casos a 12 meses (lo que de verdad se proyecta) y mejorando al menos 10 % sobre la regla inicial; si no, se queda la inicial.</li>
+        <li>El ritmo medido se recorta a un rango de −30 % a +50 % al proyectar un año; la tabla muestra el ritmo medido y el que se usó.</li>
         <li>No cambia la meta, el crecimiento, la cobertura mínima de un mes (90 %) ni el aviso de ritmo atípico (40 %).</li>
         <li>Lo calibrado se guarda en este navegador y, con la sincronización con la nube encendida (Configuración), también en Supabase para que el equipo vea lo mismo. Con la sincronización apagada vive solo aquí.</li>
         <li>Mide cierres de ${ty - 1} hacia atrás con meses cerrados con cobertura suficiente; no usa el plan ni los eventos.</li></ul></details>`;
@@ -136,7 +139,7 @@
     const chRows = res.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td class="num">${money(r.base)}</td>
         <td class="num"><label class="visually-hidden" for="proj-s-${esc(r.id)}">Participación de ${esc(r.label)} en la meta, en porcentaje</label><input id="proj-s-${esc(r.id)}" class="input--compact" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="${((p.shares ? p.shares[r.id] : r.metaShare * 100) || 0).toFixed(1)}" data-action="proj-share" data-channel="${esc(r.id)}"> %</td>
         <td class="num">${money(r.meta)}</td><td class="num">${pct(r.metaGrowth)}</td>
-        <td class="num">${r.last2 ? `${pct(r.last2.yoy)}<span class="cell-sub">${r.window && r.window !== 2 ? `últimos ${r.window} meses` : esc(r.last2.labels.join(' y '))}</span>` : '<span class="cell-sub">sin comparación</span>'}</td>
+        <td class="num">${r.last2 ? `${pct(r.last2.yoy)}${r.capped ? `<span class="cell-sub">tope: se usa ${pct(r.projGrowth, 0)}</span>` : ''}<span class="cell-sub">${r.window && r.window !== 2 ? `últimos ${r.window} meses` : esc(r.last2.labels.join(' y '))}</span>` : '<span class="cell-sub">sin comparación</span>'}</td>
         <td class="num">${money(r.proj)}</td><td class="num">${r.gap >= 0 ? '+' : '−'}${money(Math.abs(r.gap))}</td></tr>`).join('');
     const tot = `<tr class="row--total"><th scope="row">Total digital</th><td class="num">${money(res.base.total)}</td><td class="num">${shareErr ? `<strong>${shareSum.toFixed(1)} %</strong>` : '100.0 %'}</td><td class="num">${money(res.meta.total)}</td><td class="num">${pct(res.meta.growth)}</td><td class="num">—</td><td class="num">${money(res.projection.total)}</td><td class="num">${res.gap.total >= 0 ? '+' : '−'}${money(Math.abs(res.gap.total))}</td></tr>`;
     const byChannel = card('pj-c', 'Por canal', `La meta crece ${plain(res.growth)} sobre el total y se reparte por la participación que elijas (por defecto, la de la base). La proyección aplica a cada canal el ritmo de su ventana (${res.rows.map((r) => `${esc(r.label)}: ${r.window || 2} meses`).join(', ')}) contra ${by - 1}.`,

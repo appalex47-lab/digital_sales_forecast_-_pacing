@@ -11,6 +11,7 @@
  * «lo vendido en esos mismos meses un año antes × (1 + ritmo de la ventana)», que es la misma regla que usa la pantalla.
  * Solo cuentan meses cerrados con cobertura suficiente; un caso necesita todos sus meses.
  *
+ * Tope del ritmo: el ritmo medido se recorta a [−30 %, +50 %] al proyectar (y al medir), porque un ritmo de pocos meses no se sostiene un año completo.
  * Reglas de honestidad: con menos de 24 meses (o menos de 6 casos comparables) no calibra y se queda con la regla inicial;
  * un cambio exige mejorar al menos 10 % relativo (y un mínimo absoluto) sobre la regla inicial; los casos de un mismo canal se traslapan
  * (orígenes consecutivos comparten meses), así que 6 casos no son 6 observaciones independientes. Las bandas de «calibrada» son una propuesta.
@@ -27,6 +28,8 @@
   const MIN_MONTHS = 24;          // meses cerrados de un canal para poder comparar año contra año
   const MIN_CASES = 6;            // casos comparables para cambiar algo o decir «Sí / Casi / No»
   const HORIZONS = [3, 6, 12];
+  const MAX_GROWTH = 0.5, MIN_GROWTH = -0.3;   // tope del ritmo proyectable (se proyectan 12 meses con un ritmo medido en pocos); un ritmo fuera del rango se recorta y se avisa
+  const capGrowth = (g) => Math.max(MIN_GROWTH, Math.min(MAX_GROWTH, g));
   const REL_GAIN = 0.10;          // mejora relativa mínima sobre la regla inicial
   const ABS_GAIN = { window: 0.005, share: 0.003, shape: 0.003 };
   const BANDS = { total: { buena: 0.05, calibrada: 0.08 }, big: 0.12, small: 0.20 };   // error en 8 de cada 10 casos (propuesta)
@@ -68,7 +71,7 @@
     const b = bounds(s), out = [];
     if (!b) return out;
     for (let T = b.first; T <= lastIdx; T++) {
-      const g = growthAt(s, T, w); if (g === null) continue;
+      const g0 = growthAt(s, T, w); if (g0 === null) continue; const g = capGrowth(g0);
       HORIZONS.forEach((H) => {
         if (T + H > b.last) return;
         const pred = projectAt(s, T, H, g), act = actualAt(s, T, H);
@@ -90,10 +93,10 @@
   };
 
   /** Quita ventanas, de la más larga a la más corta, hasta que el conjunto común de orígenes tenga ≥ MIN_CASES casos a 6 meses. */
-  function commonSet(candidates, casesOf, minCases) {
+  function commonSet(candidates, casesOf, minCases, HH = 6) {
     let k = candidates.length;
     while (k >= 1) {
-      const set = candidates.slice(0, k), origins = set.map((c) => new Set(casesOf(c).filter((x) => x.H === 6).map((x) => x.T)));
+      const set = candidates.slice(0, k), origins = set.map((c) => new Set(casesOf(c).filter((x) => x.H === HH).map((x) => x.T)));
       const common = [...origins[0]].filter((T) => origins.every((o) => o.has(T)));
       if (common.length >= minCases) return { set, common: new Set(common) };
       k--;
@@ -104,9 +107,10 @@
   /* ---------- 1) Ventana de ritmo por canal ---------- */
   function analyzeWindows(s, lastIdx) {
     const all = {}; WINDOWS.forEach((w) => { all[w] = windowCases(s, w, lastIdx); });
-    const eligible = WINDOWS.filter((w) => all[w].filter((c) => c.H === 6).length >= MIN_CASES);
+    // Se proyecta un año: una ventana solo puede ganarle a la regla inicial con ≥ MIN_CASES casos a 12 meses (a 6 meses los casos son más y se traslapan más)
+    const eligible = WINDOWS.filter((w) => all[w].filter((c) => c.H === 12).length >= MIN_CASES);
     if (!eligible.includes(DEFAULT_WINDOW)) return { status: 'insufficient', chosen: DEFAULT_WINDOW, rows: [] };
-    const { set, common } = commonSet(eligible, (w) => all[w], MIN_CASES);
+    const { set, common } = commonSet(eligible, (w) => all[w], MIN_CASES, 12);
     if (!set.includes(DEFAULT_WINDOW) || set.length < 2) return { status: 'insufficient', chosen: DEFAULT_WINDOW, rows: [] };
     const rows = set.map((w) => {
       const cs = all[w].filter((c) => common.has(c.T));
@@ -215,7 +219,7 @@
       HORIZONS.forEach((H) => {
         let pred = 0, act = 0;
         for (const id of ids) {
-          const s = series[id] || {}, g = growthAt(s, T, windows[id] || DEFAULT_WINDOW); if (g === null) return;
+          const s = series[id] || {}, g0 = growthAt(s, T, windows[id] || DEFAULT_WINDOW); if (g0 === null) return; const g = capGrowth(g0);
           const p = projectAt(s, T, H, g), a = actualAt(s, T, H); if (p === null || a === null) return;
           pred += p; act += a;
         }
@@ -355,7 +359,7 @@
     return { weights: sh[0].map((_, m) => mean(sh.map((b) => b[m]))), used: method };
   }
 
-  FP.projectionCalibration = { WINDOWS, DEFAULT_WINDOW, SHARE_METHODS, SHAPE_METHODS, MIN_MONTHS, MIN_CASES, HORIZONS, BANDS, SMALL_SHARE, LABEL, SHAPE_LABEL,
+  FP.projectionCalibration = { MAX_GROWTH, MIN_GROWTH, capGrowth, WINDOWS, DEFAULT_WINDOW, SHARE_METHODS, SHAPE_METHODS, MIN_MONTHS, MIN_CASES, HORIZONS, BANDS, SMALL_SHARE, LABEL, SHAPE_LABEL,
     percentile, idxOf, keyOf, bounds, growthAt, projectAt, calibrate, defaultParams, normParams, sameParams, isDefault, emptyState, normalize, paramsOf, applyResult, undo, reset, autoDue,
     suggestShares, shapeWeights, sharesAt, blockShape, windowCases, analyzeWindows, analyzeShares, analyzeShape };
 })(typeof window !== 'undefined' ? window : globalThis);
