@@ -28,7 +28,7 @@
   /** Aplica los filtros locales (tipo, categoría, evidencia, texto, solo con oferta). */
   function visible(op, state) {
     if (!op.result) return [];
-    const f = op.f, q = FP.offers ? FP.offers.norm(f.q) : String(f.q || '').toLowerCase(), labFn = (i) => (state ? labOf(i, state) : i.brand);
+    const f = op.f, recs = f.action && state && FP.activationView ? FP.activationView.recs(state) : null, q = FP.offers ? FP.offers.norm(f.q) : String(f.q || '').toLowerCase(), labFn = (i) => (state ? labOf(i, state) : i.brand);
     return op.result.items.filter((i) => {
       if (f.type && !i.types.some((t) => t.id === f.type)) return false;
       if (f.category && i.category !== f.category) return false;
@@ -38,6 +38,7 @@
       if (f.origin && !i.offers.some((o) => o.origin === f.origin)) return false;
       if (f.subcategory && (i.subcategory || NONE) !== f.subcategory) return false;
       if (f.lab && (labFn(i) || NONE) !== f.lab) return false;
+      if (f.action && recs) { const r = recs.get(`sku:${i.sku}`); if (!r || r.main !== f.action) return false; }
       if (q && !(FP.offers ? FP.offers.norm(`${i.sku} ${i.name} ${i.brand} ${i.category}`) : `${i.sku} ${i.name}`.toLowerCase()).includes(q)) return false;
       return true;
     });
@@ -180,7 +181,7 @@
       <p class="panel__desc">Productos que, con los datos de tu propio canal, merecen una conversación con Comercial o Precios. No es un puntaje ni un pronóstico: cada fila dice por qué aparece, con qué evidencia y qué falta decidir. Un producto de mucha venta aparece como «sostener o proteger», no como candidato a descuento.</p></div></div>
       <div class="panel__body">${noData ? '<div class="empty"><strong>Todavía no hay datos de producto</strong>Carga la venta (y el funnel) por producto en «Carga de datos» para ver oportunidades.</div>' : controls(op)}
         ${op.msg ? `<div class="note note--${op.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(op.msg.text)}${(op.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : ''}</div></section>
-      ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) : ''}
+      ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) + FP.guideView.actionsHtml(state, map, 'potential') : ''}
       ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${viewSwitch(op)}${bulk(op, state)}${AV ? AV.toolbar(state, 'potential') : ''}</div>
         ${AV ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${op.view && op.view !== 'sku' ? groupsTable(op, state) : table(op, list, state, map)}</div></section>` : ''}

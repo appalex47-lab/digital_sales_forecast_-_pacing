@@ -706,3 +706,10 @@ Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya oc
 - «Crear promoción con las N seleccionadas» crea un borrador con nombre y fechas tomados de las ofertas (si hay una sola campaña); las ofertas ya agregadas no se vuelven a ofrecer.
 - Cada acción masiva deja «Deshacer». «Por revisar» agrupa por motivo (sin descuento, fechas inválidas, duplicadas, abastecimiento, sin vigencia, otros).
 - Inicio muestra una sola línea con el paso pendiente de Promociones.
+
+## Promociones: eliminar, conteo de acciones y filtros plegados (2026-10-26)
+- **Eliminar no es descartar ni cancelar.** Descartar y cancelar conservan el registro y su historial. Eliminar lo quita y siempre pide motivo, muestra cuántas se van y cuáles no (y por qué), deja una línea en el «Registro de eliminaciones» (Promociones → Resultados e historial) y ofrece «Deshacer» mientras no recargues la página.
+- Ofertas: se pueden eliminar las Recibidas, Validadas y Descartadas que no estén en una promoción; no las Seleccionadas ni las que ya están en una promoción. Dónde: «Eliminar marcadas», «Eliminar archivo» (en Archivos recibidos) y «Eliminar…» en el detalle.
+- Promociones: solo borrador, propuesta sin haberse aprobado nunca, o cancelada que nunca se aprobó. Las aprobadas, publicadas, en medición y cerradas nunca se eliminan (su historial alimenta los resultados). Sus ofertas quedan otra vez pendientes de promoción y el identificador no se reutiliza.
+- **Acciones sugeridas: cuántos SKU hay en cada una**, en Ofertas recibidas y en Oportunidades: SKU distintos, reparto por prioridad, aprobadas, «Ver» para filtrar la tabla, qué dato falta para decidir mejor y, si cargaste sugerencias de otra área, cuántas coinciden o difieren.
+- **Filtros plegados:** la tabla de ofertas muestra solo búsqueda, «Filtros» y «Columnas»; los filtros puestos salen como chips que se quitan con ×. «Archivos recibidos» también viene plegado. La columna Mecánica va oculta (se ve al abrir la oferta y, si es escalonada o muy larga, se avisa bajo el producto); «Columnas» la devuelve y el navegador recuerda la elección.

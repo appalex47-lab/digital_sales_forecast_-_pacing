@@ -119,5 +119,72 @@
       ${toast(state, 'opp')}</div></section>`;
   }
 
-  FP.guideView = { bar, offerSummary, opportunitySummary, ctxOf };
+
+  /* ---------- Conteo de acciones sugeridas ---------- */
+  const SUB = { 'Banner principal': 'Tope compartido de espacios', 'Pauta': 'Convierte bien, pocos la ven', 'CRM (WhatsApp / correo)': 'Oferta con programa', 'CRM: recordatorio de recompra': 'Crónicos en crecimiento',
+    'Cuadrícula Home': 'Incluye las que no alcanzaron banner', 'Buscador / cuadrícula de categoría': 'Mucha vista, poca compra', 'Ficha + CRM': 'Mecánica escalonada o larga', 'Cuadrícula de categoría': 'Ubicación por defecto',
+    'Redes sociales': 'Descuento alto sin otra regla', 'Revisar antes de colocar': 'Su venta cae: entender la causa', 'No activar': 'Control distinto de «Ningún Control»', 'No activar ahora': 'Producto agotado' };
+
+  /** Cuántos SKU hay en cada acción sugerida, con prioridad, aprobadas y «Ver» (filtra la tabla). tab = 'offer' | 'potential'. */
+  function actionsHtml(state, recs, tab) {
+    const esc = H().esc, A = FP.activation, ac = state.ac.reg;
+    const C = G().actionCounts(recs, tab, (k) => A.stateOf(ac, k)); if (!C.rows.length) return '';
+    const cur = tab === 'offer' ? state.of.f.action : state.op.f.action, isOffer = tab === 'offer';
+    const miss = G().missingCounts(recs, tab, 5), cmp = isOffer ? G().compareExternal(recs, tab, ac.external) : { loaded: false };
+    const rows = C.rows.map((r) => `<tr${cur === r.label ? ' aria-selected="true"' : ''}><td><strong>${esc(r.label)}</strong><span class="cell-sub">${esc(SUB[r.label] || '')}</span></td><td class="num"><strong>${r.n}</strong></td>
+      <td><span class="gd-bar-m" aria-hidden="true"><span style="width:${C.max ? Math.round(r.n / C.max * 100) : 0}%"></span></span></td>
+      <td>${r.blocked ? '<span class="cell-sub">No aplica</span>' : `Alta ${r.a} · Media ${r.m} · Baja ${r.b}`}</td>${isOffer ? `<td class="num">${r.approved}</td>` : ''}
+      <td><button type="button" class="btn btn--small" data-action="gd-act" data-tab="${tab}" data-label="${esc(r.label)}">${cur === r.label ? 'Quitar filtro' : 'Ver'}</button></td></tr>`).join('');
+    const missHtml = miss.length ? `<div><h3 class="gd-h">Qué falta para decidir mejor</h3>${miss.map((m) => `<div class="gd-al"><span>${esc(m.text)}</span><strong class="num">${m.n} SKU</strong></div>`).join('')}
+      <p class="field__hint">Sale de la razón escrita de cada sugerencia: te dice qué dato cargar primero.</p></div>` : '';
+    const cmpHtml = cmp.loaded ? `<div><h3 class="gd-h">Contra las sugerencias que te compartieron</h3><div class="gd-chips"><span class="gd-chip gd-chip--val"><strong class="num">${cmp.match}</strong> coinciden</span><span class="gd-chip gd-chip--rec"><strong class="num">${cmp.differ}</strong> difieren</span>
+      <span class="gd-chip"><strong class="num">${cmp.none}</strong> sin sugerencia cargada</span>${cmp.unknown ? `<span class="gd-chip"><strong class="num">${cmp.unknown}</strong> canal no reconocido</span>` : ''}</div></div>` : '';
+    return `<section class="panel gd-act" aria-labelledby="gd-act-t-${tab}"><div class="panel__head"><div><h2 class="panel__title" id="gd-act-t-${tab}">Acciones sugeridas · cuántos SKU hay en cada una</h2>
+      <p class="panel__desc">Cuenta SKU ${isOffer ? 'de ofertas activas' : 'sin oferta vigente'}; si un SKU está en dos ofertas cuenta una vez. Es una regla con su razón escrita, no un efecto medido.</p></div>
+      <div class="btn-row"><button type="button" class="btn btn--small" data-action="ac-export-xlsx" data-tab="${isOffer ? 'offer' : 'potential'}">Exportar plan de activación (Excel)</button></div></div>
+      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Acción sugerida</th><th>SKU</th><th>Reparto</th><th>Prioridad</th>${isOffer ? '<th>Aprobadas</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody>
+        <tfoot><tr><th>Total</th><th class="num">${C.total}</th><th></th><th></th>${isOffer ? '<th></th>' : ''}<th></th></tr></tfoot></table></div></div>
+      ${missHtml || cmpHtml ? `<div class="panel__body"><div class="gd-sum__grid">${missHtml}${cmpHtml}</div></div>` : ''}</section>`;
+  }
+
+  /* ---------- Eliminar ofertas y promociones ---------- */
+  function removalToast(state) {
+    const u = state.gd && state.gd.undo; if (!u || (u.kind !== 'rm-offers' && u.kind !== 'rm-promo')) return '';
+    return `<div class="gd-toast gd-toast--page" role="status"><span>${H().esc(u.text)}</span><button type="button" class="btn btn--small btn--ghost" data-action="gd-undo">Deshacer</button></div>`;
+  }
+
+  /** Confirmación de eliminar: cuántas se van, cuáles no y por qué, y el motivo (obligatorio). */
+  function removalConfirm(state) {
+    const c = state.rm && state.rm.confirm; if (!c) return '';
+    const esc = H().esc;
+    const reason = `<label class="field"><span class="field__label">Motivo (obligatorio)</span><input id="rm-reason" type="text" value="${esc(c.reason || '')}" autocomplete="off"></label>`;
+    if (c.kind === 'offers') {
+      const nb = c.plan.blocked.length, no = c.plan.ok.length;
+      return `<section class="panel gd-rm" id="rm-confirm" role="alertdialog" aria-labelledby="rm-t"><div class="panel__body"><h2 class="panel__title" id="rm-t">¿Eliminar ${esc(c.label)}?</h2>
+        <p>${no ? `Se ${no === 1 ? 'eliminará' : 'eliminarán'} <strong>${no} ${no === 1 ? 'oferta' : 'ofertas'}</strong> (Recibidas, Validadas o Descartadas).` : '<strong>No hay ninguna que se pueda eliminar.</strong>'}</p>
+        ${nb ? `<div class="note note--warn"><strong>${nb} no se ${nb === 1 ? 'elimina' : 'eliminan'}:</strong><ul class="plain-list">${c.plan.blocked.slice(0, 6).map((b) => `<li>${esc(b.offer.sku)} · ${esc(b.why)}</li>`).join('')}${nb > 6 ? `<li>…y ${nb - 6} más</li>` : ''}</ul></div>` : ''}
+        ${no ? `${reason}<p class="field__hint">Eliminar quita el registro; descartar lo conserva. Queda una línea en el registro de eliminaciones y puedes deshacerlo mientras no recargues la página.</p>` : ''}
+        <div class="btn-row">${no ? `<button type="button" class="btn btn--danger" data-action="rm-confirm">Eliminar ${no === 1 ? 'la oferta' : `las ${no}`}</button>` : ''}<button type="button" class="btn btn--ghost" data-action="rm-cancel">Cancelar</button></div></div></section>`;
+    }
+    const p = FP.promotions.find(state.pm.reg, c.promoId); if (!p) return '';
+    const offers = p.skus.filter((s) => s.offerId).length, digital = p.skus.length - offers;
+    return `<section class="panel gd-rm" id="rm-confirm" role="alertdialog" aria-labelledby="rm-t"><div class="panel__body"><h2 class="panel__title" id="rm-t">¿Eliminar la promoción «${esc(p.name)}»?</h2>
+      <p>Está en <strong>${esc(FP.promotions.STATUS[p.status].toLowerCase())}</strong>, con <strong>${p.skus.length} SKU</strong>, y nunca se aprobó.</p>
+      <div class="note"><strong>Qué pasa con sus SKU:</strong> ${offers ? `las ${offers} ofertas que vinieron de aquí quedan otra vez pendientes de promoción y la guía te pedirá armar otra. ` : ''}${digital ? `${digital} SKU de oportunidades solo salen del plan.` : ''}</div>
+      <p class="field__hint">El identificador ${esc(p.promoId)} no se vuelve a usar.</p>${reason}
+      <div class="btn-row"><button type="button" class="btn btn--danger" data-action="rm-confirm">Eliminar promoción</button><button type="button" class="btn btn--ghost" data-action="rm-cancel">Cancelar</button></div></div></section>`;
+  }
+
+  /** Registro de eliminaciones (qué, cuántas, quién, cuándo, por qué). */
+  function removalLog(state) {
+    const log = state.rm && state.rm.log; if (!log) return '';
+    const esc = H().esc, KIND = { offers: 'Ofertas', batch: 'Archivo', promotion: 'Promoción' };
+    const rows = log.entries.length ? log.entries.slice(0, 50).map((e) => `<tr><td class="num">${esc(String(e.at).slice(0, 16).replace('T', ' '))}</td><td>${esc(e.what)}</td><td class="num">${e.n}</td><td>${esc(e.by)}</td><td>${esc(KIND[e.kind] || e.kind)}</td><td>${esc(e.reason)}</td></tr>`).join('')
+      : '<tr><td colspan="6"><span class="cell-sub">Todavía no se ha eliminado nada.</span></td></tr>';
+    return `<section class="panel" aria-labelledby="rm-log-t"><div class="panel__head"><div><h2 class="panel__title" id="rm-log-t">Registro de eliminaciones (${log.entries.length})</h2>
+      <p class="panel__desc">Una línea por eliminación. No guarda precios ni descuentos. Descartar y cancelar no aparecen aquí: se quedan en el historial de cada oferta o promoción.</p></div></div>
+      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Cuándo</th><th>Qué</th><th>Cuántas</th><th>Quién</th><th>Tipo</th><th>Motivo</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+  }
+
+  FP.guideView = { bar, offerSummary, opportunitySummary, ctxOf, actionsHtml, removalToast, removalConfirm, removalLog };
 })(typeof window !== 'undefined' ? window : globalThis);
