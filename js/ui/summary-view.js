@@ -47,6 +47,8 @@
   function demoPanel(state) {
     const D = FP.demo; if (!D) return '';
     const on = D.has({ offers: state.of.reg, promos: state.pm.reg, proposals: state.sm.reg });
+    let ask = false; try { ask = /[?&]ejemplo\b/.test(root.location.search); } catch (e) { /* sin ubicación */ }
+    if (!on && !ask && !state.sm.showDemo) return '';   // los datos de ejemplo no se ofrecen salvo que ya estén cargados (para quitarlos) o se pida con ?ejemplo
     return `<section class="panel" aria-labelledby="sm-t-d"><div class="panel__head"><div><h2 class="panel__title" id="sm-t-d">Datos de ejemplo</h2>
       <p class="panel__desc">Para ver cómo se ve todo sin cargar nada real. Los datos son inventados y todo lleva «EJEMPLO» en el nombre; quitar el ejemplo no toca tus datos reales.</p></div></div>
       <div class="panel__body"><div class="btn-row">${on ? '<button type="button" class="btn btn--small" data-action="dm-clear">Quitar los datos de ejemplo</button>' : '<button type="button" class="btn btn--small btn--primary" data-action="dm-load">Cargar datos de ejemplo</button>'}</div>

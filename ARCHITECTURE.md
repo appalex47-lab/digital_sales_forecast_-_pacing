@@ -2966,3 +2966,7 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 - `FP.guide.actionCounts/missingCounts/compareExternal`: SKU distintos por acción sugerida, datos que faltan y comparación con las sugerencias cargadas. `addedToPromo` ahora lee la última nota («Agregada…» marca, «Quitada…» libera), también al quitar un SKU a mano.
 - UI en `guide-view.js` (`actionsHtml`, `removalConfirm`, `removalToast`, `removalLog`) y `offer-view.js` (filtros y columnas plegables; `FP.offerView.visible(state)` es la lista única de la tabla y de «Marcar las visibles»). La preferencia de columnas vive en `localStorage` (`rn.ofCols`), no se sincroniza.
 - Pruebas: `tools/test-removal.js` (Node, CI) y `tools/regression/batch_promos_eliminar.py <raíz>` (navegador, a mano).
+
+## Versión de los archivos (caché del navegador)
+
+`index.html` carga cada script y hoja de estilo con `?v=…`. Si el valor no cambia, el navegador sigue usando el archivo viejo aunque ya esté publicado el nuevo. **Antes de subir cualquier cambio a un archivo existente, corre `node tools/bump-version.js`** (cambia la versión en todo `index.html`).

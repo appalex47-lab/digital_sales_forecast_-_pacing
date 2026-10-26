@@ -95,6 +95,7 @@ button.metric-card:focus-visible { outline: 2px solid var(--ds-accent); outline-
 .gd-grp__t { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
 .gd-count { display: inline-block; background: var(--ds-warning-soft); color: var(--ds-hyp); border-radius: var(--ds-r-sm); padding: 0 7px; font-size: var(--ds-fs-caption); font-weight: 700; }
 .linklike { background: none; border: 0; padding: 0; color: var(--ds-accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: 24px; }
+.panel--wide-desc .panel__desc { max-width: none; }   /* el texto ocupa todo el ancho de la sección */
 /* Tarjetas de prioridad, pestañas de estado, lista deslizable */
 .gd-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ds-s4); }
 .gd-card { display: grid; gap: var(--ds-s2); align-content: start; border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); padding: var(--ds-s4); background: var(--ds-bg); }

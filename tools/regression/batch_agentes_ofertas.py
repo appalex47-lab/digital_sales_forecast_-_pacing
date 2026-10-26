@@ -27,6 +27,7 @@ async def main():
         await q.keyboard.press('Escape')
         # 2. Con datos de ejemplo
         await q.evaluate("FP.app.state.pm.actor='Persona A'; FP.app.render()")
+        await q.evaluate("FP.app.state.sm.showDemo=true; FP.app.render()"); await q.wait_for_timeout(200)
         await q.click('[data-action="dm-load"]'); await q.wait_for_timeout(1000)
         for _ in range(240):
             if 'Cargando' not in (await q.evaluate("(FP.app.state.sm.msg||{}).text||''")): break
