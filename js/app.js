@@ -4540,7 +4540,7 @@
         state.of.msg = null;
       } else {
         const p = FP.promotions.find(state.pm.reg, c.promoId), name = p ? p.name : c.promoId;
-        const r = FP.removal.removePromotion(state.pm.reg, state.of.reg, c.promoId, { by: state.pm.actor, reason });
+        const r = FP.removal.removePromotion(state.pm.reg, state.of.reg, c.promoId, { by: state.pm.actor, reason, ack: !!(document.getElementById('rm-ack') || {}).checked });
         if (!r.ok) return fail(r.error);
         FP.removal.addLog(state.rm.log, { kind: 'promotion', what: `Promoción ${c.promoId} «${name}»`, n: 1, by: state.pm.actor, reason });
         if (state.pm.sel === c.promoId) state.pm.sel = null;

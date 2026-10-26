@@ -7,7 +7,7 @@
  *   offerPlan(offerReg, promoReg, ids)      → { ok:[ofertas], blocked:[{ offer, why }] }
  *   removeOffers(offerReg, promoReg, ids)   → { ok, removed, snapshot, blocked }     (snapshot sirve para restoreOffers)
  *   restoreOffers(offerReg, snapshot)
- *   promoPlan(promo)                        → { ok, why }
+ *   promoPlan(promo)                        → { ok, heavy, impact[] }   (toda promoción se puede eliminar; las que ya avanzaron piden confirmación reforzada)
  *   removePromotion(promoReg, offerReg, promoId, meta) → { ok, snapshot, released } | { ok:false, error }
  *   restorePromotion(promoReg, snapshot)
  *   emptyLog / hydrateLog / addLog          → registro de eliminaciones
@@ -58,13 +58,21 @@
     return snapshot.offers.length;
   }
 
-  /** Una promoción se puede eliminar solo si nunca avanzó: borrador, propuesta sin haber sido aprobada, o cancelada que nunca se aprobó. */
+  /**
+   * Cualquier promoción se puede eliminar. Las que ya avanzaron (aprobada, publicada, medida) o tienen cortes de evaluación llevan
+   * un aviso reforzado: se pierde su historial y su medición, así que hay que confirmarlo (ack) y conviene exportarla antes.
+   */
   function promoPlan(p) {
-    if (!p) return { ok: false, why: 'No encuentro esa promoción.' };
+    if (!p) return { ok: false, why: 'No encuentro esa promoción.', heavy: false, impact: [] };
     const everLive = (p.history || []).some((h) => h.field === 'status' && LIVE.includes(h.to));
-    if (everLive) return { ok: false, why: p.status === 'cancelled' ? 'Estuvo aprobada o publicada: queda en el historial.' : 'Ya se aprobó o publicó: su historial alimenta los resultados. Si ya no va, cancélala.' };
-    if (['draft', 'proposed', 'cancelled'].includes(p.status)) return { ok: true, why: '' };
-    return { ok: false, why: 'Ya se aprobó o publicó: su historial alimenta los resultados. Si ya no va, cancélala.' };
+    const evals = (p.evaluations || []).length, acts = (p.activations || []).length;
+    const heavy = everLive || LIVE.includes(p.status) || evals > 0;
+    const impact = [];
+    if (everLive || LIVE.includes(p.status)) impact.push('estuvo aprobada o publicada');
+    if (p.baseline) impact.push('su línea base congelada');
+    if (acts) impact.push(`${acts} ${acts === 1 ? 'activación registrada' : 'activaciones registradas'}`);
+    if (evals) impact.push(`${evals} ${evals === 1 ? 'corte de evaluación' : 'cortes de evaluación'}`);
+    return { ok: true, why: '', heavy, impact };
   }
 
   function removePromotion(promoReg, offerReg, promoId, meta) {
@@ -74,6 +82,7 @@
     if (!plan.ok) return fail(plan.why);
     if (!clean(m.by)) return fail('Escribe tu nombre: la eliminación guarda quién la hizo.');
     if (!clean(m.reason)) return fail('Escribe el motivo para eliminar.');
+    if (plan.heavy && !m.ack) return fail('Esta promoción ya avanzó: confirma que entiendes que se pierde su historial y su medición.');
     const released = [];
     (p.skus || []).forEach((s) => {
       if (!s.offerId || !FP.offers) return;
