@@ -82,6 +82,10 @@ async def main():
         w2 = await q.evaluate("JSON.stringify(FP.app.projParams())")
         chk('E1 la calibración se conserva al recargar en este navegador', w1 == w2, [w1, w2])
         await q.screenshot(path=os.environ.get('SHOT','/tmp/pj_cal.png'), full_page=True)
+        # Texto honesto: si lo medido no es lo aplicado (p. ej. tras deshacer), lo dice
+        await q.evaluate("FP.app.actions['pcal-reset'](); const r = FP.app.pcalAnalysis(); if (r.shares) { r.shares.status = 'changed'; r.shares.chosen = 'recent6'; } FP.app.render()"); await q.wait_for_timeout(300)
+        tx = await q.evaluate(VIEW)
+        chk('E2 si lo medido no es lo aplicado, el texto dice qué está en uso y cómo aplicarlo', 'Hoy está en uso la participación de la base' in tx and 'Calibrar ahora' in tx, tx[tx.find('Reparto sugerido'):][:500])
         # Reparto sugerido
         await q.evaluate("FP.app.state.pcal.saved.active = { params: { windows: FP.app.projParams().windows, shareMethod: 'trend', shapeMethod: 'base' }, at: '2026-10-20T10:00:00Z', monthsUsed: 44, summary: null }; FP.app.render()")
         await q.evaluate("location.hash='#proyeccion'"); await q.wait_for_timeout(500)
