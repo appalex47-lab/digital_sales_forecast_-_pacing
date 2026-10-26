@@ -178,14 +178,28 @@
 
   function clearCollection(store, dataType) { store[dataType] = emptyCollection(); }
 
-  /** Grupos de registros con la misma llave (fecha|canal|tipo) y más de una aparición. */
+  /** Grupos de registros con la misma llave (fecha|canal|tipo) y más de una aparición.
+   * Optimización: evita instanciar un arreglo por cada registro único (que suele ser >99% de las llaves)
+   * guardando el registro individual directamente y creando un arreglo únicamente cuando se detecta un duplicado. */
   function findDuplicates(store, dataType) {
-    const groups = new Map();
-    records(store, dataType).forEach((r) => {
-      if (!groups.has(r.key)) groups.set(r.key, []);
-      groups.get(r.key).push(r);
-    });
-    return [...groups.entries()].filter(([, list]) => list.length > 1).map(([key, list]) => ({ key, records: list }));
+    const map = new Map();
+    const recList = records(store, dataType);
+    for (let i = 0; i < recList.length; i++) {
+      const r = recList[i];
+      const item = map.get(r.key);
+      if (!item) {
+        map.set(r.key, r);
+      } else if (Array.isArray(item)) {
+        item.push(r);
+      } else {
+        map.set(r.key, [item, r]);
+      }
+    }
+    const res = [];
+    for (const [key, val] of map.entries()) {
+      if (Array.isArray(val)) res.push({ key, records: val });
+    }
+    return res;
   }
 
   /**
