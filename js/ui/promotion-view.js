@@ -10,7 +10,7 @@
   const P = () => FP.promotions;
   const $ = (id) => document.getElementById(id);
   const PILL = { draft: 'na', proposed: 'warning', approved: 'ok', published: 'ok', measuring: 'warning', closed: 'ok', cancelled: 'error' };
-  const NEXT_LABEL = { proposed: 'Enviar como propuesta', draft: 'Volver a borrador', approved: 'Aprobar', published: 'Marcar como publicada', measuring: 'Pasar a en medición', closed: 'Cerrar con conclusión' };
+  const NEXT_LABEL = { proposed: 'Enviar a aprobación', draft: 'Volver a borrador', approved: 'Aprobar', published: 'Marcar en marcha (publicada)', measuring: 'Pasar a medición', closed: 'Cerrar con conclusión' };
   const BACK = { draft: true };   // pasos hacia atrás: estilo secundario
 
   const val = (id) => { const el = $(id); return el ? String(el.value).trim() : ''; };
@@ -114,7 +114,7 @@
     const delBtn = FP.removal ? `<button type="button" class="btn btn--ghost btn--danger-text" data-action="rm-promo-ask" data-id="${esc(p.promoId)}">Eliminar…</button>` : '';
     const cancel = editable ? `${field('pm-st-cancel', 'Motivo para cancelar', input('pm-st-cancel', ''))}<div class="btn-row"><button type="button" class="btn btn--ghost btn--danger-text" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="cancelled">Cancelar promoción</button>${delBtn}</div><p class="field__hint">Cancelar conserva el historial; eliminar lo quita.</p>` : `<div class="btn-row">${delBtn}</div>`;
     const status = `<section class="panel" aria-labelledby="pm-t-st"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-st">Estado y aprobación</h2>
-      <p class="panel__desc">Borrador → Propuesta → Aprobada → Publicada → En medición → Cerrada. Cada cambio guarda quién y cuándo, y no se puede borrar. «En medición» solo se alcanza cuando la vigencia ya terminó.</p></div></div>
+      <p class="panel__desc">Borrador (puede pasar por «en aprobación») → Aprobada → En marcha (publicada, luego en medición) → Cerrada. Cada cambio guarda quién y cuándo, y no se puede borrar. «En medición» solo se alcanza cuando la vigencia ya terminó.</p></div></div>
       <div class="panel__body">${approveField}${closeFields}${stateBtns ? `<div class="btn-row">${stateBtns}</div>` : ''}${cancel}</div></section>`;
 
     // Línea base congelada
