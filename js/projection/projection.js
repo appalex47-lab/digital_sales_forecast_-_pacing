@@ -157,10 +157,11 @@
     // ---- proyección: ritmo de los últimos 2 meses cerrados, por canal ----
     const warnings = [], notes = [];
     const projCh = chans.map((c) => {
-      const gr = c.last2 && fin(c.last2.yoy) ? c.last2.yoy : 0, wTxt = c.window === 2 ? 'dos meses' : `${c.window} meses`;
+      const raw = c.last2 && fin(c.last2.yoy) ? c.last2.yoy : 0, gr = PC ? PC.capGrowth(raw) : raw, capped = gr !== raw, wTxt = c.window === 2 ? 'dos meses' : `${c.window} meses`;
       if (!(c.last2 && fin(c.last2.yoy)) && c.revenue > 0) warnings.push(`${c.label}: no hay ${wTxt} cerrados comparables contra ${baseYear - 1}; su proyección es igual a la base (0 % de crecimiento).`);
-      if (c.last2 && fin(c.last2.yoy) && Math.abs(c.last2.yoy) > 0.4) warnings.push(`${c.label}: los últimos ${c.window} meses (${c.window === 2 ? c.last2.labels.join(' y ') : `${c.last2.labels[0]} a ${c.last2.labels[c.last2.labels.length - 1]}`}) cambiaron ${(c.last2.yoy * 100).toFixed(1)} % contra ${baseYear - 1}; el ritmo puede ser atípico antes de proyectarlo todo el año.`);
-      return { growth: gr, amount: Math.round(c.revenue * (1 + gr)) };
+      if (c.last2 && fin(c.last2.yoy) && Math.abs(c.last2.yoy) > 0.4 && !capped) warnings.push(`${c.label}: los últimos ${c.window} meses (${c.window === 2 ? c.last2.labels.join(' y ') : `${c.last2.labels[0]} a ${c.last2.labels[c.last2.labels.length - 1]}`}) cambiaron ${(c.last2.yoy * 100).toFixed(1)} % contra ${baseYear - 1}; el ritmo puede ser atípico antes de proyectarlo todo el año.`);
+      if (capped) warnings.push(`${c.label}: el ritmo medido (${raw > 0 ? '+' : ''}${(raw * 100).toFixed(1)} %) queda fuera del rango de ${PC.MIN_GROWTH * 100} % a +${PC.MAX_GROWTH * 100} % que se acepta para proyectar un año (un ritmo de pocos meses no suele sostenerse 12); se proyecta con ${gr > 0 ? '+' : ''}${(gr * 100).toFixed(0)} %.`);
+      return { growth: gr, raw, capped, amount: Math.round(c.revenue * (1 + gr)) };
     });
     const projTotal = projCh.reduce((s, p) => s + p.amount, 0);
 
@@ -181,7 +182,7 @@
     const rows = chans.map((c, i) => {
       const gap = metaCh[i] - projCh[i].amount, x = projCh[i].amount > 0 ? metaCh[i] / projCh[i].amount - 1 : null;
       return { id: c.id, label: c.label, window: c.window, base: c.revenue, metaShare: metaTotal ? metaCh[i] / metaTotal : null, meta: metaCh[i], metaGrowth: c.revenue > 0 ? metaCh[i] / c.revenue - 1 : null,
-        projGrowth: projCh[i].growth, proj: projCh[i].amount, gap, uplift: x, last2: c.last2, cr: c.cr, aov: c.aov,
+        projGrowth: projCh[i].growth, rawGrowth: projCh[i].raw, capped: projCh[i].capped, proj: projCh[i].amount, gap, uplift: x, last2: c.last2, cr: c.cr, aov: c.aov,
         needs: x !== null && x > 0 ? { volumePct: x, crPp: c.cr !== null ? c.cr * x * 100 : null, aovPct: x } : null,
         forecastClose: forecastClose ? forecastClose.byChannel[c.id] : null };
     });
@@ -212,7 +213,7 @@
     // ---- reparto sugerido (solo sugerencia: la meta se reparte como tú decidas) ----
     let suggestedShares = null;
     if (cal && ser) { suggestedShares = PC.suggestShares(ser, chIds, cal.shareMethod); }
-    const calInfo = cal ? { params: cal, applied: !PC.isDefault(cal, chIds), shapeUsed } : null;
+    const calInfo = cal ? { cap: { max: PC.MAX_GROWTH, min: PC.MIN_GROWTH }, params: cal, applied: !PC.isDefault(cal, chIds), shapeUsed } : null;
 
     return { baseYear, targetYear, growth: g, today, hasData: true, sharesCustom, suggestedShares, calibration: calInfo,
       base: { total: baseTotal, channels: chans },

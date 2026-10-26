@@ -170,5 +170,34 @@ function make(months, { level = 1e6, g = 0.1, noise = 0.0, shock = null, seas = 
   t('una ventana sin meses comparables deja la proyección del canal igual a su base y avisa', (() => { const x = PJ.build(STORE, { baseYear: 2023, growth: 0.16, today: '2023-03-05', calibration: { ...PC.defaultParams(IDS), windows: { ecommerce: 12, app: 2, whatsapp: 2 } } }); const r = x.rows.find((q) => q.id === 'ecommerce'); return x.hasData && r.projGrowth === 0 && x.warnings.some((w) => /12 meses cerrados comparables/.test(w)); })());
 }
 
+
+/* ---------- 10) Tope del ritmo y casos a 12 meses ---------- */
+{
+  t('capGrowth recorta a [−30 %, +50 %] y respeta lo de adentro', PC.capGrowth(1.26) === 0.5 && PC.capGrowth(-0.9) === -0.3 && PC.capGrowth(0.12) === 0.12 && PC.MAX_GROWTH === 0.5 && PC.MIN_GROWTH === -0.3);
+  // el backtest proyecta con el ritmo recortado: serie que triplica cada año → la proyección usa +50 %, no +200 %
+  const trip = {}; for (let i = 0; i < 40; i++) trip[2022 * 12 + i] = 100 * Math.pow(3, i / 12);
+  const T = 2022 * 12 + 30, cs = PC.windowCases(trip, 6, 2022 * 12 + 39).find((c) => c.T === T && c.H === 6);
+  const prior = [1, 2, 3, 4, 5, 6].reduce((a, k) => a + trip[T + k - 12], 0);
+  t('el backtest también aplica el tope', cs && near(cs.pred, prior * 1.5, 1e-6), [cs && cs.pred, prior * 1.5]);
+  // proyección: un canal que crece 126 % se proyecta con +50 % y avisa; la meta no cambia
+  seed = 61;
+  const rows = [], mk = (g, id) => make(46, { g, noise: 0.01, start: 2022 * 12 });
+  const chS = { ecommerce: mk(0.1), app: mk(0.2), whatsapp: mk(0.0) };
+  Object.keys(chS.app).forEach((k) => { if (+k >= 2025 * 12 + 3) chS.app[k] *= 2.26; });   // abril–octubre de 2025 explotan contra 2024
+  IDS.forEach((ch) => Object.keys(chS[ch]).forEach((k) => { const idx = +k, y = Math.floor(idx / 12), m = (idx % 12) + 1, dim = new Date(Date.UTC(y, m, 0)).getUTCDate(); for (let d = 1; d <= dim; d++) rows.push({ date: `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, channel: ch, metrics: { revenue: { source: 'observed', value: chS[ch][k] / dim }, orders: null, trafficVolume: null } }); }));
+  STORE = { rows };
+  const r = PJ.build(STORE, { baseYear: 2025, growth: 0.16, today: '2025-11-05' }), a = r.rows.find((x) => x.id === 'app');
+  t('un ritmo de +126 % se proyecta con el tope (+50 %) y se informa el medido', a.capped === true && a.projGrowth === 0.5 && a.rawGrowth > 1.0, [a.rawGrowth, a.projGrowth]);
+  t('la proyección del canal es su base × 1.5 y avisa con el rango aceptado', a.proj === Math.round(a.base * 1.5) && r.warnings.some((w) => /app.*fuera del rango/.test(w)), r.warnings);
+  t('los canales dentro del rango no se tocan', r.rows.filter((x) => x.id !== 'app').every((x) => x.capped === false && x.projGrowth === x.rawGrowth));
+  const base = PJ.build(STORE, { baseYear: 2025, growth: 0.16, today: '2025-11-05', calibration: PC.defaultParams(IDS) });
+  t('el tope no cambia la meta', r.meta.total === base.meta.total);
+  // 33 meses con ruido: ventanas de 6 y 12 no alcanzan 6 casos a 12 meses → no se pueden elegir
+  seed = 71;
+  const n33 = () => make(33, { g: 0.1, noise: 0.2 });
+  const q = PC.calibrate({ ecommerce: n33(), app: n33(), whatsapp: n33() }, IDS);
+  t('con 33 meses ninguna ventana de 6 o 12 meses puede ganar (faltan casos a 12 meses)', IDS.every((id) => q.channels[id].chosen <= 3), IDS.map((id) => [id, q.channels[id].chosen, q.channels[id].status]));
+}
+
 console.log(`\n${n - bad}/${n} pruebas pasan`);
 process.exit(bad ? 1 : 0);
