@@ -12,6 +12,7 @@
   const EV_TXT = { high: 'Evidencia alta', medium: 'Evidencia media', low: 'Evidencia baja' };
   const TYPE_PILL = { unconverted: 'warning', lowVisibility: 'warning', growing: 'ok', declining: 'error', highWeight: 'na' };
   const PAGE = 50;
+  const CAP = 1000;   // la lista se desliza (10 filas visibles); este tope solo protege la página
   const NONE = '∅';   // valor del filtro y de la marca para «sin subcategoría» / «sin laboratorio»
   const VIEWS = [['sku', 'SKU'], ['subcat', 'Subcategoría'], ['lab', 'Laboratorio']];
   const DIM = { subcat: 'Subcategoría', lab: 'Laboratorio' };
@@ -106,7 +107,7 @@
   function groupsTable(op, state) {
     const esc = H().esc, pill = H().pill, list = visible(op, state), groups = groupsOf(op, state, list), dim = DIM[op.view];
     if (!groups.length) return '<div class="empty"><strong>Ningún SKU coincide con los filtros</strong>Quita algún filtro para verlos.</div>';
-    const shown = groups.slice(0, op.limit || PAGE), cg = op.checkedG || {};
+    const shown = groups.slice(0, CAP), cg = op.checkedG || {};
     const T = OP().TYPES;
     const rows = shown.map((x) => `<tr><td><input type="checkbox" data-action="op-gchk" data-id="${esc(gk(x))}" aria-label="Marcar ${esc(x.label)}"${cg[gk(x)] ? ' checked' : ''}></td>
       <td><strong>${esc(x.label)}</strong>${x.categories.length ? `<span class="cell-sub">${esc(x.categories.slice(0, 3).join(' · '))}${x.categories.length > 3 ? '…' : ''}</span>` : ''}</td>
@@ -115,8 +116,8 @@
       <td class="num">${money(x.revenue)}<span class="cell-sub">${pct(x.deltaPct)} vs referencia</span></td>
       <td>${Object.keys(x.types).map((k) => `${pill(TYPE_PILL[k] || 'na', ((T[k] || {}).label || k))} <span class="num">${int(x.types[k])}</span>`).join('<br>')}</td>
       <td><button type="button" class="btn btn--small" data-action="op-gopen" data-id="${esc(gk(x))}">Ver SKU</button></td></tr>`).join('');
-    const more = groups.length > shown.length ? `<div class="btn-row"><button type="button" class="btn" data-action="op-more">Mostrar ${Math.min(PAGE, groups.length - shown.length)} más (${groups.length - shown.length} restantes)</button></div>` : '';
-    return `<div class="table-wrap"><table class="table ds-table pm-wide"><thead><tr><th></th><th>${esc(dim)}</th><th>SKU</th><th>Con oferta recibida</th><th>Evidencia alta</th><th>Tamaño</th><th>Venta del periodo</th><th>Tipos de oportunidad (SKU)</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
+    const more = groups.length > shown.length ? `<p class="field__hint">Se muestran los primeros ${CAP}; afina con la búsqueda o los filtros.</p>` : '';
+    return `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Lista, se desliza"><table class="table ds-table pm-wide"><thead><tr><th></th><th>${esc(dim)}</th><th>SKU</th><th>Con oferta recibida</th><th>Evidencia alta</th><th>Tamaño</th><th>Venta del periodo</th><th>Tipos de oportunidad (SKU)</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
       <p class="field__hint">${groups.length} ${esc(dim.toLowerCase())}${groups.length === 1 ? '' : 's'} con ${list.length} SKU con estos filtros, de mayor a menor. Cada fila suma lo que ya trae cada SKU. «Tamaño» solo suma los SKU de demanda no convertida (y dice cuántos son): sirve para ordenar, no es un pronóstico.</p>`;
   }
 
@@ -144,15 +145,15 @@
     const esc = H().esc, pill = H().pill, AV = FP.activationView;
     const keyOf = (i) => { const o = i.offers.slice().sort((a, b) => (b.discount || 0) - (a.discount || 0))[0]; return o ? `offer:${o.offerId}` : `sku:${i.sku}`; };
     if (!list.length) return '<div class="empty"><strong>Ningún SKU coincide con los filtros</strong>Quita algún filtro para verlos.</div>';
-    const shown = list.slice(0, op.limit || PAGE);
+    const shown = list.slice(0, CAP);
     const rows = shown.map((i) => `<tr${i.sku === op.sel ? ' aria-selected="true"' : ''}><td><input type="checkbox" data-action="op-chk" data-id="${esc(i.sku)}" aria-label="Marcar ${esc(i.sku)}"${op.checked[i.sku] ? ' checked' : ''}></td>
       <td class="num">${esc(i.sku)}</td><td>${esc(i.name)}<span class="cell-sub">${esc([i.category, i.brand].filter(Boolean).join(' · '))}</span></td><td>${esc(labOf(i, state) || '—')}</td>
       <td>${i.types.map((t) => pill(TYPE_PILL[t.id] || 'na', t.label)).join(' ')}</td><td>${pill(EV_PILL[i.evidence.level], EV_TXT[i.evidence.level])}</td>
       <td class="num">${typeof i.size === 'number' ? money(i.size) : '—'}</td><td class="num">${money(i.revenue)}<span class="cell-sub">${pct(i.revenueDeltaPct)} vs referencia</span></td>
       <td>${i.offers.length ? i.offers.map((o) => `<span class="num">${esc(o.offerId)}</span> ${pct(o.discount)}`).join('<br>') : '—'}</td>${AV ? AV.cells(state, map.get(keyOf(i))) : ''}
       <td><button type="button" class="btn btn--small" data-action="op-open" data-id="${esc(i.sku)}">Abrir</button>${AV ? ` <button type="button" class="btn btn--small btn--ghost" data-action="ac-open" data-key="${esc(keyOf(i))}">Ver razón</button>` : ''}</td></tr>`).join('');
-    const more = list.length > shown.length ? `<div class="btn-row"><button type="button" class="btn" data-action="op-more">Mostrar ${Math.min(PAGE, list.length - shown.length)} más (${list.length - shown.length} restantes)</button></div>` : '';
-    return `<div class="table-wrap"><table class="table ds-table pm-wide"><thead><tr><th></th><th>SKU</th><th>Producto</th><th>Laboratorio</th><th>Tipo de oportunidad</th><th>Evidencia</th><th>Tamaño</th><th>Venta del periodo</th><th>Oferta recibida</th>${AV ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
+    const more = list.length > shown.length ? `<p class="field__hint">Se muestran los primeros ${CAP}; afina con la búsqueda o los filtros.</p>` : '';
+    return `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Lista de SKU, se desliza"><table class="table ds-table pm-wide"><thead><tr><th></th><th>SKU</th><th>Producto</th><th>Laboratorio</th><th>Tipo de oportunidad</th><th>Evidencia</th><th>Tamaño</th><th>Venta del periodo</th><th>Oferta recibida</th>${AV ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
       <p class="field__hint">${list.length} SKU con estos filtros. «Tamaño» solo existe para demanda no convertida (vistas × diferencia de conversión contra la mediana de su categoría × venta por pedido): sirve para ordenar, no es un pronóstico.</p>`;
   }
 

@@ -772,7 +772,7 @@
     try { const raw = JSON.parse(localStorage.getItem(OF_COLS_KEY) || 'null'); if (raw && typeof raw === 'object') Object.keys(base).forEach((k) => { if (typeof raw[k] === 'boolean') base[k] = raw[k]; }); } catch (e) { /* sin preferencia guardada */ }
     return base;
   }
-  function loadOffers() { const env = storage.load(K.offers); state.of.reg = FP.offers.hydrate(env && env.data); state.of.sel = null; state.of.pending = null; state.of.checked = {}; state.of.fold = state.of.fold || {}; state.of.cols = state.of.cols || loadOfCols(); }
+  function loadOffers() { const env = storage.load(K.offers); state.of.reg = FP.offers.hydrate(env && env.data); autoValidateOffers(false); state.of.sel = null; state.of.pending = null; state.of.checked = {}; state.of.fold = state.of.fold || {}; state.of.cols = state.of.cols || loadOfCols(); }
   function loadRemovalLog() { const env = storage.load(K.removalLog); state.rm.log = FP.removal.hydrateLog(env && env.data); }
   function saveRemovalLog() { return saveOk(storage.save(K.removalLog, state.rm.log), 'el registro de eliminaciones'); }
   function loadProposals() { const env = storage.load(K.proposals); state.sm.reg = FP.summary.hydrate(env && env.data); state.sm.msg = null; }
@@ -850,6 +850,10 @@
     });
     return { rows, total: state.op.result ? state.op.result.counts.total : 0 };
   }
+  /** Las ofertas Recibidas sin ninguna alerta pasan solas a «Validada» (por «Automático»). Se llama al cargar y al guardar un archivo. */
+  function autoValidateOffers(persist) {
+    try { const done = FP.guide.autoValidate(state.of.reg, 'Automático'); if (done.length && persist) saveOffers(); return done.length; } catch (e) { return 0; }
+  }
   function saveOffers() { return saveOk(storage.save(K.offers, state.of.reg), 'las ofertas recibidas'); }
   function ofMsg(r, okText) { state.of.msg = r.ok ? { kind: 'ok', text: okText, warnings: [r.warning].filter(Boolean) } : { kind: 'bad', text: r.error }; if (r.ok) saveOffers(); render(); return r; }
   const ofV = (id) => FP.offerView.val(id);
@@ -868,7 +872,7 @@
   async function opRun(force) {
     const op = state.op, m = FP.productStore.meta;
     if (!FP.productStore.available() || !m || !m.batches) { op.result = null; render(); return; }
-    if (!op.f.from || !op.f.to) { op.f.to = m.dateMax; op.f.from = `${m.dateMax.slice(0, 7)}-01`; }
+    if (!op.f.from || !op.f.to) { op.f.to = m.dateMax; op.f.from = FP.promotionEvaluation.addDays(m.dateMax, -29); }   // últimos 30 días contra los 30 previos
     if (!force && op.result) return;
     if (op.f.from > op.f.to) { op.msg = { kind: 'bad', text: 'La fecha de inicio es posterior a la de fin.' }; render(); return; }
     op.loading = true; op.msg = null; render();
@@ -4447,8 +4451,9 @@
     'of-commit'() {
       const pd = state.of.pending; if (!pd || !ofOk(pd.built)) return;
       const r = FP.offers.commitBatch(state.of.reg, pd.built, { by: state.pm.actor, fileName: pd.fileName, sheet: pd.sheet, campaign: pd.campaign, origin: pd.origin });
-      if (r.ok) { state.of.pending = null; ofBuffer = null; state.of.f = { batchId: r.batch.batchId }; state.of.limit = 60; state.of.checked = {}; }
-      return ofMsg(r, r.ok ? `${r.batch.imported} ofertas guardadas en ${r.batch.batchId} como «Recibida».${r.batch.rejected.length ? ` Se omitieron ${r.batch.rejected.length} filas sin SKU.` : ''}` : '');
+      let auto = 0;
+      if (r.ok) { auto = autoValidateOffers(false); state.of.pending = null; ofBuffer = null; state.of.f = { batchId: r.batch.batchId }; state.of.limit = 60; state.of.checked = {}; }
+      return ofMsg(r, r.ok ? `${r.batch.imported} ofertas guardadas en ${r.batch.batchId}${auto ? `; ${auto} sin alertas quedaron validadas solas y el resto como «Recibida» para revisar` : ' como «Recibida»'}.${r.batch.rejected.length ? ` Se omitieron ${r.batch.rejected.length} filas sin SKU.` : ''}` : '');
     },
     'of-batch'(el) { const f = state.of.f; f.batchId = f.batchId === el.dataset.id ? '' : el.dataset.id; state.of.limit = 60; render(); },
     'of-filter'() {
@@ -4457,9 +4462,10 @@
       state.of.limit = 60; render();
     },
     'of-more'() { state.of.limit += 60; render(); },
+    'of-tab'(el) { const f = state.of.f; if (el.dataset.s) f.state = el.dataset.s; else delete f.state; state.of.limit = 60; render(); },
     'of-chk'(el) { if (el.checked) state.of.checked[el.dataset.id] = true; else delete state.of.checked[el.dataset.id]; render(); },
     'of-check-all'() {
-      FP.offerView.visible(state).slice(0, state.of.limit).forEach((o) => { state.of.checked[o.offerId] = true; }); render();
+      FP.offerView.visible(state).slice(0, 1000).forEach((o) => { state.of.checked[o.offerId] = true; }); render();
     },
     'of-check-none'() { state.of.checked = {}; render(); },
     'of-bulk'(el) {
@@ -4756,8 +4762,8 @@
     'op-chk'(el) { if (el.checked) state.op.checked[el.dataset.id] = true; else delete state.op.checked[el.dataset.id]; render(); },
     'op-check-all'() {
       const op = state.op;
-      if (op.view && op.view !== 'sku') FP.opportunityView.groupsOf(op, state).slice(0, op.limit).forEach((g) => { op.checkedG[g.key || FP.opportunityView.NONE] = true; });
-      else FP.opportunityView.visible(op, state).slice(0, op.limit).forEach((i) => { op.checked[i.sku] = true; });
+      if (op.view && op.view !== 'sku') FP.opportunityView.groupsOf(op, state).slice(0, 1000).forEach((g) => { op.checkedG[g.key || FP.opportunityView.NONE] = true; });
+      else FP.opportunityView.visible(op, state).slice(0, 1000).forEach((i) => { op.checked[i.sku] = true; });
       render();
     },
     'op-check-none'() { state.op.checked = {}; state.op.checkedG = {}; render(); },

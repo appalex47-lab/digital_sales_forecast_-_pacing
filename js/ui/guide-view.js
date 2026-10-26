@@ -11,6 +11,7 @@
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
   function ctxOf(state) { return { offers: state.of.reg.offers, promotions: state.pm.reg.promotions, today: todayISO() }; }
+  const money = (n) => Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   function goAttrs(go, esc) {
@@ -65,60 +66,60 @@
       <div class="btn-row"><button type="button" class="btn btn--primary" data-action="gd-select-confirm"${c.ok.length ? '' : ' disabled'}>Seleccionar las ${c.ok.length}</button><button type="button" class="btn btn--ghost" data-action="gd-select-cancel">Cancelar</button></div></div>`;
   }
 
-  /** Resumen de Ofertas recibidas: matriz, estados, alertas, banner y acciones de un clic. */
+  /** Tarjetas de prioridad (reemplazan la matriz 3×3): cuántos SKU, cuántos con datos suficientes y qué falta. */
+  function cardsHtml(cards, esc, altaBtn) {
+    return `<div class="gd-cards" role="group" aria-label="Prioridad de activación">${cards.map((c) => {
+      const alta = c.priority === 'Alta';
+      const why = alta ? (c.sure ? (c.rest ? `Las otras ${c.rest} no tienen datos suficientes${c.why ? `: ${c.why}` : ''}.` : 'Todas tienen datos suficientes.') : (c.n ? `Ninguna tiene datos suficientes todavía${c.why ? `: ${c.why}` : ''}.` : 'No hay SKU de esta prioridad.')) : (c.n ? 'Se revisan una por una: no se agregan en bloque.' : 'No hay SKU de esta prioridad.');
+      return `<div class="gd-card${alta ? ' gd-card--alta' : ''}"><span class="gd-card__t">Prioridad ${esc(c.priority.toLowerCase())}</span><strong class="gd-card__n num">${c.n} <span>SKU</span></strong>
+        <span class="gd-card__s"><strong class="num">${c.sure}</strong> con datos suficientes · ${c.rest} por revisar</span>${alta ? altaBtn : ''}<span class="field__hint">${esc(why)}</span></div>`;
+    }).join('')}</div>`;
+  }
+
+  /** Aviso del periodo con el que se calcula la prioridad. */
+  function periodNote(state) {
+    const f = state.op.f || {}, esc = H().esc;
+    const rng = f.from && f.to ? `${esc(f.from)} al ${esc(f.to)} contra el periodo anterior de la misma duración` : 'se calcula al cargar Oportunidades';
+    return `<p class="note gd-period"><strong>Periodo:</strong> ${rng}. Por defecto son los últimos 30 días contra los 30 previos (antes era el mes en curso); cámbialo en Oportunidades.</p>`;
+  }
+
+  /** Resumen de Ofertas recibidas: tarjetas de prioridad, acción de un clic y ofertas por revisar. */
   function offerSummary(state, an, recs) {
     const esc = H().esc, reg = state.of.reg; if (!reg.offers.length) return '';
     const P = state.ac.reg.params, S = G().offerSummary(reg, an, recs, P, todayISO());
-    const st = FP.offers.STATE, c = S.byState;
-    const chip = (k, cls) => `<span class="gd-chip ${cls}"><strong class="num">${c[k]}</strong> ${esc(st[k])}${c[k] === 1 ? '' : 's'}</span>`;
-    const bn = S.banner;
+    const cards = G().priorityCards(S.matrix, recs, 'offer');
+    const btn = `<button type="button" class="btn btn--primary" data-action="gd-select-aa"${S.aa.length ? '' : ' disabled'}>${S.aa.length ? `Elegir las ${S.aa.length} de prioridad Alta con datos suficientes` : 'Sin ofertas listas para elegir en bloque'}</button>`;
+    const groups = S.groups.map((g) => `<div class="gd-grp"><div class="gd-grp__t"><strong>${esc(g.title)}</strong> <span class="gd-count">${g.n}</span><span class="cell-sub">${esc(g.text)}</span></div>
+      <button type="button" class="btn btn--small" data-action="gd-go" data-tab="ofertas" data-fstate="received" data-fissue="${esc(g.issue)}">Ver ${g.n === 1 ? 'la oferta' : `las ${g.n}`}</button></div>`).join('');
     const extras = [];
     if (S.soon) extras.push(`${plural(S.soon, 'oferta vence', 'ofertas vencen')} en 5 días o menos`);
     if (S.starting) extras.push(`${plural(S.starting, 'oferta empieza', 'ofertas empiezan')} en 5 días o menos`);
-    const groups = S.groups.map((g) => `<div class="gd-grp"><div class="gd-grp__t"><strong>${esc(g.title)}</strong> <span class="gd-count">${g.n}</span><span class="cell-sub">${esc(g.text)}</span></div>
-      <button type="button" class="btn btn--small" data-action="gd-go" data-tab="ofertas" data-fstate="received" data-fissue="${esc(g.issue)}">Ver ${g.n === 1 ? 'la oferta' : `las ${g.n}`}</button></div>`).join('');
-    return `<section class="panel gd-sum" aria-labelledby="gd-sum-t"><div class="panel__head"><div><h2 class="panel__title" id="gd-sum-t">Resumen de las ${S.total} ofertas cargadas</h2>
-      <p class="panel__desc">Cuenta todas las ofertas cargadas, de cualquier archivo o campaña. La activación sugerida es una regla con su razón escrita, no un efecto medido.</p></div></div>
-      <div class="panel__body"><div class="gd-sum__grid">
-        <div><h3 class="gd-h">Activación sugerida · prioridad por confianza</h3>${matrixHtml(S.matrix, esc)}
-          <p class="field__hint">${S.noRec ? `${plural(S.noRec, 'oferta sin sugerencia', 'ofertas sin sugerencia')} (producto agotado, control distinto de «Ningún Control» o descartada).` : 'Todas las ofertas activas tienen sugerencia.'}</p></div>
-        <div><h3 class="gd-h">Estado de la oferta</h3><div class="gd-chips">${chip('received', 'gd-chip--rec')}${chip('validated', 'gd-chip--val')}${chip('selected', 'gd-chip--sel')}${chip('discarded', 'gd-chip--dis')}</div>
-          <h3 class="gd-h">Alertas de las ${c.received} recibidas</h3>
-          <div class="gd-al gd-al--ok"><span>Sin alertas</span><strong class="num">${S.clean}</strong></div><div class="gd-al gd-al--warn"><span>Por revisar</span><strong class="num">${S.review}</strong></div>
-          <div class="gd-al"><span>Espacios de banner${bn.shared ? ' (compartidos con Oportunidades)' : ''}</span><strong class="num">${bn.used} de ${bn.slots}</strong></div>
-          ${extras.length ? `<p class="field__hint">${extras.map(esc).join(' · ')}.</p>` : ''}
-          ${S.altaSinOferta ? `<p class="field__hint">${plural(S.altaSinOferta, 'SKU de prioridad Alta no tiene', 'SKU de prioridad Alta no tienen')} oferta cargada. <button type="button" class="linklike" data-action="gd-go" data-tab="oportunidades">Verlos en Oportunidades</button></p>` : ''}</div>
-      </div>
-      <div class="gd-acts"><div><h3 class="gd-h">Un clic · validar</h3>
-          <button type="button" class="btn btn--primary" data-action="gd-validate-clean"${S.clean ? '' : ' disabled'}>Validar las ${S.clean} sin alertas</button>
-          <p class="field__hint">Solo las recibidas sin ninguna alerta. Las ${S.review} con alertas no se tocan: quedan en «Por revisar».</p></div>
-        <div><h3 class="gd-h">Un clic · seleccionar</h3>
-          <button type="button" class="btn btn--primary" data-action="gd-select-aa"${S.aa.length ? '' : ' disabled'}>Seleccionar las ${S.aa.length} validadas de prioridad Alta y confianza Alta</button>
-          <p class="field__hint">Antes de aplicar te muestro la lista y qué queda fuera. Las de confianza media o baja se revisan aparte.</p></div></div>
-      ${confirmHtml(state)}${toast(state, 'offers')}
-      ${groups ? `<h3 class="gd-h">Por revisar (${S.review})</h3><p class="field__hint">Agrupadas por motivo, para resolverlas en grupo y no una por una.</p><div class="gd-grps">${groups}</div>` : ''}
+    return `<section class="panel gd-sum" aria-labelledby="gd-sum-t"><div class="panel__head"><div><h2 class="panel__title" id="gd-sum-t">¿Qué hago primero? · ${S.active} ofertas activas</h2>
+      <p class="panel__desc">Las ofertas sin ninguna alerta ya están «Listas» (se validan solas). La activación sugerida es una regla con su razón escrita, no un efecto medido.${S.noRec ? ` ${plural(S.noRec, 'oferta sin sugerencia', 'ofertas sin sugerencia')} (agotada, control distinto de «Ningún Control» o descartada).` : ''}</p></div></div>
+      <div class="panel__body">${periodNote(state)}${cardsHtml(cards, esc, btn)}
+        <p class="field__hint">Antes de aplicar te muestro la lista y qué queda fuera. Solo propone: no activa nada en la web ni en la app.${extras.length ? ` ${extras.map(esc).join(' · ')}.` : ''}</p>
+        ${confirmHtml(state)}${toast(state, 'offers')}
+        ${groups ? `<h3 class="gd-h">Por revisar (${S.review})</h3><p class="field__hint">Agrupadas por motivo, para resolverlas en grupo y no una por una.</p><div class="gd-grps">${groups}</div>` : ''}
       </div></section>`;
   }
 
-  /** Resumen de Oportunidades: misma matriz y un clic para llevar las de prioridad Alta con confianza Alta al plan. */
+  /** Resumen de Oportunidades: las mismas tarjetas y un clic para llevar las de prioridad Alta con datos suficientes al plan. */
   function opportunitySummary(state, recs) {
     const esc = H().esc, op = state.op; if (!op.result) return '';
     const S = G().opportunitySummary(recs, state.ac.reg.params), bn = S.banner;
+    const cards = G().priorityCards(S.matrix, recs, 'potential');
     const promos = state.pm.reg.promotions.filter((p) => ['draft', 'proposed'].includes(p.status));
-    const act = !S.aa.length ? '<button type="button" class="btn btn--primary" disabled>No hay oportunidades de prioridad Alta con confianza Alta</button>'
-      : promos.length ? `<div class="btn-row"><select id="gd-op-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
-          <button type="button" class="btn btn--primary" data-action="gd-op-add">Agregar al plan las ${S.aa.length} de prioridad Alta y confianza Alta</button></div>`
-        : `<button type="button" class="btn btn--primary" data-action="gd-op-mark">Marcar las ${S.aa.length} de prioridad Alta y confianza Alta</button><p class="field__hint">No hay una promoción en borrador o propuesta: créala en la pestaña Promociones para agregarlas.</p>`;
-    return `<section class="panel gd-sum" aria-labelledby="gd-osum-t"><div class="panel__head"><div><h2 class="panel__title" id="gd-osum-t">Resumen de ${S.total} SKU con activación sugerida</h2>
-      <p class="panel__desc">El mismo resumen que en Ofertas recibidas. Aquí solo cuentan los productos sin oferta vigente.</p></div></div>
-      <div class="panel__body"><div class="gd-sum__grid"><div><h3 class="gd-h">Prioridad por confianza</h3>${matrixHtml(S.matrix, esc)}
-        ${S.noRec ? `<p class="field__hint">${plural(S.noRec, 'SKU sin sugerencia', 'SKU sin sugerencia')}.</p>` : ''}</div>
-        <div><div class="gd-al"><span>Espacios de banner${bn.shared ? ' (compartidos con Ofertas)' : ''}</span><strong class="num">${bn.used} de ${bn.slots}</strong></div>
-          ${S.aa.length && bn.slots - bn.used < S.aa.length ? `<p class="field__hint">Hay ${S.aa.length} de prioridad Alta con confianza Alta y quedan ${Math.max(0, bn.slots - bn.used)} espacios de banner; el resto va a otros espacios (el banner se limita por venta).</p>` : ''}</div></div>
-      <div class="gd-acts gd-acts--one"><div>${act}<p class="field__hint">Solo propone un plan: no activa nada en la web ni en la app.</p></div></div>
-      ${toast(state, 'opp')}</div></section>`;
+    const act = !S.aa.length ? '<button type="button" class="btn btn--primary" disabled>Sin oportunidades listas para agregar en bloque</button>'
+      : promos.length ? `<select id="gd-op-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
+          <button type="button" class="btn btn--primary" data-action="gd-op-add">Agregar las ${S.aa.length} de prioridad Alta con datos suficientes</button>`
+        : `<button type="button" class="btn btn--primary" data-action="gd-op-mark">Marcar las ${S.aa.length} de prioridad Alta con datos suficientes</button>`;
+    return `<section class="panel gd-sum" aria-labelledby="gd-osum-t"><div class="panel__head"><div><h2 class="panel__title" id="gd-osum-t">¿Qué hago primero? · ${S.total} SKU con activación sugerida</h2>
+      <p class="panel__desc">Mismo resumen que en Ofertas recibidas. Aquí solo cuentan los productos sin oferta vigente.${S.noRec ? ` ${plural(S.noRec, 'SKU sin sugerencia', 'SKU sin sugerencia')}.` : ''}</p></div></div>
+      <div class="panel__body">${periodNote(state)}${cardsHtml(cards, esc, act)}
+        ${S.aa.length && !promos.length ? '<p class="field__hint">No hay una promoción en borrador o propuesta: créala en la pestaña Promociones para agregarlas.</p>' : ''}
+        ${S.aa.length && bn.slots - bn.used < S.aa.length ? `<p class="field__hint">Hay ${S.aa.length} listas y quedan ${Math.max(0, bn.slots - bn.used)} espacios de banner; el resto va a otros espacios.</p>` : ''}
+        <p class="field__hint">Solo propone un plan: no activa nada en la web ni en la app.</p>${toast(state, 'opp')}</div></section>`;
   }
-
 
   /* ---------- Conteo de acciones sugeridas ---------- */
   const SUB = { 'Banner principal': 'Tope compartido de espacios', 'Pauta': 'Convierte bien, pocos la ven', 'CRM (WhatsApp / correo)': 'Oferta con programa', 'CRM: recordatorio de recompra': 'Crónicos en crecimiento',
@@ -133,7 +134,7 @@
     const miss = G().missingCounts(recs, tab, 5), cmp = isOffer ? G().compareExternal(recs, tab, ac.external) : { loaded: false };
     const rows = C.rows.map((r) => `<tr${cur === r.label ? ' aria-selected="true"' : ''}><td><strong>${esc(r.label)}</strong><span class="cell-sub">${esc(SUB[r.label] || '')}</span></td><td class="num"><strong>${r.n}</strong></td>
       <td><span class="gd-bar-m" aria-hidden="true"><span style="width:${C.max ? Math.round(r.n / C.max * 100) : 0}%"></span></span></td>
-      <td>${r.blocked ? '<span class="cell-sub">No aplica</span>' : `Alta ${r.a} · Media ${r.m} · Baja ${r.b}`}</td>${isOffer ? `<td class="num">${r.approved}</td>` : ''}
+      <td class="num">${r.sale == null ? '—' : esc(money(r.sale))}</td><td>${r.blocked ? '<span class="cell-sub">No aplica</span>' : `Alta ${r.a} · Media ${r.m} · Baja ${r.b}`}</td>${isOffer ? `<td class="num">${r.approved}</td>` : ''}
       <td><button type="button" class="btn btn--small" data-action="gd-act" data-tab="${tab}" data-label="${esc(r.label)}">${cur === r.label ? 'Quitar filtro' : 'Ver'}</button></td></tr>`).join('');
     const missHtml = miss.length ? `<div><h3 class="gd-h">Qué falta para decidir mejor</h3>${miss.map((m) => `<div class="gd-al"><span>${esc(m.text)}</span><strong class="num">${m.n} SKU</strong></div>`).join('')}
       <p class="field__hint">Sale de la razón escrita de cada sugerencia: te dice qué dato cargar primero.</p></div>` : '';
@@ -142,8 +143,8 @@
     return `<section class="panel gd-act" aria-labelledby="gd-act-t-${tab}"><div class="panel__head"><div><h2 class="panel__title" id="gd-act-t-${tab}">Acciones sugeridas · cuántos SKU hay en cada una</h2>
       <p class="panel__desc">Cuenta SKU ${isOffer ? 'de ofertas activas' : 'sin oferta vigente'}; si un SKU está en dos ofertas cuenta una vez. Es una regla con su razón escrita, no un efecto medido.</p></div>
       <div class="btn-row"><button type="button" class="btn btn--small" data-action="ac-export-xlsx" data-tab="${isOffer ? 'offer' : 'potential'}">Exportar plan de activación (Excel)</button></div></div>
-      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Acción sugerida</th><th>SKU</th><th>Reparto</th><th>Prioridad</th>${isOffer ? '<th>Aprobadas</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><th>Total</th><th class="num">${C.total}</th><th></th><th></th>${isOffer ? '<th></th>' : ''}<th></th></tr></tfoot></table></div></div>
+      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Acción sugerida</th><th>SKU</th><th>Reparto</th><th>Venta del periodo</th><th>Prioridad</th>${isOffer ? '<th>Aprobadas</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody>
+        <tfoot><tr><th>Total</th><th class="num">${C.total}</th><th></th><th></th><th></th>${isOffer ? '<th></th>' : ''}<th></th></tr></tfoot></table></div></div>
       ${missHtml || cmpHtml ? `<div class="panel__body"><div class="gd-sum__grid">${missHtml}${cmpHtml}</div></div>` : ''}</section>`;
   }
 

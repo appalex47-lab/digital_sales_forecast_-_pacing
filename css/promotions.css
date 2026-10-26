@@ -95,7 +95,22 @@ button.metric-card:focus-visible { outline: 2px solid var(--ds-accent); outline-
 .gd-grp__t { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
 .gd-count { display: inline-block; background: var(--ds-warning-soft); color: var(--ds-hyp); border-radius: var(--ds-r-sm); padding: 0 7px; font-size: var(--ds-fs-caption); font-weight: 700; }
 .linklike { background: none; border: 0; padding: 0; color: var(--ds-accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: 24px; }
+/* Tarjetas de prioridad, pestañas de estado, lista deslizable */
+.gd-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ds-s4); }
+.gd-card { display: grid; gap: var(--ds-s2); align-content: start; border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); padding: var(--ds-s4); background: var(--ds-bg); }
+.gd-card--alta { border: 2px solid var(--ds-accent); background: var(--ds-accent-soft); }
+.gd-card__t { font-size: var(--ds-fs-caption); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ds-text-muted); }
+.gd-card__n { font-size: 1.875rem; line-height: 1.1; } .gd-card__n span { font-size: var(--ds-fs-helper); font-weight: 600; color: var(--ds-text-muted); }
+.gd-card__s { font-size: var(--ds-fs-helper); }
+.gd-card .btn { min-height: 44px; height: auto; white-space: normal; text-align: left; }
+.gd-period { margin: 0 0 var(--ds-s4); }
+.gd-tabs { display: flex; flex-wrap: wrap; gap: var(--ds-s2); margin-bottom: var(--ds-s2); }
+.gd-tab { min-height: 40px; border-radius: 20px; border: 1px solid var(--ds-border); background: var(--ds-surface, #fff); color: var(--ds-text-muted); font: inherit; font-weight: 600; padding: 0 14px; cursor: pointer; }
+.gd-tab[aria-pressed="true"] { background: var(--ds-text); color: #fff; border-color: var(--ds-text); }
+.gd-scroll { max-height: 520px; overflow-y: auto; border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); }
+.gd-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--ds-bg); }
 @media (max-width: 760px) {
+  .gd-cards { grid-template-columns: 1fr; }
   .gd-bar { padding: var(--ds-s4); border-left-width: 1px; border-top: 5px solid var(--ds-accent); }
   .gd-bar__acts, .gd-bar__acts .btn { width: 100%; }
   .gd-steps { grid-template-columns: 1fr; gap: 0; }
