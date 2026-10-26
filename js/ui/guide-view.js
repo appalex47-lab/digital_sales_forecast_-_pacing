@@ -167,11 +167,14 @@
         <div class="btn-row">${no ? `<button type="button" class="btn btn--danger" data-action="rm-confirm">Eliminar ${no === 1 ? 'la oferta' : `las ${no}`}</button>` : ''}<button type="button" class="btn btn--ghost" data-action="rm-cancel">Cancelar</button></div></div></section>`;
     }
     const p = FP.promotions.find(state.pm.reg, c.promoId); if (!p) return '';
-    const offers = p.skus.filter((s) => s.offerId).length, digital = p.skus.length - offers;
+    const plan = FP.removal.promoPlan(p), offers = p.skus.filter((s) => s.offerId).length, digital = p.skus.length - offers;
+    const heavy = plan.heavy ? `<div class="note note--warn"><strong>Esta promoción ya avanzó.</strong> Al eliminarla se pierde: ${plan.impact.map(esc).join('; ')}. Su historial y su medición no se podrán consultar después.
+        <div class="btn-row"><button type="button" class="btn btn--small" data-action="pm-export-csv" data-id="${esc(p.promoId)}">Exportar CSV antes</button><button type="button" class="btn btn--small" data-action="pm-export-json" data-id="${esc(p.promoId)}">Exportar JSON antes</button></div>
+        <label class="gd-colchk"><input type="checkbox" id="rm-ack"> Entiendo que se pierde su historial y su medición</label></div>` : '';
     return `<section class="panel gd-rm" id="rm-confirm" role="alertdialog" aria-labelledby="rm-t"><div class="panel__body"><h2 class="panel__title" id="rm-t">¿Eliminar la promoción «${esc(p.name)}»?</h2>
-      <p>Está en <strong>${esc(FP.promotions.STATUS[p.status].toLowerCase())}</strong>, con <strong>${p.skus.length} SKU</strong>, y nunca se aprobó.</p>
-      <div class="note"><strong>Qué pasa con sus SKU:</strong> ${offers ? `las ${offers} ofertas que vinieron de aquí quedan otra vez pendientes de promoción y la guía te pedirá armar otra. ` : ''}${digital ? `${digital} SKU de oportunidades solo salen del plan.` : ''}</div>
-      <p class="field__hint">El identificador ${esc(p.promoId)} no se vuelve a usar.</p>${reason}
+      <p>Está en <strong>${esc(FP.promotions.STATUS[p.status].toLowerCase())}</strong> y tiene <strong>${p.skus.length} SKU</strong>.</p>${heavy}
+      ${p.skus.length ? `<div class="note"><strong>Qué pasa con sus SKU:</strong> ${offers ? `las ${offers} ofertas que vinieron de aquí quedan otra vez pendientes de promoción y la guía te pedirá armar otra. ` : ''}${digital ? `${digital} SKU de oportunidades solo salen del plan.` : ''}</div>` : ''}
+      <p class="field__hint">El identificador ${esc(p.promoId)} no se vuelve a usar. Si solo quieres detenerla pero conservar su historial, usa «Cancelar promoción».</p>${reason}
       <div class="btn-row"><button type="button" class="btn btn--danger" data-action="rm-confirm">Eliminar promoción</button><button type="button" class="btn btn--ghost" data-action="rm-cancel">Cancelar</button></div></div></section>`;
   }
 

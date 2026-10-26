@@ -30,7 +30,7 @@
       <td><span class="num">${esc(p.promoId)}</span></td><td>${esc(p.name)}${p.proposalName ? `<span class="cell-sub">Propuesta: ${esc(p.proposalName)}</span>` : ''}</td>
       <td>${pill(PILL[p.status] || 'na', P().STATUS[p.status])}</td><td>${esc(dateTxt(p.plannedStart))} a ${esc(dateTxt(p.plannedEnd))}</td>
       <td class="num">${p.skus.length}</td><td>${esc(p.createdBy)}</td>
-      <td><button type="button" class="btn btn--small" data-action="pm-open" data-id="${esc(p.promoId)}">Abrir</button></td></tr>`).join('');
+      <td><button type="button" class="btn btn--small" data-action="pm-open" data-id="${esc(p.promoId)}">Abrir</button> <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-promo-ask" data-id="${esc(p.promoId)}">Eliminar…</button></td></tr>`).join('');
     return `<div class="table-wrap"><table class="table ds-table"><thead><tr><th>Identificador</th><th>Promoción</th><th>Estado</th><th>Vigencia planeada</th><th>SKU</th><th>Creada por</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
@@ -111,10 +111,8 @@
     const stateBtns = nexts.map((to) => `<button type="button" class="btn${BACK[to] || (p.status === 'approved' && to === 'proposed') ? ' btn--ghost' : ' btn--primary'}" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="${to}">${esc(NEXT_LABEL[to])}</button>`).join('');
     const approveField = p.status === 'proposed' ? field('pm-st-approver', 'Quién aprueba', input('pm-st-approver', ''), 'Debe ser una persona distinta de quien creó la promoción.') : '';
     const closeFields = p.status === 'measuring' ? `${field('pm-st-concl', 'Conclusión', `<textarea id="pm-st-concl" rows="3"></textarea>`, 'Obligatoria para cerrar.')}${field('pm-st-rec', 'Recomendación', `<select id="pm-st-rec"><option value="">Elige…</option>${opt(Pm.RECOMMENDATIONS, '')}</select>`)}` : '';
-    const canDel = FP.removal && FP.removal.promoPlan(p);
-    const delBtn = canDel && canDel.ok ? `<button type="button" class="btn btn--ghost btn--danger-text" data-action="rm-promo-ask" data-id="${esc(p.promoId)}">Eliminar…</button>` : '';
-    const delNote = canDel && !canDel.ok && FP.removal ? `<p class="field__hint">No se puede eliminar: ${esc(canDel.why)}</p>` : '';
-    const cancel = editable ? `${field('pm-st-cancel', 'Motivo para cancelar', input('pm-st-cancel', ''))}<div class="btn-row"><button type="button" class="btn btn--ghost btn--danger-text" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="cancelled">Cancelar promoción</button>${delBtn}</div>${delNote}` : `<div class="btn-row">${delBtn}</div>${delNote}`;
+    const delBtn = FP.removal ? `<button type="button" class="btn btn--ghost btn--danger-text" data-action="rm-promo-ask" data-id="${esc(p.promoId)}">Eliminar…</button>` : '';
+    const cancel = editable ? `${field('pm-st-cancel', 'Motivo para cancelar', input('pm-st-cancel', ''))}<div class="btn-row"><button type="button" class="btn btn--ghost btn--danger-text" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="cancelled">Cancelar promoción</button>${delBtn}</div><p class="field__hint">Cancelar conserva el historial; eliminar lo quita.</p>` : `<div class="btn-row">${delBtn}</div>`;
     const status = `<section class="panel" aria-labelledby="pm-t-st"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-st">Estado y aprobación</h2>
       <p class="panel__desc">Borrador → Propuesta → Aprobada → Publicada → En medición → Cerrada. Cada cambio guarda quién y cuándo, y no se puede borrar. «En medición» solo se alcanza cuando la vigencia ya terminó.</p></div></div>
       <div class="panel__body">${approveField}${closeFields}${stateBtns ? `<div class="btn-row">${stateBtns}</div>` : ''}${cancel}</div></section>`;

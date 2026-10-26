@@ -104,7 +104,13 @@ async def main():
         # una aprobada no
         await ev(q, "(i)=>{const p=FP.promotions.find(FP.app.state.pm.reg,i);p.plannedStart='2026-11-01';p.plannedEnd='2026-11-10';FP.promotions.addSku(FP.app.state.pm.reg,i,{sku:'ZZ1',name:'z',origin:'digital',reason:'r'},'Persona A');FP.promotions.setStatus(FP.app.state.pm.reg,i,'proposed',{by:'Persona A'});FP.promotions.setStatus(FP.app.state.pm.reg,i,'approved',{by:'Persona B',approvedBy:'Persona B'});FP.app.render()}", pid)
         await q.wait_for_timeout(300)
-        chk('D5 una aprobada no ofrece eliminar y explica por qué', not await ev(q, "!!document.querySelector('[data-action=\"rm-promo-ask\"]')") and 'No se puede eliminar' in await txt(q, '#pm-body'))
+        chk('D5 una aprobada también ofrece eliminar', await ev(q, "!!document.querySelector('[data-action=\"rm-promo-ask\"]')"))
+        await q.click('[data-action="rm-promo-ask"]'); await q.wait_for_timeout(300)
+        chk('D5b aviso reforzado y casilla de confirmación', await ev(q, "!!document.getElementById('rm-ack')") and 'ya avanzó' in await txt(q, '#rm-confirm'))
+        await q.fill('#rm-reason', 'Ya no va'); await q.click('[data-action="rm-confirm"]'); await q.wait_for_timeout(300)
+        chk('D5c sin marcar la casilla no se elimina', await ev(q, "(i)=>!!FP.promotions.find(FP.app.state.pm.reg,i)", pid))
+        await q.check('#rm-ack'); await q.click('[data-action="rm-confirm"]'); await q.wait_for_timeout(300)
+        chk('D5d con la casilla se elimina', await ev(q, "(i)=>!FP.promotions.find(FP.app.state.pm.reg,i)", pid))
         # 7. Registro visible
         await ev(q, "FP.app.state.pm.tab='resultados'; FP.app.render()"); await q.wait_for_timeout(600)
         chk('G1 el registro de eliminaciones se ve en Resultados e historial', 'Registro de eliminaciones' in await txt(q, '#pm-body'))

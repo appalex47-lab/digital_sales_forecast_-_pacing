@@ -30,17 +30,19 @@ R.restoreOffers(reg, r.snapshot);
 ok('F2 deshacer restaura ofertas y lote en su lugar', reg.offers.some((o) => o.sku === 'S5') && reg.batches.some((b) => b.batchId === bB) && reg.batches.length === nb);
 ok('F3 los identificadores de oferta no se reutilizan', (() => { man('S9'); const ids = reg.offers.map((o) => o.offerId); return new Set(ids).size === ids.length; })());
 
-// 3. Promociones
-ok('P1 borrador se puede eliminar', R.promoPlan(P.find(pr, pid)).ok);
+// 3. Promociones: toda promoción se puede eliminar; las que ya avanzaron piden confirmación reforzada
+ok('P1 borrador se puede eliminar sin aviso reforzado', R.promoPlan(P.find(pr, pid)).ok && !R.promoPlan(P.find(pr, pid)).heavy);
 const p2 = P.createPromotion(pr, { name: 'Otra', createdBy: 'Persona A', plannedStart: '2026-11-01', plannedEnd: '2026-11-15' }).promotion; P.addSku(pr, p2.promoId, { sku: 'X1', name: 'x', origin: 'digital', reason: 'r' }, 'Persona A');
 P.setStatus(pr, p2.promoId, 'proposed', { by: 'Persona A' });
-ok('P2 propuesta sin aprobar se puede eliminar', R.promoPlan(P.find(pr, p2.promoId)).ok);
+ok('P2 propuesta sin aprobar: sin aviso reforzado', R.promoPlan(P.find(pr, p2.promoId)).ok && !R.promoPlan(P.find(pr, p2.promoId)).heavy);
 P.setStatus(pr, p2.promoId, 'approved', { by: 'Persona B', approvedBy: 'Persona B' });
-ok('P3 aprobada no se elimina (se cancela antes)', !R.promoPlan(P.find(pr, p2.promoId)).ok);
-P.setStatus(pr, p2.promoId, 'cancelled', { by: 'Persona B', note: 'ya no' });
-ok('P4 cancelada que estuvo aprobada tampoco', !R.promoPlan(P.find(pr, p2.promoId)).ok, P.find(pr, p2.promoId).status);
+const pl3 = R.promoPlan(P.find(pr, p2.promoId));
+ok('P3 aprobada: se puede eliminar, con aviso reforzado y su impacto', pl3.ok && pl3.heavy && pl3.impact.length >= 1, pl3);
+ok('P4 sin confirmar el aviso reforzado no se elimina', !R.removePromotion(pr, reg, p2.promoId, { by: 'P', reason: 'x' }).ok && !!P.find(pr, p2.promoId));
+const rp2 = R.removePromotion(pr, reg, p2.promoId, { by: 'Persona A', reason: 'Ya no va', ack: true });
+ok('P5 confirmada, se elimina y se puede restaurar con su historial', rp2.ok && !P.find(pr, p2.promoId) && R.restorePromotion(pr, rp2.snapshot) && P.find(pr, p2.promoId).history.length > 2);
 const p3 = P.createPromotion(pr, { name: 'Prueba', createdBy: 'Persona A' }).promotion; P.setStatus(pr, p3.promoId, 'cancelled', { by: 'Persona A', note: 'error' });
-ok('P5 cancelada que nunca avanzó sí', R.promoPlan(P.find(pr, p3.promoId)).ok);
+ok('P5b cancelada que nunca avanzó: sin aviso reforzado', R.promoPlan(P.find(pr, p3.promoId)).ok && !R.promoPlan(P.find(pr, p3.promoId)).heavy);
 ok('P6 hace falta nombre y motivo', !R.removePromotion(pr, reg, pid, { by: '', reason: 'x' }).ok && !R.removePromotion(pr, reg, pid, { by: 'P', reason: '' }).ok);
 const rp = R.removePromotion(pr, reg, pid, { by: 'Persona A', reason: 'Creada por error' });
 ok('P7 elimina la promoción y libera sus ofertas', rp.ok && !P.find(pr, pid) && rp.released.length === 1 && !G.addedToPromo(reg.offers.find((o) => o.sku === 'S2')));
@@ -48,6 +50,8 @@ const again = P.createPromotion(pr, { name: 'Dermo noviembre', createdBy: 'Perso
 ok('P8 el identificador eliminado no se reutiliza', again !== pid && Number(/PRM-\d{4}-(\d{4})/.exec(again)[1]) > Number(/PRM-\d{4}-(\d{4})/.exec(pid)[1]), [pid, again]);
 ok('P9 deshacer restaura la promoción y su identificador', R.restorePromotion(pr, rp.snapshot) && !!P.find(pr, pid) && !pr.retired.includes(pid));
 ok('P10 el registro hidrata sin perder los identificadores retirados', P.hydrate(JSON.parse(JSON.stringify({ ...pr, retired: ['PRM-2026-0099-X'] }))).retired.includes('PRM-2026-0099-X'));
+const pe = P.createPromotion(pr, { name: 'Con corte', createdBy: 'Persona A' }).promotion; pe.evaluations = [{ at: '2026-10-01' }];
+ok('P11 con cortes de evaluación también es reforzado', R.promoPlan(pe).heavy && R.promoPlan(pe).impact.some((t) => /corte/.test(t)));
 
 // 4. Registro de eliminaciones
 const log = R.emptyLog(); R.addLog(log, { kind: 'offers', what: 'Archivo demo.xlsx', n: 9, by: 'Persona A', reason: 'Archivo cargado por error' });
