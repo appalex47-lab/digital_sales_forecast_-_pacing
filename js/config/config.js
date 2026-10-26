@@ -260,7 +260,9 @@
         // Fase 3.3 (calibración de la confianza del forecast: umbrales en uso, historial y el interruptor de recalibrar sola)
         confidenceCalibration: 'confidenceCalibration',
         // Calibración de la proyección del año siguiente (ventana de ritmo, reparto sugerido, forma de los meses; historial y interruptor)
-        projectionCalibration: 'projectionCalibration'
+        projectionCalibration: 'projectionCalibration',
+        // Registro de eliminaciones de ofertas y promociones (una línea por eliminación; sin precios ni descuentos)
+        removalLog: 'removalLog'
       }
     },
 

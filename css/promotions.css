@@ -103,3 +103,22 @@ button.metric-card:focus-visible { outline: 2px solid var(--ds-accent); outline-
   .gd-sum__grid, .gd-acts { grid-template-columns: 1fr; }
   .gd-mx { grid-template-columns: 78px repeat(3, minmax(0, 1fr)); gap: 4px; } .gd-mx__h { font-size: 10px; }
 }
+
+/* —— Filtros plegados, conteo de acciones y eliminar —— */
+.btn--danger { background: var(--ds-danger); border-color: var(--ds-danger); color: #fff; }
+.btn--danger:hover { filter: brightness(.92); }
+.btn--primary-soft { background: var(--ds-accent-soft); border-color: var(--ds-accent); color: var(--ds-accent); font-weight: 600; }
+.gd-foldrow { margin: 0 0 var(--ds-s3); }
+.gd-fold { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: var(--ds-s3); min-height: 48px; padding: 0 var(--ds-s4); border-radius: var(--ds-r-md); border: 1px solid var(--ds-border); background: var(--ds-surface); font: inherit; font-weight: 600; color: var(--ds-text); text-align: left; cursor: pointer; }
+.gd-fold:hover { background: var(--ds-bg); }
+.gd-ftop { margin-bottom: var(--ds-s2); }
+.gd-search { flex: 1 1 260px; display: flex; } .gd-search input { flex: 1; min-height: 44px; }
+.gd-chiprow { margin: var(--ds-s2) 0; gap: var(--ds-s2); flex-wrap: wrap; }
+.gd-fchip { background: var(--ds-accent-soft); color: var(--ds-accent); border: 0; border-radius: var(--ds-r-pill); padding: 6px 12px; min-height: 36px; font: inherit; font-size: var(--ds-fs-helper); font-weight: 600; cursor: pointer; }
+.gd-cols { gap: var(--ds-s4); flex-wrap: wrap; margin: var(--ds-s2) 0; }
+.gd-colchk { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ds-fs-helper); min-height: 36px; }
+.gd-bar-m { display: block; height: 10px; min-width: 90px; background: var(--ds-border); border-radius: 5px; }
+.gd-bar-m > span { display: block; height: 10px; border-radius: 5px; background: var(--ds-accent); }
+.gd-toast--page { margin: 0 0 var(--ds-s4); }
+.gd-rm { border-top: 5px solid var(--ds-danger); margin-bottom: var(--ds-s4); }
+.gd-act tfoot th { text-align: left; font-weight: 700; }

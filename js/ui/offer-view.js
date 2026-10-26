@@ -55,46 +55,75 @@
       <div class="btn-row"><button type="button" class="btn btn--primary" data-action="of-commit"${b.offers && b.offers.length ? '' : ' disabled'}>Guardar ${b.offers ? b.offers.length : 0} ofertas</button><button type="button" class="btn btn--ghost" data-action="of-cancel">Cancelar</button></div></div></section>`;
   }
 
+  function foldBtn(of, key, label, extra) {
+    const open = !!(of.fold && of.fold[key]); const esc = H().esc;
+    return `<button type="button" class="gd-fold" data-action="of-fold" data-fold="${key}" aria-expanded="${open}"><span>${label}${extra ? ` <span class="cell-sub">${esc(extra)}</span>` : ''}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button>`;
+  }
   function batchesHtml(reg, of) {
     const esc = H().esc; if (!reg.batches.length) return '';
+    const open = !!(of.fold && of.fold.batches);
+    const head = foldBtn(of, 'batches', `Archivos recibidos (${reg.batches.length})`, `${reg.offers.length} ofertas`);
+    if (!open) return `<div class="gd-foldrow">${head}</div>`;
     const rows = reg.batches.slice().reverse().map((b) => `<tr${of.f.batchId === b.batchId ? ' aria-selected="true"' : ''}><td><span class="num">${esc(b.batchId)}</span></td><td>${esc(b.campaign || '—')}<span class="cell-sub">${esc(b.fileName)}${b.sheet ? ` · ${esc(b.sheet)}` : ''}</span></td>
       <td>${esc(O().ORIGINS[b.origin] || b.origin)}</td><td>${esc(b.start || '—')} a ${esc(b.end || '—')}</td><td class="num">${b.imported}${b.rejected.length ? ` <span class="cell-sub">${b.rejected.length} omitidas</span>` : ''}</td><td>${esc(b.receivedBy)}<span class="cell-sub">${esc(when(b.receivedAt))}</span></td>
-      <td><button type="button" class="btn btn--small" data-action="of-batch" data-id="${esc(b.batchId)}">${of.f.batchId === b.batchId ? 'Quitar filtro' : 'Ver sus ofertas'}</button></td></tr>`).join('');
-    return `<section class="panel" aria-labelledby="of-t-b"><div class="panel__head"><div><h2 class="panel__title" id="of-t-b">Archivos recibidos (${reg.batches.length})</h2></div></div>
+      <td><button type="button" class="btn btn--small" data-action="of-batch" data-id="${esc(b.batchId)}">${of.f.batchId === b.batchId ? 'Quitar filtro' : 'Ver sus ofertas'}</button> <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="batch" data-id="${esc(b.batchId)}">Eliminar archivo</button></td></tr>`).join('');
+    return `<div class="gd-foldrow">${head}</div><section class="panel" aria-labelledby="of-t-b"><div class="panel__head"><div><h2 class="panel__title" id="of-t-b">Archivos recibidos (${reg.batches.length})</h2></div></div>
       <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Lote</th><th>Campaña / archivo</th><th>Origen</th><th>Vigencia</th><th>Ofertas</th><th>Recibió</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
   }
 
+  const ISS = [['', 'Con o sin alertas'], ['error', 'Con error'], ['warn', 'Con error o aviso'], ['clean', 'Sin alertas'], ['dup_other', 'Duplicadas con otra oferta'], ['dup_batch', 'Repetidas en su archivo'], ['supply', 'Problema de abastecimiento'], ['no_dates', 'Sin vigencia']];
+  const COLS = [['mech', 'Mecánica'], ['price', 'Precio PMP → final'], ['vig', 'Vigencia'], ['act', 'Activación sugerida']];
+  /** Chips de los filtros puestos (sin la búsqueda de texto, que ya se ve en su caja). */
+  function activeFilters(of) {
+    const f = of.f, L = [];
+    if (f.batchId) L.push(['batchId', `Archivo: ${f.batchId}`]);
+    if (f.state) L.push(['state', `Estado: ${O().STATE[f.state] || f.state}`]);
+    if (f.lab) L.push(['lab', `Laboratorio: ${f.lab}`]);
+    if (f.category) L.push(['category', `Categoría: ${f.category}`]);
+    if (f.issue) L.push(['issue', `Alertas: ${(ISS.find((x) => x[0] === f.issue) || [0, f.issue])[1]}`]);
+    if (f.action) L.push(['action', `Acción: ${f.action}`]);
+    return L;
+  }
   function filtersHtml(reg, of) {
-    const f = of.f, esc = H().esc;
+    const f = of.f, esc = H().esc, fold = of.fold || {}, act = activeFilters(of), cols = of.cols || {};
     const lab = [['', 'Todos los laboratorios'], ...O().distinct(reg, 'lab', f.batchId).map((x) => [x, x])];
     const cat = [['', 'Todas las categorías'], ...O().distinct(reg, 'category', f.batchId).map((x) => [x, x])];
     const st = [['', 'Todos los estados'], ...Object.entries(O().STATE)];
-    const iss = [['', 'Con o sin alertas'], ['error', 'Con error'], ['warn', 'Con error o aviso'], ['clean', 'Sin alertas'], ['dup_other', 'Duplicadas con otra oferta'], ['dup_batch', 'Repetidas en su archivo'], ['supply', 'Problema de abastecimiento'], ['no_dates', 'Sin vigencia']];
-    return `<div class="field-grid">
-      ${field('of-f-q', 'Buscar', input('of-f-q', f.q || '', 'search', 'data-action="of-filter" placeholder="SKU, producto, laboratorio…"'))}
+    const top = `<div class="btn-row gd-ftop"><label class="gd-search"><span class="visually-hidden">Buscar</span>${input('of-f-q', f.q || '', 'search', 'data-action="of-filter" placeholder="Buscar SKU, producto, laboratorio…"')}</label>
+      <button type="button" class="btn${act.length ? ' btn--primary-soft' : ''}" data-action="of-fold" data-fold="filters" aria-expanded="${!!fold.filters}">Filtros${act.length ? ` · ${act.length} ${act.length === 1 ? 'activo' : 'activos'}` : ''} ${fold.filters ? '▴' : '▾'}</button>
+      <button type="button" class="btn" data-action="of-fold" data-fold="cols" aria-expanded="${!!fold.cols}">Columnas ${fold.cols ? '▴' : '▾'}</button></div>`;
+    const chips = act.length ? `<div class="btn-row gd-chiprow"><span class="field__hint">Filtros puestos:</span>${act.map(([k, t]) => `<button type="button" class="gd-fchip" data-action="of-clear" data-key="${k}" aria-label="Quitar filtro ${esc(t)}">${esc(t)} ×</button>`).join('')}<button type="button" class="btn btn--small btn--ghost" data-action="of-clear" data-key="all">Quitar todos</button></div>` : '';
+    const grid = fold.filters ? `<div class="field-grid">
       ${field('of-f-state', 'Estado', selectHtml('of-f-state', st, f.state || '', 'data-action="of-filter"'))}
       ${field('of-f-lab', 'Laboratorio', selectHtml('of-f-lab', lab, f.lab || '', 'data-action="of-filter"'))}
       ${field('of-f-cat', 'Categoría', selectHtml('of-f-cat', cat, f.category || '', 'data-action="of-filter"'))}
-      ${field('of-f-issue', 'Alertas', selectHtml('of-f-issue', iss, f.issue || '', 'data-action="of-filter"'))}
-    </div>${f.batchId ? `<p class="field__hint">Mostrando solo el lote ${esc(f.batchId)}.</p>` : ''}`;
+      ${field('of-f-issue', 'Alertas', selectHtml('of-f-issue', ISS, f.issue || '', 'data-action="of-filter"'))}</div>` : '';
+    const colBox = fold.cols ? `<div class="btn-row gd-cols"><span class="field__hint">Mostrar columnas:</span>${COLS.map(([k, l]) => `<label class="gd-colchk"><input type="checkbox" data-action="of-col" data-col="${k}"${cols[k] ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</div>` : '';
+    return `${top}${chips}${grid}${colBox}`;
   }
 
+  /** Ofertas que pasan los filtros (incluida la acción sugerida elegida en el conteo). La usan la tabla y «Marcar las visibles». */
+  function visible(state) {
+    const of = state.of, reg = of.reg, an = O().analyze(reg); let list = O().filter(reg, an, of.f);
+    if (of.f.action && FP.activationView) { const map = FP.activationView.recs(state); list = list.filter((o) => { const r = map.get(`offer:${o.offerId}`); return !!r && r.main === of.f.action; }); }
+    return list;
+  }
   function tableHtml(reg, of, an, state, map) {
-    const esc = H().esc, pill = H().pill, AV = FP.activationView;
-    const list = O().filter(reg, an, of.f); const shown = list.slice(0, of.limit || PAGE);
+    const esc = H().esc, pill = H().pill, AV = FP.activationView, C = of.cols || {};
+    const list = visible(state); const shown = list.slice(0, of.limit || PAGE);
     if (!reg.offers.length) return '<div class="empty"><strong>Todavía no hay ofertas recibidas</strong>Carga el archivo que te manda el proveedor o comercial con «Cargar archivo de ofertas». Cada oferta queda como «Recibida», con su origen y fecha.</div>';
     if (!list.length) return '<div class="empty"><strong>Ninguna oferta coincide con los filtros</strong>Quita algún filtro para verlas.</div>';
     const rows = shown.map((o) => {
       const codes = an.get(o.offerId) || [], lv = O().levelOf(codes), n = codes.filter((c) => O().ISSUE[c].level !== 'info').length;
       return `<tr${o.offerId === of.sel ? ' aria-selected="true"' : ''}><td><input type="checkbox" data-action="of-chk" data-id="${esc(o.offerId)}" aria-label="Marcar ${esc(o.offerId)}"${of.checked[o.offerId] ? ' checked' : ''}></td>
-        <td><span class="num">${esc(o.offerId)}</span></td><td class="num">${esc(o.sku)}</td><td>${esc(o.name || '—')}<span class="cell-sub">${esc([o.lab, o.category].filter(Boolean).join(' · '))}</span></td>
-        <td>${esc(o.mechanic || o.program || (o.offerCode ? `Oferta ${o.offerCode}` : '—'))}</td><td class="num">${pct(o.discount)}${o.discountSource && o.discountSource !== 'file' ? ` <span class="cell-sub">${o.discountSource === 'calculated' ? 'calculado' : 'ajustado'}</span>` : ''}</td>
-        <td class="num">${money(o.pmp)} → ${money(o.finalPrice)}</td><td>${esc(o.start || '—')} a ${esc(o.end || '—')}</td>
+        <td><span class="num">${esc(o.offerId)}</span></td><td class="num">${esc(o.sku)}</td><td>${esc(o.name || '—')}<span class="cell-sub">${esc([o.lab, o.category].filter(Boolean).join(' · '))}</span>${!C.mech && FP.activation && FP.activation.mechanicKind(o.mechanic) === 'tiered' ? '<span class="cell-sub">Mecánica escalonada o larga: ver al abrir</span>' : ''}</td>
+        ${C.mech ? `<td>${esc(o.mechanic || o.program || (o.offerCode ? `Oferta ${o.offerCode}` : '—'))}</td>` : ''}<td class="num">${pct(o.discount)}${o.discountSource && o.discountSource !== 'file' ? ` <span class="cell-sub">${o.discountSource === 'calculated' ? 'calculado' : 'ajustado'}</span>` : ''}</td>
+        ${C.price ? `<td class="num">${money(o.pmp)} → ${money(o.finalPrice)}</td>` : ''}${C.vig ? `<td>${esc(o.start || '—')} a ${esc(o.end || '—')}</td>` : ''}
         <td title="${esc(issueText(codes))}">${n ? pill(LEVEL_PILL[lv], `${n} ${n === 1 ? 'alerta' : 'alertas'}`) : pill('ok', 'Sin alertas')}</td>
-        <td>${pill(STATE_PILL[o.state], O().STATE[o.state])}</td>${AV ? AV.cells(state, map.get(`offer:${o.offerId}`)) : ''}<td><button type="button" class="btn btn--small" data-action="of-open" data-id="${esc(o.offerId)}">Abrir</button>${AV ? ` <button type="button" class="btn btn--small btn--ghost" data-action="ac-open" data-key="offer:${esc(o.offerId)}">Ver razón</button>` : ''}</td></tr>`;
+        <td>${pill(STATE_PILL[o.state], O().STATE[o.state])}</td>${AV && C.act ? AV.cells(state, map.get(`offer:${o.offerId}`)) : ''}<td><button type="button" class="btn btn--small" data-action="of-open" data-id="${esc(o.offerId)}">Abrir</button>${AV ? ` <button type="button" class="btn btn--small btn--ghost" data-action="ac-open" data-key="offer:${esc(o.offerId)}">Ver razón</button>` : ''}</td></tr>`;
     }).join('');
     const more = list.length > shown.length ? `<div class="btn-row"><button type="button" class="btn" data-action="of-more">Mostrar ${Math.min(PAGE, list.length - shown.length)} más (${list.length - shown.length} restantes)</button></div>` : '';
-    return `<div class="table-wrap"><table class="table ds-table pm-wide"><thead><tr><th></th><th>ID</th><th>SKU</th><th>Producto</th><th>Mecánica</th><th>% desc.</th><th>PMP → final</th><th>Vigencia</th><th>Alertas</th><th>Estado de la oferta</th>${AV ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
+    return `<div class="table-wrap"><table class="table ds-table pm-wide"><thead><tr><th></th><th>ID</th><th>SKU</th><th>Producto</th>${C.mech ? '<th>Mecánica</th>' : ''}<th>% desc.</th>${C.price ? '<th>PMP → final</th>' : ''}${C.vig ? '<th>Vigencia</th>' : ''}<th>Alertas</th><th>Estado de la oferta</th>${AV && C.act ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
       <p class="field__hint">${list.length} ofertas con estos filtros.</p>`;
   }
 
@@ -105,7 +134,8 @@
     return `<div class="btn-row"><span class="field__hint">Marcadas: <strong>${ids.length}</strong></span>
       <button type="button" class="btn btn--small" data-action="of-check-all">Marcar las visibles</button><button type="button" class="btn btn--small btn--ghost" data-action="of-check-none">Quitar marcas</button>
       <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="validated"${ids.length ? '' : ' disabled'}>Validar marcadas</button>
-      <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="selected"${ids.length ? '' : ' disabled'}>Seleccionar marcadas</button></div>
+      <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="selected"${ids.length ? '' : ' disabled'}>Seleccionar marcadas</button>
+      <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="marked"${ids.length ? '' : ' disabled'}>Eliminar marcadas</button></div>
       <div class="btn-row">${promos.length ? `${selectedCount ? '' : ''}<select id="of-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
       <button type="button" class="btn btn--small" data-action="of-to-promo"${selectedCount ? '' : ' disabled'}>Agregar las ${selectedCount} seleccionadas a la promoción</button>` : '<span class="field__hint">Para pasar las seleccionadas a una promoción, crea una en la pestaña Promociones (en borrador o propuesta).</span>'}</div>`;
   }
@@ -122,13 +152,14 @@
     const ed = (k, label, v, type, hint) => `<div class="field">${`<label for="of-e-${k}" class="field__label">${esc(label)}</label>`}<div class="btn-row"><input id="of-e-${k}" type="${type}" value="${esc(v === null || v === undefined ? '' : v)}"${editable ? '' : ' disabled'}><button type="button" class="btn btn--small" data-action="of-edit" data-field="${k}" data-id="${esc(o.offerId)}"${editable ? '' : ' disabled'}>Guardar</button></div>${hint ? `<span class="field__hint">${esc(hint)}</span>` : ''}</div>`;
     const nexts = O().NEXT[o.state].map((to) => `<button type="button" class="btn${to === 'discarded' ? ' btn--ghost' : ' btn--primary'}" data-action="of-state" data-to="${to}" data-id="${esc(o.offerId)}">${to === 'discarded' ? 'Descartar' : to === 'received' ? (o.state === 'discarded' ? 'Reabrir' : 'Volver a recibida') : to === 'validated' ? (o.state === 'selected' ? 'Volver a validada' : 'Validar') : 'Seleccionar'}</button>`).join('');
     const hist = o.history.slice().reverse().map((h) => `<li><span class="num">${esc(when(h.at))}</span> · ${esc(histText(h))}${h.by ? ` <span class="cell-sub">${esc(h.by)}</span>` : ''}</li>`).join('');
+    const delBtn = `<button type="button" class="btn btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="one" data-id="${esc(o.offerId)}">Eliminar…</button>`;
     return `<section class="panel" aria-labelledby="of-t-det"><div class="panel__head"><div><h2 class="panel__title" id="of-t-det">${esc(o.offerId)} · ${esc(o.name || o.sku)} ${pill(STATE_PILL[o.state], O().STATE[o.state])}</h2>
       <p class="panel__desc">${pct(o.discount)} de descuento · ${esc(o.start || '—')} a ${esc(o.end || '—')} · ${esc(o.mechanic || 'sin mecánica')}</p></div><button type="button" class="btn btn--small" data-action="of-close">Cerrar</button></div>
       <div class="panel__body"><h3>Alertas</h3>${issues}<h3>Datos de la oferta</h3><dl class="facts">${facts}</dl>
         <h3>Ajustes ${editable ? '' : '<span class="field__hint">(seleccionada: devuélvela a «Validada» para editar)</span>'}</h3>
         <p class="field__hint">Cada cambio guarda el valor anterior, quién y cuándo; nada se sobrescribe en silencio.</p>
         <div class="field-grid">${ed('start', 'Inicio', o.start, 'date')}${ed('end', 'Fin', o.end, 'date')}${ed('discount', '% de descuento', o.discount === null ? '' : +(o.discount * 100).toFixed(2), 'text', 'Escribe el porcentaje, ej. 25,5.')}${ed('mechanic', 'Mecánica', o.mechanic, 'text')}</div>
-        <h3>Estado</h3>${field('of-s-note', 'Nota o motivo', input('of-s-note', ''), 'Obligatorio para descartar.')}<div class="btn-row">${nexts}</div>
+        <h3>Estado</h3>${field('of-s-note', 'Nota o motivo', input('of-s-note', ''), 'Obligatorio para descartar.')}<div class="btn-row">${nexts}${delBtn}</div>
         ${field('of-n-text', 'Agregar nota al historial', input('of-n-text', ''))}<div class="btn-row"><button type="button" class="btn btn--small" data-action="of-note" data-id="${esc(o.offerId)}">Guardar nota</button></div>
         <h3>Historial</h3><ul class="plain-list">${hist}</ul></div></section>`;
   }
@@ -169,6 +200,7 @@
       <div class="btn-row"><label class="btn btn--primary" for="of-file">Cargar archivo de ofertas</label><button type="button" class="btn" data-action="of-manual-open">Capturar una oferta</button><button type="button" class="btn btn--ghost" data-action="of-template">Descargar plantilla</button><input id="of-file" type="file" accept=".xlsx,.csv" data-action="of-file" style="position:absolute;left:-9999px"></div></div>
       <div class="panel__body">${counters(reg, an)}</div></section>
       ${FP.guideView ? FP.guideView.offerSummary(state, an, map) : ''}
+      ${FP.guideView && reg.offers.length ? FP.guideView.actionsHtml(state, map, 'offer') : ''}
       ${manualHtml(of)}
       ${pendingHtml(of)}
       ${batchesHtml(reg, of)}
@@ -180,5 +212,5 @@
       ${sel ? detailHtml(reg, sel, an, state.pm.actor) : ''}`;
   }
 
-  FP.offerView = { html, val };
+  FP.offerView = { html, val, visible };
 })(typeof window !== 'undefined' ? window : globalThis);

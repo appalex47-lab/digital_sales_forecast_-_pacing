@@ -107,6 +107,7 @@ async def main():
         await q.reload(); await q.wait_for_timeout(1500)
         await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove()); location.hash='#promociones'"); await q.wait_for_timeout(700)
         await click(q, '[data-action="pm-tab"][data-tab="ofertas"]')
+        await click(q, '[data-fold="batches"]')   # «Archivos recibidos» viene plegado
         t = await body(q)
         chk('R1 tras recargar siguen las ofertas', 'Ofertas (5)' in t and 'LOT-001' in t, t[:300])
         st = await q.evaluate("JSON.stringify(FP.offers && 1)")
@@ -118,6 +119,7 @@ async def main():
         await q.fill('#of-p-end', '2026-06-02'); await q.dispatch_event('#of-p-end', 'change'); await q.wait_for_timeout(250)
         await click(q, '[data-action="of-commit"]')
         t = await body(q); chk('U1 segunda carga queda en LOT-002', 'LOT-002' in t, t[:200])
+        await click(q, '[data-fold="filters"]')   # los filtros vienen plegados
         await q.select_option('#of-f-issue', 'dup_other'); await q.dispatch_event('#of-f-issue', 'change'); await q.wait_for_timeout(300)
         n = await q.evaluate("document.querySelectorAll('#pm-body tbody tr [data-action=\"of-open\"]').length")
         tot = await q.evaluate("(() => { const an = FP.offers.analyze(FP.app.state.of.reg); return FP.app.state.of.reg.offers.filter(o => an.get(o.offerId).includes('dup_other')).length })()")

@@ -20,7 +20,11 @@
 
   const O = () => FP.offers;
   const alerts = (codes) => (codes || []).filter((c) => O().ISSUE[c] && O().ISSUE[c].level !== 'info');
-  const addedToPromo = (o) => (o.history || []).some((h) => h.field === 'note' && /^Agregada a la promoción/.test(String(h.to || '')));
+  const addedToPromo = (o) => {   // la última nota manda: «Agregada…» la marca, «Quitada…» la libera
+    let v = false;
+    (o.history || []).forEach((h) => { if (h.field !== 'note') return; const t = String(h.to || ''); if (/^Agregada a la promoción/.test(t)) v = true; else if (/^Quitada de la promoción/.test(t)) v = false; });
+    return v;
+  };
   const dayDiff = (iso, today) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY);
 
   /** Grupos de «Por revisar»: cada oferta cae en el primer motivo que le aplica, del más grave al menos grave. */
@@ -153,5 +157,51 @@
     return { name: camps.length === 1 ? camps[0] : `Promoción del ${today}`, campaign: camps.length === 1 ? camps[0] : '', plannedStart: starts[0] || '', plannedEnd: ends[ends.length - 1] || '' };
   }
 
-  FP.guide = { LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers };
+
+  /**
+   * Conteo de acciones sugeridas: cuántos SKU hay en cada una (SKU distintos; si un SKU está en dos ofertas cuenta una vez).
+   * recs = Map de FP.activation.recommendAll; tab = 'offer' | 'potential'; stateOf(key) → estado de seguimiento de la sugerencia.
+   */
+  const SPACE_ORDER = ['banner', 'paid', 'crm', 'crmRepeat', 'home', 'search', 'ficha', 'category', 'social', 'review', 'none', 'soldout'];
+  function actionCounts(recs, tab, stateOf) {
+    const A = FP.activation, labelOrder = SPACE_ORDER.map((k) => A.SPACE[k]);
+    const by = new Map();
+    [...recs.values()].filter((r) => r.tab === tab).forEach((r) => {
+      if (!by.has(r.main)) by.set(r.main, { label: r.main, skus: new Set(), a: new Set(), m: new Set(), b: new Set(), approved: new Set(), blocked: !!r.blocked });
+      const x = by.get(r.main);
+      if (x.skus.has(r.sku)) return;
+      x.skus.add(r.sku);
+      if (r.priority === 'Alta') x.a.add(r.sku); else if (r.priority === 'Media') x.m.add(r.sku); else if (r.priority === 'Baja') x.b.add(r.sku);
+      const st = stateOf ? stateOf(r.key) : 'suggested';
+      if (st === 'approved' || st === 'executed') x.approved.add(r.sku);
+    });
+    const rows = [...by.values()].map((x) => ({ label: x.label, n: x.skus.size, a: x.a.size, m: x.m.size, b: x.b.size, approved: x.approved.size, blocked: x.blocked }))
+      .sort((p, q) => { const ip = labelOrder.indexOf(p.label), iq = labelOrder.indexOf(q.label); return (ip < 0 ? 99 : ip) - (iq < 0 ? 99 : iq); });
+    const skus = new Set(); [...recs.values()].filter((r) => r.tab === tab).forEach((r) => skus.add(r.sku));
+    return { rows, total: skus.size, max: rows.reduce((m, r) => Math.max(m, r.n), 0) };
+  }
+
+  /** Qué dato falta para decidir mejor, contado por SKU distinto (sale de las razones escritas de cada sugerencia). */
+  function missingCounts(recs, tab, limit) {
+    const by = new Map();
+    [...recs.values()].filter((r) => r.tab === tab && !r.blocked).forEach((r) => (r.missing || []).forEach((t) => { if (!by.has(t)) by.set(t, new Set()); by.get(t).add(r.sku); }));
+    return [...by.entries()].map(([t, set]) => ({ text: t, n: set.size })).sort((p, q) => q.n - p.n || (p.text < q.text ? -1 : 1)).slice(0, limit || 5);
+  }
+
+  /** Contra el archivo de sugerencias que compartió otra área: coinciden, difieren y sin sugerencia cargada (por SKU). */
+  function compareExternal(recs, tab, external) {
+    const out = { match: 0, differ: 0, none: 0, unknown: 0, loaded: !!(external && external.rows) };
+    if (!out.loaded) return out;
+    const seen = new Set();
+    [...recs.values()].filter((r) => r.tab === tab && !r.blocked).forEach((r) => {
+      if (seen.has(r.sku)) return; seen.add(r.sku);
+      const e = external.rows[r.sku];
+      if (!e) { out.none += 1; return; }
+      const c = FP.activation.compare(r, e.space);
+      if (c === 'match' || c === 'second') out.match += 1; else if (c === 'differ') out.differ += 1; else out.unknown += 1;
+    });
+    return out;
+  }
+
+  FP.guide = { actionCounts, missingCounts, compareExternal, LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers };
 })(typeof window !== 'undefined' ? window : globalThis);

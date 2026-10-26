@@ -32,11 +32,11 @@
   const ok = (extra) => Object.assign({ ok: true }, extra || {});
   const fail = (error) => ({ ok: false, error });
 
-  function createRegistry() { return { version: 1, promotions: [] }; }
+  function createRegistry() { return { version: 1, promotions: [], retired: [] }; }
 
   function hydrate(raw) {
     if (!raw || !Array.isArray(raw.promotions)) return createRegistry();
-    return { version: 1, promotions: raw.promotions.filter((p) => p && p.promoId).map((p) => Object.assign({ skus: [], activations: [], incidents: [], evaluations: [], history: [] }, p)) };
+    return { version: 1, retired: Array.isArray(raw.retired) ? raw.retired.filter((x) => typeof x === 'string') : [], promotions: raw.promotions.filter((p) => p && p.promoId).map((p) => Object.assign({ skus: [], activations: [], incidents: [], evaluations: [], history: [] }, p)) };
   }
 
   /** Parte legible del identificador: MAYÚSCULAS sin acentos, guiones, hasta 16 caracteres. */
@@ -48,8 +48,8 @@
   /** Siguiente consecutivo del año: máximo + 1 (tras cancelar no se repiten). */
   function nextId(reg, name, year) {
     const y = String(year || new Date().getFullYear());
-    const max = reg.promotions.reduce((m, p) => {
-      const mm = /^PRM-(\d{4})-(\d{4})/.exec(p.promoId); return mm && mm[1] === y ? Math.max(m, Number(mm[2])) : m;
+    const max = reg.promotions.map((p) => p.promoId).concat(reg.retired || []).reduce((m, id) => {   // los identificadores eliminados no se reutilizan
+      const mm = /^PRM-(\d{4})-(\d{4})/.exec(id); return mm && mm[1] === y ? Math.max(m, Number(mm[2])) : m;
     }, 0);
     return `PRM-${y}-${String(max + 1).padStart(4, '0')}-${slugOf(name)}`;
   }
