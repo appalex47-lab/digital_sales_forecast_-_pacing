@@ -18,7 +18,7 @@
   'use strict';
   const FP = (root.FP = root.FP || {});
 
-  const STATUS = { draft: 'Borrador', proposed: 'Propuesta', approved: 'Aprobada', published: 'Publicada', measuring: 'En medición', closed: 'Cerrada', cancelled: 'Cancelada' };
+  const STATUS = { draft: 'Borrador', proposed: 'Borrador · en aprobación', approved: 'Aprobada', published: 'En marcha · publicada', measuring: 'En marcha · en medición', closed: 'Cerrada', cancelled: 'Cancelada' };
   const NEXT = { draft: ['proposed'], proposed: ['approved', 'draft'], approved: ['published', 'proposed'], published: ['measuring'], measuring: ['closed'], closed: [], cancelled: [] };
   const OBJECTIVES = { sales: 'Venta', conversion: 'Conversión', traffic: 'Tráfico', recover: 'Recuperar venta', clearance: 'Liquidación', launch: 'Lanzamiento', other: 'Otro' };
   const ORIGINS = { digital: 'Oportunidad digital', offer: 'Oferta recibida', manual: 'Manual' };
