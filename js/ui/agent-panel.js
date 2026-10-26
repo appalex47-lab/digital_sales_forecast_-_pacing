@@ -259,16 +259,15 @@
     if (aiReady()) return '<div class="ag-note"><b style="color:#1E7A4C">● IA conectada</b></div>';
     return '<div class="ag-note" style="display:flex;align-items:center;justify-content:space-between;gap:10px;white-space:nowrap"><b style="color:#A05A0A">● IA no conectada</b><a class="ag-a" href="#ajustes" data-section="ia" data-ag="go">Ir a Configuración</a></div>';
   }
-  /** Preguntas sugeridas del Arquitecto: cinco en escritorio y tres (1, 3 y 4) en celular. Se ven siempre, no hay que desplegarlas. */
+  /** Preguntas sugeridas del Arquitecto: cinco en escritorio y tres (1, 3 y 4) en celular. Van ocultas tras «¿No sabes qué preguntar?», como en los otros asistentes. */
   const ARQ_QS = ['¿Qué campañas se pisan en fechas?', '¿Qué SKU de alta venta no tienen oferta?', '¿Cuál campaña va peor contra su meta?', '¿Qué ofertas vencen esta semana?', '¿Cómo cayó la conversión en los SKU en oferta?'];
   const arqQs = () => (isMobile() ? [ARQ_QS[0], ARQ_QS[2], ARQ_QS[3]] : ARQ_QS);
   const PLACEHOLDER = { arquitecto: 'Pregúntale al Arquitecto (p. ej. «¿qué campañas se pisan?»)…', analista: 'Pregúntale al Analista (p. ej. «¿por qué cae Insulinas?»)…', auditor: 'Pregúntale al Auditor (p. ej. «¿qué producto reviso primero?»)…' };
   function askBlock() {
     const agent = S.agent;
     if (!AGENT_IDS.includes(agent)) return '';
-    const run = S.runs[agent], qs = run && run.findings ? run.findings.map((f) => f.pregunta).filter(Boolean).slice(0, 4) : [];
-    const sug = agent === 'arquitecto' ? `<div class="ag-chips ag-chips--q" role="group" aria-label="Preguntas sugeridas">${arqQs().map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>`
-      : qs.length ? `<button type="button" class="ag-link" data-ag="sug" aria-expanded="${S.sugOpen}">¿No sabes qué preguntar?${CHEV}</button>${S.sugOpen ? `<div class="ag-chips">${qs.map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}` : '';
+    const run = S.runs[agent], qs = agent === 'arquitecto' ? arqQs() : (run && run.findings ? run.findings.map((f) => f.pregunta).filter(Boolean).slice(0, 4) : []);
+    const sug = qs.length ? `<button type="button" class="ag-link" data-ag="sug" aria-expanded="${S.sugOpen}">¿No sabes qué preguntar?${CHEV}</button>${S.sugOpen ? `<div class="ag-chips${agent === 'arquitecto' ? ' ag-chips--q' : ''}" role="group" aria-label="Preguntas sugeridas">${qs.map((q) => `<button type="button" class="ag-chip" data-ag="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : ''}` : '';
     const a = S.asks[agent]; let ans = '';
     if (a) {
       if (a.status === 'busy') ans = '<div class="ag-note" role="status">Consultando la evidencia calculada…</div>';
