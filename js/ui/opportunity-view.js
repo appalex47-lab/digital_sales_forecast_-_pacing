@@ -180,6 +180,7 @@
       <p class="panel__desc">Productos que, con los datos de tu propio canal, merecen una conversación con Comercial o Precios. No es un puntaje ni un pronóstico: cada fila dice por qué aparece, con qué evidencia y qué falta decidir. Un producto de mucha venta aparece como «sostener o proteger», no como candidato a descuento.</p></div></div>
       <div class="panel__body">${noData ? '<div class="empty"><strong>Todavía no hay datos de producto</strong>Carga la venta (y el funnel) por producto en «Carga de datos» para ver oportunidades.</div>' : controls(op)}
         ${op.msg ? `<div class="note note--${op.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(op.msg.text)}${(op.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : ''}</div></section>
+      ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) : ''}
       ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${viewSwitch(op)}${bulk(op, state)}${AV ? AV.toolbar(state, 'potential') : ''}</div>
         ${AV ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${op.view && op.view !== 'sku' ? groupsTable(op, state) : table(op, list, state, map)}</div></section>` : ''}

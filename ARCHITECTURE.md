@@ -2953,3 +2953,10 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 - **Sin calibrar o con parámetros iniciales la proyección es idéntica a la anterior** (prueba de equivalencia). Los casos de un canal se traslapan: 6 casos no son 6 observaciones independientes.
 - **Pruebas:** `tools/test-projection-calibration.js` (50: aritmética, sin fuga de futuro, ventana/reparto/forma, estado y deshacer, integración con `FP.projection.build`) y `tools/regression/batch_proyeccion_calibracion.py` (18 y 44 meses, botones, deshacer, interruptor, persistencia, reparto sugerido, exportación, celular).
 
+
+
+## Guía de promociones y resumen de un clic (2026-10-26)
+- `js/promotions/guideEngine.js` (`FP.guide`): funciones puras. `nextStep/allSteps` eligen el paso más adelantado con trabajo pendiente; `offerSummary` y `opportunitySummary` cuentan matriz prioridad × confianza, estados, alertas y grupos «Por revisar»; `selectPlan` decide qué validadas Alta/Alta se pueden seleccionar y explica las que no; `draftFromOffers` propone nombre y fechas sin inventar.
+- `js/ui/guide-view.js` (`FP.guideView`): barra, resumen de Ofertas recibidas, resumen de Oportunidades. Las acciones `gd-*` viven en `app.js` y usan `FP.offers.setState`, `FP.promotions.createPromotion/addSku/removeSku`; `state.gd = { stepsOpen, undo, confirm }`. El deshacer es de sesión y solo toca lo que sigue en el estado en que lo dejó la acción.
+- No hay alerta ni parámetro nuevo: «descuento alto» sigue siendo el parámetro `discountHigh` de la activación (25 % por defecto).
+- Pruebas: `tools/test-guide.js` (Node, corre en CI) y `tools/regression/batch_promos_guia.py <raíz>` (navegador, a mano).

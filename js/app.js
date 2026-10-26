@@ -31,6 +31,7 @@
     pm: { reg: null, sel: null, creating: false, actor: '', msg: null, tab: 'resumen' },
     cg: { reg: null, form: {}, msg: null, live: {}, data: null, loading: false },   // metas por campaña (Resumen)
     sm: { reg: null, group: 'cat', campaign: '', msg: null },   // pestaña «Resumen» + registro de propuestas exportadas
+    gd: { stepsOpen: false, undo: null, confirm: null },   // guía «Ahora haz esto» y acciones de un clic
     ac: { reg: null, sel: null, msg: null },   // «Activación sugerida» (columnas de Ofertas recibidas y Oportunidades)
     of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
     op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
@@ -4477,6 +4478,98 @@
     'of-note'(el) { const r = FP.offers.addNote(state.of.reg, el.dataset.id, ofV('of-n-text'), state.pm.actor); return ofMsg(r, 'Nota guardada en el historial.'); },
     'sm-group'(el) { state.sm.group = FP.summary.GROUPS[el.dataset.g] ? el.dataset.g : 'cat'; state.sm.msg = null; render(); },
     'sm-filter'() { state.sm.campaign = FP.summaryView.val('sm-camp'); state.sm.msg = null; render(); },
+    // —— Guía «Ahora haz esto» y resumen con acciones de un clic (solo usan las reglas de siempre; nada se activa en el sitio ni en la app) ——
+    'gd-steps'() { state.gd.stepsOpen = !state.gd.stepsOpen; render(); },
+    'gd-go'(el) {
+      const d = el.dataset, tab = ['resumen', 'oportunidades', 'ofertas', 'resultados', 'promos'].includes(d.tab) ? d.tab : 'ofertas';
+      state.pm.tab = tab; state.gd.confirm = null;
+      if (tab === 'ofertas') {
+        state.of.f = (d.fstate || d.fissue) ? Object.assign({}, d.fstate ? { state: d.fstate } : {}, d.fissue ? { issue: d.fissue } : {}) : {}; state.of.limit = 60;
+        if (d.manual) state.of.manual = state.of.manual || { v: {}, msg: '' };
+      }
+      if (d.open && FP.promotions.find(state.pm.reg, d.open)) state.pm.sel = d.open;
+      if (['resumen', 'oportunidades', 'ofertas'].includes(tab) && !state.op.result && !state.op.loading) opRun(false);
+      render();
+    },
+    'gd-validate-clean'() {
+      const of = state.of, G = FP.guide;
+      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio de estado guarda quién lo hizo.' }; render(); return; }
+      const an = FP.offers.analyze(of.reg), entries = [], bad = [];
+      of.reg.offers.filter((o) => o.state === 'received' && !G.alerts(an.get(o.offerId)).length).forEach((o) => {
+        const r = FP.offers.setState(of.reg, o.offerId, 'validated', { by: state.pm.actor });
+        if (r.ok) entries.push({ id: o.offerId, from: 'received', to: 'validated' }); else bad.push(`${o.offerId}: ${r.error}`);
+      });
+      state.gd.confirm = null;
+      if (entries.length) { saveOffers(); state.gd.undo = { kind: 'offers', text: `Se validaron ${entries.length} ${entries.length === 1 ? 'oferta' : 'ofertas'}.`, entries }; }
+      of.msg = entries.length ? null : { kind: 'bad', text: bad.length ? `No se pudo validar ninguna: ${bad[0]}` : 'No hay ofertas recibidas sin alertas.' };
+      if (bad.length && entries.length) of.msg = { kind: 'bad', text: `${bad.length} no pasaron:`, warnings: bad.slice(0, 6) };
+      render();
+    },
+    'gd-select-aa'() {
+      const of = state.of;
+      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio de estado guarda quién lo hizo.' }; render(); return; }
+      const plan = FP.guide.selectPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state));
+      state.gd.confirm = { ok: plan.ok, out: plan.out }; of.msg = null; render();
+    },
+    'gd-select-cancel'() { state.gd.confirm = null; render(); },
+    'gd-select-confirm'() {
+      const of = state.of; state.gd.confirm = null;
+      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio de estado guarda quién lo hizo.' }; render(); return; }
+      const plan = FP.guide.selectPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state));   // se recalcula: la lista pudo cambiar
+      const entries = [], bad = [];
+      plan.ok.forEach((o) => { const r = FP.offers.setState(of.reg, o.offerId, 'selected', { by: state.pm.actor }); if (r.ok) entries.push({ id: o.offerId, from: 'validated', to: 'selected' }); else bad.push(`${o.offerId}: ${r.error}`); });
+      if (entries.length) { saveOffers(); state.gd.undo = { kind: 'offers', text: `Se seleccionaron ${entries.length} ${entries.length === 1 ? 'oferta' : 'ofertas'}.`, entries }; }
+      of.msg = bad.length ? { kind: 'bad', text: `${bad.length} no pasaron:`, warnings: bad.slice(0, 6) } : null;
+      render();
+    },
+    'gd-create-promo'() {
+      const of = state.of, G = FP.guide;
+      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: la promoción guarda quién la creó.' }; state.pm.tab = 'ofertas'; render(); return; }
+      const offers = of.reg.offers.filter((o) => o.state === 'selected' && !G.addedToPromo(o));
+      if (!offers.length) { of.msg = { kind: 'bad', text: 'No hay ofertas seleccionadas pendientes de promoción.' }; render(); return; }
+      const d = G.draftFromOffers(offers, of.reg, new Date().toISOString().slice(0, 10));
+      const c = FP.promotions.createPromotion(state.pm.reg, { name: d.name, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd, campaign: d.campaign, createdBy: state.pm.actor });
+      if (!c.ok) { of.msg = { kind: 'bad', text: c.error }; state.pm.tab = 'ofertas'; render(); return; }
+      const id = c.promotion.promoId; let added = 0; const skipped = [];
+      offers.forEach((o) => { const r = FP.promotions.addSku(state.pm.reg, id, FP.offers.toPromotionSku(o), state.pm.actor); if (r.ok) { added += 1; FP.offers.addNote(of.reg, o.offerId, `Agregada a la promoción ${id}`, state.pm.actor); } else skipped.push(`${o.sku}: ${r.error}`); });
+      savePromotions(); saveOffers();
+      state.pm.tab = 'promos'; state.pm.sel = id; state.gd.undo = null; state.gd.confirm = null;
+      state.pm.msg = { kind: skipped.length ? 'bad' : 'ok', text: `Promoción «${d.name}» creada con el identificador ${id} y ${added} ${added === 1 ? 'SKU' : 'SKU'} de ofertas seleccionadas. Queda en borrador: pon objetivo y fechas y envíala como propuesta.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6).concat(c.warnings || []) };
+      render();
+    },
+    'gd-op-mark'() {
+      const op = state.op, aa = FP.guide.opportunitySummary(FP.activationView.recs(state), state.ac.reg.params).aa;
+      op.view = 'sku'; op.checked = {}; aa.forEach((sku) => { op.checked[sku] = true; });
+      op.msg = { kind: 'ok', text: `Quedaron marcados ${aa.length} SKU. Elige una promoción abajo (crea una en la pestaña Promociones si no tienes) y agrégalos al plan.` }; render();
+    },
+    'gd-op-add'() {
+      const op = state.op, promoId = (document.getElementById('gd-op-promo') || {}).value, reg = state.pm.reg;
+      if (!state.pm.actor) { op.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: el plan guarda quién agregó cada SKU.' }; render(); return; }
+      if (!FP.promotions.find(reg, promoId)) { op.msg = { kind: 'bad', text: 'Elige la promoción destino.' }; render(); return; }
+      const aa = FP.guide.opportunitySummary(FP.activationView.recs(state), state.ac.reg.params).aa; const entries = [], skipped = [];
+      aa.forEach((sku) => {
+        const i = op.result.items.find((x) => x.sku === sku); if (!i) return;
+        const reason = i.types.map((t) => `${t.label}: ${t.reason}`).join(' ');
+        const r = FP.promotions.addSku(reg, promoId, { sku: i.sku, name: i.name, origin: 'digital', reason, note: `Evidencia ${{ high: 'alta', medium: 'media', low: 'baja' }[i.evidence.level]}` }, state.pm.actor);
+        if (r.ok) entries.push({ promoId, sku }); else skipped.push(`${sku}: ${r.error}`);
+      });
+      if (entries.length) { savePromotions(); state.gd.undo = { kind: 'opp', text: `Se agregaron ${entries.length} SKU al plan de ${promoId}.`, entries }; }
+      op.msg = skipped.length || !entries.length ? { kind: entries.length ? 'ok' : 'bad', text: `${entries.length} SKU agregados.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6) } : null;
+      render();
+    },
+    'gd-undo'() {
+      const u = state.gd.undo; if (!u) return; state.gd.undo = null; let n = 0, skip = 0;
+      if (u.kind === 'offers') {
+        u.entries.forEach((e) => { const o = FP.offers.find(state.of.reg, e.id); if (o && o.state === e.to && FP.offers.setState(state.of.reg, e.id, e.from, { by: state.pm.actor, note: 'Deshecho desde el resumen' }).ok) n += 1; else skip += 1; });
+        if (n) saveOffers();
+        state.of.msg = { kind: skip ? 'bad' : 'ok', text: `Se deshicieron ${n} cambios.${skip ? ` ${skip} ya no estaban en ese estado y no se tocaron.` : ''}` };
+      } else {
+        u.entries.forEach((e) => { const r = FP.promotions.removeSku(state.pm.reg, e.promoId, e.sku, state.pm.actor); if (r.ok) n += 1; else skip += 1; });
+        if (n) savePromotions();
+        state.op.msg = { kind: skip ? 'bad' : 'ok', text: `Se quitaron ${n} SKU del plan.${skip ? ` ${skip} no se pudieron quitar (la promoción ya no está en borrador o propuesta).` : ''}` };
+      }
+      render();
+    },
     'sm-go'(el) { state.pm.tab = 'ofertas'; state.of.f = { state: ['received', 'validated'].includes(el.dataset.to) ? el.dataset.to : '' }; if (!state.op.result && !state.op.loading) opRun(false); render(); },
     async 'dm-load'() {
       const sm = state.sm; sm.msg = null;
