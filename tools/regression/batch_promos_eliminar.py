@@ -22,6 +22,7 @@ async def main():
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); await q.goto(U + '#promociones'); await q.wait_for_function(READY, timeout=60000)
         await ev(q, "document.querySelectorAll('dialog').forEach(d=>d.remove())"); await q.wait_for_timeout(800)
         await ev(q, "FP.app.state.pm.actor='Persona A'; FP.app.render()")
+        await q.evaluate("FP.app.state.sm.showDemo=true; FP.app.render()"); await q.wait_for_timeout(200)
         await q.click('[data-action="dm-load"]')
         for _ in range(240):
             if 'Cargando' not in (await ev(q, "(FP.app.state.sm.msg||{}).text||''")): break

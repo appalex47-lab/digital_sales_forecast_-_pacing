@@ -20,10 +20,13 @@ async def main():
         await q.clock.set_fixed_time(dt.datetime(2026, 10, 2, 9, 0)); await q.goto(U + '#inicio'); await q.wait_for_timeout(1500)
         await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
         await q.evaluate("location.hash='#promociones'"); await q.wait_for_timeout(600)
-        chk('E1 el panel de datos de ejemplo existe y ofrece cargar', 'Datos de ejemplo' in await body(q) and await q.query_selector('[data-action="dm-load"]') is not None)
+        chk('E0 el panel de datos de ejemplo no se ofrece por defecto', 'Datos de ejemplo' not in await body(q) and await q.query_selector('[data-action="dm-load"]') is None)
+        await q.evaluate("FP.app.state.sm.showDemo=true; FP.app.render()"); await q.wait_for_timeout(200)
+        chk('E1 con ?ejemplo (o la marca) el panel existe y ofrece cargar', 'Datos de ejemplo' in await body(q) and await q.query_selector('[data-action="dm-load"]') is not None)
         await q.click('[data-action="dm-load"]'); await q.wait_for_timeout(500)
         chk('E2 sin tu nombre no carga y lo dice', 'Escribe tu nombre' in await body(q) and await q.evaluate("FP.app.state.of.reg.offers.length") == 0, (await body(q))[:200])
         await q.evaluate("FP.app.state.pm.actor='Persona A'; FP.app.render()")
+        await q.evaluate("FP.app.state.sm.showDemo=true; FP.app.render()"); await q.wait_for_timeout(200)
         await q.click('[data-action="dm-load"]'); await q.wait_for_timeout(1000)
         for _ in range(240):
             if 'Cargando' not in (await q.evaluate("(FP.app.state.sm.msg||{}).text||''")): break
