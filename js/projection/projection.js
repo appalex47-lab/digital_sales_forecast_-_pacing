@@ -7,7 +7,7 @@
  *    se toman del MISMO mes del año anterior. Un mes parcial (p. ej. octubre con 2 días de venta) no se usa a medias.
  *  - La META (objetivo) crece sobre el monto TOTAL: meta = base total × (1 + g). Se reparte por canal según su participación
  *    (por defecto, la de la base; editable). El crecimiento por canal es un resultado, no un dato de entrada.
- *  - La PROYECCIÓN (lo que esperamos) aplica a cada canal el ritmo de los últimos 2 meses cerrados contra los mismos meses del año anterior.
+ *  - La PROYECCIÓN (lo que esperamos) aplica a cada canal el ritmo de su ventana (por defecto los últimos 2 meses cerrados; la calibración puede elegir 3, 6 o 12) contra los mismos meses del año anterior.
  *  - La BRECHA es meta − proyección; «qué tendría que pasar» dice cuánto subiría, por separado, el volumen, el CR o el AOV para cerrarla.
  * Una proyección es una estimación con reglas, no un pronóstico estadístico: depende de que el ritmo reciente se mantenga.
  */
@@ -59,6 +59,18 @@
     return { a, total, ended, coverage, usable: Boolean(a) && ended && coverage >= MIN_COVERAGE };
   }
 
+  /** Meses cerrados con cobertura por canal: { canal: { idx: venta } } con idx = año × 12 + mes − 1 (lo que usa la calibración). */
+  function series(store, today) {
+    const data = collect(store), t = today || FP.calendar.toISODate(new Date()), out = {};
+    C().channelIds.forEach((ch) => { out[ch] = {}; });
+    data.months.forEach((a, k) => {
+      const [ch, ym] = k.split('|'); if (!out[ch]) return;
+      const y = +ym.slice(0, 4), m = +ym.slice(5, 7), info = monthInfo(data, ch, y, m, t);
+      if (info.usable) out[ch][y * 12 + m - 1] = a.revenue;
+    });
+    return out;
+  }
+
   /** Base de un canal: 12 meses del año base (real o, si faltan, del año anterior) y los dos últimos meses cerrados contra el año anterior. */
   function channelBase(data, ch, baseYear, today) {
     const months = []; let rev = 0, ord = 0, trf = 0, nReal = 0, nPrior = 0, nMissing = 0;
@@ -87,6 +99,16 @@
     return { id: ch, months, revenue: rev, orders: ord, traffic: trf, cr: trf > 0 ? ord / trf : null, aov: ord > 0 ? rev / ord : null, nReal, nPrior, nMissing, last2 };
   }
 
+  /** Ritmo de una ventana de w meses consecutivos (la que termina en el último mes cerrado del canal) contra el año anterior. Solo para w ≠ 2 (w = 2 usa la regla original). */
+  function windowLast(ser, w) {
+    const ks = Object.keys(ser || {}).map(Number); if (!ks.length) return null;
+    const T = Math.max(...ks); let cur = 0, prev = 0;
+    for (let i = T - w + 1; i <= T; i++) { if (!(typeof ser[i] === 'number') || !(typeof ser[i - 12] === 'number')) return null; cur += ser[i]; prev += ser[i - 12]; }
+    if (!(prev > 0)) return null;
+    const lbl = []; for (let i = T - w + 1; i <= T; i++) lbl.push(MONTHS[i % 12]);
+    return { months: [], labels: w > 3 ? [lbl[0], lbl[lbl.length - 1]] : lbl, span: w, cur, prev, yoy: cur / prev - 1 };
+  }
+
   /** Reparte `total` en partes enteras que suman exacto, según `weights`. */
   function split(total, weights) {
     const sum = weights.reduce((a, b) => a + b, 0);
@@ -96,7 +118,8 @@
 
   /**
    * @param {object} store
-   * @param {{ baseYear:number, growth:number, shares?:object|null, today?:string, forecastRun?:object|null }} o
+   * @param {{ baseYear:number, growth:number, shares?:object|null, today?:string, forecastRun?:object|null, calibration?:object|null }} o
+   *   `calibration` = { windows:{canal:2|3|6|12}, shareMethod, shapeMethod } (ver projectionCalibration); sin él, la regla original.
    */
   function build(store, o) {
     const baseYear = o.baseYear, targetYear = baseYear + 1, g = o.growth;
@@ -105,7 +128,13 @@
     const chIds = C().channelIds, label = (id) => (C().channels.find((c) => c.id === id) || { label: id }).label;
     const empty = { baseYear, targetYear, growth: g, today, hasData: data.hasData, channels: [], notes: [], warnings: [] };
     if (!data.hasData) return empty;
-    const chans = chIds.map((id) => ({ ...channelBase(data, id, baseYear, today), label: label(id) }));
+    const PC = FP.projectionCalibration, cal = PC ? PC.normParams(o.calibration, chIds) : null, ser = cal ? series(store, today) : null;
+    const chans = chIds.map((id) => {
+      const c = { ...channelBase(data, id, baseYear, today), label: label(id) }, w = cal ? cal.windows[id] : 2;
+      c.window = w;
+      if (w !== 2) { const wl = windowLast(ser[id], w); c.last2 = wl; }   // sin ventana comparable queda null y el aviso lo dice
+      return c;
+    });
     const used = chans.filter((c) => c.revenue > 0);
     if (!used.length) {
       // hay venta, pero ningún mes cuenta: se explica cuál es la situación para no decir «no hay venta» cuando sí la hay
@@ -128,9 +157,9 @@
     // ---- proyección: ritmo de los últimos 2 meses cerrados, por canal ----
     const warnings = [], notes = [];
     const projCh = chans.map((c) => {
-      const gr = c.last2 && fin(c.last2.yoy) ? c.last2.yoy : 0;
-      if (!(c.last2 && fin(c.last2.yoy)) && c.revenue > 0) warnings.push(`${c.label}: no hay dos meses cerrados comparables contra ${baseYear - 1}; su proyección es igual a la base (0 % de crecimiento).`);
-      if (c.last2 && fin(c.last2.yoy) && Math.abs(c.last2.yoy) > 0.4) warnings.push(`${c.label}: los últimos 2 meses (${c.last2.labels.join(' y ')}) cambiaron ${(c.last2.yoy * 100).toFixed(1)} % contra ${baseYear - 1}; el ritmo puede ser atípico antes de proyectarlo todo el año.`);
+      const gr = c.last2 && fin(c.last2.yoy) ? c.last2.yoy : 0, wTxt = c.window === 2 ? 'dos meses' : `${c.window} meses`;
+      if (!(c.last2 && fin(c.last2.yoy)) && c.revenue > 0) warnings.push(`${c.label}: no hay ${wTxt} cerrados comparables contra ${baseYear - 1}; su proyección es igual a la base (0 % de crecimiento).`);
+      if (c.last2 && fin(c.last2.yoy) && Math.abs(c.last2.yoy) > 0.4) warnings.push(`${c.label}: los últimos ${c.window} meses (${c.window === 2 ? c.last2.labels.join(' y ') : `${c.last2.labels[0]} a ${c.last2.labels[c.last2.labels.length - 1]}`}) cambiaron ${(c.last2.yoy * 100).toFixed(1)} % contra ${baseYear - 1}; el ritmo puede ser atípico antes de proyectarlo todo el año.`);
       return { growth: gr, amount: Math.round(c.revenue * (1 + gr)) };
     });
     const projTotal = projCh.reduce((s, p) => s + p.amount, 0);
@@ -151,7 +180,7 @@
     // ---- brecha y «qué tendría que pasar» ----
     const rows = chans.map((c, i) => {
       const gap = metaCh[i] - projCh[i].amount, x = projCh[i].amount > 0 ? metaCh[i] / projCh[i].amount - 1 : null;
-      return { id: c.id, label: c.label, base: c.revenue, metaShare: metaTotal ? metaCh[i] / metaTotal : null, meta: metaCh[i], metaGrowth: c.revenue > 0 ? metaCh[i] / c.revenue - 1 : null,
+      return { id: c.id, label: c.label, window: c.window, base: c.revenue, metaShare: metaTotal ? metaCh[i] / metaTotal : null, meta: metaCh[i], metaGrowth: c.revenue > 0 ? metaCh[i] / c.revenue - 1 : null,
         projGrowth: projCh[i].growth, proj: projCh[i].amount, gap, uplift: x, last2: c.last2, cr: c.cr, aov: c.aov,
         needs: x !== null && x > 0 ? { volumePct: x, crPp: c.cr !== null ? c.cr * x * 100 : null, aovPct: x } : null,
         forecastClose: forecastClose ? forecastClose.byChannel[c.id] : null };
@@ -160,8 +189,16 @@
 
     // ---- reparto mensual de referencia (la forma de la base; el plan diario lo genera Planear con su estacionalidad) ----
     const monthly = [];
-    const metaM = chans.map((c, i) => split(metaCh[i], c.months.map((x) => x.revenue)));
-    const projM = chans.map((c, i) => split(projCh[i].amount, c.months.map((x) => x.revenue)));
+    const shapeUsed = {};
+    const wts = chans.map((c) => {
+      const baseW = c.months.map((x) => x.revenue);
+      if (!cal || cal.shapeMethod === 'base') { shapeUsed[c.id] = 'base'; return baseW; }
+      const yearOf = (y) => { const a = []; for (let m = 1; m <= 12; m++) { const v = ser[c.id][y * 12 + m - 1]; if (typeof v !== 'number') return null; a.push(v); } return a; };
+      const r = PC.shapeWeights(cal.shapeMethod, [baseW, yearOf(baseYear - 1), yearOf(baseYear - 2)]);
+      shapeUsed[c.id] = r.used; return r.weights;
+    });
+    const metaM = chans.map((c, i) => split(metaCh[i], wts[i]));
+    const projM = chans.map((c, i) => split(projCh[i].amount, wts[i]));
     for (let m = 0; m < 12; m++) {
       const row = { month: m + 1, label: MONTHS[m], byChannel: {} };
       chans.forEach((c, i) => { row.byChannel[c.id] = { base: c.months[m].revenue, source: c.months[m].source, meta: metaM[i][m], proj: projM[i][m] }; });
@@ -172,7 +209,12 @@
     const gs = [...new Set([0.1, 0.12, 0.16, 0.2, Math.round(g * 1000) / 1000])].sort((a, b) => a - b);
     const sensitivity = gs.map((x) => { const meta = Math.round(baseTotal * (1 + x)); return { growth: x, meta, gap: meta - projTotal, uplift: projTotal > 0 ? meta / projTotal - 1 : null, current: Math.abs(x - g) < 1e-9 }; });
 
-    return { baseYear, targetYear, growth: g, today, hasData: true, sharesCustom,
+    // ---- reparto sugerido (solo sugerencia: la meta se reparte como tú decidas) ----
+    let suggestedShares = null;
+    if (cal && ser) { suggestedShares = PC.suggestShares(ser, chIds, cal.shareMethod); }
+    const calInfo = cal ? { params: cal, applied: !PC.isDefault(cal, chIds), shapeUsed } : null;
+
+    return { baseYear, targetYear, growth: g, today, hasData: true, sharesCustom, suggestedShares, calibration: calInfo,
       base: { total: baseTotal, channels: chans },
       meta: { total: metaTotal, growth: baseTotal > 0 ? metaTotal / baseTotal - 1 : null },
       projection: { total: projTotal, growth: baseTotal > 0 ? projTotal / baseTotal - 1 : null },
@@ -184,7 +226,7 @@
   function toExport(res, { app = 'RevNavigator', version = '' } = {}) {
     if (!res || !res.hasData) return { app, version, empty: true };
     return { app, version, kind: 'projection', baseYear: res.baseYear, targetYear: res.targetYear, assumptions: { growthOnTotalTarget: res.growth, minCoverage: MIN_COVERAGE, sharesCustom: res.sharesCustom,
-        baseRule: `meses cerrados de ${res.baseYear}; los que faltan, del mismo mes de ${res.baseYear - 1}`, projectionRule: 'ritmo de los últimos 2 meses cerrados contra los mismos meses del año anterior, por canal' },
+        baseRule: `meses cerrados de ${res.baseYear}; los que faltan, del mismo mes de ${res.baseYear - 1}`, projectionRule: 'ritmo de la ventana de cada canal (meses cerrados) contra los mismos meses del año anterior', calibration: res.calibration ? { applied: res.calibration.applied, windows: res.calibration.params.windows, shareMethod: res.calibration.params.shareMethod, shapeMethod: res.calibration.params.shapeMethod } : null },
       generatedFor: res.today, base: res.base.total, meta: res.meta.total, projection: res.projection.total, gap: res.gap.total,
       byChannel: res.rows.map((r) => ({ channel: r.id, base: r.base, meta: r.meta, metaGrowth: r.metaGrowth, projection: r.proj, projectionGrowth: r.projGrowth, gap: r.gap, last2Months: r.last2, requiredUplift: r.needs })),
       monthly: res.monthly.map((m) => ({ month: m.month, total: m.total, byChannel: m.byChannel })), sensitivity: res.sensitivity, notes: res.notes, warnings: res.warnings };
@@ -199,5 +241,5 @@
     return out.join('\n') + '\n';
   }
 
-  FP.projection = { build, collect, toExport, toCsv, MIN_COVERAGE, MONTHS };
+  FP.projection = { build, collect, series, toExport, toCsv, MIN_COVERAGE, MONTHS };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -546,7 +546,7 @@ Ver `REPORTE_PRODUCTOS_IA_Y_TRAFICO.md`. Calidad de datos incluye los negativos 
 ---
 
 ## Proyección del año siguiente (Planear)
-Ver `REPORTE_PROYECCION_siguiente_ano.md`. Base = cierre estimado (meses reales + meses faltantes del año anterior), meta propuesta = base total × (1 + g) repartida por canal, proyección = ritmo de los últimos 2 meses cerrados, brecha y «qué tendría que pasar», reparto mensual de referencia, sensibilidad, descargas y guardado de las metas del año siguiente. Prueba: `batch_ai.py`. Plan de la Fase H: `PLAN_FASE_H_cohere_avanzado.md`.
+Ver `REPORTE_PROYECCION_siguiente_ano.md`. Base = cierre estimado (meses reales + meses faltantes del año anterior), meta propuesta = base total × (1 + g) repartida por canal, proyección = ritmo de la ventana de cada canal (2 meses con la regla inicial; se calibra con el historial), brecha y «qué tendría que pasar», reparto mensual de referencia, sensibilidad, descargas y guardado de las metas del año siguiente. Prueba: `batch_ai.py`. Plan de la Fase H: `PLAN_FASE_H_cohere_avanzado.md`.
 
 ---
 

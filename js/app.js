@@ -654,6 +654,50 @@
     } catch (e) { /* sin red de seguridad que mostrar: se reintenta al abrir la app */ }
   }
 
+  /* ---------- Calibración de la proyección del año siguiente ----------
+     Ajusta la ventana de ritmo de cada canal, el reparto sugerido entre canales y la forma de los meses con un backtest sobre los meses cerrados.
+     No toca la meta ni el crecimiento. Lo guardado vive en este navegador (localStorage `projectionCalibration`) y viaja a Supabase con la sincronización de ajustes. Lógica en js/projection/projectionCalibration.js. */
+  const PCAL = () => FP.projectionCalibration;
+  const pcalIds = () => C.channelIds;
+  const pcalLabels = () => Object.fromEntries(C.channels.map((c) => [c.id, c.label]));
+  function loadProjCalibration() {
+    const env = storage.load(K.projectionCalibration);
+    state.pcal = { saved: PCAL().normalize(env ? env.data : null, pcalIds()), cache: null };
+  }
+  function saveProjCalibration() {
+    if (!storage.save(K.projectionCalibration, state.pcal.saved)) { FP.ui.toast('No se pudo guardar la calibración de la proyección en este navegador. Sigue en uso hasta que cierres la página.'); return false; }
+    return true;
+  }
+  /** Parámetros en uso (los de la calibración guardada o la regla inicial). */
+  function projParams() { return PCAL().paramsOf(state.pcal && state.pcal.saved, pcalIds()); }
+  /** Backtest sobre los meses cerrados; se guarda en caché mientras no cambien los datos ni el día. */
+  function pcalAnalysis() {
+    const today = FP.calendar.toISODate(new Date());
+    let n = 0, max = '';
+    ['actual', 'historical'].forEach((t) => ST.records(state.store, t).forEach((r) => { n++; if (r.date && r.date > max) max = r.date; }));
+    const sig = `${n}|${max}|${today}`;
+    if (state.pcal.cache && state.pcal.cache.sig === sig) return state.pcal.cache.res;
+    let res = null;
+    try { res = PCAL().calibrate(FP.projection.series(state.store, today), pcalIds(), { labels: pcalLabels() }); } catch (e) { res = { status: 'error', error: String((e && e.message) || e), params: PCAL().defaultParams(pcalIds()), changes: [] }; }
+    state.pcal.cache = { sig, res };
+    return res;
+  }
+  /** Con «Calibrar sola» encendida: si hay un mes cerrado más nuevo que el de la última calibración automática (y ≥ 24 meses), calibra una vez. Devuelve true si cambió algo. */
+  function pcalAutoCheck({ repaint = false } = {}) {
+    if (!state.pcal || !state.pcal.saved.auto) return false;
+    try {
+      const res = pcalAnalysis(); if (res.status !== 'ok') return false;
+      const due = PCAL().autoDue(state.pcal.saved, res.lastClosedKey, res.monthsUsed); if (!due.due) return false;
+      const before = state.pcal.saved;
+      state.pcal.saved = PCAL().applyResult(before, res, pcalIds(), { trigger: 'auto', month: due.month });
+      saveProjCalibration();
+      const changed = !PCAL().sameParams(PCAL().paramsOf(before, pcalIds()), PCAL().paramsOf(state.pcal.saved, pcalIds()), pcalIds());
+      if (changed) FP.ui.toast(`Proyección recalibrada con ${res.monthsUsed} meses: ${res.changes.length} cambio(s). Puedes deshacerlo en Proyección.`, { ms: 5000 });
+      if (repaint) render();
+      return changed;
+    } catch (e) { return false; }
+  }
+
   function setPath(obj, path, value) {
     const parts = path.split('.');
     const last = parts.pop();
@@ -1252,7 +1296,7 @@
       customers = { result: res, scopeLabel: o.filter ? `Selección: ${FP.productFilter.describe(o.filter)}${ch === 'total' ? '' : ` · Canal ${FP.analysisContext.channelLabel(ch)}`}` : (ch === 'total' ? 'Toda la empresa' : `Canal ${FP.analysisContext.channelLabel(ch)}`) };
     } catch (e) { /* sin libro de clientes la página se omite */ }
     let profiles = null; try { profiles = ensureProfiles(); } catch (e) { /* sin historia */ }
-    let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run }); } catch (e) { /* sin proyección */ }
+    let projection = null; try { projection = FP.projection.build(state.store, { baseYear: state.year, growth: state.proj.growth, shares: state.proj.shares, forecastRun: run, calibration: projParams() }); } catch (e) { /* sin proyección */ }
     const an = state.an, pa = state.pa;
     const desc = (f) => (FP.productFilter && f ? FP.productFilter.describe(FP.productFilter.active(f)) : '');
     const rpLabel = (() => { if (!rpF) return ''; let f = rpF; try { if (f.branch) { const b = (FP.productStore.geoOptions({}).branches || []).find((x) => x.code === f.branch); if (b && b.name) f = { ...f, branch: b.name }; } } catch (e) { /* se deja el código */ } return FP.productFilter.describe(f); })();
@@ -2641,7 +2685,7 @@
       loadOffers();
       loadActivation();
       loadProposals(); loadGoals();
-      loadBusinessContext(); loadBrand(); loadCalibration();
+      loadBusinessContext(); loadBrand(); loadCalibration(); loadProjCalibration();
       state.rc.draft = emptyDraft(); state.rc.selected = []; state.rc.imported = null;
       loadDiagnosticSettings();
       state.rf.simDate = null;
@@ -4069,6 +4113,38 @@
       const item = state.staging.items.find((i) => i.staged.id === state.staging.activeId) || state.staging.items[0];
       if (item) retypeStaged(item, el.value || el.dataset.value);
     },
+    /* ----- Calibración de la proyección ----- */
+    'pcal-run'() {
+      const res = pcalAnalysis();
+      if (res.status !== 'ok') { FP.ui.toast(res.status === 'insufficient' ? `Hacen falta ${res.needed} meses cerrados en algún canal para calibrar; hay ${res.monthsUsed}.` : 'No se pudo calibrar la proyección.'); render(); return; }
+      const before = state.pcal.saved;
+      state.pcal.saved = PCAL().applyResult(before, res, pcalIds(), { trigger: 'manual' });
+      saveProjCalibration(); state.proj.savedAt = null; render();
+      FP.ui.toast(res.changes.length ? `Proyección calibrada con ${res.monthsUsed} meses: ${res.changes.length} cambio(s).` : 'Proyección revisada: la regla actual ya era la mejor medida.', { ms: 4500 });
+    },
+    'pcal-undo'() {
+      const before = state.pcal.saved, next = PCAL().undo(before, pcalIds());
+      if (next === before) { FP.ui.toast('No hay ningún cambio que deshacer.'); return; }
+      state.pcal.saved = next; saveProjCalibration(); state.proj.savedAt = null; render(); FP.ui.toast('Se deshizo el último cambio de la calibración.');
+    },
+    'pcal-reset'() {
+      const before = state.pcal.saved, next = PCAL().reset(before, pcalIds());
+      if (next === before) { FP.ui.toast('Ya se usa la regla inicial.'); return; }
+      state.pcal.saved = next; saveProjCalibration(); state.proj.savedAt = null; render(); FP.ui.toast('Se volvió a la regla inicial. Puedes deshacerlo en el historial.');
+    },
+    'pcal-auto'(el) {
+      state.pcal.saved = { ...state.pcal.saved, auto: Boolean(el && el.checked) };
+      saveProjCalibration();
+      if (state.pcal.saved.auto) pcalAutoCheck();
+      render();
+      FP.ui.toast(state.pcal.saved.auto ? 'La proyección se calibrará sola cuando cierre cada mes (con 24 meses o más).' : 'La calibración sola quedó apagada.');
+    },
+    /** Pone el reparto sugerido como participación de la meta (tú lo decides: no se aplica solo). */
+    'proj-use-suggested'() {
+      const r = FP.projectionView.compute(state); if (!r.hasData || !r.suggestedShares) return;
+      state.proj.shares = { ...r.suggestedShares }; state.proj.savedAt = null; render();
+      FP.ui.toast('Se usó el reparto sugerido. «Restablecer» vuelve a la participación de la base.');
+    },
     /* ----- Proyección del próximo año ----- */
     'proj-growth'(el) {
       const v = Number(String(el.value).replace(',', '.'));
@@ -5236,6 +5312,7 @@
     loadActivation(); loadProposals(); loadGoals();
     loadBusinessContext();
     loadCalibration();
+    loadProjCalibration();
     loadUx();
     loadStore();
     loadYearScoped(C.defaultYear);
@@ -5254,7 +5331,7 @@
     render();
     if (migrated) FP.ui.toast('Los datos de la Fase 0 se migraron al nuevo modelo de carga.');
     scheduleEngineTests();
-    setTimeout(() => { if (root.requestIdleCallback) root.requestIdleCallback(() => calAutoCheck(), { timeout: 20000 }); else calAutoCheck(); }, 8000);   // Fase 3.3: solo hace algo si «Recalibrar sola» está encendido
+    setTimeout(() => { if (root.requestIdleCallback) root.requestIdleCallback(() => calAutoCheck(), { timeout: 20000 }); else calAutoCheck(); pcalAutoCheck({ repaint: true }); }, 8000);   // Fase 3.3: solo hace algo si «Recalibrar sola» está encendido
     if (FP.agentLauncher) FP.agentLauncher.init();   // Fase 1: botón «Asistentes» (el panel se carga al usarlo)
   }
 
@@ -5316,6 +5393,7 @@
     if (r.applied.length) {
       state.cloud.auto.pulled = r.applied;
       if (r.applied.includes('reportBrand')) { loadBrand(); render(); }   // la marca se aplica en caliente
+      if (r.applied.includes('projectionCalibration')) { loadProjCalibration(); render(); }   // la calibración de la proyección se aplica en caliente
       const needReload = r.applied.includes('businessContext');   // config.js lo lee antes de arrancar
       if (needReload) state.cloud.restored = true;
       FP.ui.toast(`Se trajeron ${r.applied.length} ajuste(s) más nuevos de la nube${needReload ? '. Recarga la página para aplicar los del negocio.' : '.'}`);
@@ -5333,7 +5411,7 @@
   const SIGNOUT_KEEP = ['uxSettings', 'productSettings', 'cohereApiKey', 'storageMigration', 'onboardingDone'];
   const signout = { phase: 'idle', audit: null, busy: false, ack: false, msg: '' };
   const baseOf = (k) => String(k).split(':')[0];
-  const KEY_LABEL = { actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
+  const KEY_LABEL = { projectionCalibration: 'Calibración de la proyección', confidenceCalibration: 'Calibración de la confianza', actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
   const keyName = (k) => { const b = baseOf(k), y = String(k).split(':')[1]; return `${KEY_LABEL[b] || b}${y && /^\d{4}$/.test(y) ? ' ' + y : ''}`; };
   /** Compara lo local con la nube (solo lectura). Devuelve { ok, unsynced:[texto], checked } o { ok:false, error }. */
   async function signoutAudit() {
@@ -5524,7 +5602,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, calibrateNow, calAutoCheck, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
