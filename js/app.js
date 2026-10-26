@@ -5253,7 +5253,8 @@
     if (typeof Worker === 'undefined') throw new Error('Este navegador no permite procesos en segundo plano.');
     // La lista de archivos sale de index.html (única fuente de verdad), con los diferidos incluidos y sin app.js ni lazy.js.
     const files = Array.from(document.querySelectorAll('script[src]')).map((s) => s.getAttribute('src'))
-      .filter((f) => !/^js\/(app|lazy)\.js(\?|$)/.test(f)).map((f) => new URL(f, document.baseURI).href);
+      .filter((f) => !/^js\/(app|lazy)\.js(\?|$)/.test(f)).map((f) => new URL(f, document.baseURI).href)
+      .filter((u) => { try { return new URL(u).origin === root.location.origin; } catch (e) { return false; } });   // solo los archivos del sitio: una extensión del navegador puede inyectar su propio <script> (chrome-extension://…) que el Worker no puede cargar
     try { return await engineTestsAttempt(files, null); } catch (e1) {
       if (!e1.start) throw e1;   // falló corriendo las pruebas: no tiene caso repetir
       // No arrancó el archivo del Worker: se baja su texto y se arranca desde un Blob (mismas pruebas, mismo aislamiento).
