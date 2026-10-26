@@ -11,6 +11,7 @@
   const STATE_PILL = { received: 'warning', validated: 'ok', selected: 'ok', discarded: 'na' };
   const LEVEL_PILL = { error: 'error', warn: 'warning', ok: 'ok' };
   const PAGE = 60;
+  const CAP = 1000;   // la lista se desliza (10 filas visibles); este tope solo protege la página
 
   const val = (id) => { const el = $(id); return el ? String(el.value).trim() : ''; };
   const pct = (d) => (d === null || d === undefined ? '—' : `${(d * 100).toFixed(1).replace(/\.0$/, '')} %`);
@@ -99,7 +100,11 @@
       ${field('of-f-cat', 'Categoría', selectHtml('of-f-cat', cat, f.category || '', 'data-action="of-filter"'))}
       ${field('of-f-issue', 'Alertas', selectHtml('of-f-issue', ISS, f.issue || '', 'data-action="of-filter"'))}</div>` : '';
     const colBox = fold.cols ? `<div class="btn-row gd-cols"><span class="field__hint">Mostrar columnas:</span>${COLS.map(([k, l]) => `<label class="gd-colchk"><input type="checkbox" data-action="of-col" data-col="${k}"${cols[k] ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</div>` : '';
-    return `${top}${chips}${grid}${colBox}`;
+    const cnt = { received: 0, validated: 0, selected: 0, discarded: 0 }; reg.offers.forEach((o) => { cnt[o.state] += 1; });
+    const TABS = [['', 'Todas', reg.offers.length], ['received', 'Por revisar', cnt.received], ['validated', 'Validadas', cnt.validated], ['selected', 'Elegidas', cnt.selected], ['discarded', 'Descartadas', cnt.discarded]];
+    const tabs = `<div class="gd-tabs" role="group" aria-label="Estado de la oferta">${TABS.map(([k, l, n]) => `<button type="button" class="gd-tab" data-action="of-tab" data-s="${k}" aria-pressed="${(f.state || '') === k}">${esc(l)} <span class="num">${n}</span></button>`).join('')}</div>
+      <p class="field__hint">Las ofertas sin ninguna alerta se validan solas al cargarlas. «Por revisar» son las que traen alertas o las que devolviste a mano.</p>`;
+    return `${tabs}${top}${chips}${grid}${colBox}`;
   }
 
   /** Ofertas que pasan los filtros (incluida la acción sugerida elegida en el conteo). La usan la tabla y «Marcar las visibles». */
@@ -110,7 +115,7 @@
   }
   function tableHtml(reg, of, an, state, map) {
     const esc = H().esc, pill = H().pill, AV = FP.activationView, C = of.cols || {};
-    const list = visible(state); const shown = list.slice(0, of.limit || PAGE);
+    const list = visible(state); const shown = list.slice(0, CAP);
     if (!reg.offers.length) return '<div class="empty"><strong>Todavía no hay ofertas recibidas</strong>Carga el archivo que te manda el proveedor o comercial con «Cargar archivo de ofertas». Cada oferta queda como «Recibida», con su origen y fecha.</div>';
     if (!list.length) return '<div class="empty"><strong>Ninguna oferta coincide con los filtros</strong>Quita algún filtro para verlas.</div>';
     const rows = shown.map((o) => {
@@ -122,8 +127,8 @@
         <td title="${esc(issueText(codes))}">${n ? pill(LEVEL_PILL[lv], `${n} ${n === 1 ? 'alerta' : 'alertas'}`) : pill('ok', 'Sin alertas')}</td>
         <td>${pill(STATE_PILL[o.state], O().STATE[o.state])}</td>${AV && C.act ? AV.cells(state, map.get(`offer:${o.offerId}`)) : ''}<td><button type="button" class="btn btn--small" data-action="of-open" data-id="${esc(o.offerId)}">Abrir</button>${AV ? ` <button type="button" class="btn btn--small btn--ghost" data-action="ac-open" data-key="offer:${esc(o.offerId)}">Ver razón</button>` : ''}</td></tr>`;
     }).join('');
-    const more = list.length > shown.length ? `<div class="btn-row"><button type="button" class="btn" data-action="of-more">Mostrar ${Math.min(PAGE, list.length - shown.length)} más (${list.length - shown.length} restantes)</button></div>` : '';
-    return `<div class="table-wrap"><table class="table ds-table pm-wide"><thead><tr><th></th><th>ID</th><th>SKU</th><th>Producto</th>${C.mech ? '<th>Mecánica</th>' : ''}<th>% desc.</th>${C.price ? '<th>PMP → final</th>' : ''}${C.vig ? '<th>Vigencia</th>' : ''}<th>Alertas</th><th>Estado de la oferta</th>${AV && C.act ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
+    const more = list.length > shown.length ? `<p class="field__hint">Se muestran las primeras ${CAP}; afina con la búsqueda o los filtros para ver el resto.</p>` : '';
+    return `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Lista de ofertas, se desliza"><table class="table ds-table pm-wide"><thead><tr><th></th><th>ID</th><th>SKU</th><th>Producto</th>${C.mech ? '<th>Mecánica</th>' : ''}<th>% desc.</th>${C.price ? '<th>PMP → final</th>' : ''}${C.vig ? '<th>Vigencia</th>' : ''}<th>Alertas</th><th>Estado de la oferta</th>${AV && C.act ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
       <p class="field__hint">${list.length} ofertas con estos filtros.</p>`;
   }
 

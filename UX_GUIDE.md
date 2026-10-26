@@ -713,3 +713,12 @@ Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya oc
 - Promociones: solo borrador, propuesta sin haberse aprobado nunca, o cancelada que nunca se aprobó. Las aprobadas, publicadas, en medición y cerradas nunca se eliminan (su historial alimenta los resultados). Sus ofertas quedan otra vez pendientes de promoción y el identificador no se reutiliza.
 - **Acciones sugeridas: cuántos SKU hay en cada una**, en Ofertas recibidas y en Oportunidades: SKU distintos, reparto por prioridad, aprobadas, «Ver» para filtrar la tabla, qué dato falta para decidir mejor y, si cargaste sugerencias de otra área, cuántas coinciden o difieren.
 - **Filtros plegados:** la tabla de ofertas muestra solo búsqueda, «Filtros» y «Columnas»; los filtros puestos salen como chips que se quitan con ×. «Archivos recibidos» también viene plegado. La columna Mecánica va oculta (se ve al abrir la oferta y, si es escalonada o muy larga, se avisa bajo el producto); «Columnas» la devuelve y el navegador recuerda la elección.
+
+## Ofertas recibidas y Oportunidades: pantalla simplificada
+
+- **Periodo por defecto:** últimos 30 días contra los 30 previos (antes, el mes en curso). Un aviso arriba del resumen lo dice. La confianza «Alta» pide 60 días con venta sumando ambos periodos, funnel con cobertura ≥ 80 % y sin celdas en cuarentena; con el mes en curso casi nunca se alcanzaba.
+- **Validación automática:** al cargar un archivo (y al abrir la app), las ofertas Recibidas sin ninguna alerta pasan solas a «Validada» por «Automático», con nota en su historial. Una oferta que la persona devolvió a Recibida no se vuelve a validar sola.
+- **Tarjetas de prioridad** (Alta, Media, Baja) reemplazan la matriz 3×3: SKU, cuántos con datos suficientes y por qué faltan. El botón en bloque existe solo para Alta con datos suficientes.
+- **Pestañas de estado** (Todas, Por revisar, Validadas, Elegidas, Descartadas) reemplazan el panel lateral.
+- **Acciones sugeridas** suman la columna «Venta del periodo» (— si no hay venta).
+- **Lista deslizable:** 10 filas visibles con encabezado fijo; ya no hay «Mostrar más» (tope de 1000 filas).

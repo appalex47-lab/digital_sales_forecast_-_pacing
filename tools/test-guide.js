@@ -76,4 +76,24 @@ ok('D2 sin campaña, nombre con la fecha de hoy', G.draftFromOffers([Object.assi
   const o = G.opportunitySummary(m, A.SETTINGS);
   ok('O1 matriz de oportunidades y Alta/Alta', o.total === 4 && o.matrix.Alta.Alta === 1 && o.matrix.Alta.Media === 1 && o.matrix.Baja.Baja === 1 && o.noRec === 1 && o.aa.join() === 'A', o); }
 
+// 8. Rediseño: validación automática, tarjetas de prioridad y venta del periodo
+{ const r2 = O.createRegistry();
+  const m2 = (sku, e) => O.captureManual(r2, Object.assign({ sku, name: 'P ' + sku, controlled: 'Ningún Control', discount: '30', start: '2026-11-01', end: '2026-11-15', campaignName: 'C' }, e || {}), { by: 'Persona A', now: '2026-10-26T10:00:00.000Z' });
+  m2('L1'); m2('L2'); m2('L3', { start: '', end: '' });
+  const done = G.autoValidate(r2, 'Automático'), st = (k) => r2.offers.find((o) => o.sku === k).state;
+  ok('AV1 las que no tienen ninguna alerta pasan solas a Validada', st('L1') === 'validated' && st('L2') === 'validated', r2.offers.map((o) => [o.sku, o.state]));
+  ok('AV2 las que tienen alertas se quedan en Recibida', st('L3') === 'received');
+  ok('AV3 queda escrito quién y por qué', r2.offers.find((o) => o.sku === 'L1').history.some((h) => h.field === 'state' && h.by === 'Automático' && /automáticamente/.test(h.note)));
+  const l1 = r2.offers.find((o) => o.sku === 'L1'); O.setState(r2, l1.offerId, 'received', { by: 'Persona A' });
+  ok('AV4 una devuelta a mano no se vuelve a validar sola', G.autoValidate(r2, 'Automático').length === 0 && st('L1') === 'received');
+  ok('AV5 es idempotente', done.length === 2 && G.autoValidate(r2, 'Automático').length === 0);
+  const rec = (sku, p, c, rev, miss) => [`sku:${sku}`, { key: `sku:${sku}`, tab: 'potential', sku, priority: p, confidence: c, blocked: false, main: 'Pauta', revenue: rev, missing: miss || [] }];
+  const m = new Map([rec('A', 'Alta', 'Alta', 1000), rec('B', 'Alta', 'Baja', 500, ['22 de 60 días con venta']), rec('C', 'Alta', 'Baja', 0, ['22 de 60 días con venta']), rec('D', 'Media', 'Media', 0)]);
+  const o = G.opportunitySummary(m, A.SETTINGS), cards = G.priorityCards(o.matrix, m, 'potential');
+  ok('PC1 tres tarjetas con SKU, datos suficientes y por revisar', cards.length === 3 && cards[0].n === 3 && cards[0].sure === 1 && cards[0].rest === 2 && cards[1].n === 1 && cards[2].n === 0, cards);
+  ok('PC2 la de Alta dice qué falta (motivo más frecuente)', cards[0].why === '22 de 60 días con venta', cards[0]);
+  const C = G.actionCounts(m, 'potential', null);
+  ok('VP1 venta del periodo suma por acción y es null sin datos', C.rows[0].sale === 1500 && G.actionCounts(new Map([rec('Z', 'Baja', 'Baja', 0)]), 'potential', null).rows[0].sale === null, C.rows);
+}
+
 console.log(`${n - fails}/${n} pruebas pasan.`); process.exit(fails ? 1 : 0);

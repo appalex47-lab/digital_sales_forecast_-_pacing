@@ -82,6 +82,35 @@
     };
   }
 
+  /** Tres tarjetas de prioridad: cuántos SKU, cuántos con datos suficientes (confianza Alta) y por qué no hay más. */
+  function priorityCards(matrix, recs, tab) {
+    const cards = LEVELS.map((p) => {
+      const row = matrix[p], n = row.Alta + row.Media + row.Baja;
+      return { priority: p, n, sure: row.Alta, rest: row.Media + row.Baja };
+    });
+    const by = new Map();
+    [...recs.values()].filter((r) => r.tab === tab && !r.blocked && r.priority === 'Alta' && r.confidence !== 'Alta')
+      .forEach((r) => (r.missing || []).forEach((t) => { if (!by.has(t)) by.set(t, new Set()); by.get(t).add(r.sku); }));
+    const top = [...by.entries()].map(([t, set]) => ({ text: t, n: set.size })).sort((a, b) => b.n - a.n || (a.text < b.text ? -1 : 1))[0] || null;
+    cards[0].why = top ? top.text : '';
+    return cards;
+  }
+
+  /**
+   * Validación automática: las ofertas Recibidas sin ninguna alerta pasan solas a «Validada» (por «Automático»).
+   * No toca las que ya tienen movimientos de estado (una devuelta a Recibida a mano se queda como la dejó la persona).
+   */
+  function autoValidate(reg, by) {
+    const an = O().analyze(reg), done = [];
+    reg.offers.forEach((o) => {
+      if (o.state !== 'received' || alerts(an.get(o.offerId)).length) return;
+      if ((o.history || []).some((h) => h.field === 'state')) return;
+      const r = O().setState(reg, o.offerId, 'validated', { by: by || 'Automático', note: 'Sin alertas: validada automáticamente' });
+      if (r.ok) done.push(o.offerId);
+    });
+    return done;
+  }
+
   /** Por qué una validada de prioridad Alta/Alta no se puede seleccionar con un clic (para decirlo antes de aplicar). */
   function selectPlan(reg, an, recs) {
     const ok = [], out = { notAA: 0, blocked: [] };
@@ -167,15 +196,15 @@
     const A = FP.activation, labelOrder = SPACE_ORDER.map((k) => A.SPACE[k]);
     const by = new Map();
     [...recs.values()].filter((r) => r.tab === tab).forEach((r) => {
-      if (!by.has(r.main)) by.set(r.main, { label: r.main, skus: new Set(), a: new Set(), m: new Set(), b: new Set(), approved: new Set(), blocked: !!r.blocked });
+      if (!by.has(r.main)) by.set(r.main, { label: r.main, skus: new Set(), a: new Set(), m: new Set(), b: new Set(), approved: new Set(), blocked: !!r.blocked, sale: 0 });
       const x = by.get(r.main);
       if (x.skus.has(r.sku)) return;
-      x.skus.add(r.sku);
+      x.skus.add(r.sku); if (Number.isFinite(r.revenue) && r.revenue > 0) x.sale += r.revenue;
       if (r.priority === 'Alta') x.a.add(r.sku); else if (r.priority === 'Media') x.m.add(r.sku); else if (r.priority === 'Baja') x.b.add(r.sku);
       const st = stateOf ? stateOf(r.key) : 'suggested';
       if (st === 'approved' || st === 'executed') x.approved.add(r.sku);
     });
-    const rows = [...by.values()].map((x) => ({ label: x.label, n: x.skus.size, a: x.a.size, m: x.m.size, b: x.b.size, approved: x.approved.size, blocked: x.blocked }))
+    const rows = [...by.values()].map((x) => ({ label: x.label, n: x.skus.size, a: x.a.size, m: x.m.size, b: x.b.size, approved: x.approved.size, blocked: x.blocked, sale: x.sale > 0 ? x.sale : null }))
       .sort((p, q) => { const ip = labelOrder.indexOf(p.label), iq = labelOrder.indexOf(q.label); return (ip < 0 ? 99 : ip) - (iq < 0 ? 99 : iq); });
     const skus = new Set(); [...recs.values()].filter((r) => r.tab === tab).forEach((r) => skus.add(r.sku));
     return { rows, total: skus.size, max: rows.reduce((m, r) => Math.max(m, r.n), 0) };
@@ -203,5 +232,5 @@
     return out;
   }
 
-  FP.guide = { actionCounts, missingCounts, compareExternal, LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers };
+  FP.guide = { actionCounts, missingCounts, compareExternal, LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers, priorityCards, autoValidate };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -76,6 +76,9 @@ async def main():
         await click(q, f'[data-action="of-open"][data-id="{oid}"]')
         t = await body(q)
         chk('D1 el detalle muestra datos y alertas', 'Datos de la oferta' in t and 'Historial' in t and 'CREMA DEMO' in t, t[-400:])
+        if await q.evaluate("(i)=>FP.offers.find(FP.app.state.of.reg,i).state==='validated'", oid):   # las que no traen alertas se validan solas
+            chk('E0 una oferta sin alertas ya llegó validada automáticamente', True)
+            await click(q, f'[data-action="of-state"][data-to="received"][data-id="{oid}"]')
         await click(q, f'[data-action="of-state"][data-to="validated"][data-id="{oid}"]')
         t = await body(q); chk('E1 pasa a Validada', 'ahora está «Validada»' in t, t[:300])
         await click(q, f'[data-action="of-state"][data-to="selected"][data-id="{oid}"]')
