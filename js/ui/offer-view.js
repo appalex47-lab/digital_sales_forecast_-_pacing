@@ -101,7 +101,7 @@
       ${field('of-f-issue', 'Alertas', selectHtml('of-f-issue', ISS, f.issue || '', 'data-action="of-filter"'))}</div>` : '';
     const colBox = fold.cols ? `<div class="btn-row gd-cols"><span class="field__hint">Mostrar columnas:</span>${COLS.map(([k, l]) => `<label class="gd-colchk"><input type="checkbox" data-action="of-col" data-col="${k}"${cols[k] ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</div>` : '';
     const cnt = { received: 0, validated: 0, selected: 0, discarded: 0 }; reg.offers.forEach((o) => { cnt[o.state] += 1; });
-    const TABS = [['', 'Todas', reg.offers.length], ['received', 'Por revisar', cnt.received], ['validated', 'Validadas', cnt.validated], ['selected', 'Elegidas', cnt.selected], ['discarded', 'Descartadas', cnt.discarded]];
+    const TABS = [['', 'Todas', reg.offers.length], ['received', 'Por revisar', cnt.received], ['validated', 'Validadas', cnt.validated], ['selected', 'En promoción', cnt.selected], ['discarded', 'Descartadas', cnt.discarded]];
     const tabs = `<div class="gd-tabs" role="group" aria-label="Estado de la oferta">${TABS.map(([k, l, n]) => `<button type="button" class="gd-tab" data-action="of-tab" data-s="${k}" aria-pressed="${(f.state || '') === k}">${esc(l)} <span class="num">${n}</span></button>`).join('')}</div>
       <p class="field__hint">Las ofertas sin ninguna alerta se validan solas al cargarlas. «Por revisar» son las que traen alertas o las que devolviste a mano.</p>`;
     return `${tabs}${top}${chips}${grid}${colBox}`;
@@ -135,14 +135,14 @@
   function bulkHtml(reg, of) {
     const esc = H().esc; const ids = Object.keys(of.checked).filter((k) => of.checked[k]);
     const promos = (FP.promotionNotes && FP.promotionNotes.registry ? FP.promotionNotes.registry() : { promotions: [] }).promotions.filter((p) => ['draft', 'proposed'].includes(p.status));
-    const selectedCount = reg.offers.filter((o) => o.state === 'selected').length;
+    const selectedCount = ids.length;
     return `<div class="btn-row"><span class="field__hint">Marcadas: <strong>${ids.length}</strong></span>
       <button type="button" class="btn btn--small" data-action="of-check-all">Marcar las visibles</button><button type="button" class="btn btn--small btn--ghost" data-action="of-check-none">Quitar marcas</button>
       <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="validated"${ids.length ? '' : ' disabled'}>Validar marcadas</button>
-      <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="selected"${ids.length ? '' : ' disabled'}>Seleccionar marcadas</button>
+      <button type="button" class="btn btn--small btn--primary" data-action="gd-build-marked"${ids.length ? '' : ' disabled'}>Armar promoción con las marcadas</button>
       <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="marked"${ids.length ? '' : ' disabled'}>Eliminar marcadas</button></div>
       <div class="btn-row">${promos.length ? `${selectedCount ? '' : ''}<select id="of-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
-      <button type="button" class="btn btn--small" data-action="of-to-promo"${selectedCount ? '' : ' disabled'}>Agregar las ${selectedCount} seleccionadas a la promoción</button>` : '<span class="field__hint">Para pasar las seleccionadas a una promoción, crea una en la pestaña Promociones (en borrador o propuesta).</span>'}</div>`;
+      <button type="button" class="btn btn--small" data-action="of-to-promo"${selectedCount ? '' : ' disabled'}>Agregar las ${selectedCount} marcadas a esa promoción</button>` : '<span class="field__hint">Para agregar ofertas a una promoción existente, crea una en la pestaña Promociones (en borrador o propuesta).</span>'}</div>`;
   }
 
   function detailHtml(reg, o, an, actor) {
@@ -161,7 +161,7 @@
     return `<section class="panel" aria-labelledby="of-t-det"><div class="panel__head"><div><h2 class="panel__title" id="of-t-det">${esc(o.offerId)} · ${esc(o.name || o.sku)} ${pill(STATE_PILL[o.state], O().STATE[o.state])}</h2>
       <p class="panel__desc">${pct(o.discount)} de descuento · ${esc(o.start || '—')} a ${esc(o.end || '—')} · ${esc(o.mechanic || 'sin mecánica')}</p></div><button type="button" class="btn btn--small" data-action="of-close">Cerrar</button></div>
       <div class="panel__body"><h3>Alertas</h3>${issues}<h3>Datos de la oferta</h3><dl class="facts">${facts}</dl>
-        <h3>Ajustes ${editable ? '' : '<span class="field__hint">(seleccionada: devuélvela a «Validada» para editar)</span>'}</h3>
+        <h3>Ajustes ${editable ? '' : '<span class="field__hint">(en promoción: devuélvela a «Validada» para editar)</span>'}</h3>
         <p class="field__hint">Cada cambio guarda el valor anterior, quién y cuándo; nada se sobrescribe en silencio.</p>
         <div class="field-grid">${ed('start', 'Inicio', o.start, 'date')}${ed('end', 'Fin', o.end, 'date')}${ed('discount', '% de descuento', o.discount === null ? '' : +(o.discount * 100).toFixed(2), 'text', 'Escribe el porcentaje, ej. 25,5.')}${ed('mechanic', 'Mecánica', o.mechanic, 'text')}</div>
         <h3>Estado</h3>${field('of-s-note', 'Nota o motivo', input('of-s-note', ''), 'Obligatorio para descartar.')}<div class="btn-row">${nexts}${delBtn}</div>

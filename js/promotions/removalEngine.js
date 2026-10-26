@@ -30,7 +30,7 @@
     const set = new Set(ids), ok = [], blocked = [];
     offerReg.offers.forEach((o) => {
       if (!set.has(o.offerId)) return;
-      if (!REMOVABLE.includes(o.state)) { blocked.push({ offer: o, why: 'Está Seleccionada: devuélvela a Validada primero.' }); return; }
+      if (!REMOVABLE.includes(o.state)) { blocked.push({ offer: o, why: 'Está en promoción: devuélvela a Validada primero.' }); return; }
       const p = promotionOf(promoReg, o.offerId);
       if (p) { blocked.push({ offer: o, why: `Ya está en la promoción «${p.name}»: quítala de ahí primero.` }); return; }
       ok.push(o);

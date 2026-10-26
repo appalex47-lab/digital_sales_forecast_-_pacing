@@ -741,6 +741,7 @@
   function loadPromotions() {
     const env = storage.load(K.promotions);
     state.pm.reg = FP.promotions.hydrate(env && env.data);
+    try { if (FP.promotions.autoAdvance(state.pm.reg, Cal.toISODate(new Date())).length) savePromotions(); } catch (e) { /* el avance automático nunca bloquea el arranque */ }   // En marcha con vigencia vencida → En medición
     try { state.pm.actor = root.localStorage.getItem(PM_ACTOR) || state.pm.actor || ''; } catch (e) { /* sin storage */ }
   }
   FP.promotionNotes.provider = () => state.pm.reg;
@@ -786,6 +787,23 @@
     state.pm.reg.promotions.forEach((pr) => { if (String(pr.campaign || '').trim().toLowerCase() === c) (pr.skus || []).forEach((x) => set.add(x.sku)); });
     return [...set];
   }
+  /** Días que dura una campaña según las fechas de sus lotes y de sus promociones (inicio más temprano a fin más tardío); null si no hay fechas. */
+  function cgCampaignDays(campaign) {
+    const c = String(campaign || '').trim().toLowerCase(), starts = [], ends = [];
+    state.of.reg.batches.filter((b) => String(b.campaign || '').trim().toLowerCase() === c).forEach((b) => { if (b.start) starts.push(b.start); if (b.end) ends.push(b.end); });
+    state.pm.reg.promotions.filter((p) => String(p.campaign || '').trim().toLowerCase() === c).forEach((p) => { if (p.plannedStart) starts.push(p.plannedStart); if (p.plannedEnd) ends.push(p.plannedEnd); });
+    if (!starts.length || !ends.length) return null;
+    const a = starts.sort()[0], z = ends.sort().pop(), n = Math.round((Date.parse(`${z}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 864e5) + 1;
+    return n > 0 && n <= 366 ? n : null;
+  }
+  /** Llena la meta con el punto de partida automático × m (redondeado). Devuelve true si había con qué sugerir. */
+  function cgPrefill(m) {
+    const f = state.cg.form || {}, name = String(f.campaign || '').trim(); if (!name || !FP.goalsView || !FP.goalsView.suggestion) return false;
+    const bs = FP.goalsView.suggestion(state, name); if (!bs) return false;
+    const r = (v, step) => Math.round(v * m / step) * step;
+    state.cg.form = Object.assign({}, f, { revenue: String(r(bs.revenue, 1000)), units: bs.units ? String(r(bs.units, 10)) : '', note: m === 1 ? 'Punto de partida automático (ritmo reciente), sin efecto de la promoción' : `Punto de partida automático +${Math.round((m - 1) * 100)} %` });
+    return true;
+  }
   /** Ofertas recibidas de los lotes de una campaña (para el descuento promedio). */
   function cgCampaignOffers(campaign) {
     const c = String(campaign || '').trim().toLowerCase(), lots = new Set(state.of.reg.batches.filter((b) => String(b.campaign || '').trim().toLowerCase() === c).map((b) => b.batchId));
@@ -823,7 +841,7 @@
     } catch (e) { cg.live = {}; cg.data = null; cg.msg = { kind: 'bad', text: `No pude calcular el avance al día (${e.message || e}). Se usa el último corte guardado.` }; }
     cg.loading = false; render();
   }
-  if (FP.goalsView) { FP.goalsView.campaignSkus = cgCampaignSkus; FP.goalsView.campaignOffers = cgCampaignOffers; }
+  if (FP.goalsView) { FP.goalsView.campaignSkus = cgCampaignSkus; FP.goalsView.campaignOffers = cgCampaignOffers; FP.goalsView.campaignDays = cgCampaignDays; }
   function saveProposals() { return saveOk(storage.save(K.proposals, state.sm.reg), 'las propuestas exportadas'); }
   function loadActivation() { const env = storage.load(K.activation); state.ac.reg = FP.activation.hydrate(env && env.data); state.ac.sel = null; state.ac.msg = null; }
   function saveActivation() { return saveOk(storage.save(K.activation, state.ac.reg), 'la activación'); }
@@ -849,6 +867,23 @@
       rows.push(Object.assign({ sku: i.sku, name: i.name, category: i.category, lab: i.brand, origin: o ? 'Oportunidad con oferta recibida' : 'Oportunidad', offer: o ? [pctTxt(o.discount), full && full.mechanic].filter(Boolean).join(' · ') : '', program: full ? full.program : '', rec, ext: extOf(i.sku, rec) }, stateInfo(rec.key)));
     });
     return { rows, total: state.op.result ? state.op.result.counts.total : 0 };
+  }
+  /** Crea la promoción en borrador con las ofertas dadas (nombre y fechas salen de ellas) y las marca como agregadas. */
+  function createPromoFromOffers(offers) {
+    const of = state.of, G = FP.guide;
+    const d = G.draftFromOffers(offers, of.reg, new Date().toISOString().slice(0, 10));
+    const c = FP.promotions.createPromotion(state.pm.reg, { name: d.name, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd, campaign: d.campaign, createdBy: state.pm.actor });
+    if (!c.ok) { of.msg = { kind: 'bad', text: c.error }; state.pm.tab = 'ofertas'; render(); return null; }
+    const id = c.promotion.promoId; let added = 0; const skipped = [];
+    offers.forEach((o) => { const r = FP.promotions.addSku(state.pm.reg, id, FP.offers.toPromotionSku(o), state.pm.actor); if (r.ok) { added += 1; FP.offers.addNote(of.reg, o.offerId, `Agregada a la promoción ${id}`, state.pm.actor); } else skipped.push(`${o.sku}: ${r.error}`); });
+    savePromotions(); saveOffers();
+    return { id, d, added, skipped, warnings: c.warnings || [] };
+  }
+  function gdBuildAsk(opts) {
+    const of = state.of;
+    if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio guarda quién lo hizo.' }; render(); return; }
+    const plan = FP.guide.buildPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state), opts);
+    state.gd.confirm = { ok: plan.ok, out: plan.out, opts }; of.msg = null; state.pm.tab = 'ofertas'; render();
   }
   /** Las ofertas Recibidas sin ninguna alerta pasan solas a «Validada» (por «Automático»). Se llama al cargar y al guardar un archivo. */
   function autoValidateOffers(persist) {
@@ -4478,13 +4513,17 @@
     'of-to-promo'() {
       const promoId = ofV('of-b-promo'); const reg = state.pm.reg; const p = FP.promotions.find(reg, promoId);
       if (!p) { state.of.msg = { kind: 'bad', text: 'Elige la promoción destino.' }; render(); return; }
+      if (!state.pm.actor) { state.of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio guarda quién lo hizo.' }; render(); return; }
       let added = 0; const skipped = [];
-      state.of.reg.offers.filter((o) => o.state === 'selected').forEach((o) => {
+      const ids = Object.keys(state.of.checked).filter((k) => state.of.checked[k]);
+      ids.map((id) => FP.offers.find(state.of.reg, id)).filter((o) => o && ['validated', 'selected'].includes(o.state)).forEach((o) => {
+        if (o.state === 'validated') { const st = FP.offers.setState(state.of.reg, o.offerId, 'selected', { by: state.pm.actor, note: `Agregada a la promoción ${promoId}` }); if (!st.ok) { skipped.push(`${o.sku}: ${st.error}`); return; } }
         const r = FP.promotions.addSku(reg, promoId, FP.offers.toPromotionSku(o), state.pm.actor);
         if (r.ok) { added += 1; FP.offers.addNote(state.of.reg, o.offerId, `Agregada a la promoción ${promoId}`, state.pm.actor); } else skipped.push(`${o.sku}: ${r.error}`);
       });
+      if (added) state.of.checked = {};
       if (added) { savePromotions(); saveOffers(); }
-      state.of.msg = { kind: added ? 'ok' : 'bad', text: `${added} ofertas seleccionadas se agregaron a ${promoId}.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6) };
+      state.of.msg = { kind: added ? 'ok' : 'bad', text: `${added} ofertas se agregaron a ${promoId}.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6) };
       render();
     },
     'of-open'(el) { state.of.sel = el.dataset.id; state.of.msg = null; render(); const d = document.getElementById('of-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
@@ -4581,38 +4620,39 @@
       if (bad.length && entries.length) of.msg = { kind: 'bad', text: `${bad.length} no pasaron:`, warnings: bad.slice(0, 6) };
       render();
     },
-    'gd-select-aa'() {
-      const of = state.of;
-      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio de estado guarda quién lo hizo.' }; render(); return; }
-      const plan = FP.guide.selectPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state));
-      state.gd.confirm = { ok: plan.ok, out: plan.out }; of.msg = null; render();
-    },
     'gd-select-cancel'() { state.gd.confirm = null; render(); },
     'gd-select-confirm'() {
-      const of = state.of; state.gd.confirm = null;
-      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio de estado guarda quién lo hizo.' }; render(); return; }
-      const plan = FP.guide.selectPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state));   // se recalcula: la lista pudo cambiar
-      const entries = [], bad = [];
-      plan.ok.forEach((o) => { const r = FP.offers.setState(of.reg, o.offerId, 'selected', { by: state.pm.actor }); if (r.ok) entries.push({ id: o.offerId, from: 'validated', to: 'selected' }); else bad.push(`${o.offerId}: ${r.error}`); });
-      if (entries.length) { saveOffers(); state.gd.undo = { kind: 'offers', text: `Se seleccionaron ${entries.length} ${entries.length === 1 ? 'oferta' : 'ofertas'}.`, entries }; }
-      of.msg = bad.length ? { kind: 'bad', text: `${bad.length} no pasaron:`, warnings: bad.slice(0, 6) } : null;
+      const of = state.of, G = FP.guide; const c = state.gd.confirm; state.gd.confirm = null;
+      if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: cada cambio guarda quién lo hizo.' }; render(); return; }
+      const plan = G.buildPlan(of.reg, FP.offers.analyze(of.reg), FP.activationView.recs(state), c && c.opts);   // se recalcula: la lista pudo cambiar
+      const done = [], bad = [];
+      plan.ok.forEach((o) => {
+        if (o.state === 'selected') { done.push({ id: o.offerId, from: 'selected', to: 'selected' }); return; }
+        const r = FP.offers.setState(of.reg, o.offerId, 'selected', { by: state.pm.actor, note: 'Armada en una promoción' }); if (r.ok) done.push({ id: o.offerId, from: 'validated', to: 'selected' }); else bad.push(`${o.offerId}: ${r.error}`);
+      });
+      const offers = done.map((e) => FP.offers.find(of.reg, e.id)).filter(Boolean);
+      if (!offers.length) { of.msg = { kind: 'bad', text: bad.length ? `No se pudo armar la promoción: ${bad[0]}` : 'No hay ofertas que se puedan armar.' }; render(); return; }
+      const r = createPromoFromOffers(offers); if (!r) { done.filter((e) => e.from === 'validated').forEach((e) => FP.offers.setState(of.reg, e.id, 'validated', { by: state.pm.actor, note: 'No se pudo crear la promoción' })); saveOffers(); render(); return; }
+      of.checked = {};
+      state.gd.undo = { kind: 'build', promoId: r.id, entries: done.filter((e) => e.from === 'validated'), text: `Se armó «${r.d.name}» (${r.id}) con ${r.added} SKU.` };
+      state.pm.tab = 'promos'; state.pm.sel = r.id;
+      state.pm.msg = { kind: r.skipped.length || bad.length ? 'bad' : 'ok', text: `Promoción «${r.d.name}» creada con el identificador ${r.id} y ${r.added} SKU. Queda en borrador: pon objetivo y fechas y apruébala.`, warnings: r.skipped.concat(bad).slice(0, 6) };
       render();
     },
     'gd-create-promo'() {
       const of = state.of, G = FP.guide;
       if (!state.pm.actor) { of.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: la promoción guarda quién la creó.' }; state.pm.tab = 'ofertas'; render(); return; }
       const offers = of.reg.offers.filter((o) => o.state === 'selected' && !G.addedToPromo(o));
-      if (!offers.length) { of.msg = { kind: 'bad', text: 'No hay ofertas seleccionadas pendientes de promoción.' }; render(); return; }
-      const d = G.draftFromOffers(offers, of.reg, new Date().toISOString().slice(0, 10));
-      const c = FP.promotions.createPromotion(state.pm.reg, { name: d.name, plannedStart: d.plannedStart, plannedEnd: d.plannedEnd, campaign: d.campaign, createdBy: state.pm.actor });
-      if (!c.ok) { of.msg = { kind: 'bad', text: c.error }; state.pm.tab = 'ofertas'; render(); return; }
-      const id = c.promotion.promoId; let added = 0; const skipped = [];
-      offers.forEach((o) => { const r = FP.promotions.addSku(state.pm.reg, id, FP.offers.toPromotionSku(o), state.pm.actor); if (r.ok) { added += 1; FP.offers.addNote(of.reg, o.offerId, `Agregada a la promoción ${id}`, state.pm.actor); } else skipped.push(`${o.sku}: ${r.error}`); });
-      savePromotions(); saveOffers();
-      state.pm.tab = 'promos'; state.pm.sel = id; state.gd.undo = null; state.gd.confirm = null;
-      state.pm.msg = { kind: skipped.length ? 'bad' : 'ok', text: `Promoción «${d.name}» creada con el identificador ${id} y ${added} ${added === 1 ? 'SKU' : 'SKU'} de ofertas seleccionadas. Queda en borrador: pon objetivo y fechas y envíala como propuesta.${skipped.length ? ` No se agregaron ${skipped.length}:` : ''}`, warnings: skipped.slice(0, 6).concat(c.warnings || []) };
+      if (!offers.length) { of.msg = { kind: 'bad', text: 'No hay ofertas en espera de promoción.' }; render(); return; }
+      const r = createPromoFromOffers(offers); if (!r) return;
+      state.pm.tab = 'promos'; state.pm.sel = r.id; state.gd.undo = null; state.gd.confirm = null;
+      state.pm.msg = { kind: r.skipped.length ? 'bad' : 'ok', text: `Promoción «${r.d.name}» creada con el identificador ${r.id} y ${r.added} SKU. Queda en borrador: pon objetivo y fechas y apruébala.${r.skipped.length ? ` No se agregaron ${r.skipped.length}:` : ''}`, warnings: r.skipped.slice(0, 6).concat(r.warnings || []) };
       render();
     },
+    /** Armar promoción: muestra la lista de ofertas que entran (todas las validadas, solo Alta con datos suficientes, o las marcadas) y qué queda fuera. */
+    'gd-build-promo'() { gdBuildAsk({}); },
+    'gd-select-aa'() { gdBuildAsk({ aaOnly: true }); },
+    'gd-build-marked'() { const ids = Object.keys(state.of.checked).filter((k) => state.of.checked[k]); if (!ids.length) { state.of.msg = { kind: 'bad', text: 'Marca primero las ofertas que entran a la promoción.' }; render(); return; } gdBuildAsk({ ids }); },
     'gd-op-mark'() {
       const op = state.op, aa = FP.guide.opportunitySummary(FP.activationView.recs(state), state.ac.reg.params).aa;
       op.view = 'sku'; op.checked = {}; aa.forEach((sku) => { op.checked[sku] = true; });
@@ -4644,6 +4684,13 @@
         if (ok) { u.snapshot.released.forEach((id) => { if (FP.offers.find(state.of.reg, id)) FP.offers.addNote(state.of.reg, id, `Agregada a la promoción ${u.promoId} (restaurada)`, state.pm.actor); }); state.rm.log.entries.shift(); savePromotions(); saveOffers(); saveRemovalLog(); }
         if (ok) state.pm.sel = u.promoId;
         state.pm.msg = { kind: ok ? 'ok' : 'bad', text: ok ? 'Se restauró la promoción.' : 'No se pudo restaurar: ya existe una promoción con ese identificador.' }; render(); return;
+      }
+      if (u.kind === 'build') {
+        const p = FP.promotions.find(state.pm.reg, u.promoId);
+        if (p) { FP.removal.removePromotion(state.pm.reg, state.of.reg, u.promoId, { by: state.pm.actor, reason: 'Deshecho al armar la promoción', ack: true }); }
+        u.entries.forEach((e) => { const o = FP.offers.find(state.of.reg, e.id); if (o && o.state === 'selected') { FP.offers.setState(state.of.reg, e.id, 'validated', { by: state.pm.actor, note: 'Deshecho al armar la promoción' }); n += 1; } });
+        savePromotions(); saveOffers();
+        state.pm.tab = 'ofertas'; state.pm.sel = null; state.pm.msg = { kind: 'ok', text: 'Se deshizo: la promoción se quitó y las ofertas volvieron a Validadas.' }; render(); return;
       }
       if (u.kind === 'offers') {
         u.entries.forEach((e) => { const o = FP.offers.find(state.of.reg, e.id); if (o && o.state === e.to && FP.offers.setState(state.of.reg, e.id, e.from, { by: state.pm.actor, note: 'Deshecho desde el resumen' }).ok) n += 1; else skip += 1; });
@@ -4813,7 +4860,7 @@
     },
     'rs-export-csv'() { const rs = state.rs; if (!rs.result) return; pmDownload(`evaluacion_${rs.promoId}_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildEvaluationCsv(rs.result), 'text/csv'); },
     'rs-export-history'() { const list = FP.resultsView.filtered(state); if (!list.length) { state.rs.msg = { kind: 'bad', text: 'No hay promociones que exportar con estos filtros.' }; render(); return; } pmDownload(`historial_promociones_${FP.promotionExport.fileStamp()}.csv`, FP.promotionExport.buildHistoryCsv(list), 'text/csv'); },
-    'pm-tab'(el) { state.pm.tab = ['resumen', 'oportunidades', 'ofertas', 'resultados'].includes(el.dataset.tab) ? el.dataset.tab : 'promos'; render(); if (['resumen', 'oportunidades', 'ofertas'].includes(state.pm.tab) && !state.op.result && !state.op.loading) opRun(false); if (state.pm.tab === 'resumen') cgLoad(); },
+    'pm-tab'(el) { state.pm.tab = ['resumen', 'oportunidades', 'ofertas', 'resultados'].includes(el.dataset.tab) ? el.dataset.tab : 'promos'; render(); if (['resumen', 'oportunidades', 'ofertas'].includes(state.pm.tab) && !state.op.result && !state.op.loading) opRun(false); if (state.pm.tab === 'promos') cgLoad(); },
     'pm-open'(el) { state.pm.sel = el.dataset.id; state.pm.msg = null; render(); const d = document.getElementById('pm-t-det'); if (d) { try { d.scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } } },
     'pm-close-detail'() { state.pm.sel = null; state.pm.msg = null; render(); },
     'pm-save-head'(el) {
@@ -4822,13 +4869,17 @@
       return pmMsg(FP.promotions.updatePromotion(state.pm.reg, id, f, state.pm.actor), 'Cambios guardados.');
     },
     'cg-refresh'() { cgLoad(); },
+    'cg-suggest'(el) { cgPrefill(Number(el.dataset.m) || 1); render(); },
     'cg-form'() {   // se guarda lo escrito y se repinta para mostrar el ticket histórico y el aviso de precio implícito
       const V = FP.goalsView.val; state.cg.form = { campaign: V('cg-camp'), revenue: V('cg-rev'), units: V('cg-units'), note: V('cg-note') };
+      if (!state.cg.form.revenue && !state.cg.form.units && !state.cg.form.note && cgPrefill(1)) { render(); return; }   // campaña nueva con los campos vacíos: sugiere sola
       const h = document.getElementById('cg-help'); if (h) h.innerHTML = FP.goalsView.helper(state);   // solo la ayuda: repintar todo se come el clic sobre «Guardar»
     },
     'cg-edit'(el) {
       const g = FP.goals.find(state.cg.reg, el.dataset.c), f = (n) => (n ? String(n) : '');
-      state.cg.form = { campaign: el.dataset.c, revenue: g ? f(g.revenue) : '', units: g ? f(g.units) : '', note: g ? g.note || '' : '' }; state.cg.msg = null; render();
+      state.cg.form = { campaign: el.dataset.c, revenue: g ? f(g.revenue) : '', units: g ? f(g.units) : '', note: g ? g.note || '' : '' }; state.cg.msg = null;
+      if (!g) cgPrefill(1);   // sin meta: arranca con el punto de partida automático (lo ajustas tú)
+      render();
       const i = document.getElementById('cg-rev'); if (i) { try { i.focus(); } catch (e) { /* sin foco */ } }
     },
     'cg-save'() {
@@ -4865,8 +4916,8 @@
     'pm-inc-add'(el) { return pmMsg(FP.promotions.addIncident(state.pm.reg, el.dataset.id, pmV('pm-i-text'), pmV('pm-i-date'), state.pm.actor), 'Incidencia registrada.'); },
     'pm-status'(el) {
       const to = el.dataset.to;
-      const r = FP.promotions.setStatus(state.pm.reg, el.dataset.id, to, { by: state.pm.actor, approvedBy: pmV('pm-st-approver'), conclusion: pmV('pm-st-concl'), recommendation: pmV('pm-st-rec'), note: to === 'cancelled' ? pmV('pm-st-cancel') : '', today: Cal.toISODate(new Date()) });
-      if (r.ok && to === 'approved') {
+      const r = FP.promotions.setStatus(state.pm.reg, el.dataset.id, to, { by: state.pm.actor, approvedBy: pmV('pm-st-approver') || state.pm.actor, conclusion: pmV('pm-st-concl'), recommendation: pmV('pm-st-rec'), note: to === 'cancelled' ? pmV('pm-st-cancel') : pmV('pm-st-back'), today: Cal.toISODate(new Date()) });
+      if (r.ok && to === 'approved' && !(FP.promotions.find(state.pm.reg, el.dataset.id) || {}).baseline) {
         pmMsg(r, `Estado actualizado a «${FP.promotions.STATUS[to]}». Congelando la línea base…`);
         return freezePromoBaseline(el.dataset.id, null).then((f) => { if (f && !f.ok) { state.pm.msg = { kind: 'bad', text: `Aprobada, pero ${f.error}` }; render(); } });
       }

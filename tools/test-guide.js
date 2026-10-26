@@ -49,17 +49,17 @@ ok('B1 una oferta de control distinto no entra a la matriz', (() => { const t = 
 // 5. Siguiente paso: el más adelantado con trabajo pendiente
 const ns = (offers, promos) => G.nextStep({ offers, promotions: promos || [], today });
 const of = (state, extra) => Object.assign({ offerId: 'O' + Math.random(), sku: 'K', state, history: [] }, extra || {});
+const pr = (status, extra) => Object.assign({ promoId: 'P-1', name: 'Dermo', status, skus: [], plannedEnd: '2026-12-01' }, extra || {});
 ok('N1 sin ofertas: cargar', ns([]).step === 1 && /Cargar/.test(ns([]).button));
-ok('N2 recibidas: validar, con el conteo', ns([of('received'), of('received')]).step === 2 && /2/.test(ns([of('received'), of('received')]).button));
-ok('N3 validadas: seleccionar', ns([of('validated')]).step === 3);
-ok('N4 seleccionadas: crear promoción en un clic', ns([of('selected'), of('selected')]).step === 4 && ns([of('selected'), of('selected')]).go.action === 'gd-create-promo');
+ok('N2 recibidas con alertas: revisar, con el conteo', ns([of('received'), of('received')]).step === 2 && /2/.test(ns([of('received'), of('received')]).button));
+ok('N3 validadas: armar la promoción en un clic', ns([of('validated')]).step === 2 && ns([of('validated')]).go.action === 'gd-build-promo');
+ok('N4 seleccionadas pendientes también entran a armar la promoción', ns([of('selected'), of('selected')]).step === 2 && ns([of('selected'), of('selected')]).go.action === 'gd-build-promo' && /2/.test(ns([of('selected'), of('selected')]).button));
 const added = of('selected', { history: [{ field: 'note', to: 'Agregada a la promoción P-1' }] });
 ok('N5 seleccionadas que ya están en una promoción no piden crear otra', ns([added]).done === true);
-ok('N6 con varias cosas por hacer gana la más adelantada', ns([of('received'), of('validated'), of('selected')]).step === 4);
-const pr = (status, extra) => Object.assign({ promoId: 'P-1', name: 'Dermo', status, skus: [], plannedEnd: '2026-12-01' }, extra || {});
-ok('N7 promoción aprobada: publicar', ns([], [pr('approved')]).step === 5);
-ok('N8 promoción en borrador: abrirla', ns([], [pr('draft')]).step === 4);
-ok('N9 publicada con vigencia vencida: medir', ns([], [pr('published', { plannedEnd: '2026-10-01' })]).step === 6);
+ok('N6 con varias cosas por hacer gana la más adelantada', ns([of('received'), of('validated'), of('selected')]).go.action === 'gd-build-promo' && ns([of('received')], [pr('approved')]).step === 3);
+ok('N7 promoción aprobada: ponerla en marcha', ns([], [pr('approved')]).step === 3);
+ok('N8 promoción en borrador: abrirla y aprobarla', ns([], [pr('draft')]).step === 3);
+ok('N9 publicada con vigencia vencida: medir', ns([], [pr('published', { plannedEnd: '2026-10-01' })]).step === 4);
 ok('N10 publicada vigente: nada pendiente', ns([], [pr('published')]).done === true);
 ok('N11 todo en orden dice «al día»', ns([of('discarded')]).done === true && ns([of('discarded')]).step === 0);
 ok('N12 la lista de pasos marca el actual', G.allSteps({ offers: [of('received')], promotions: [], today }).find((x) => x.n === 2).state === 'now');
@@ -95,5 +95,13 @@ ok('D2 sin campaña, nombre con la fecha de hoy', G.draftFromOffers([Object.assi
   const C = G.actionCounts(m, 'potential', null);
   ok('VP1 venta del periodo suma por acción y es null sin datos', C.rows[0].sale === 1500 && G.actionCounts(new Map([rec('Z', 'Baja', 'Baja', 0)]), 'potential', null).rows[0].sale === null, C.rows);
 }
+
+// buildPlan
+{ const r3 = O.createRegistry(); const m3 = (sku, e) => O.captureManual(r3, Object.assign({ sku, name: 'P ' + sku, controlled: 'Ningún Control', discount: '30', start: '2026-11-01', end: '2026-11-15', campaignName: 'C' }, e || {}), { by: 'A', now: '2026-10-26T10:00:00.000Z' });
+  m3('B1'); m3('B2'); m3('B3', { start: '', end: '' }); G.autoValidate(r3, 'Automático'); r3.offers.find((o) => o.sku === 'B3').state = 'validated';
+  const an3 = O.analyze(r3), plan3 = G.buildPlan(r3, an3, new Map());
+  ok('BP1 arma con las validadas que se pueden elegir y deja fuera las que no, con su razón', plan3.ok.length === 2 && plan3.out.blocked.length === 1 && /vigencia|fecha/i.test(plan3.out.blocked[0].why), plan3);
+  ok('BP2 se puede limitar a las ofertas indicadas', G.buildPlan(r3, an3, new Map(), { ids: [r3.offers[0].offerId] }).ok.length === 1);
+  ok('BP3 con aaOnly, sin Alta/Alta no arma nada y cuenta las que quedan fuera', G.buildPlan(r3, an3, new Map(), { aaOnly: true }).out.notAA === 3); }
 
 console.log(`${n - fails}/${n} pruebas pasan.`); process.exit(fails ? 1 : 0);

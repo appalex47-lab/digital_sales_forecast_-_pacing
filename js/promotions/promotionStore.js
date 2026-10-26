@@ -19,7 +19,9 @@
   const FP = (root.FP = root.FP || {});
 
   const STATUS = { draft: 'Borrador', proposed: 'Borrador · en aprobación', approved: 'Aprobada', published: 'En marcha · publicada', measuring: 'En marcha · en medición', closed: 'Cerrada', cancelled: 'Cancelada' };
-  const NEXT = { draft: ['proposed'], proposed: ['approved', 'draft'], approved: ['published', 'proposed'], published: ['measuring'], measuring: ['closed'], closed: [], cancelled: [] };
+  // Se puede avanzar directo (Borrador → Aprobada) y regresar un paso desde Aprobada, En marcha (publicada) y En medición; Cerrada y Cancelada son finales.
+  const NEXT = { draft: ['proposed', 'approved'], proposed: ['approved', 'draft'], approved: ['published', 'draft', 'proposed'], published: ['measuring', 'approved'], measuring: ['closed', 'published'], closed: [], cancelled: [] };
+  const BACK = { 'approved>draft': 1, 'approved>proposed': 1, 'published>approved': 1, 'measuring>published': 1, 'proposed>draft': 1 };
   const OBJECTIVES = { sales: 'Venta', conversion: 'Conversión', traffic: 'Tráfico', recover: 'Recuperar venta', clearance: 'Liquidación', launch: 'Lanzamiento', other: 'Otro' };
   const ORIGINS = { digital: 'Oportunidad digital', offer: 'Oferta recibida', manual: 'Manual' };
   const SPACES = { banner: 'Banner', grid: 'Cuadrícula', search: 'Buscador', paid: 'Pauta', email: 'Correo', other: 'Otro' };
@@ -202,6 +204,21 @@
    * Cambio de estado con reglas. `a` = { by, approvedBy, note, conclusion, recommendation, today }.
    * Devuelve { ok, error?, warnings? }. Un cambio rechazado no modifica nada.
    */
+  /**
+   * Avance por fechas: una promoción En marcha (publicada) cuya vigencia ya terminó pasa sola a «En medición».
+   * No toca la que la persona regresó a mano de medición a publicada. Cerrar sí requiere conclusión y recomendación de la persona.
+   */
+  function autoAdvance(reg, today) {
+    const moved = [];
+    (reg.promotions || []).forEach((p) => {
+      if (p.status !== 'published') return;
+      const last = (p.history || []).filter((h) => h.field === 'status').pop();
+      if (last && last.from === 'measuring' && last.to === 'published') return;
+      if (setStatus(reg, p.promoId, 'measuring', { by: 'Automático', today, note: 'Terminó la vigencia: pasa sola a medición' }).ok) moved.push(p.promoId);
+    });
+    return moved;
+  }
+
   function setStatus(reg, promoId, to, a = {}) {
     const p = find(reg, promoId); if (!p) return fail('La promoción no existe.');
     if (to === 'cancelled') {
@@ -212,14 +229,14 @@
     if (!STATUS[to]) return fail('Estado no reconocido.');
     if (!NEXT[p.status].includes(to)) return fail(`No se puede pasar de «${STATUS[p.status]}» a «${STATUS[to]}».`);
     const warnings = [];
+    if (BACK[`${p.status}>${to}`] && ['published', 'measuring'].includes(p.status) && !clean(a.note)) return fail('Para regresar una promoción en marcha escribe el motivo.');
     if (to === 'proposed') {
       if (!p.skus.length) return fail('Agrega al menos un SKU antes de enviar como propuesta.');
     }
     if (to === 'approved') {
       if (!p.skus.length) return fail('Agrega al menos un SKU antes de aprobar.');
       if (!p.plannedStart || !p.plannedEnd) return fail('Para aprobar define la vigencia planeada (inicio y fin).');
-      const by = clean(a.approvedBy); if (!by) return fail('Escribe quién aprueba.');
-      if (by.toLowerCase() === clean(p.createdBy).toLowerCase()) return fail('Quien aprueba debe ser distinto de quien crea.');
+      const by = clean(a.approvedBy) || (p.status === 'published' ? clean(p.approvedBy) : ''); if (!by) return fail('Escribe quién aprueba.');
       p.approvedBy = by;
     }
     if (to === 'published') {
@@ -238,7 +255,7 @@
       p.conclusion = clean(a.conclusion); p.recommendation = a.recommendation;
     }
     log(p, 'status', p.status, to, clean(a.note) || null, to === 'approved' ? clean(a.approvedBy) : a.by);
-    if (to === 'proposed' && p.baseline) { delete p.baseline; log(p, 'baseline', 'congelada', null, 'Se quitó la línea base al regresar a propuesta; se congela de nuevo al aprobar.', a.by); }
+    if ((to === 'proposed' || to === 'draft') && p.baseline) { delete p.baseline; log(p, 'baseline', 'congelada', null, 'Se quitó la línea base al regresar a antes de aprobar; se congela de nuevo al aprobar.', a.by); }
     p.status = to;
     return ok({ warnings });
   }
@@ -305,6 +322,6 @@
     }
   };
 
-  FP.promotions = { STATUS, NEXT, OBJECTIVES, ORIGINS, SPACES, ACT_STATUS, RECOMMENDATIONS, createRegistry, hydrate, slugOf, nextId, find, createPromotion, updatePromotion,
+  FP.promotions = { STATUS, NEXT, autoAdvance, OBJECTIVES, ORIGINS, SPACES, ACT_STATUS, RECOMMENDATIONS, createRegistry, hydrate, slugOf, nextId, find, createPromotion, updatePromotion,
     addSku, removeSku, updateSku, addActivation, setActivationStatus, addIncident, addEvaluation, setStatus, setBaseline, overlaps, activeIn, duplicateNameWarning };
 })(typeof window !== 'undefined' ? window : globalThis);

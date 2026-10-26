@@ -47,8 +47,8 @@ const mk = (reg, o = {}) => P.createPromotion(reg, Object.assign({ name: 'Demo o
   ok('S2 con SKU pasa a propuesta', P.setStatus(reg, id, 'proposed', { by: 'Persona A' }).ok && p.status === 'proposed');
   ok('S3 saltar a publicada se rechaza y no cambia nada', !P.setStatus(reg, id, 'published').ok && p.status === 'proposed');
   ok('S4 aprobar sin nombre de aprobador se rechaza', !P.setStatus(reg, id, 'approved', {}).ok);
-  ok('S5 quien aprueba = quien crea se rechaza (sin importar mayúsculas)', !P.setStatus(reg, id, 'approved', { approvedBy: ' persona a ' }).ok && p.status === 'proposed');
-  ok('S6 aprobador distinto aprueba', P.setStatus(reg, id, 'approved', { approvedBy: 'Persona B' }).ok && p.status === 'approved' && p.approvedBy === 'Persona B');
+  ok('S5 sin nombre de quien aprueba no se aprueba', !P.setStatus(reg, id, 'approved', { approvedBy: '  ' }).ok && p.status === 'proposed');
+  ok('S6 quien crea también puede aprobar (misma persona)', P.setStatus(reg, id, 'approved', { approvedBy: 'Persona A' }).ok && p.status === 'approved' && p.approvedBy === 'Persona A');
   ok('S7 el SKU ya no se edita tras aprobar', !P.addSku(reg, id, { sku: 'DEMO-002', origin: 'digital' }).ok);
   ok('S8 fechas reales no se registran antes de publicar', !P.updateSku(reg, id, 'DEMO-001', { realStart: '2026-11-05' }).ok);
   const pub = P.setStatus(reg, id, 'published', { by: 'Persona C' });
@@ -132,6 +132,19 @@ const mk = (reg, o = {}) => P.createPromotion(reg, Object.assign({ name: 'Demo o
   ok('B6 publicada aún se puede congelar', P.setBaseline(reg, id, fz, {}).ok);
   const h = P.hydrate(JSON.parse(JSON.stringify(reg)));
   ok('B7 la base sobrevive a guardar y cargar', h.promotions[0].baseline && h.promotions[0].baseline.rows === 3);
+}
+
+// flujo simplificado: aprobar directo, misma persona, regresar un paso y avance automático por fechas
+{ const reg = P.createRegistry(); const p = mk(reg).promotion; const id = p.promoId; P.addSku(reg, id, { sku: 'DEMO-001', origin: 'digital' });
+  ok('F1 Borrador pasa directo a Aprobada, aprobada por la misma persona', P.setStatus(reg, id, 'approved', { approvedBy: 'Persona A', by: 'Persona A' }).ok && p.status === 'approved' && p.approvedBy === 'Persona A');
+  ok('F2 Aprobada regresa a Borrador y quita la línea base', P.setStatus(reg, id, 'draft', { by: 'Persona A' }).ok && p.status === 'draft' && !p.baseline);
+  P.setStatus(reg, id, 'approved', { approvedBy: 'Persona A' }); P.setStatus(reg, id, 'published', { by: 'Persona A' });
+  ok('F3 En marcha regresa a Aprobada solo con motivo', !P.setStatus(reg, id, 'approved', { by: 'Persona A' }).ok && P.setStatus(reg, id, 'approved', { by: 'Persona A', note: 'Se movió la fecha' }).ok && p.status === 'approved');
+  P.setStatus(reg, id, 'published', { by: 'Persona A' });
+  ok('F4 el avance automático no mueve una promoción cuya vigencia no ha terminado', P.autoAdvance(reg, '2026-11-10').length === 0 && p.status === 'published');
+  ok('F5 al terminar la vigencia pasa sola a medición, por «Automático»', P.autoAdvance(reg, '2026-11-20').length === 1 && p.status === 'measuring' && p.history[p.history.length - 1].by === 'Automático');
+  ok('F6 En medición regresa a En marcha con motivo y ya no se vuelve a mover sola', !P.setStatus(reg, id, 'published', { by: 'Persona A' }).ok && P.setStatus(reg, id, 'published', { by: 'Persona A', note: 'Faltaba un SKU' }).ok && P.autoAdvance(reg, '2026-11-25').length === 0 && p.status === 'published');
+  ok('F7 Cerrada y Cancelada no regresan', P.NEXT.closed.length === 0 && P.NEXT.cancelled.length === 0);
 }
 
 console.log(`${n - fails}/${n} pruebas OK${fails ? ` — ${fails} FALLAN` : ''}`);

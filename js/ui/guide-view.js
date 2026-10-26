@@ -35,7 +35,7 @@
         <div class="btn-row gd-bar__acts">${main}${second}</div></div>
       <div class="gd-bar__foot"><span class="field__hint">Esta barra solo te guía: no activa nada en la web ni en la app.</span>
         <button type="button" class="btn btn--small btn--ghost" data-action="gd-steps" aria-expanded="${open}" aria-controls="gd-steps">${open ? 'Ocultar los pasos' : 'Ver todos los pasos'}</button></div>
-      <ol class="gd-steps" id="gd-steps" aria-label="Los seis pasos"${open ? '' : ' hidden'}>${list}</ol></section>`;
+      <ol class="gd-steps" id="gd-steps" aria-label="Los cuatro pasos"${open ? '' : ' hidden'}>${list}</ol></section>`;
   }
 
   function matrixHtml(m, esc) {
@@ -59,11 +59,12 @@
     const esc = H().esc;
     const out = [];
     if (c.out.notAA) out.push(`${plural(c.out.notAA, 'validada', 'validadas')} no son de prioridad Alta con confianza Alta (se revisan aparte)`);
-    if (c.out.blocked.length) out.push(`${plural(c.out.blocked.length, 'no se puede seleccionar', 'no se pueden seleccionar')}: ${c.out.blocked.slice(0, 4).map((b) => `${b.sku} (${b.why.replace(/\.$/, '')})`).join('; ')}${c.out.blocked.length > 4 ? '…' : ''}`);
-    return `<div class="note note--warn gd-confirm" role="alert"><strong>Se van a seleccionar ${c.ok.length} ${c.ok.length === 1 ? 'oferta' : 'ofertas'}:</strong>
+    if (c.out.blocked.length) out.push(`${plural(c.out.blocked.length, 'no se puede armar', 'no se pueden armar')}: ${c.out.blocked.slice(0, 4).map((b) => `${b.sku} (${b.why.replace(/\.$/, '')})`).join('; ')}${c.out.blocked.length > 4 ? '…' : ''}`);
+    return `<div class="note note--warn gd-confirm" role="alert"><strong>Se va a armar una promoción en borrador con ${c.ok.length} ${c.ok.length === 1 ? 'oferta' : 'ofertas'}:</strong>
       ${c.ok.slice(0, 8).map((o) => esc(`${o.sku} ${o.name ? '· ' + o.name : ''}`)).join('<br>')}${c.ok.length > 8 ? `<br>…y ${c.ok.length - 8} más` : ''}
       ${out.length ? `<p>Quedan fuera: ${out.map(esc).join('. ')}.</p>` : ''}
-      <div class="btn-row"><button type="button" class="btn btn--primary" data-action="gd-select-confirm"${c.ok.length ? '' : ' disabled'}>Seleccionar las ${c.ok.length}</button><button type="button" class="btn btn--ghost" data-action="gd-select-cancel">Cancelar</button></div></div>`;
+      <p class="field__hint">El nombre y las fechas salen de las ofertas. Después pones el objetivo y la apruebas. Puedes deshacerlo.</p>
+      <div class="btn-row"><button type="button" class="btn btn--primary" data-action="gd-select-confirm"${c.ok.length ? '' : ' disabled'}>Armar promoción con las ${c.ok.length}</button><button type="button" class="btn btn--ghost" data-action="gd-select-cancel">Cancelar</button></div></div>`;
   }
 
   /** Tarjetas de prioridad (reemplazan la matriz 3×3): cuántos SKU, cuántos con datos suficientes y qué falta. */
@@ -88,7 +89,7 @@
     const esc = H().esc, reg = state.of.reg; if (!reg.offers.length) return '';
     const P = state.ac.reg.params, S = G().offerSummary(reg, an, recs, P, todayISO());
     const cards = G().priorityCards(S.matrix, recs, 'offer');
-    const btn = `<button type="button" class="btn btn--primary" data-action="gd-select-aa"${S.aa.length ? '' : ' disabled'}>${S.aa.length ? `Elegir las ${S.aa.length} de prioridad Alta con datos suficientes` : 'Sin ofertas listas para elegir en bloque'}</button>`;
+    const btn = `<button type="button" class="btn btn--primary" data-action="gd-select-aa"${S.aa.length ? '' : ' disabled'}>${S.aa.length ? `Armar promoción con las ${S.aa.length} de prioridad Alta` : 'Sin ofertas listas para armar en bloque'}</button>`;
     const groups = S.groups.map((g) => `<div class="gd-grp"><div class="gd-grp__t"><strong>${esc(g.title)}</strong> <span class="gd-count">${g.n}</span><span class="cell-sub">${esc(g.text)}</span></div>
       <button type="button" class="btn btn--small" data-action="gd-go" data-tab="ofertas" data-fstate="received" data-fissue="${esc(g.issue)}">Ver ${g.n === 1 ? 'la oferta' : `las ${g.n}`}</button></div>`).join('');
     const extras = [];
@@ -150,7 +151,7 @@
 
   /* ---------- Eliminar ofertas y promociones ---------- */
   function removalToast(state) {
-    const u = state.gd && state.gd.undo; if (!u || (u.kind !== 'rm-offers' && u.kind !== 'rm-promo')) return '';
+    const u = state.gd && state.gd.undo; if (!u || (u.kind !== 'rm-offers' && u.kind !== 'rm-promo' && u.kind !== 'build')) return '';
     return `<div class="gd-toast gd-toast--page" role="status"><span>${H().esc(u.text)}</span><button type="button" class="btn btn--small btn--ghost" data-action="gd-undo">Deshacer</button></div>`;
   }
 

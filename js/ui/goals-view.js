@@ -27,6 +27,13 @@
   }
 
     /** Ayuda al fijar la meta: ticket por unidad de los SKU de la campaña contra el corte alto/bajo, y aviso si las dos metas implican un precio fuera de lo histórico. */
+  /** Punto de partida automático de la meta de una campaña (null si faltan datos o fechas). */
+  function suggestion(state, name) {
+    const d = state.cg.data; if (!d || !d.rows) return null;
+    const days = FP.goalsView.campaignDays ? FP.goalsView.campaignDays(name) : null;
+    const skus = FP.goalsView.campaignSkus ? FP.goalsView.campaignSkus(name) : [];
+    return G().baselineSuggestion(skus, d.rows, 56, days);
+  }
   function helper(state) {
     const esc = H().esc, cg = state.cg, f = cg.form || {}, d = cg.data;
     if (cg.loading && !d) return '<p class="field__hint">Calculando el ticket histórico…</p>';
@@ -44,7 +51,11 @@
     const ab = G().autoBand(d.weeks, skus), chk = G().impliedCheck(rev, un, ct.ticket, dsc ? dsc.avg : null, ab.band);
     const txt = `Los ${int(ct.skus)} SKU de «${name}» con venta se vendieron a <strong>${money(ct.ticket)}</strong> por unidad: ticket <strong>${sug === 'revenue' ? 'alto' : 'bajo'}</strong>. ${sug === 'revenue' ? 'Sugerencia: meta principal en venta; las unidades ayudan poco a ver el avance.' : 'Sugerencia: meta principal en unidades; la venta se mueve poco por unidad.'} Es una sugerencia: la decides tú.`;
     const imp = chk ? `<div class="note note--${chk.off ? 'warn' : 'ok'}" role="status">Tus dos metas implican <strong>${money(chk.implied)}</strong> por unidad${chk.hist ? `, ${chk.ratio >= 0 ? '+' : ''}${Math.round(chk.ratio * 100)} % contra lo esperado de ${money(chk.expected)}${chk.discount ? ` (histórico de ${money(chk.hist)} menos ${Math.round(chk.discount * 100)} % de descuento promedio de las ofertas de la campaña)` : ` (histórico; la campaña no tiene ofertas con descuento para descontar)`}` : ''}.${chk.off ? ` Se aleja más de ${Math.round(chk.band * 100)} % de lo esperado: revisa que venta y unidades sean consistentes.` : ' Es consistente con lo esperado.'} <span class="cell-sub">Tolerancia ${Math.round(chk.band * 100)} %${ab.auto ? `: se ajustó sola con la variación semanal del precio por unidad de estos SKU (${ab.weeks} semanas, variación de ${(ab.cv * 100).toFixed(1).replace(/\.0$/, '')} %; tolerancia = 2 veces eso, entre 10 % y 25 %)` : `: 25 % por defecto, porque hay ${ab.weeks} semana(s) con venta de estos SKU y se necesitan 6 para ajustarla`}.</span></div>` : '';
-    return `${base}<p>${txt}</p>${imp}${cat}`;
+    const bs = suggestion(state, name);
+    const sg = bs ? `<div class="note note--ok" role="status"><strong>Punto de partida automático:</strong> ${money(bs.revenue)} de venta${bs.units ? ` y ${int(bs.units)} unidades` : ''}. Sale del ritmo de los últimos ${bs.windowDays} días de los ${int(bs.skus)} SKU de la campaña, llevado a sus ${bs.campaignDays} días. <strong>No incluye el efecto de la promoción</strong>: cuánto más esperas lo decides tú.
+      <div class="btn-row"><button type="button" class="btn btn--small" data-action="cg-suggest" data-m="1">Usar como meta</button><button type="button" class="btn btn--small" data-action="cg-suggest" data-m="1.1">Usar +10 %</button><button type="button" class="btn btn--small" data-action="cg-suggest" data-m="1.2">Usar +20 %</button><button type="button" class="btn btn--small" data-action="cg-suggest" data-m="1.3">Usar +30 %</button></div></div>`
+      : `<p class="field__hint">${FP.goalsView.campaignDays && FP.goalsView.campaignDays(name) ? '' : 'Para sugerir un punto de partida la campaña necesita fechas (en sus ofertas o en una promoción). '}</p>`;
+    return `${base}<p>${txt}</p>${sg}${imp}${cat}`;
   }
 
   function html(state) {
@@ -76,5 +87,5 @@
         <h3>${f.campaign && G().find(cg.reg, f.campaign) ? 'Editar la meta' : 'Fijar una meta'}</h3>${form}</div></section>`;
   }
 
-  FP.goalsView = { html, val, rows, helper, campaignSkus: null, campaignOffers: null };
+  FP.goalsView = { html, val, rows, helper, suggestion, campaignDays: null, campaignSkus: null, campaignOffers: null };
 })(typeof window !== 'undefined' ? window : globalThis);

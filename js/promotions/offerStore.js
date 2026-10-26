@@ -17,7 +17,7 @@
   'use strict';
   const FP = (root.FP = root.FP || {});
 
-  const STATE = { received: 'Recibida', validated: 'Validada', selected: 'Seleccionada', discarded: 'Descartada' };
+  const STATE = { received: 'Recibida', validated: 'Validada', selected: 'En promoción', discarded: 'Descartada' };
   const NEXT = { received: ['validated', 'discarded'], validated: ['selected', 'received', 'discarded'], selected: ['validated', 'discarded'], discarded: ['received'] };
   const ORIGINS = { commercial: 'Comercial', pricing: 'Precios', other: 'Otro' };
   const ISSUE = {
@@ -278,7 +278,7 @@
     if (!o) return fail('No encuentro esa oferta.');
     if (!EDITABLE[field]) return fail('Ese campo no se edita.');
     if (!clean(by)) return fail('Escribe tu nombre: el cambio guarda quién lo hizo.');
-    if (o.state === 'selected') return fail('La oferta está seleccionada: devuélvela a «Validada» antes de editarla.');
+    if (o.state === 'selected') return fail('La oferta está en promoción: devuélvela a «Validada» antes de editarla.');
     let nv = value;
     if (field === 'start' || field === 'end') { nv = clean(value); if (nv && !isISO(nv)) return fail('La fecha no es válida.'); }
     else if (field === 'discount') {

@@ -15,7 +15,7 @@
   const FP = (root.FP = root.FP || {});
 
   const LEVELS = ['Alta', 'Media', 'Baja'];
-  const STEP_LABEL = ['Cargar', 'Validar', 'Seleccionar', 'Crear promoción', 'Publicar', 'Medir'];
+  const STEP_LABEL = ['Cargar', 'Armar la promoción', 'Aprobar y poner en marcha', 'Medir y cerrar'];
   const DAY = 86400000;
 
   const O = () => FP.offers;
@@ -124,6 +124,23 @@
     return { ok, out };
   }
 
+  /**
+   * Plan de «Armar promoción»: las ofertas Validadas (o solo las indicadas en ids) que se pueden elegir; el resto queda fuera con su razón.
+   * aaOnly = true limita a las de prioridad Alta con confianza Alta.
+   */
+  function buildPlan(reg, an, recs, opts) {
+    const o = opts || {}, ids = o.ids ? new Set(o.ids) : null, ok = [], out = { notAA: 0, blocked: [] };
+    reg.offers.filter((x) => (x.state === 'validated' || (x.state === 'selected' && !addedToPromo(x))) && (!ids || ids.has(x.offerId))).forEach((x) => {
+      if (o.aaOnly && !isAA(recs.get(`offer:${x.offerId}`))) { out.notAA += 1; return; }
+      if (x.state === 'validated') {
+        const bl = O().blockers(an.get(x.offerId) || [], 'selected');
+        if (bl.length) { out.blocked.push({ id: x.offerId, sku: x.sku, why: bl.map((c) => O().ISSUE[c].text).join(' ') }); return; }
+      }
+      ok.push(x);
+    });
+    return { ok, out };
+  }
+
   function opportunitySummary(recs, P) {
     const matrix = emptyMatrix(); let noRec = 0, total = 0; const aa = [];
     [...recs.values()].filter((r) => r.tab === 'potential').forEach((r) => { total += 1; if (!addToMatrix(matrix, r)) noRec += 1; if (isAA(r)) aa.push(r.sku); });
@@ -139,18 +156,17 @@
     const cnt = (s) => offers.filter((o) => o.state === s).length;
     const received = cnt('received'), validated = cnt('validated');
     const selPending = offers.filter((o) => o.state === 'selected' && !addedToPromo(o)).length;
+    const buildable = validated + selPending;   // «Elegida» ya no es un paso aparte: armar la promoción elige y crea en un clic
     const openPromos = promos.filter((p) => ['draft', 'proposed'].includes(p.status));
     const approved = promos.filter((p) => p.status === 'approved');
     const toMeasure = promos.filter((p) => ['published', 'measuring'].includes(p.status) && p.plannedEnd && p.plannedEnd < today);
     return {
-      received, validated, selPending, openPromos, approved, toMeasure,
+      received, validated, selPending, buildable, openPromos, approved, toMeasure,
       list: [
         { n: 1, label: STEP_LABEL[0], count: offers.length || promos.length ? 0 : 1 },
-        { n: 2, label: STEP_LABEL[1], count: received },
-        { n: 3, label: STEP_LABEL[2], count: validated },
-        { n: 4, label: STEP_LABEL[3], count: selPending + openPromos.length },
-        { n: 5, label: STEP_LABEL[4], count: approved.length },
-        { n: 6, label: STEP_LABEL[5], count: toMeasure.length }
+        { n: 2, label: STEP_LABEL[1], count: buildable + received },
+        { n: 3, label: STEP_LABEL[2], count: approved.length + openPromos.length },
+        { n: 4, label: STEP_LABEL[3], count: toMeasure.length }
       ]
     };
   }
@@ -159,18 +175,17 @@
 
   function nextStep(ctx) {
     const s = steps(ctx), offers = ctx.offers || [];
-    const mk = (n, title, text, button, go, extra) => Object.assign({ step: n, total: 6, title, text, button, go, done: false }, extra || {});
-    if (s.toMeasure.length) { const p = s.toMeasure[0]; return mk(6, 'Mide cómo le fue', `«${p.name}» ya terminó su vigencia. Revisa su resultado y ciérrala con una conclusión.`, 'Ver resultados', { tab: 'resultados' }, s.toMeasure.length > 1 ? { note: `Hay ${s.toMeasure.length} promociones por medir.` } : {}); }
-    if (s.approved.length) { const p = s.approved[0]; return mk(5, 'Publícala y anota dónde', `«${p.name}» está aprobada. Registra en qué espacios entra y cuándo la publicas.`, 'Registrar publicación', { tab: 'promos', open: p.promoId }, { note: 'Esta barra no publica nada: tú lo haces y aquí lo registras.' }); }
-    if (s.selPending) {
-      return mk(4, 'Arma la promoción con ellas', `Crea un borrador con las ${s.selPending} ofertas seleccionadas. Después pones objetivo y fechas.`, `Crear promoción con las ${s.selPending} seleccionadas`, { action: 'gd-create-promo' },
-        s.openPromos.length ? { second: 'Agregarlas a una existente', secondGo: { tab: 'ofertas', filter: { state: 'selected' } } } : {});
+    const mk = (n, title, text, button, go, extra) => Object.assign({ step: n, total: 4, title, text, button, go, done: false }, extra || {});
+    if (s.toMeasure.length) { const p = s.toMeasure[0]; return mk(4, 'Mide cómo le fue', `«${p.name}» ya terminó su vigencia. Revisa su resultado y ciérrala con una conclusión.`, 'Ver resultados', { tab: 'resultados' }, s.toMeasure.length > 1 ? { note: `Hay ${s.toMeasure.length} promociones por medir.` } : {}); }
+    if (s.approved.length) { const p = s.approved[0]; return mk(3, 'Ponla en marcha y anota dónde', `«${p.name}» está aprobada. Registra en qué espacios entra y cuándo la publicas.`, 'Registrar publicación', { tab: 'promos', open: p.promoId }, { note: 'Esta barra no publica nada: tú lo haces y aquí lo registras.' }); }
+    if (s.buildable) {
+      return mk(2, 'Arma la promoción', `Hay ${plural(s.buildable, 'oferta lista', 'ofertas listas')}. Con un clic quedan en una promoción nueva en borrador; antes te muestro la lista.`, `Armar promoción con las ${s.buildable}`, { action: 'gd-build-promo' },
+        { second: 'Elegir cuáles', secondGo: { tab: 'ofertas', filter: { state: 'validated' } } });
     }
-    if (s.openPromos.length) { const p = s.openPromos[0]; return mk(4, p.status === 'draft' ? 'Termina tu promoción y envíala' : 'Aprueba la promoción', `«${p.name}» está en ${p.status === 'draft' ? 'borrador' : 'propuesta'}. ${p.skus.length ? `Tiene ${plural(p.skus.length, 'SKU', 'SKU')}.` : 'Todavía no tiene SKU.'}`, 'Abrir la promoción', { tab: 'promos', open: p.promoId }); }
-    if (s.validated) return mk(3, 'Elige cuáles sí vas a correr', `Marca como «Seleccionadas» las ofertas que te sirven. Hay ${plural(s.validated, 'validada', 'validadas')}.`, `Ver las ${s.validated} validadas`, { tab: 'ofertas', filter: { state: 'validated' } });
-    if (s.received) return mk(2, 'Valida tus ofertas', `Revisa que cada oferta tenga descuento y fechas correctas. Hay ${plural(s.received, 'recibida', 'recibidas')} esperando.`, `Ver las ${s.received} por validar`, { tab: 'ofertas', filter: { state: 'received' } });
-    if (!offers.length && !(ctx.promotions || []).length) return mk(1, 'Carga las ofertas que te mandaron', 'Sube el archivo del proveedor o comercial. Cada oferta queda como «Recibida» y no activa nada.', 'Cargar archivo de ofertas', { tab: 'ofertas' }, { second: 'Capturar una oferta a mano', secondGo: { tab: 'ofertas', manual: true } });
-    return { step: 0, total: 6, done: true, title: 'No hay nada pendiente por ahora', text: 'Tus ofertas están revisadas y tus promociones avanzan. Cuando llegue algo nuevo, aquí te lo aviso.', button: '', go: null };
+    if (s.openPromos.length) { const p = s.openPromos[0]; return mk(3, 'Termina tu promoción y apruébala', `«${p.name}» está en borrador. ${p.skus.length ? `Tiene ${plural(p.skus.length, 'SKU', 'SKU')}.` : 'Todavía no tiene SKU.'} Pon objetivo y fechas y apruébala.`, 'Abrir la promoción', { tab: 'promos', open: p.promoId }); }
+    if (s.received) return mk(2, 'Revisa tus ofertas', `Hay ${plural(s.received, 'oferta con alertas', 'ofertas con alertas')} esperando. Las que no traen ninguna alerta ya se validaron solas.`, `Ver las ${s.received} por revisar`, { tab: 'ofertas', filter: { state: 'received' } });
+    if (!offers.length && !(ctx.promotions || []).length) return mk(1, 'Carga las ofertas que te mandaron', 'Sube el archivo del proveedor o comercial. Las que no traen alertas se validan solas y no activan nada.', 'Cargar archivo de ofertas', { tab: 'ofertas' }, { second: 'Capturar una oferta a mano', secondGo: { tab: 'ofertas', manual: true } });
+    return { step: 0, total: 4, done: true, title: 'No hay nada pendiente por ahora', text: 'Tus ofertas están revisadas y tus promociones avanzan. Cuando llegue algo nuevo, aquí te lo aviso.', button: '', go: null };
   }
 
   /** Para «Ver todos los pasos»: marca dónde estás y qué ya pasó. */
@@ -232,5 +247,5 @@
     return out;
   }
 
-  FP.guide = { actionCounts, missingCounts, compareExternal, LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers, priorityCards, autoValidate };
+  FP.guide = { actionCounts, missingCounts, compareExternal, LEVELS, GROUPS, groupOf, alerts, addedToPromo, isAA, offerSummary, selectPlan, opportunitySummary, steps, nextStep, allSteps, draftFromOffers, priorityCards, autoValidate, buildPlan };
 })(typeof window !== 'undefined' ? window : globalThis);

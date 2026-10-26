@@ -43,7 +43,7 @@
   function goalCard(goal, p, card) {
     const esc = H().esc, pill = H().pill;
     if (!p || !p.campaign) return card('Cumplimiento del objetivo', pill('na', 'Sin campaña'), '<strong class="metric-card__value">Sin campaña</strong>', 'La promoción no tiene campaña, así que no hay meta contra qué medir. Asígnala en su detalle (pestaña Promociones).');
-    if (!goal) return card('Cumplimiento del objetivo', pill('na', 'Sin meta'), '<strong class="metric-card__value">Sin meta</strong>', `La campaña «${p.campaign}» no tiene meta numérica. Fíjala en Resumen → Metas por campaña.`);
+    if (!goal) return card('Cumplimiento del objetivo', pill('na', 'Sin meta'), '<strong class="metric-card__value">Sin meta</strong>', `La campaña «${p.campaign}» no tiene meta numérica. Fíjala en Promociones → Metas por campaña.`);
     const pr = goal.progress, g = goal.goal, main = g.revenue ? pr.pctRevenue : pr.pctUnits;
     const parts = [g.revenue ? `venta ${money(pr.revenue)} de ${money(g.revenue)} (${fin(pr.pctRevenue) ? Math.round(pr.pctRevenue * 100) + ' %' : '—'})` : '', g.units ? `unidades ${int(pr.units)} de ${int(g.units)} (${fin(pr.pctUnits) ? Math.round(pr.pctUnits * 100) + ' %' : '—'})` : ''].filter(Boolean).join(' · ');
     const miss = pr.missing.length ? ` ${pr.missing.length} promoción(es) de la campaña sin evaluación ni corte guardado no suman: el avance es parcial.` : '';

@@ -80,7 +80,7 @@ async def main():
             await ev(q, "(i)=>{FP.app.state.of.checked={}; FP.app.state.of.checked[i]=true; FP.app.render()}", sel)
             await q.click('[data-action="rm-offers-ask"][data-kind="marked"]'); await q.wait_for_timeout(300)
             cf = await txt(q, '#rm-confirm')
-            chk('R6 una Seleccionada no se elimina y lo explica', 'No hay ninguna que se pueda eliminar' in cf and 'Seleccionada' in cf, cf[:200])
+            chk('R6 una Seleccionada no se elimina y lo explica', 'No hay ninguna que se pueda eliminar' in cf and 'en promoci' in cf, cf[:200])
             await q.click('[data-action="rm-cancel"]')
         # 5. Eliminar un archivo completo
         await q.click('[data-fold="batches"]'); await q.wait_for_timeout(200)
