@@ -722,3 +722,12 @@ Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya oc
 - **Pestañas de estado** (Todas, Por revisar, Validadas, Elegidas, Descartadas) reemplazan el panel lateral.
 - **Acciones sugeridas** suman la columna «Venta del periodo» (— si no hay venta).
 - **Lista deslizable:** 10 filas visibles con encabezado fijo; ya no hay «Mostrar más» (tope de 1000 filas).
+
+## Flujo de promociones en cuatro pasos
+
+- **Pasos de la guía:** 1 Cargar, 2 Armar la promoción, 3 Aprobar y poner en marcha, 4 Medir y cerrar.
+- **Armar promoción en un clic:** elige y crea el borrador a la vez (de todas las validadas, solo Alta con datos suficientes, o las marcadas). Muestra la lista antes y se puede deshacer. «Seleccionada» se muestra como «En promoción».
+- **Aprobar:** directo desde Borrador; puede aprobar la misma persona que la creó (por defecto, tú). «En aprobación» ya no se ofrece como paso, aunque el estado existe.
+- **En marcha:** una promoción publicada pasa sola a «En medición» al terminar su vigencia (por «Automático»). Cerrar siempre pide conclusión y recomendación.
+- **Regresar un paso:** Aprobada → Borrador, En marcha → Aprobada y En medición → En marcha, estos dos con motivo obligatorio. Cerrada y Cancelada no regresan.
+- **Metas por campaña:** viven en la pestaña Promociones. Al fijar una meta se sugiere un punto de partida con el ritmo de venta de los últimos 56 días de los SKU de la campaña, llevado a los días de la campaña; no incluye el efecto de la promoción.

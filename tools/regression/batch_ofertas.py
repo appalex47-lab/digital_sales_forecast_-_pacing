@@ -82,7 +82,7 @@ async def main():
         await click(q, f'[data-action="of-state"][data-to="validated"][data-id="{oid}"]')
         t = await body(q); chk('E1 pasa a Validada', 'ahora está «Validada»' in t, t[:300])
         await click(q, f'[data-action="of-state"][data-to="selected"][data-id="{oid}"]')
-        t = await body(q); chk('E2 pasa a Seleccionada', 'ahora está «Seleccionada»' in t, t[:300])
+        t = await body(q); chk('E2 pasa a En promoción', 'ahora está «En promoción»' in t, t[:300])
         dis = await q.evaluate("document.getElementById('of-e-discount').disabled")
         chk('E3 seleccionada no se edita', dis is True)
         await click(q, f'[data-action="of-state"][data-to="validated"][data-id="{oid}"]')
@@ -102,8 +102,9 @@ async def main():
         await click(q, f'[data-action="of-state"][data-to="selected"][data-id="{oid}"]')
         has = await q.evaluate("!!document.getElementById('of-b-promo')")
         chk('P1 aparece el selector de promoción destino', has)
+        await q.evaluate("(i)=>{FP.app.state.of.checked={}; FP.app.state.of.checked[i]=true; FP.app.render()}", oid); await q.wait_for_timeout(300)   # el destino ahora recibe las marcadas
         await click(q, '[data-action="of-to-promo"]')
-        t = await body(q); chk('P2 agrega la seleccionada a la promoción', '1 ofertas seleccionadas se agregaron' in t, t[:300])
+        t = await body(q); chk('P2 agrega la seleccionada a la promoción', '1 ofertas se agregaron' in t, t[:300])
         sk = await q.evaluate("JSON.stringify(FP.promotionNotes.registry().promotions[0].skus.map(s=>[s.sku,s.origin,s.offerId]))")
         chk('P3 el SKU entra con origen «oferta» y su identificador', sk == '[["7500000000001","offer","%s"]]' % oid, sk)
         # persistencia

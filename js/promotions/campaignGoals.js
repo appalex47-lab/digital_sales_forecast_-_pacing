@@ -119,6 +119,19 @@
     (rows || []).forEach((r) => { if (set.has(r.sku) && r.units > 0 && fin(r.revenue)) { R += r.revenue; U += r.units; n += 1; } });
     return { ticket: U > 0 ? R / U : null, skus: n, asked: set.size };
   }
+  /**
+   * Punto de partida de la meta: el ritmo de venta reciente de los SKU de la campaña llevado a los días que dura la campaña.
+   * revenue = venta de los SKU en la ventana ÷ días de la ventana × días de la campaña (lo mismo para unidades).
+   * NO incluye el efecto de la promoción: es lo que se vendería al ritmo de hoy; cuánto más se espera lo decide la persona.
+   */
+  function baselineSuggestion(skus, rows, windowDays, campaignDays) {
+    if (!(windowDays > 0) || !(campaignDays > 0)) return null;
+    const set = new Set(skus || []); let R = 0, U = 0, n = 0;
+    (rows || []).forEach((r) => { if (set.has(r.sku) && fin(r.revenue) && r.revenue > 0) { R += r.revenue; U += fin(r.units) ? r.units : 0; n += 1; } });
+    if (!n) return null;
+    const k = campaignDays / windowDays;
+    return { revenue: R * k, units: U > 0 ? U * k : null, skus: n, windowDays, campaignDays };
+  }
   /** Qué meta principal sugiere el ticket: alto → venta, bajo → unidades. */
   function suggestMain(ticket, cut) { return !fin(ticket) || !fin(cut) ? null : ticket >= cut ? 'revenue' : 'units'; }
   /**
@@ -153,5 +166,5 @@
     return { implied, hist, expected, discount: d || null, ratio, band: b, off: Math.abs(ratio) > b };
   }
 
-  FP.goals = { TICKET_BAND, BAND_MIN, MIN_WEEKS, createRegistry, hydrate, setGoal, removeGoal, find, campaignsOf, progress, ticketStats, campaignTicket, suggestMain, avgDiscount, autoBand, impliedCheck };
+  FP.goals = { TICKET_BAND, BAND_MIN, MIN_WEEKS, createRegistry, hydrate, setGoal, removeGoal, find, campaignsOf, progress, ticketStats, campaignTicket, suggestMain, baselineSuggestion, avgDiscount, autoBand, impliedCheck };
 })(typeof window !== 'undefined' ? window : globalThis);

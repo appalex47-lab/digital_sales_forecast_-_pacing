@@ -10,7 +10,7 @@
   const P = () => FP.promotions;
   const $ = (id) => document.getElementById(id);
   const PILL = { draft: 'na', proposed: 'warning', approved: 'ok', published: 'ok', measuring: 'warning', closed: 'ok', cancelled: 'error' };
-  const NEXT_LABEL = { proposed: 'Enviar a aprobación', draft: 'Volver a borrador', approved: 'Aprobar', published: 'Marcar en marcha (publicada)', measuring: 'Pasar a medición', closed: 'Cerrar con conclusión' };
+  const NEXT_LABEL = { proposed: 'Enviar a aprobación', draft: 'Volver a borrador', approved: 'Aprobar', published: 'Poner en marcha', measuring: 'Pasar a medición', closed: 'Cerrar con conclusión' };
   const BACK = { draft: true };   // pasos hacia atrás: estilo secundario
 
   const val = (id) => { const el = $(id); return el ? String(el.value).trim() : ''; };
@@ -67,7 +67,7 @@
         ${field('pm-e-start', 'Inicio planeado', input('pm-e-start', p.plannedStart, 'date'))}
         ${field('pm-e-end', 'Fin planeado', input('pm-e-end', p.plannedEnd, 'date'))}
         ${field('pm-e-prop', 'Propuesta de origen', input('pm-e-prop', p.proposalName))}
-        ${field('pm-e-camp', 'Campaña', `<input id="pm-e-camp" type="text" list="pm-camps" value="${esc(p.campaign || '')}" autocomplete="off"><datalist id="pm-camps">${(camps || []).map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist>`, 'La meta numérica se fija por campaña (Resumen → Metas por campaña).')}
+        ${field('pm-e-camp', 'Campaña', `<input id="pm-e-camp" type="text" list="pm-camps" value="${esc(p.campaign || '')}" autocomplete="off"><datalist id="pm-camps">${(camps || []).map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist>`, 'La meta numérica se fija por campaña (en esta pestaña, más abajo: Metas por campaña).')}
       </div><div class="btn-row"><button type="button" class="btn" data-action="pm-save-head" data-id="${esc(p.promoId)}">Guardar cambios</button></div>`
         : `<p class="panel__desc">${esc(Pm.OBJECTIVES[p.objective])} · ${esc(channelLabel(p.channel))} · ${esc(dateTxt(p.plannedStart))} a ${esc(dateTxt(p.plannedEnd))}${p.campaign ? ` · campaña ${esc(p.campaign)}` : ''}</p>`}</div></section>`;
 
@@ -108,14 +108,17 @@
 
     // Estado
     const nexts = Pm.NEXT[p.status] || [];
-    const stateBtns = nexts.map((to) => `<button type="button" class="btn${BACK[to] || (p.status === 'approved' && to === 'proposed') ? ' btn--ghost' : ' btn--primary'}" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="${to}">${esc(NEXT_LABEL[to])}</button>`).join('');
-    const approveField = p.status === 'proposed' ? field('pm-st-approver', 'Quién aprueba', input('pm-st-approver', ''), 'Debe ser una persona distinta de quien creó la promoción.') : '';
+    const isBack = (to) => to === 'draft' || (p.status === 'published' && to === 'approved') || (p.status === 'measuring' && to === 'published');
+    const labelOf = (to) => (p.status === 'published' && to === 'approved' ? 'Regresar a aprobada' : p.status === 'measuring' && to === 'published' ? 'Regresar a en marcha' : NEXT_LABEL[to]);
+    const stateBtns = nexts.filter((to) => to !== 'proposed').map((to) => `<button type="button" class="btn${isBack(to) ? ' btn--ghost' : ' btn--primary'}" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="${to}">${esc(labelOf(to))}</button>`).join('');
+    const approveField = ['draft', 'proposed'].includes(p.status) ? field('pm-st-approver', 'Quién aprueba', input('pm-st-approver', actor || ''), 'Puedes ser tú: quien la arma también puede aprobarla.') : '';
+    const backField = ['published', 'measuring'].includes(p.status) ? field('pm-st-back', 'Motivo para regresar un paso (solo si regresas)', input('pm-st-back', ''), 'Queda en el historial.') : '';
     const closeFields = p.status === 'measuring' ? `${field('pm-st-concl', 'Conclusión', `<textarea id="pm-st-concl" rows="3"></textarea>`, 'Obligatoria para cerrar.')}${field('pm-st-rec', 'Recomendación', `<select id="pm-st-rec"><option value="">Elige…</option>${opt(Pm.RECOMMENDATIONS, '')}</select>`)}` : '';
     const delBtn = FP.removal ? `<button type="button" class="btn btn--ghost btn--danger-text" data-action="rm-promo-ask" data-id="${esc(p.promoId)}">Eliminar…</button>` : '';
     const cancel = editable ? `${field('pm-st-cancel', 'Motivo para cancelar', input('pm-st-cancel', ''))}<div class="btn-row"><button type="button" class="btn btn--ghost btn--danger-text" data-action="pm-status" data-id="${esc(p.promoId)}" data-to="cancelled">Cancelar promoción</button>${delBtn}</div><p class="field__hint">Cancelar conserva el historial; eliminar lo quita.</p>` : `<div class="btn-row">${delBtn}</div>`;
     const status = `<section class="panel" aria-labelledby="pm-t-st"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-st">Estado y aprobación</h2>
       <p class="panel__desc">Borrador (puede pasar por «en aprobación») → Aprobada → En marcha (publicada, luego en medición) → Cerrada. Cada cambio guarda quién y cuándo, y no se puede borrar. «En medición» solo se alcanza cuando la vigencia ya terminó.</p></div></div>
-      <div class="panel__body">${approveField}${closeFields}${stateBtns ? `<div class="btn-row">${stateBtns}</div>` : ''}${cancel}</div></section>`;
+      <div class="panel__body">${approveField}${backField}${closeFields}${stateBtns ? `<div class="btn-row">${stateBtns}</div>` : ''}${cancel}</div></section>`;
 
     // Línea base congelada
     const showBase = ['approved', 'published', 'measuring', 'closed'].includes(p.status);
@@ -183,6 +186,7 @@
       ${pm.creating ? createForm(pm) : ''}
       <section class="panel" aria-labelledby="pm-t-l"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-l">Registro (${reg.promotions.length})</h2></div></div>
         <div class="panel__body panel__body--flush">${listHtml(reg, pm.sel)}</div></section>
+      ${FP.goalsView ? FP.goalsView.html(state) : ''}
       ${sel ? detail(reg, sel, pm.actor, FP.goals ? FP.goals.campaignsOf(state.of.reg, reg.promotions, state.cg && state.cg.reg) : []) : ''}`;
   }
 

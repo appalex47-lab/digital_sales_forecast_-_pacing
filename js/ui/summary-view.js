@@ -71,7 +71,7 @@
       <section class="panel" aria-labelledby="sm-t-p"><div class="panel__head"><div><h2 class="panel__title" id="sm-t-p">Pendientes de decidir</h2></div></div><div class="panel__body"><ul class="plain-list">
         ${go('received', p.received, 'ofertas recibidas sin validar')}${go('validated', p.validated, 'ofertas validadas sin seleccionar')}${go('', p.noOffer, 'SKU propuestos sin oferta')}${go('', p.outside, 'ofertas recibidas fuera de propuesta')}</ul>
         <p class="field__hint">«Ver» abre Ofertas recibidas con el estado puesto. Los otros dos pendientes salen en el Excel del resumen.</p></div></section>
-      <section class="panel" aria-labelledby="sm-t-x"><div class="panel__head"><div><h2 class="panel__title" id="sm-t-x">Propuestas exportadas (${r.proposals.length})</h2></div></div><div class="panel__body">${props}</div></section>${FP.goalsView ? FP.goalsView.html(state) : ''}${demoPanel(state)}`;
+      <section class="panel" aria-labelledby="sm-t-x"><div class="panel__head"><div><h2 class="panel__title" id="sm-t-x">Propuestas exportadas (${r.proposals.length})</h2></div></div><div class="panel__body">${props}</div></section>${demoPanel(state)}`;
   }
 
   FP.summaryView = { html, compute, val };

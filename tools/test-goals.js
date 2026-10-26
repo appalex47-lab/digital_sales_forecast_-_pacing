@@ -81,4 +81,11 @@ const ok = (name, c, d) => { n++; if (!c) { fails++; console.log('✘', name, d 
   ok('T11 descuento promedio: por SKU el mayor, luego promedio de SKU; ignora vacíos e inválidos', Math.abs(ad.avg - 0.3) < 1e-9 && ad.skus === 2 && G.avgDiscount([]) === null && G.avgDiscount([{ sku: 'A' }]) === null, ad);
   ok('T7 la banda es de 25 %', G.TICKET_BAND === 0.25 && G.impliedCheck(1250, 100, 10).off === false && G.impliedCheck(1300, 100, 10).off === true);
 }
+// punto de partida automático de la meta
+{ const rows = [{ sku: 'A', revenue: 5600, units: 56 }, { sku: 'B', revenue: 11200, units: 28 }, { sku: 'C', revenue: 999, units: 9 }];
+  const b = G.baselineSuggestion(['A', 'B'], rows, 56, 10);
+  ok('BS1 ritmo de la ventana llevado a los días de la campaña', b && Math.round(b.revenue) === 3000 && Math.round(b.units) === 15 && b.skus === 2, b);
+  ok('BS2 sin fechas de campaña o sin SKU con venta no sugiere nada', G.baselineSuggestion(['A'], rows, 56, null) === null && G.baselineSuggestion(['Z'], rows, 56, 10) === null);
+  ok('BS3 sin unidades devuelve solo la venta', G.baselineSuggestion(['A'], [{ sku: 'A', revenue: 560, units: 0 }], 56, 28).units === null); }
+
 console.log(fails ? `${fails} fallas de ${n}` : `${n}/${n} pruebas OK`); process.exit(fails ? 1 : 0);

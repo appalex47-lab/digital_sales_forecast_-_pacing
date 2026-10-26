@@ -23,7 +23,7 @@ async def main():
         # 1. Sin nada: la barra manda a cargar
         t = await txt(q, '.gd-bar')
         chk('G1 la barra está arriba de las pestañas', await q.evaluate("(()=>{const b=document.querySelector('.gd-bar'),t=document.querySelector('.sttabs');return !!b&&!!t&&(b.compareDocumentPosition(t)&4)!==0})()"))
-        chk('G2 sin ofertas dice «Carga las ofertas» y paso 1 de 6', 'carga las ofertas' in t.lower() and 'paso 1 de 6' in t.lower(), t[:200])
+        chk('G2 sin ofertas dice «Carga las ofertas» y paso 1 de 4', 'carga las ofertas' in t.lower() and 'paso 1 de 4' in t.lower(), t[:200])
         chk('G3 aclara que solo guía', 'solo te guía' in t)
         # 2. Datos de ejemplo
         await q.evaluate("FP.app.state.pm.actor='Persona A'; FP.app.render()")
@@ -60,20 +60,22 @@ async def main():
         aa = await q.evaluate("FP.guide.offerSummary(FP.app.state.of.reg, FP.offers.analyze(FP.app.state.of.reg), FP.activationView.recs(FP.app.state), FP.app.state.ac.reg.params).aa.length")
         print('validadas Alta/Alta:', aa)
         s0 = await q.evaluate("FP.app.state.of.reg.offers.filter(o=>o.state==='selected').length")
+        np0 = await q.evaluate("FP.app.state.pm.reg.promotions.length")
         if aa:
             await q.click('[data-action="gd-select-aa"]'); await q.wait_for_timeout(300)
             cf = await txt(q, '.gd-confirm')
-            chk('X1 pide confirmar con la lista antes de aplicar', 'Se van a seleccionar' in cf and await q.evaluate("FP.app.state.of.reg.offers.filter(o=>o.state==='selected').length") == s0, cf[:200])
-            await q.click('[data-action="gd-select-confirm"]'); await q.wait_for_timeout(300)
+            chk('X1 pide confirmar con la lista antes de aplicar y no cambia nada todavía', 'Se va a armar una promoción' in cf and await q.evaluate("FP.app.state.of.reg.offers.filter(o=>o.state==='selected').length") == s0 and await q.evaluate("FP.app.state.pm.reg.promotions.length") == np0, cf[:200])
+            await q.click('[data-action="gd-select-confirm"]'); await q.wait_for_timeout(500)
             sel = await q.evaluate("FP.app.state.of.reg.offers.filter(o=>o.state==='selected').length")
-            chk('X2 seleccionó solo las Alta/Alta que se pueden', 0 < sel - s0 <= aa, (sel, s0, aa))
-            bar = await txt(q, '.gd-bar')
-            chk('X3 la barra pasa a «Crear promoción con las N seleccionadas»', 'crear promoción con las' in bar.lower() and 'paso 4 de 6' in bar.lower(), bar[:200])
-            # 5. Crear promoción en un clic
-            await q.click('.gd-bar [data-action="gd-create-promo"]'); await q.wait_for_timeout(500)
+            chk('X2 armó la promoción solo con las Alta/Alta que se pueden', 0 < sel - s0 <= aa, (sel, s0, aa))
             npm = await q.evaluate("FP.app.state.pm.reg.promotions.length")
-            chk('P1 creó una promoción en borrador con las seleccionadas', npm >= 1 and await q.evaluate("FP.app.state.pm.reg.promotions.slice(-1)[0].status") == 'draft' and await q.evaluate("FP.app.state.pm.reg.promotions.slice(-1)[0].skus.length") == sel)
-            chk('P2 abre la promoción y la barra ya no pide crearla de nuevo', await q.evaluate("FP.app.state.pm.tab") == 'promos' and 'crear promoción con las' not in (await txt(q, '.gd-bar')).lower(), await txt(q, '.gd-bar'))
+            chk('P1 creó una promoción en borrador con ellas, en un solo clic', npm == np0 + 1 and await q.evaluate("FP.app.state.pm.reg.promotions.slice(-1)[0].status") == 'draft' and await q.evaluate("FP.app.state.pm.reg.promotions.slice(-1)[0].skus.length") == sel - s0, npm)
+            chk('P2 abre la promoción recién armada', await q.evaluate("FP.app.state.pm.tab") == 'promos' and await q.evaluate("!!FP.app.state.pm.sel"), await txt(q, '.gd-bar'))
+            chk('P3 queda «Deshacer»', await q.evaluate("!!document.querySelector('.gd-toast [data-action=\"gd-undo\"]')"))
+            await q.click('.gd-toast [data-action="gd-undo"]'); await q.wait_for_timeout(500)
+            chk('P4 deshacer quita la promoción y devuelve las ofertas a Validadas', await q.evaluate("FP.app.state.pm.reg.promotions.length") == np0 and await q.evaluate("FP.app.state.of.reg.offers.filter(o=>o.state==='selected').length") == s0)
+            await q.evaluate("FP.app.state.pm.tab='ofertas'; FP.app.render()"); await q.wait_for_timeout(300)
+            await q.click('[data-action="gd-select-aa"]'); await q.wait_for_timeout(300); await q.click('[data-action="gd-select-confirm"]'); await q.wait_for_timeout(500)   # se vuelve a armar para seguir con Oportunidades
         # 6. Oportunidades: mismo resumen
         await q.click('#pmtab-oportunidades')
         for _ in range(40):
@@ -97,7 +99,7 @@ async def main():
             chk('O2 hay botón para agregar al plan', False, 'sin botón gd-op-add')
         # 7. Ver todos los pasos
         await q.click('[data-action="gd-steps"]'); await q.wait_for_timeout(200)
-        chk('T1 «Ver todos los pasos» muestra los seis', await q.evaluate("document.querySelectorAll('.gd-steps li').length") == 6 and await q.evaluate("!document.querySelector('.gd-steps').hidden"))
+        chk('T1 «Ver todos los pasos» muestra los cuatro', await q.evaluate("document.querySelectorAll('.gd-steps li').length") == 4 and await q.evaluate("!document.querySelector('.gd-steps').hidden"))
         # 7b. Inicio: una sola línea de Promociones
         await q.evaluate("location.hash='inicio'"); await q.wait_for_timeout(1500)
         n_line = await q.evaluate("document.querySelectorAll('[data-block=\"promo-line\"]').length")

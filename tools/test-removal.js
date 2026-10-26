@@ -17,7 +17,7 @@ P.addSku(pr, pid, O.toPromotionSku(reg.offers.find((o) => o.sku === 'S2')), 'Per
 // 1. Reglas de ofertas
 let plan = R.offerPlan(reg, pr, reg.offers.map((o) => o.offerId));
 ok('E1 se pueden eliminar Recibidas, Validadas sin promoción y Descartadas', plan.ok.map((o) => o.sku).sort().join() === 'S1,S4,S5', plan.ok.map((o) => o.sku));
-ok('E2 la Seleccionada y la que está en una promoción no, y se dice por qué', plan.blocked.length === 2 && plan.blocked.some((b) => /Seleccionada/.test(b.why)) && plan.blocked.some((b) => /Dermo noviembre/.test(b.why)), plan.blocked.map((b) => b.why));
+ok('E2 la Seleccionada y la que está en una promoción no, y se dice por qué', plan.blocked.length === 2 && plan.blocked.some((b) => /en promoción/.test(b.why)) && plan.blocked.some((b) => /Dermo noviembre/.test(b.why)), plan.blocked.map((b) => b.why));
 const before = reg.offers.length;
 let r = R.removeOffers(reg, pr, [id('S1'), id('S3')]);
 ok('E3 elimina las permitidas y deja las bloqueadas', r.ok && r.removed.length === 1 && reg.offers.length === before - 1 && reg.offers.some((o) => o.sku === 'S3'), r.blocked && r.blocked.length);

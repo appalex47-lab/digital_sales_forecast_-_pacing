@@ -59,11 +59,11 @@ async def main():
         chk('E13 al aprobar por la pantalla se congela la línea base solo', bz['st'] == 'approved' and bz['rows'] > 0 and 'Línea base congelada' in await body(q) and await q.query_selector('[data-action="pm-freeze"]') is not None, bz)
         await q.click('[data-action="pm-freeze"]'); await q.wait_for_timeout(1500)
         chk('E14 volver a congelar queda en el historial', await q.evaluate("FP.promotions.find(FP.app.state.pm.reg,%r).history.filter(h=>h.field==='baseline').length" % nid) == 2)
-        await q.click('[data-action="pm-tab"][data-tab="resumen"]'); await q.wait_for_timeout(300)
+        await q.click('[data-action="pm-tab"][data-tab="promos"]'); await q.wait_for_timeout(300)
         t = await body(q)
         gp = await q.evaluate("FP.goalsView.rows(FP.app.state).map(x=>[x.campaign, Boolean(x.goal), x.progress?x.progress.status:null, x.progress?x.progress.pctRevenue:null])")
         sep = [x for x in gp if x[0].endswith('Septiembre')]
-        chk('E17 Resumen muestra «Metas por campaña» con las campañas de ejemplo', 'Metas por campaña' in t and len(gp) >= 3 and sep and sep[0][1] is True, gp)
+        chk('E17 Promociones muestra «Metas por campaña» con las campañas de ejemplo', 'Metas por campaña' in t and len(gp) >= 3 and sep and sep[0][1] is True, gp)
         chk('E18 la campaña de la promoción en medición ya tiene avance contra su meta (corte guardado en el ejemplo)', sep and sep[0][2] == 'ok' and sep[0][3] and sep[0][3] > 0, sep)
         for _ in range(60):
             if not await q.evaluate("FP.app.state.cg.loading"): break
