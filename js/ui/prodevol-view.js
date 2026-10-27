@@ -315,6 +315,7 @@
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('pe-drawer') && FP.app) FP.app.actions['pe-drawer-close'](); });
     }
     root.__peBarUpd = upd; upd();
+    if (!root.__peToggle) { root.__peToggle = true; document.addEventListener('toggle', (e) => { const t = e.target; if (t && t.matches && t.matches('details.drill-fold') && FP.app) FP.app.state.an.drillOpen = t.open; }, true); }   // plegar «Detalle y trazabilidad» no lo borra: se recuerda abierto o cerrado
   }
 
   function render(state, opts) {
@@ -343,8 +344,7 @@
     const totalBtn = early ? '' : '<button type="button" class="btn btn--small btn--ghost" data-action="an-drill-total" data-source="kpi">Detalle del total</button>';
     const hist = !early && !(state.an.rows || []).length && !state.an.loading && state.an.key !== null && !(opts && opts.range);
     const evoTools = early ? '' : `<div class="chap__tools">${totalBtn}</div>`;
-    const oldDrawer = $('pe-drawer'), oldScrim = oldDrawer ? el.querySelector('.pe-scrim') : null, wasOpen = Boolean(oldDrawer);
-    const prevScroll = wasOpen ? (oldDrawer.querySelector('.pe-drawer__body') || {}).scrollTop || 0 : 0;
+    const wasOpen = Boolean($('pe-drawer'));
     const hasFocus = focusEnt !== null && focusEnt !== undefined;
     const drawerOn = Boolean(state.peDrawer && !early && (state.an.selected || state.an.drill || hasFocus));
     const noRow = drawerOn && !state.an.selected;
@@ -366,20 +366,24 @@
       ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}
       `;
     enhance(el, state);
+    // El panel vive fuera de #pe-body: los repintados de la página no lo tocan (sin parpadeo, sin perder el desplazamiento ni la animación de entrada).
+    let dock = $('pe-drawer-root');
+    if (!dock) { dock = document.createElement('div'); dock.id = 'pe-drawer-root'; el.parentNode.insertBefore(dock, el.nextSibling); }
     if (drawerOn) {
-      let dr = oldDrawer, sc = oldScrim;
-      if (!dr) {   // se crea una sola vez: los repintados siguientes solo cambian su contenido (sin parpadeo ni animación nueva)
-        sc = document.createElement('button'); sc.type = 'button'; sc.className = 'pe-scrim'; sc.dataset.action = 'pe-drawer-close'; sc.setAttribute('aria-label', 'Cerrar la lectura'); sc.tabIndex = -1;
-        dr = document.createElement('aside'); dr.className = 'pe-drawer pe-drawer--in'; dr.id = 'pe-drawer'; dr.setAttribute('role', 'dialog'); dr.setAttribute('aria-modal', 'true'); dr.setAttribute('aria-label', 'Lectura de la entidad');
-        dr.innerHTML = '<div class="pe-drawer__top"><button type="button" class="btn btn--small" id="pe-drawer-x" data-action="pe-drawer-close">Cerrar ✕</button></div><div class="pe-drawer__body"></div>';
+      let dr = $('pe-drawer');
+      if (!dr) {
+        dock.innerHTML = '<button type="button" class="pe-scrim" data-action="pe-drawer-close" aria-label="Cerrar la lectura" tabindex="-1"></button><aside class="pe-drawer pe-drawer--in" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Lectura de la entidad"><div class="pe-drawer__top"><button type="button" class="btn btn--small" id="pe-drawer-x" data-action="pe-drawer-close">Cerrar ✕</button></div><div class="pe-drawer__body"></div></aside>';
+        dr = $('pe-drawer'); dr.addEventListener('animationend', () => dr.classList.remove('pe-drawer--in'), { once: true });
       }
       const body = dr.querySelector('.pe-drawer__body');
-      if (!wasOpen || body._peHtml !== drawerBody) { body.innerHTML = drawerBody; body._peHtml = drawerBody; }   // solo se reescribe si cambió
-      el.appendChild(sc); el.appendChild(dr);
-      if (wasOpen) body.scrollTop = prevScroll; else { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
-    } else if (wasOpen && state.peLastKey !== undefined) {
-      const row = [...el.querySelectorAll('tr[data-pe-key]')].find((t) => String(t.dataset.peKey) === String(state.peLastKey));
-      if (row) row.focus({ preventScroll: true });
+      if (body._peHtml !== drawerBody) { const top = body.scrollTop; body.innerHTML = drawerBody; body._peHtml = drawerBody; body.scrollTop = top; }   // solo se reescribe si cambió
+      if (!wasOpen) { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
+    } else if (dock.firstChild) {
+      dock.textContent = '';
+      if (wasOpen && state.peLastKey !== undefined) {
+        const row = [...el.querySelectorAll('tr[data-pe-key]')].find((t) => String(t.dataset.peKey) === String(state.peLastKey));
+        if (row) row.focus({ preventScroll: true });
+      }
     }
     bindBar();
     settle(state);
