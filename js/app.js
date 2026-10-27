@@ -99,7 +99,7 @@
       trace: null, counts: null, estimate: null, tests: null, testing: false, note: null },
     // Análisis 1: evolución histórica y patrones. La serie se calcula desde IndexedDB.
     fs: {},
-    an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 6, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
+    an: { filter: {}, channel: 'total', metric: 'revenue', stateFilter: 'all', level: 'product', periodType: 'month', periodCount: 12, focusKey: null, comparison: 'previous', pattern: 'all', signal: 'all', anomalyDirection: 'all', entityQuery: '', minImpact: 0, minSharePct: 0.5, page: 1, pageSize: 25, rows: [], advanced: [], groups: [], selected: null, loading: false, key: null, error: null, share: null, priorities: null, risks: null, forecast: null, cohort: null, forecastHorizon: 3, forecastMethod: 'linear', forecastPage: 1, narrative: null, ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } },
     // Fase 8.2: Business Setup (borrador en memoria; lo guardado vive en localStorage `businessContext`)
     bc: { draft: null, storedAt: null, dirty: false },
     brand: { draft: { logo: null, palette: [], main: null, accent: null, cover: 'chart' }, sel: null, saved: false, dirty: false, error: null },
@@ -1889,7 +1889,12 @@
   }
 
   /* ----- Producto y evolución: una página, dos motores (Producto y Evolución) con una sola selección ----- */
-  const repaintAn = () => { if (state.view === 'prodevol') FP.prodevolView.render(state); };
+  // Los cálculos que terminan en cascada (detalle, embudo, época, visita) piden repintar varias veces seguidas: se juntan en un solo dibujado por cuadro.
+  let repaintQueued = 0;
+  const repaintAn = () => {
+    if (state.view !== 'prodevol' || repaintQueued) return;
+    repaintQueued = root.requestAnimationFrame(() => { repaintQueued = 0; if (state.view === 'prodevol') FP.prodevolView.render(state); });
+  };
   const repaintPa = repaintAn;
   /**
    * Producto manda en canal, periodo, comparación y ruta; Evolución (`state.an`) los toma de él antes de calcular.
@@ -2409,11 +2414,11 @@
   const DRILL_LABEL = { category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto', sku: 'SKU', region: 'Región', state: 'Estado', city: 'Ciudad', branch: 'Sucursal', delivery: 'Tipo de entrega', channel: 'Canal' };
 
   /** Abre el detalle conservando Canal + Período + Comparación + Métrica del contexto vigente. */
-  function openDrill({ scope = 'entity', entity = null, source = 'tabla' } = {}) {
+  function openDrill({ scope = 'entity', entity = null, source = 'tabla', drawer = true } = {}) {
     const an = state.an;
-    if (scope === 'entity') an.selected = an.rows.find((r) => r.entity === entity) || an.selected;
+    if (scope === 'entity') { an.selected = an.rows.find((r) => r.entity === entity) || an.selected; state.peFocusKey = entity; }
     an.drill = { scope, entity: scope === 'total' ? '__total__' : entity, source, path: [], loading: true, data: null, error: null };
-    state.peDrawer = true;   // Producto y evolución: la lectura se abre en el panel lateral, sin mover la pantalla
+    state.peDrawer = drawer;   // Producto y evolución: la lectura se abre en el panel lateral, sin mover la pantalla
     loadDrill(); render();
   }
   async function loadDrill() {
@@ -2967,7 +2972,7 @@
         if (!FP.trendView.isMaterial(a, r)) return false;
         return true;
       });
-      const size = Math.max(1, Number(state.an.pageSize) || 6);
+      const size = Math.max(1, Number(state.an.pageSize) || 25);
       const pages = Math.max(1, Math.ceil(filtered.length / size));
       state.an.page = Math.max(1, Math.min(pages, Number(el.dataset.value) || 1));
       render();
@@ -3114,7 +3119,7 @@
       const name = String(r.entity).replace(/[^\w\-]+/g, '_').slice(0, 50);
       FP.exporter.download(`lectura_${name}.txt`, txt, 'text/plain');
     },
-    'an-clear-selection'() { state.an.selected = null; state.an.drill = null; state.peDrawer = false; render(); },
+    'an-clear-selection'() { state.an.selected = null; state.an.drill = null; state.peDrawer = false; state.peFocusKey = null; render(); },
 
     /* ----- Fase 1: carga ----- */
     'pick-files'(el) { pickFiles(el); },
@@ -3649,12 +3654,13 @@
       const pa = state.pa, k = el.dataset.key;
       if (k === 'topN') { pa.topN = Number(el.value); pa.page = 1; render(); return; }
       if ((k === 'from' || k === 'to') && !Cal.isValidISODate(el.value)) { FP.ui.toast('Fecha inválida.'); render(); return; }
-      pa[k] = el.value; pa.note = null; if (k !== 'channel') pa.touched = true; if (k === 'from' || k === 'to') pa.periodType = null;
+      pa[k] = el.value; pa.note = null; if (k !== 'channel') pa.touched = true; if (k === 'from' || k === 'to') { pa.periodType = null; state.peBack = null; }
       if (k === 'channel') state.ux.ctx.channel = el.value;
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
     },
     'pa-gran'(el) {
+      if (el && el.tagName) state.peBack = null;   // cambio hecho a mano en el selector
       const pa = state.pa, g = el.value || el.dataset.value, TE = FP.temporalEngine, m = FP.productStore.meta || {};
       if (!g || !m.dateMax) return;
       pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
@@ -3665,6 +3671,7 @@
       render();
     },
     'pa-focus'(el) {
+      state.peBack = null;
       const pa = state.pa, g = paGran(pa), TE = FP.temporalEngine, m = FP.productStore.meta || {}, key = el.value || el.dataset.value;
       if (!key || g === 'range' || !m.dateMax) return;
       pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
@@ -3683,20 +3690,31 @@
     'pe-evolevel'(el) { state.pa.evoLevel = el.value || null; state.an.selected = null; state.an.drill = null; render(); },
     /** Elegir una fila: abre su lectura (Evolución) y baja al capítulo pedido, sin cambiar de página. */
     'pe-focus'(el) {
-      const key = el.dataset.key;
-      const a = state.an;
+      const key = el.dataset.key, a = state.an;
       if (state.pa.evoLevel) state.pa.evoLevel = null;   // la fila es del nivel de la tabla
       peSync();
-      if (a.rows && a.rows.some((r) => r.entity === key)) openDrill({ scope: 'entity', entity: key, source: 'tabla' });
-      else a.reopen = { scope: 'entity', entity: key };
-      render();
+      state.peFocusKey = key;
+      if (a.rows && a.rows.some((r) => r.entity === key)) { openDrill({ scope: 'entity', entity: key, source: 'tabla' }); return; }
+      if (a.loading || a.key === null) { a.reopen = { scope: 'entity', entity: key }; state.peDrawer = true; render(); return; }   // la evolución aún se calcula: se abre al terminar
+      a.selected = null; openDrill({ scope: 'entity', entity: key, source: 'tabla' });   // sin historia suficiente no hay fila de patrón: el panel abre igual con la ficha y el detalle
     },
-    /** Tablas de Producto y evolución: ver todas las filas o solo las primeras; más o menos columnas (la elección de columnas se recuerda). */
-    'pe-fold-rows'(el) { const r = (state.ux.peRows = state.ux.peRows || {}); r[el.dataset.key] = !r[el.dataset.key]; render(); },
-    'pe-fold-cols'(el) {
-      let c = {}; try { c = JSON.parse(root.localStorage.getItem('fp.pe.cols.v1') || '{}') || {}; } catch (e) { c = {}; }
-      c[el.dataset.key] = !c[el.dataset.key]; try { root.localStorage.setItem('fp.pe.cols.v1', JSON.stringify(c)); } catch (e) { /* sin almacenamiento: vale para esta sesión */ }
-      render();
+    /** Elegir una fila del embudo: cambia el foco de los bloques sin abrir el panel lateral. */
+    'pe-pick'(el) {
+      const key = el.dataset.entity, a = state.an;
+      if (a.rows && a.rows.some((r) => r.entity === key)) { openDrill({ scope: 'entity', entity: key, source: 'embudo', drawer: false }); return; }
+      state.peFocusKey = key; a.selected = null; render();
+    },
+    /** Pasar al nivel de tiempo siguiente (año → mes → semana → día) cuando el actual no tiene historia suficiente, y poder volver. */
+    'pe-finer'() {
+      const pa = state.pa, g = paGran(pa), m = FP.productStore.meta || {}, to = { year: 'month', month: 'week', week: 'day' }[g];
+      if (!to || !m.dateMax) return;
+      state.peBack = { from: pa.from, to: pa.to, periodType: pa.periodType, gran: g };
+      state.peDrawer = false;
+      actions['pa-gran']({ value: to, dataset: { value: to } });
+    },
+    'pe-back'() {
+      const b = state.peBack, pa = state.pa; if (!b) return;
+      Object.assign(pa, { from: b.from, to: b.to, periodType: b.periodType, result: null, trace: null, page: 1, touched: true }); state.peBack = null; state.peDrawer = false; render();
     },
     /** Cierra el panel de lectura sin perder la entidad en foco (el embudo y «¿Qué hago?» siguen con ella). */
     'pe-drawer-close'() { state.peDrawer = false; render(); },
