@@ -4946,6 +4946,13 @@
     },
     'rs-pick'() { state.rs.promoId = rsV('rs-promo'); state.rs.result = null; state.rs.msg = null; render(); },
     async 'rs-run'() { await rsRun(); },
+    'rs-ex-save'() {
+      const ex = state.rs.ex, r = FP.exposures.addCut(state.ex.reg, ex.batchId, ex.result, state.pm.actor);
+      if (!r.ok) { ex.msg = { kind: 'bad', text: r.error }; render(); return; }
+      saveExposures(); ex.msg = { kind: 'ok', text: `Corte ${r.cut.id} guardado en ${ex.batchId}. También se ve en Promociones, en «Exposición sin oferta».` }; render();
+    },
+    /** Desde Promociones: abre Resultados con ese folio elegido y lo mide. */
+    async 'pm-ex-measure'(el) { const ex = state.rs.ex; ex.batchId = el.dataset.id; ex.result = null; ex.msg = null; state.pm.tab = 'resultados'; render(); await rsExRun(); },
     'rs-ex-pick'() { const ex = state.rs.ex; ex.batchId = rsV('rs-ex-batch'); ex.result = null; ex.msg = null; render(); },
     async 'rs-ex-run'() { await rsExRun(); },
     'rs-open'(el) { state.rs.promoId = el.dataset.id; state.rs.result = null; state.rs.msg = null; render(); try { document.getElementById('rs-t').scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } },

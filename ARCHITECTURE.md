@@ -2984,3 +2984,5 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 - Acciones: `ex-ask`, `ex-confirm`, `ex-cancel-confirm`, `ex-remove`, `of-fold` (panel). Pruebas: `tools/test-exposures.js`, `tools/regression/batch_exposicion.py`.
 
 - Medición de exposiciones: `FP.exposures.batches/asPromotion` arman una «promoción» temporal (no se guarda) para `FP.promotionEvaluation.evaluate`, con canal `total` y las promociones registradas tratadas como del mismo canal para sacar sus días de la base. Acciones `rs-ex-pick`, `rs-ex-run`; estado `state.rs.ex`.
+
+- Cortes de exposición: `FP.exposures.addCut/cutsOf`, dentro del mismo registro `exposures` (`cuts[]`, `cutSeq`). Acciones `rs-ex-save` y `pm-ex-measure`; la sección vive en `promotion-view.js` (`exposuresSection`).

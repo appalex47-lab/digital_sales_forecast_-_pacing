@@ -34,6 +34,10 @@ ok('E12 no hay ofertas por exponer: el registro de ofertas sigue vacío', FP.off
   const dates = new Set(), data = new Map(); const PE = FP.promotionEvaluation;
   PE.eachDay('2026-08-01', '2026-10-15').forEach((d) => { dates.add(d); const m = new Map(); ['1', '2', '3'].forEach((s) => m.set(s, { revenue: d >= '2026-10-05' ? 200 : 100, units: 10, orders: 5 })); data.set(d, m); });
   const res = PE.compute(p, { data, dates, max: '2026-10-15' }, { promotions: [], events: [] });
-  ok('M5 mide: venta real contra línea base, sube 100 % y no afirma causalidad', res.counts.evaluable === 3 && Math.abs(res.concepts.observedGrowth.revenue - 1) < 1e-9 && res.concepts.causal.status === 'not_demonstrated', res.concepts.observedGrowth); }
+  ok('M5 mide: venta real contra línea base, sube 100 % y no afirma causalidad', res.counts.evaluable === 3 && Math.abs(res.concepts.observedGrowth.revenue - 1) < 1e-9 && res.concepts.causal.status === 'not_demonstrated', res.concepts.observedGrowth);
+  ok('C1 guardar un corte pide nombre, algo evaluable y un folio que exista', !E.addCut(r2, bs[1].batchId, res, '').ok && !E.addCut(r2, 'EXP-9999', res, 'Ana').ok && !E.addCut(r2, bs[1].batchId, Object.assign({}, res, { counts: { evaluable: 0 } }), 'Ana').ok && r2.cuts.length === 0);
+  const c1 = E.addCut(r2, bs[1].batchId, res, 'Ana', '2026-10-16T10:00:00.000Z'), c2 = E.addCut(r2, bs[1].batchId, res, 'Luis');
+  ok('C2 guarda cifras, método, avisos y quién; los cortes se acumulan sin reemplazarse', c1.ok && c1.cut.id === 'EXC-0001' && c2.cut.id === 'EXC-0002' && r2.cuts.length === 2 && c1.cut.by === 'Ana' && c1.cut.cutoff === '2026-10-15' && c1.cut.items.length === 3 && c1.cut.concepts.observedGrowth.revenue === res.concepts.observedGrowth.revenue, c1);
+  ok('C3 se leen por folio y sobreviven al guardar y cargar', E.cutsOf(r2, bs[1].batchId).length === 2 && E.cutsOf(r2, bs[0].batchId).length === 0 && E.hydrate(JSON.parse(JSON.stringify(r2))).cuts.length === 2 && E.hydrate(JSON.parse(JSON.stringify(r2))).cutSeq === 2); }
 console.log(`${n - fails}/${n} pruebas de exposición ${fails ? 'FALLARON' : 'OK'}`);
 process.exit(fails ? 1 : 0);

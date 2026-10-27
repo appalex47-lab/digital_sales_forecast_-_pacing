@@ -754,3 +754,8 @@ Búsqueda, tipo de oportunidad, «Filtros (N activos)», «Ver por» y «Exporta
 
 - En Resultados e historial, el panel «Medir una exposición» compara la venta real de los SKU de un folio de exposición, desde su fecha de inicio, contra su propia línea base (28 días anteriores, lunes con lunes, sin días de otras promociones ni eventos). Sin fecha de fin mide hasta la última venta cargada; si se quitó antes, hasta ese día.
 - Es una estimación: no hay descuento ni grupo de control, así que el efecto causal sale siempre «No demostrado». Las exposiciones sin fecha de inicio no se pueden medir. El corte no se guarda: se calcula cada vez.
+
+## Cortes de exposición y su lugar en Promociones
+
+- «Guardar este corte» (en Medir una exposición) agrega al folio un corte con cifras, método, avisos, quién y cuándo (`EXC-0001`…). No se editan ni se reemplazan.
+- En la pestaña Promociones, la sección «Exposición sin oferta» lista cada folio con sus SKU, fechas, último corte y todos sus cortes; «Medir» abre Resultados con ese folio ya calculado. No son promociones: no llevan descuento ni aprobación.

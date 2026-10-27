@@ -131,6 +131,10 @@
       <div class="panel__body">${ctl}${rs.msg ? `<div class="note note--${rs.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(rs.msg.text)}</div>` : ''}${body}</div></section>`;
   }
 
+  function cutsTable(cuts) {
+    const esc = H().esc;
+    return `<div class="table-wrap"><table class="table ds-table"><thead><tr><th>Corte</th><th>Guardado</th><th>Datos hasta</th><th>Por</th><th>Crecimiento</th><th>Incremental</th><th>SKU</th></tr></thead><tbody>${cuts.map((c) => `<tr><td class="num">${esc(c.id)}</td><td>${esc(String(c.at).slice(0, 10))}</td><td>${esc(c.cutoff || '—')}</td><td>${esc(c.by)}</td><td class="num">${pct(c.concepts.observedGrowth.revenue)}</td><td class="num">${signedMoney(c.concepts.incremental.revenue)}</td><td class="num">${c.counts.evaluable}</td></tr>`).join('')}</tbody></table></div>`;
+  }
   /** «Medir una exposición»: venta real de los SKU expuestos contra su línea base, con las fechas de la exposición. */
   function exposurePanel(state) {
     const esc = H().esc, pill = H().pill, ex = state.rs.ex, E = FP.exposures; if (!E || !state.ex || !state.ex.reg || !state.ex.reg.items.length) return '';
@@ -152,8 +156,12 @@
         ${trackPanel(r)}
         <h3>Avisos</h3><ul class="plain-list">${r.warnings.filter((w) => w.code !== 'planned_dates').map((w) => `<li>${pill(w.level === 'warn' ? 'warning' : 'na', w.level === 'warn' ? 'Atención' : 'Nota')} ${esc(w.text)}</li>`).join('')}</ul>
         <h3>Por SKU</h3>${skuTable(r)}
-        <p class="field__hint">Una exposición no es una promoción: no tiene descuento, así que el cambio de venta puede venir del lugar que se le dio, de la temporada o de otras acciones. Los días de promociones registradas del mismo SKU se sacan de la base. No se guarda el corte: se calcula cada vez con la venta cargada.</p>`;
+        <div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="rs-ex-save"${r.counts.evaluable ? '' : ' disabled'}>Guardar este corte</button></div>
+        <p class="field__hint">Guardar un corte lo agrega al historial del folio con sus cifras y método (no se edita ni se reemplaza) y lo muestra en Promociones, en «Exposición sin oferta».</p>
+        <p class="field__hint">Una exposición no es una promoción: no tiene descuento, así que el cambio de venta puede venir del lugar que se le dio, de la temporada o de otras acciones. Los días de promociones registradas del mismo SKU se sacan de la base. Sin guardar un corte, se calcula cada vez con la venta cargada.</p>`;
     }
+    const cuts = ex.batchId ? E.cutsOf(state.ex.reg, ex.batchId).slice().reverse() : [];
+    if (cuts.length) body += `<h3>Cortes guardados de ${esc(ex.batchId)}</h3>${cutsTable(cuts)}`;
     const nos = bs.filter((b) => b.noStart).reduce((a, b) => a + b.noStart, 0);
     return `<section class="panel" aria-labelledby="rs-t-x"><div class="panel__head"><div><h2 class="panel__title" id="rs-t-x">Medir una exposición</h2>
       <p class="panel__desc">Compara la venta de los SKU expuestos, desde su fecha de inicio, contra su propia línea base (28 días anteriores, lunes con lunes). Sin fecha de fin se mide hasta la última venta cargada.${nos ? ` ${nos} exposición(es) sin fecha de inicio no se pueden medir.` : ''}</p></div></div>
@@ -191,5 +199,5 @@
   }
 
   function html(state) { return `${evaluationPanel(state)}${exposurePanel(state)}${historyPanel(state)}`; }
-  FP.resultsView = { html, val, filtered };
+  FP.resultsView = { html, val, filtered, cutsTable };
 })(typeof window !== 'undefined' ? window : globalThis);
