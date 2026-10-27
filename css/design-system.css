@@ -2177,3 +2177,6 @@ body.gs-lock{overflow:hidden}
 .chap__block { min-width: 0; }
 .pe-jump { display: flex; flex-wrap: wrap; gap: var(--ds-s2); margin-top: var(--ds-s3); }
 .nw { white-space: nowrap; }
+.chap__n { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ds-accent); color: #fff; font-weight: 700; flex: none; }
+.chap__tools { display: flex; flex-wrap: wrap; gap: var(--ds-s2); }
+.chap .panel { background: var(--ds-surface-2); }

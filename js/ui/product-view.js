@@ -250,7 +250,7 @@
   function renderControls(state) { $('pa-controls').innerHTML = controlsHtml(state); }
 
   /** HTML de los resultados (KPIs, tabla, señales y trazabilidad), para pintarlos aquí o dentro de otra página. */
-  function resultParts(state) {
+  function resultParts(state, extra) {
     const out = { kpis: '', table: '', signals: '', trace: '' };
     const pa = state.pa;
     const r = pa.result;
@@ -277,16 +277,18 @@
     const page = n ? 1 : Math.max(1, Math.min(pa.page || 1, Math.ceil(rows.length / size)));
     const shown = n ? rows.slice(0, n) : rows.slice((page - 1) * size, page * size);
     const dm = (row, k) => { const x = row.drivers[k]; return fin(x.deltaPct) ? F().signedPercent(x.deltaPct, 1) : '—'; };
+    const xc = (extra && extra.cols) || [];   // columnas que otra página suma a la tabla (por ejemplo, la contribución y el patrón de Evolución)
     out.table = `<div class="table-wrap"><table class="table ds-table table--dense">
       <thead><tr><th${r.level === 'state' ? ' data-help="estadoProducto"' : ''}>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
-        <th class="num">Contribución</th><th>${r.level === 'state' ? 'Situación' : 'Estado'}</th><th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
+        <th class="num">Contribución</th><th>${r.level === 'state' ? 'Situación' : 'Estado'}</th>${xc.map((c) => `<th class="${c.cls || ''}">${c.head}</th>`).join('')}<th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
       <tbody>${shown.map((x) => `<tr>
-        <td><strong>${esc(displayKey(r.level, x.key))}</strong>${x.geography && x.geography.path.length > 1 ? `<span class="cell-sub">${esc(x.geography.path.slice(0, -1).map((g) => g.name).join(' › '))}</span>` : ''}${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}</td>
+        <td><strong>${esc(displayKey(r.level, x.key))}</strong>${x.geography && x.geography.path.length > 1 ? `<span class="cell-sub">${esc(x.geography.path.slice(0, -1).map((g) => g.name).join(' › '))}</span>` : ''}${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}${extra && extra.sub ? extra.sub(x) : ''}</td>
         <td class="num">${esc(F().currency(x.revenue.current, 0))}</td><td class="num">${esc(F().currency(x.revenue.baseline, 0))}</td>
         <td class="num">${esc(FP.pacingView.signed('revenue', x.revenue.delta))}<span class="cell-sub">${esc(F().signedPercent(x.revenue.deltaPct, 1))}</span></td>
         <td class="num">${esc(F().percent(x.share, 1))}</td>
         <td class="num">${esc(F().percent(x.contribution, 1))}</td>
         <td>${H().pill(...(GROWTH[x.status] || ['na', x.status]))}</td>
+        ${xc.map((c) => `<td class="${c.cls || ''}">${c.cell(x)}</td>`).join('')}
         <td class="num">${esc(dm(x, 'orders'))}</td><td class="num">${esc(dm(x, 'views'))}</td>
         <td class="num">${metricVal('conversionRate', x.current && x.current.conversionRate)}</td>
         <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>

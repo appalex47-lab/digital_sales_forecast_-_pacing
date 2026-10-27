@@ -630,6 +630,27 @@
     el.innerHTML = P.early !== undefined ? P.early : [P.filters, P.context, P.narrative, P.kpis, P.table, P.reading, P.contribution, P.pvm, P.bridge, P.mix, P.forecast, P.assistant].join('');
   }
 
+  /* ---------- Piezas de Evolución que otra página reutiliza ---------- */
+  const priorityMap = (a) => new Map(a.priorities && a.priorities.status === 'available' ? [...(a.priorities.drag || []), ...(a.priorities.compensate || [])].map((x) => [x.entity, x]) : []);
+  const clueOf = (prio, e) => { const x = prio.get(e); if (!x || !x.evidenceSummary) return F().DASH; const parts = String(x.evidenceSummary).split(' · ').filter((s) => !/sin dato/i.test(s)); return parts.length ? esc(parts.join(' · ')) : F().DASH; };
+  /** Por entidad: rol, peso del movimiento, cambio de participación, persistencia, primera pista, tendencia y patrón (los mismos datos de «Contribución y origen» y de la tabla de patrones). */
+  function extras(state) {
+    const a = state.an, c = a.contribution, ok = c && c.status === 'available', prio = priorityMap(a);
+    const cmap = new Map(ok ? [...c.positive, ...c.negative].map((r) => [String(r.entity), r]) : []);
+    const rmap = new Map((a.rows || []).map((r) => [String(r.entity), r]));
+    return (entity) => {
+      const k = String(entity), r = cmap.get(k), t = rmap.get(k), p = prio.get(entity);
+      return { role: r ? (r.delta < 0 ? 'Arrastra' : r.delta > 0 ? 'Compensa' : 'Estable') : null, rank: r ? r.rank : null,
+        movementShare: r ? r.movementShare : null, shareChangePp: r ? r.shareChangePp : null,
+        persist: p ? (p.consecutivePeriods || 0) : null, clue: clueOf(prio, entity),
+        spark: t ? spark(t.series || []) : '', pattern: t ? pill(t.pattern) : '', since: t ? t.startPeriod : null };
+    };
+  }
+  /** Cambio neto, movimiento positivo y negativo, concentración, conciliación y aviso de materialidad (el encabezado de «Contribución y origen»). */
+  function contributionKpis(state) {
+    const a = state.an, c = a.contribution; if (!c || c.status !== 'available') return '';
+    return `<div class="metric-grid"><div class="metric"><span>Cambio neto</span><strong>${money(c.totalDelta)}</strong><small>base → actual</small></div><div class="metric"><span>Movimiento positivo</span><strong>${money(c.compensation.positiveDelta)}</strong><small>compensación generada</small></div><div class="metric"><span>Movimiento negativo</span><strong>${money(c.compensation.negativeDelta)}</strong><small>arrastre generado</small></div><div class="metric"><span>Concentración 80%</span><strong>${c.direction === 'decline' ? (c.concentration.negative.topN || 0) : (c.concentration.positive.topN || 0)} entidades</strong><small>para explicar el movimiento</small></div></div>${reconLine(a)}${matNote(a, c)}`;
+  }
   /** Materialidad: oculta de la tabla de patrones las entidades que pesan menos de X % del total (en el periodo actual o en el base). En Contribución la tabla también las oculta (con aviso), pero el cambio neto y la concentración incluyen todas las entidades. */
   function isMaterial(a, r) {
     const pct = Number(a.minSharePct) || 0; if (pct <= 0) return true;
@@ -637,5 +658,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { render, build, filters, isMaterial };
+  FP.trendView = { render, build, filters, isMaterial, extras, contributionKpis };
 })(typeof window !== 'undefined' ? window : globalThis);

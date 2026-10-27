@@ -3610,7 +3610,7 @@
       const pa = state.pa;
       const rows = await FP.productStore.skuTrace({ sku: el.dataset.key, from: pa.result.baseline.from < pa.from ? pa.result.baseline.from : pa.from, to: pa.to, channel: pa.channel });
       pa.trace = { sku: el.dataset.key, rows }; render();
-      const t = document.getElementById('pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const t = document.getElementById(state.view === 'prodevol' ? 'pe-trace' : 'pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
     'pa-to-trend'(el) {
       // Producto → Evolución: la misma selección (ruta y geografía, canal y periodo) y la entidad de la fila abierta en su lectura.
