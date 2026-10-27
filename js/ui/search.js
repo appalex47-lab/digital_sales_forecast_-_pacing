@@ -50,7 +50,7 @@
   function hasData() { try { const s = root.FP.app && root.FP.app.state; return Boolean(s && ((s.dataset && FP.dataModel && FP.dataModel.allRecords(s.dataset).length) || (FP.productStore && FP.productStore.available && FP.productStore.available()))); } catch (e) { return false; } }
   function buildIndex() {
     const G = FP.guidanceConfig || {}, items = [], doc = typeof document !== 'undefined' ? document : null;
-    Object.entries(G.VIEWS || {}).forEach(([id, v]) => { if (doc && !doc.getElementById(`view-${id}`)) return;
+    Object.entries(G.VIEWS || {}).forEach(([id, v]) => { if (v.retired || (doc && !doc.getElementById(`view-${id}`))) return;
       items.push({ type: 'go', id: `v-${id}`, title: v.title, desc: v.purpose || '', keywords: '', view: id }); });
     ACTIONS.forEach((a) => { if (a.view && doc && !doc.getElementById(`view-${a.view}`)) return; items.push({ type: 'action', ...a }); });
     (G.HELP || []).filter((e) => e.glossary).forEach((e) => items.push({ type: 'concept', id: `c-${e.id}`, title: e.title, desc: e.shortDescription || '', keywords: '', help: e.id }));

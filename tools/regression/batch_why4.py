@@ -1,4 +1,4 @@
-"""Fase 4 · Diagnóstico + entrada única «¿Por qué?»: respuesta arriba, detalle en «Ver más», cuatro formas de investigar.
+"""Fase 4 · Diagnóstico + entrada única «¿Por qué?»: respuesta arriba, detalle en «Ver más», tres formas de investigar.
 Uso: python3 batch_why4.py <raiz>"""
 import asyncio, sys, os, threading, functools, http.server, socketserver, datetime as dt, random
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -38,17 +38,17 @@ async def main():
         # W0 · sin datos: sin «Ver más» vacíos
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(900)
         e = await q.evaluate("(()=>({more:[...document.querySelectorAll('#view-diagnostico details.dx-more')].filter(d=>!d.hidden).length, layer:!document.querySelector('#view-diagnostico .dx-layer').hidden, hub:document.querySelectorAll('#why-hub-diagnostico .why-hub__item').length}))()")
-        chk('W0 sin diagnóstico: no hay «Ver más» vacíos y la entrada «¿Por qué?» sí está', e['more'] == 0 and not e['layer'] and e['hub'] == 4, e)
+        chk('W0 sin diagnóstico: no hay «Ver más» vacíos y la entrada «¿Por qué?» sí está', e['more'] == 0 and not e['layer'] and e['hub'] == 3, e)
         await prepare(q, u)
-        # W1 · la franja en las cuatro vistas, con la actual marcada y las otras tres como enlaces
-        exp = {'diagnostico': 'Brecha y drivers', 'analisis': 'Evolución y patrones', 'segmentos': 'Tráfico y conversión', 'producto': 'Categoría → Producto'}
+        # W1 · la franja en las tres vistas, con la actual marcada y las otras dos como enlaces
+        exp = {'diagnostico': 'Brecha y drivers', 'prodevol': 'Producto y evolución', 'segmentos': 'Tráfico y conversión'}
         for v, name in exp.items():
             await q.goto(u + '#' + v); await q.wait_for_timeout(1100)
             r = await q.evaluate(f"(()=>{{const h=document.querySelector('#why-hub-{v}'); return {{n:h.querySelectorAll('.why-hub__item').length, cur:[...h.querySelectorAll('[aria-current=page]')].map(x=>x.querySelector('strong').textContent), links:[...h.querySelectorAll('button[data-view]')].map(b=>b.dataset.view), vis:h.checkVisibility()}}}})()")
-            chk(f'W1 «{v}»: franja con 4 formas, la actual marcada ({name}) y 3 enlaces a las otras', r['n'] == 4 and r['cur'] == [name] and sorted(r['links']) == sorted(k for k in exp if k != v) and r['vis'], r)
+            chk(f'W1 «{v}»: franja con 3 formas, la actual marcada ({name}) y 2 enlaces a las otras', r['n'] == 3 and r['cur'] == [name] and sorted(r['links']) == sorted(k for k in exp if k != v) and r['vis'], r)
         # W2 · navegar desde la franja
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(900)
-        for v in ['analisis', 'segmentos', 'producto']:
+        for v in ['prodevol', 'segmentos']:
             await q.click(f'#why-hub-diagnostico button[data-view="{v}"]'); await q.wait_for_timeout(900)
             h = await q.evaluate("location.hash"); vis = await q.evaluate(f"document.querySelector('#view-{v}').checkVisibility()")
             chk(f'W2 desde la franja se llega a «{v}»', h == '#' + v and vis, (h, vis))

@@ -106,7 +106,7 @@
 
   function t5() {
     const steps = ['Dimensionar', 'Atribuir', 'Profundizar', 'Investigar', 'Simular', 'Actuar', 'Medir'];
-    const views = ['pacing', 'diagnostico', 'producto', 'diagnostico', 'recovery', 'recovery', 'medir'];
+    const views = ['pacing', 'diagnostico', 'prodevol', 'diagnostico', 'recovery', 'recovery', 'medir'];
     return `<ol class="tour-card__steps" style="padding:0;background:none">${steps.map((s, i) => `<li class="tour-step">
       <a href="#${views[i]}"><span class="tour-step__t"><span class="tour-step__n tour-step__n--${STEP_COLORS[i]}">${i + 1}</span>${s}</span>
       <span class="tour-step__d">${esc(t((G().VIEWS[views[i]] || {}).title || ''))}</span></a></li>`).join('')}</ol>`;

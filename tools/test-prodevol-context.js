@@ -1,0 +1,22 @@
+// Pruebas de las partes puras de «Producto y evolución · contexto» (sin navegador).
+const vm = require('vm'), fs = require('fs'), path = require('path');
+const root = path.join(__dirname, '..');
+const c = { console }; vm.createContext(c); c.window = c;
+vm.runInContext(fs.readFileSync(path.join(root, 'js/ui/prodevol-context.js'), 'utf8'), c, { filename: 'prodevol-context.js' });
+const X = c.FP.prodevolContext;
+const checks = []; const t = (n, ok, d) => checks.push({ n, ok: !!ok, d });
+const base = { Cardio: { d: 'growth', p: 'growth_sustained', an: null }, Diabetes: { d: 'stable', p: 'stable', an: null }, Dermo: { d: 'decline', p: 'decline_sustained', an: null }, Viejo: { d: 'stable', p: 'stable', an: null } };
+const cur = { Cardio: { d: 'decline', p: 'trend_break', an: 'decrease' }, Diabetes: { d: 'stable', p: 'stable', an: null }, Dermo: { d: 'growth', p: 'decline_sustained', an: null }, Nuevo: { d: 'growth', p: 'growth_sustained', an: null } };
+const r = X.visitDiff(base, cur, (x) => x.toUpperCase());
+const by = (k) => r.items.filter((i) => i.key === k);
+t('Cardio: ahora cae (antes crecía)', by('Cardio').some((i) => i.kind === 'state' && /ahora cae \(antes crece\)/.test(i.text)), by('Cardio'));
+t('Cardio: movimiento inusual nuevo y cambio de patrón con la etiqueta dada', by('Cardio').some((i) => i.kind === 'anomaly') && by('Cardio').some((i) => i.kind === 'pattern' && /GROWTH_SUSTAINED → TREND_BREAK/.test(i.text)));
+t('Dermo: ahora crece (antes caía)', by('Dermo').some((i) => /ahora crece \(antes caía\)/.test(i.text)));
+t('Diabetes sin cambios: no aparece', by('Diabetes').length === 0);
+t('Nuevo aparece; Viejo ya no aparece', by('Nuevo')[0].kind === 'new' && by('Viejo')[0].kind === 'gone');
+t('orden: lo que empieza a caer va primero', r.items[0].key === 'Cardio' && r.items[0].kind === 'state', r.items.map((i) => i.key + ':' + i.kind));
+t('conteos por tipo', r.counts.state === 2 && r.counts.new === 1 && r.counts.gone === 1, r.counts);
+t('sin base: todo es nuevo', X.visitDiff(null, { A: { d: 'growth' } }).items[0].kind === 'new');
+t('sin cambios: lista vacía', X.visitDiff(cur, cur).items.length === 0);
+let fail = 0; checks.forEach((x) => { console.log((x.ok ? 'PASS ' : 'FAIL ') + x.n + (x.ok ? '' : ' ' + JSON.stringify(x.d))); if (!x.ok) fail++; });
+console.log(fail ? fail + ' fallas' : checks.length + '/' + checks.length + ' PASS'); process.exit(fail ? 1 : 0);

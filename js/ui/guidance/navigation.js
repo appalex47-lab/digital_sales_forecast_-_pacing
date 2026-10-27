@@ -25,6 +25,7 @@
     const c = { ...state.ux.ctx };
     // Narrativa y Paquete trabajan sobre la misma selección que Diagnóstico (periodo y canal se pueden cambiar en ellas)
     if (view === 'diagnostico' || view === 'narrativa' || view === 'presentacion' || view === 'segmentos') Object.assign(c, pick(state.dx.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
+    else if (view === 'prodevol' && state.pa) Object.assign(c, paContext(state.pa));
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
     else if (view === 'reforecast') { c.channel = state.rf.channel; if (state.rf.month && state.rf.period !== 'months') { c.periodType = 'month'; c.periodKey = state.rf.month; } }
@@ -34,6 +35,33 @@
       else { c.channel = state.ux.home.channel; c.periodType = 'month'; c.periodKey = null; }
     }
     return c;
+  }
+
+
+  /**
+   * Contexto de Producto y evolución que se comparte con el resto.
+   *  · Canal y selección (ruta de categoría/producto y filtros de ubicación): siempre se comparten; la selección es una sola.
+   *  · Periodo y comparación: solo si la persona los cambió en esa vista (`touched`), para que visitarla con su periodo por defecto no pise el de Diagnóstico.
+   */
+  const SEL_KEYS = () => (FP.productFilter ? FP.productFilter.KEYS : ['category', 'subcategory', 'product', 'state', 'city', 'branch', 'delivery']);
+  const selKey = (o) => JSON.stringify(Object.keys(o || {}).filter((k) => o[k]).sort().map((k) => [k, o[k]]));
+  function paContext(pa) {
+    const r = { channel: pa.channel || 'total' };
+    const path = FP.app && FP.app.paFilter ? FP.app.paFilter(pa) : null;
+    if (path) {
+      const f = {}, dropped = [];
+      Object.keys(path).forEach((k) => { if (SEL_KEYS().includes(k)) f[k] = path[k]; else dropped.push(k); });
+      r.sel = { filter: f, dropped };
+    }
+    if (!pa.touched) return r;
+    r.comparison = pa.comparison === 'yoy' ? 'actual_vs_yoy' : 'actual_vs_previous';
+    if (pa.from && pa.to) {
+      const g = FP.app && FP.app.paGran ? FP.app.paGran(pa) : 'range', TE = FP.temporalEngine;
+      if (g === 'day') { r.periodType = 'day'; r.periodKey = pa.from; }
+      else if (['year', 'month', 'week'].includes(g) && TE) { r.periodType = g; r.periodKey = TE.periodKey(pa.from, g); }
+      else { r.periodType = 'range'; r.periodKey = pa.from; }
+    }
+    return r;
   }
 
   function pick(o, keys) { const r = {}; keys.forEach((k) => { if (o && o[k] !== undefined && o[k] !== null && o[k] !== '') r[k] = o[k]; }); return r; }
@@ -68,10 +96,26 @@
     } else if (view === 'reforecast') {
       state.rf.channel = c.channel || 'total'; state.rf.tableChannel = c.channel || 'total';
       if (monthKey) state.rf.month = monthKey;
-    } else if (view === 'producto' && state.pa) {
-      state.pa.channel = c.channel || state.pa.channel || 'total';
-      state.pa.result = null;
-      if (c.periodType === 'range' || c.periodType === 'week' || c.periodType === 'year') notes.push('Categoría → Producto usa un rango de fechas: se toma el mes del periodo elegido o el último mes con datos.');
+    } else if (view === 'prodevol' && state.pa) {
+      const pa = state.pa, before = JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]);
+      pa.channel = c.channel || pa.channel || 'total';
+      if (c.comparison === 'actual_vs_yoy') pa.comparison = 'yoy'; else if (c.comparison === 'actual_vs_previous') pa.comparison = 'previous';
+      const TE = FP.temporalEngine, meta = (FP.productStore && FP.productStore.meta) || {};
+      const gt = ['year', 'month', 'week', 'day'].includes(c.periodType) && c.periodKey ? c.periodType : null;
+      const key = gt ? c.periodKey : monthKey, kt = gt || 'month';
+      if (key && TE && meta.dateMax) {
+        let r = null; try { r = kt === 'day' ? { from: key, to: key } : TE.focusRange(kt, key, meta.dateMax); } catch (e) { r = null; }
+        if (r && r.from && r.to && r.from <= r.to && r.from >= (meta.dateMin || r.from) && r.from <= meta.dateMax) { pa.from = r.from; pa.to = r.to; pa.periodType = kt === 'day' ? null : kt; if (!gt) notes.push('Categoría → Producto trabaja por año, mes, semana o día: se muestra el mes del periodo elegido.'); }
+        else notes.push('Los datos de productos no llegan al periodo elegido: se conserva el periodo que ya tenía esta vista.');
+      }
+      // selección única: la ruta de Producto es el filtro de Evolución (SKU y región solo existen como ruta)
+      let selChanged = false;
+      if (c.sel && c.sel.filter && FP.app && FP.app.paFromSelection) {
+        const mine = {}; Object.entries(FP.app.paFilter(pa)).forEach(([k, v]) => { if (SEL_KEYS().includes(k)) mine[k] = v; });
+        if (selKey(mine) !== selKey(c.sel.filter)) { FP.app.paFromSelection(c.sel.filter, pa.channel); selChanged = true; }
+      }
+      pa.touched = false;
+      if (selChanged || JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]) !== before) { pa.result = null; pa.trace = null; pa.page = 1; pa.note = null; }
     } else if (view === 'inicio') {
       state.ux.home.channel = c.channel || 'total';
       if ((c.periodType === 'year' || c.periodType === 'month') && c.periodKey) {
@@ -127,6 +171,7 @@
     reforecast: I('<path d="M4 18l5-6 4 3 7-9"/><path d="M16 6h4v4"/>'),
     diagnostico: I('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
     producto: I('<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
+    prodevol: I('<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
     analisis: I('<path d="M4 18V8M10 18V5M16 18v-9M22 18H2"/><path d="M4 5l6-2 6 3 6-4"/>'),
     recovery: I('<path d="M4 12a8 8 0 108-8"/><path d="M4 4v5h5"/>'),
     medir: I('<path d="M5 20V10M12 20V4M19 20v-6"/>'),

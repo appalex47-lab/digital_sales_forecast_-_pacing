@@ -21,7 +21,7 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
@@ -1526,7 +1526,7 @@
     if (v === 'pacing' && fcReal) { learn('pacing-seen'); learn('forecast-seen'); }
     else if (v === 'reforecast' && state.rf.run) learn('reforecast-seen');
     else if (v === 'diagnostico' && state.dx.run && state.dx.run.signals && state.dx.run.signals.length) learn('signal-seen');
-    else if (v === 'producto' && state.pa.result && ['region', 'state', 'city', 'branch', 'delivery'].includes(state.pa.result.level)) learn('product-geo-seen');
+    else if (v === 'prodevol' && state.pa.result && ['region', 'state', 'city', 'branch', 'delivery'].includes(state.pa.result.level)) learn('product-geo-seen');
   }
 
   /**
@@ -1668,7 +1668,9 @@
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
     else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
-    else if (state.view === 'analisis') { FP.trendView.render(state); ensureTrendAnalysis(); }
+    else if (state.view === 'prodevol') {
+      const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis();
+    }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
     else if (state.view === 'ajustes') {
@@ -1679,7 +1681,6 @@
         if (el) setTimeout(() => { el.scrollIntoView({ block: 'start' }); try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 0);
       }
     }
-    else if (state.view === 'producto') { FP.productView.render(state); ensureProductAnalysis(); }
   }
 
   /* ================= Pipeline de importación ================= */
@@ -1866,11 +1867,147 @@
   }
   /** Niveles que se pueden elegir como siguiente desglose (los que no están ya en la ruta ni en los filtros). */
   function paNextChoices(pa) { const used = paUsed(pa), ok = paAvailable(); return PA_ALL.filter((l) => !used.has(l) && ok(l)); }
+  /** Granularidad del periodo de Producto: año, mes, semana, día o rango libre (desde–hasta). */
+  function paGran(pa) {
+    if (['year', 'month', 'week'].includes(pa.periodType)) return pa.periodType;
+    if (pa.from && pa.to && pa.from === pa.to) return 'day';
+    return 'range';
+  }
   function paFilter(pa) {
     const f = {};
     pa.drill.forEach((d) => { f[d.level] = d.key; });
     Object.entries(pa.geo).forEach(([k, v]) => { if (v) f[k] = v; });
     return f;
+  }
+
+  /** Traduce una selección de producto/ubicación (filtro de Evolución) a la ruta de Categoría → Producto. */
+  function paFromSelection(f, channel) {
+    const pa = state.pa;
+    pa.drill = ['category', 'subcategory', 'product', 'sku'].filter((k) => f[k]).map((k) => ({ level: k, key: f[k] }));
+    pa.geo = {}; ['region', 'state', 'city', 'branch', 'delivery'].forEach((k) => { if (f[k]) pa.geo[k] = f[k]; });
+    pa.channel = FP.analysisContext.normChannel(channel); pa.next = null; pa.result = null; pa.trace = null; pa.page = 1; pa.note = null;
+  }
+
+  /* ----- Producto y evolución: una página, dos motores (Producto y Evolución) con una sola selección ----- */
+  const repaintAn = () => { if (state.view === 'prodevol') FP.prodevolView.render(state); };
+  const repaintPa = repaintAn;
+  /**
+   * Producto manda en canal, periodo, comparación y ruta; Evolución (`state.an`) los toma de él antes de calcular.
+   * Devuelve true si el periodo es un rango libre (Evolución necesita calendario y lo avisa).
+   */
+  function peSync() {
+    const pa = state.pa, a = state.an, TE = FP.temporalEngine, PF = FP.productFilter, m = (FP.productStore && FP.productStore.meta) || {};
+    if (!m.dateMax) return false;
+    if (!pa.to || !pa.from) { pa.to = m.dateMax; pa.from = `${m.dateMax.slice(0, 7)}-01`; if (!pa.periodType) pa.periodType = 'month'; }
+    const g = paGran(pa), patch = {};
+    const ch = FP.analysisContext.normChannel(pa.channel); if (ch !== a.channel) patch.channel = ch;
+    const cmp = pa.comparison === 'yoy' ? 'year_ago' : 'previous'; if (cmp !== a.comparison) patch.comparison = cmp;
+    if (g !== 'range') {
+      const key = g === 'day' ? pa.from : TE.periodKey(pa.from, g);
+      if (a.periodType !== g || a.focusKey !== key) { Object.assign(patch, { periodType: g, focusKey: key }); if (a.periodType !== g) { const pc = { year: 3, month: 12, week: 12, day: 30 }[g]; patch.periodCount = pc; patch.months = pc; } }
+    }
+    if (PF) {
+      const path = paFilter(pa); let f = {}; PF.KEYS.forEach((k) => { if (path[k]) f = PF.cascade(f, k, path[k]); });
+      if (JSON.stringify(Object.entries(PF.active(a.filter)).sort()) !== JSON.stringify(Object.entries(f).sort())) patch.filter = f;
+    }
+    // el nivel que se analiza en el tiempo es el de la tabla, salvo que la persona elija otro («Ver evolución por»)
+    if (pa.evoLevel && (paUsed(pa).has(pa.evoLevel) || !paAvailable()(pa.evoLevel))) pa.evoLevel = null;
+    const lvl = pa.evoLevel || paLevel(pa) || 'sku';
+    if (['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) && a.level !== lvl) patch.level = lvl;
+    if (Object.keys(patch).length) resetAnalysis(patch);
+    return g === 'range';
+  }
+
+  /**
+   * Producto y evolución · tasas del embudo por periodo (vista→carrito, carrito→checkout, checkout→compra) para el foco: la entidad elegida
+   * o toda la selección. Usa los mismos periodos que Evolución (`an.periodsList`) y el mismo almacén; se calcula una vez por selección.
+   */
+  async function ensureFunnelSeries() {
+    const pa = state.pa, a = state.an;
+    if (!pa.result || pa.loading || !FP.productStore || !FP.productStore.available() || !FP.funnelEngine) return;
+    const periods = a.periodsList;
+    if (!Array.isArray(periods) || !periods.length) return;   // los arma Evolución al terminar
+    const lvl = a.level, ent = a.selected && a.selected.entity ? a.selected.entity : null;
+    const fkey = ent && ['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) ? { [lvl]: ent } : {};
+    const key = JSON.stringify([pa.channel, paFilter(pa), fkey, periods.map((p) => p.key)]);
+    if (pa.fseries && pa.fseries.key === key) return;
+    const run = (pa._fsRun = (pa._fsRun || 0) + 1);
+    pa.fseries = { key, loading: true, rows: [] }; repaintPa();
+    const rows = [];
+    try {
+      for (const p of periods) {
+        const map = await FP.productStore.aggregate({ from: p.from, to: p.to, channel: pa.channel, groupBy: 'total', filter: { ...paFilter(pa), ...fkey } });
+        if (pa._fsRun !== run) return;
+        let acc = null; map.forEach((x) => { acc = x; });
+        rows.push({ period: p.key, label: p.label || p.key, partial: !!p.partial, v: acc ? FP.funnelEngine.pick(FP.productStore.finalize(acc, null)) : null });
+      }
+    } catch (e) { if (pa._fsRun === run) { pa.fseries = { key, loading: false, rows: [], error: e.message }; repaintPa(); } return; }
+    if (pa._fsRun !== run) return;
+    pa.fseries = { key, loading: false, rows }; repaintPa();
+  }
+
+  /**
+   * Producto y evolución · contexto de época: el cambio de este periodo contra su comparación frente al mismo cambio un año antes, y el cambio
+   * contra el mismo periodo del año anterior, para la selección (o la fila elegida). Mismo almacén; se calcula una vez por selección.
+   */
+  async function ensureSeasonalContext() {
+    const pa = state.pa, a = state.an, c = a.context;
+    if (!pa.result || pa.loading || !c || !c.focus || !c.comparison || !c.comparison.available || !c.comparison.baseline || !FP.productStore.available()) return;
+    const TE = FP.temporalEngine, lvl = a.level, ent = a.selected && a.selected.entity, meta = FP.productStore.meta || {};
+    const fkey = ent && ['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) ? { [lvl]: ent } : {};
+    const cur = { from: c.focus.from, to: c.focus.to }, base = { from: c.comparison.baseline.from, to: c.comparison.baseline.to };
+    const key = JSON.stringify([pa.channel, paFilter(pa), fkey, cur, base]);
+    if (pa.seasonal && pa.seasonal.key === key) return;
+    const run = (pa._seRun = (pa._seRun || 0) + 1);
+    pa.seasonal = { key, loading: true }; repaintPa();
+    const revenue = async (r) => {
+      if (!r || (meta.dateMin && r.from < meta.dateMin)) return null;   // el año anterior no está en los datos
+      const map = await FP.productStore.aggregate({ from: r.from, to: r.to, channel: pa.channel, groupBy: 'total', filter: { ...paFilter(pa), ...fkey } });
+      let acc = null; map.forEach((x) => { acc = x; });
+      const f = acc ? FP.productStore.finalize(acc, null) : null;
+      return f && f.revenue && Number.isFinite(f.revenue.value) ? f.revenue.value : null;
+    };
+    try {
+      const last = (r) => TE.shiftRange(r, 'year', -1, false);
+      const [P, B, P1, B1] = [await revenue(cur), await revenue(base), await revenue(last(cur)), await revenue(last(base))];
+      if (pa._seRun !== run) return;
+      const ch = (x, y) => (Number.isFinite(x) && Number.isFinite(y) && y > 0 ? x / y - 1 : null);
+      pa.seasonal = { key, loading: false, cur: P, base: B, lastCur: P1, lastBase: B1, change: ch(P, B), lastChange: ch(P1, B1), yoy: ch(P, P1) };
+    } catch (e) { if (pa._seRun === run) pa.seasonal = { key, loading: false, error: e.message }; }
+    repaintPa();
+  }
+
+  /**
+   * «Nuevo desde tu última visita»: compara la lectura de cada fila (dirección, patrón, movimiento inusual) con la que se vio la última vez
+   * con esta misma selección. La foto vive en este navegador (localStorage); se guarda al terminar de leer y se compara en la visita siguiente.
+   */
+  const PE_VISIT_KEY = 'fp.pe.visit.v1';
+  function peVisitLoad() { try { return JSON.parse(root.localStorage.getItem(PE_VISIT_KEY)) || {}; } catch (e) { return {}; } }
+  function peVisitSave(all) { try { root.localStorage.setItem(PE_VISIT_KEY, JSON.stringify(all)); } catch (e) { /* sin almacenamiento: la comparación no se guarda */ } }
+  function ensureVisitDiff() {
+    const pa = state.pa, a = state.an, c = a.context, m = (FP.productStore && FP.productStore.meta) || {};
+    if (!pa.result || pa.loading || a.loading || a.key === null || !a.rows || !a.rows.length || !c || !c.focus || !FP.prodevolContext) return;
+    const scope = JSON.stringify([pa.channel, a.level, a.periodType, a.comparison, paFilter(pa)]);
+    if (pa.visit && pa.visit.scope === scope) return;
+    const cur = {};
+    a.rows.slice(0, 400).forEach((r) => { cur[String(r.entity)] = { d: r.direction || null, p: r.pattern || null, an: r.anomaly ? (r.anomaly.direction || 'yes') : null }; });
+    const all = peVisitLoad(), base = all[scope] || null;
+    const stale = base && base.dataDay && m.dateMax && m.dateMax < base.dataDay;   // datos más viejos que los de la visita anterior: no se compara
+    const diff = base && base.entities && !stale ? FP.prodevolContext.visitDiff(base.entities, cur, (x) => FP.trendView.patternLabel(x)) : null;
+    pa.visit = { scope, first: !base, at: base ? base.at : null, items: diff ? diff.items : [] };
+    if (!stale) {
+      all[scope] = { at: new Date().toISOString(), dataDay: m.dateMax || null, focus: c.focus.key, entities: cur };
+      Object.keys(all).sort((x, y) => String(all[y].at).localeCompare(String(all[x].at))).slice(12).forEach((k) => { delete all[k]; });   // solo las 12 selecciones más recientes
+      peVisitSave(all);
+    }
+    repaintPa();
+  }
+
+  /** Oportunidades (se calculan una vez por sesión si hace falta para «¿Qué hago?»). */
+  function opEnsure() {
+    const op = state.op;
+    if (state.pa._opTried || op.result || op.loading || !FP.productStore.available() || !(FP.productStore.meta || {}).batches) return;
+    state.pa._opTried = true; opRun(false);
   }
 
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
@@ -1882,6 +2019,7 @@
     if (!pa.to || !pa.from) {
       pa.to = m.dateMax;
       pa.from = `${m.dateMax.slice(0, 7)}-01`;
+      if (!pa.periodType) pa.periodType = 'month';   // mes en curso: se compara con los mismos días del mes anterior, igual que Evolución
     }
     if (!pa.counts) { pa.counts = await FP.productStore.counts(); pa.estimate = await repo.estimate(); }
     const level = paLevel(pa) || 'sku';
@@ -1893,7 +2031,8 @@
     const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, periodType: pa.periodType, comparison: pa.comparison, channel: pa.channel, level, filter, next: level === 'sku' ? null : paLevel(probe) });
     if (pa.key !== key) return;
     pa.result = res; pa.loading = false; pa.page = 1;
-    if (state.view === 'producto') FP.productView.render(state);
+    repaintPa();
+    if (pa.pendingTrace) { const sku = pa.pendingTrace; pa.pendingTrace = null; await actions['pa-trace']({ dataset: { key: sku } }); }   // llegó desde «Ver trazabilidad completa» de Evolución
   }
 
   /** Filtro de página de Evolución y patrones (categoría, producto, sucursal…): se suma a TODA lectura de productos. */
@@ -2035,7 +2174,7 @@
     an.loading = true; an.error = null; an.key = key;
     const runId = an._run = (an._run || 0) + 1, STALE = { stale: true }, chk = () => { if (an._run !== runId) throw STALE; };
     startAnLoader(an, periods.length);
-    if (state.view === 'analisis') FP.trendView.render(state);   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
+    repaintAn();   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
     ctx.filter = pageFilter(); an.context = ctx;
     const aggTotal = async (range) => {
       if (!range || range.to < range.from) return null;
@@ -2262,7 +2401,7 @@
       if (e === STALE) return;   // una corrida más nueva (por ejemplo, otro «Analizar por») ya tomó el control
       an.rows = []; an.selected = null; an.error = e && e.message ? e.message : String(e);
     } finally {
-      if (an._run === runId) { an.loading = false; stopAnLoader(an); if (state.view === 'analisis') FP.trendView.render(state); }
+      if (an._run === runId) { an.loading = false; stopAnLoader(an); repaintAn(); }
     }
   }
   /* ========== Análisis · drill-down (KPI → variación → señal → entidad → canal → producto → período → registro fuente) ========== */
@@ -2280,10 +2419,10 @@
     const an = state.an, d = an.drill, ctx = an.context, ci = an.comparisonInfo;
     if (!d) return;
     // Nunca dejar «Cargando…» sin salida: si falta el contexto del análisis, se dice (antes se salía en silencio y quedaba cargando para siempre)
-    if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; if (state.view === 'analisis') FP.trendView.render(state); return; }
+    if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; repaintAn(); return; }
     const token = d.token = Math.random(); d.loading = true; d.pending = false; d.error = null; d.step = 'Leyendo el período actual…'; d.data = null;
     const TE = FP.temporalEngine, PS = FP.productStore, mine = () => d.token === token;
-    const repaint = () => { if (mine() && state.view === 'analisis') { try { FP.trendView.render(state); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
+    const repaint = () => { if (mine() && state.view === 'prodevol') { try { repaintAn(); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
     // Salida de emergencia: si algo tarda demasiado (datos muy grandes), se avisa y se ofrece reintentar en vez de quedarse cargando.
     const watchdog = setTimeout(() => { if (mine() && d.loading) { d.loading = false; d.pending = false; d.error = 'El detalle tarda más de lo normal (90 s). Puede seguir calculándose; si no aparece, pulsa «Reintentar» o acota el período.'; repaint(); } }, an.drillTimeoutMs || 90000);
     try {
@@ -2839,7 +2978,7 @@
     'an-forecast-page'(el) { const rows = state.an.forecast && Array.isArray(state.an.forecast.rows) ? state.an.forecast.rows : []; const pages = Math.max(1, Math.ceil(rows.length/6)); state.an.forecastPage = Math.max(1, Math.min(pages, Number(el.dataset.value)||1)); render(); },
     'an-assistant-toggle'() {
       state.an.assistant = { ...state.an.assistant, open: !state.an.assistant.open };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
     },
     'an-assistant-question'(el) {
       state.an.assistant = { ...state.an.assistant, question: el.value || '' };
@@ -2849,7 +2988,7 @@
       const q = String(a.question || '').trim();
       if (!q || !FP.cohereAnalysisAssistant) return;
       state.an.assistant = { ...a, open: true, status: 'busy', result: null, errors: [] };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
       const wantsPanorama = a.panorama || PANORAMA_RE.test(q);
       (wantsPanorama ? buildPanorama() : Promise.resolve({ ok: true, panorama: null }))
         .then((pr) => (pr.ok ? FP.cohereAnalysisAssistant.ask(q, state, { apiKey: state.dx.apiKey, model: state.dx.model, panorama: pr.panorama })
@@ -2857,24 +2996,24 @@
         .then(r => {
           const history = [...(state.an.assistant.history || []), { question: q, result: r.result, errors: r.errors || [], ok: r.ok }].slice(-5);
           state.an.assistant = { ...state.an.assistant, status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [], history, question: '', panorama: false };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         })
         .catch(e => {
           state.an.assistant = { ...state.an.assistant, status: 'error', result: null, errors: [e?.message || String(e)] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         });
     },
     'an-assistant-group'(el) {
       const g = Number(el.dataset.group); state.an.assistant = { ...state.an.assistant, group: String(state.an.assistant.group) === String(g) ? null : g };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
     },
     'an-assistant-suggest'(el) {
       const q = el.dataset.question || '';
       const isPan = el.dataset.panorama === '1';
       state.an.assistant = { ...state.an.assistant, open: true, question: q, panorama: isPan, panBusy: isPan && !(state.an._panorama), pan: isPan && state.an._panorama ? state.an._panorama.value : state.an.assistant.pan };
-      if (state.view === 'analisis') FP.trendView.render(state);
-      if (isPan) buildPanorama().then((pr) => { state.an.assistant = { ...state.an.assistant, panBusy: false, pan: pr.ok ? pr.panorama : null }; if (state.view === 'analisis') FP.trendView.render(state); })
-        .catch(() => { state.an.assistant = { ...state.an.assistant, panBusy: false }; if (state.view === 'analisis') FP.trendView.render(state); });
+      repaintAn();
+      if (isPan) buildPanorama().then((pr) => { state.an.assistant = { ...state.an.assistant, panBusy: false, pan: pr.ok ? pr.panorama : null }; repaintAn(); })
+        .catch(() => { state.an.assistant = { ...state.an.assistant, panBusy: false }; repaintAn(); });
       const input = document.getElementById('an-assistant-input');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     },
@@ -2882,7 +3021,7 @@
       const n = state.an.narrative;
       if (!n || !n.ready || !FP.cohereNarrative) return;
       state.an.ai = { status: 'busy', result: null, errors: [] };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
       const sections = Object.fromEntries((n.layers || []).map((layer) => {
         const claims = (n.sections?.[layer.id] || []).map((c) => c.id);
         return [layer.id, { claims, empty: claims.length === 0 }];
@@ -2899,11 +3038,11 @@
       FP.cohereNarrative.narrate(payload, { apiKey: state.dx.apiKey, model: state.dx.model })
         .then(r => {
           state.an.ai = { status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         })
         .catch(e => {
           state.an.ai = { status: 'error', result: null, errors: [e?.message || String(e)] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         });
     },
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
@@ -2919,13 +3058,16 @@
         if (k.startsWith('f:')) return actions['an-filter']({ dataset: { fkey: k.slice(2) }, value: '' });
         const reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
         if (k in reset) { state.an[k] = reset[k]; state.an.page = 1; render(); }
+      } else if (pg === 'pa' && k.startsWith('an:')) {   // chip de resultado de Evolución dentro de Producto y evolución
+        const kk = k.slice(3), reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
+        if (kk in reset) { state.an[kk] = reset[kk]; state.an.page = 1; render(); }
       } else if (pg === 'pa' && k.startsWith('geo:')) actions['pa-geo']({ dataset: { key: k.slice(4) }, value: '' });
       else if (pg === 'cu' && k.startsWith('cu:')) { const f = state.cu.opts.filter = state.cu.opts.filter || {}; const kk = k.slice(3); f[kk] = undefined; if (kk === 'category') { f.subcategory = undefined; f.product = undefined; } else if (kk === 'subcategory') f.product = undefined; else if (kk === 'state') f.branch = undefined; state.cu.status = 'idle'; render(); }
     },
     'fs-clear'(el) {
       const pg = el.dataset.fsPage;
       if (pg === 'an') { Object.assign(state.an, { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0, page: 1 }); actions['an-filter-clear'](); }
-      else if (pg === 'pa') actions['pa-geo-clear']();
+      else if (pg === 'pa') { if (state.view === 'prodevol') Object.assign(state.an, { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0, page: 1 }); actions['pa-geo-clear'](); }
       else if (pg === 'cu') actions['cu-clear-filter']();
     },
     'an-filter-clear'() { resetAnalysis({ filter: {} }); state.an.reopen = null; render(); },
@@ -3506,11 +3648,56 @@
       const pa = state.pa, k = el.dataset.key;
       if (k === 'topN') { pa.topN = Number(el.value); pa.page = 1; render(); return; }
       if ((k === 'from' || k === 'to') && !Cal.isValidISODate(el.value)) { FP.ui.toast('Fecha inválida.'); render(); return; }
-      pa[k] = el.value; pa.note = null; if (k === 'from' || k === 'to') pa.periodType = null;
+      pa[k] = el.value; pa.note = null; if (k !== 'channel') pa.touched = true; if (k === 'from' || k === 'to') pa.periodType = null;
       if (k === 'channel') state.ux.ctx.channel = el.value;
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
     },
+    'pa-gran'(el) {
+      const pa = state.pa, g = el.value || el.dataset.value, TE = FP.temporalEngine, m = FP.productStore.meta || {};
+      if (!g || !m.dateMax) return;
+      pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
+      if (g === 'range') { pa.periodType = null; render(); return; }   // conserva el desde–hasta actual
+      const anchor = pa.to || m.dateMax;
+      if (g === 'day') { pa.from = pa.to = anchor; pa.periodType = null; }
+      else { const r = TE.focusRange(g, TE.periodKey(anchor, g), m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
+      render();
+    },
+    'pa-focus'(el) {
+      const pa = state.pa, g = paGran(pa), TE = FP.temporalEngine, m = FP.productStore.meta || {}, key = el.value || el.dataset.value;
+      if (!key || g === 'range' || !m.dateMax) return;
+      pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
+      if (g === 'day') { pa.from = pa.to = key; pa.periodType = null; }
+      else { const r = TE.focusRange(g, key, m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
+      render();
+    },
+    /** «Ir a…»: salta directo a una categoría, subcategoría, producto o SKU (la ruta completa). */
+    'pa-goto'(el) {
+      const PF = FP.productFilter, p = PF && PF.gotoOptions().get(String(el.value || '').trim());
+      if (!p) return;   // texto que no es una opción: se ignora sin cambiar nada
+      const pa = state.pa;
+      pa.drill = p.map((x) => ({ level: x.level, key: x.key })); pa.next = null; pa.result = null; pa.trace = null; pa.page = 1; pa.evoLevel = null; pa.touched = true;
+      render();
+    },
+    'pe-evolevel'(el) { state.pa.evoLevel = el.value || null; state.an.selected = null; state.an.drill = null; render(); },
+    /** Elegir una fila: abre su lectura (Evolución) y baja al capítulo pedido, sin cambiar de página. */
+    'pe-focus'(el) {
+      const key = el.dataset.key, target = el.dataset.target;
+      const a = state.an;
+      if (state.pa.evoLevel) state.pa.evoLevel = null;   // la fila es del nivel de la tabla
+      peSync();
+      if (a.rows && a.rows.some((r) => r.entity === key)) openDrill({ scope: 'entity', entity: key, source: 'tabla' });
+      else a.reopen = { scope: 'entity', entity: key };
+      render();
+      if (target) setTimeout(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }, 60);
+    },
+    /** Abre Oportunidades con la selección como filtro (categoría y subcategoría) y la búsqueda por producto o SKU. */
+    'pe-open-op'() {
+      const p = paFilter(state.pa), op = state.op;
+      op.f.category = p.category || ''; op.f.subcategory = p.subcategory || ''; op.f.q = p.sku || p.product || '';
+      state.pm.tab = 'oportunidades'; root.location.hash = '#promociones';
+    },
+    'pe-jump'(el) { const t = document.getElementById(el.dataset.target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
     'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
     'pa-drill'(el) {
       const pa = state.pa, lvl = paLevel(pa);
@@ -3538,13 +3725,16 @@
       const pa = state.pa;
       const rows = await FP.productStore.skuTrace({ sku: el.dataset.key, from: pa.result.baseline.from < pa.from ? pa.result.baseline.from : pa.from, to: pa.to, channel: pa.channel });
       pa.trace = { sku: el.dataset.key, rows }; render();
-      const t = document.getElementById('pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const t = document.getElementById('pe-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
+    'pa-to-trend'(el) { return actions['pe-focus']({ dataset: { key: el.dataset.key, target: 'pe-evolucion' } }); },
+    'an-to-product'() { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },   // el foco ya es esta entidad: se baja al capítulo del embudo
+    'an-open-trace'(el) { return actions['pa-trace']({ dataset: { key: el.dataset.sku } }); },   // la trazabilidad es del SKU: no cambia la ruta
     'pa-trace-close'() { state.pa.trace = null; render(); },
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
       if (!x) return;
-      Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note, result: null });
+      Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note, result: null, touched: true });
       render();
     },
     async 'pa-export'() {
@@ -5405,6 +5595,8 @@
     if (v === 'negocio') { v = 'ajustes'; state.ajustesSection = 'negocio'; try { root.history.replaceState(null, '', '#ajustes'); } catch (e) { /* file:// */ } }
     // El paquete de análisis (.zip) vive ahora en Datos → Exportar datos: el enlace #paquete abre esa sección
     if (v === 'paquete') { v = 'datos'; state.datosSection = 'paquete'; try { root.history.replaceState(null, '', '#datos'); } catch (e) { /* file:// */ } }
+    // Categoría → Producto y Evolución y patrones viven ahora en «Producto y evolución»: sus rutas siguen funcionando y abren el capítulo equivalente
+    if (v === 'producto' || v === 'analisis') { state.peAnchor = v === 'analisis' ? 'pe-evolucion' : 'pe-quien'; v = 'prodevol'; try { root.history.replaceState(null, '', '#prodevol'); } catch (e) { /* file:// */ } }
     state.view = VIEWS.includes(v) ? v : 'inicio';
   }
 
@@ -5865,7 +6057,7 @@
     Object.keys(keep).forEach((k) => lsAdapter.set(`${C.storage.namespace}:${k}`, keep[k]));
     await st('Cerrando la sesión', 92);
     FP.cloud.signOut();
-    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs', 'fp.cloudGcLast'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.pe.visit.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs', 'fp.cloudGcLast'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
     ['fp.route.origin.v1', 'fp.loginAsked'].forEach((k) => { try { root.sessionStorage.removeItem(k); } catch (e) { /* nada */ } });
   }
   async function signoutConfirm() {
@@ -5942,7 +6134,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, ensureFunnelSeries, ensureSeasonalContext, ensureVisitDiff, opEnsure, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
