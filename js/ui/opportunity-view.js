@@ -21,6 +21,7 @@
   const REQ_PILL = { asked: 'warning', noReply: 'error', received: 'ok', none: 'na' };
   const todayISO = () => new Date().toISOString().slice(0, 10);
   const RQ = () => FP.requests;
+  const EX = () => FP.exposures;
   const reqView = (state, sku) => (state && state.rq && state.rq.reg ? RQ().viewOf(state.rq.reg, sku, todayISO()) : 'none');
 
   const val = (id) => { const el = $(id); return el ? String(el.value).trim() : ''; };
@@ -177,12 +178,17 @@
     const plan = requestPlan(op, state), askLbl = ids.length ? `Pedir oferta de los ${plan.ok.length} marcados` : (plan.ok.length ? `Pedir oferta de los ${plan.ok.length} de «Pedir oferta»` : 'Pedir oferta');
     return `<div class="btn-row"><span class="field__hint">Marcados: <strong>${grp ? `${ng} ${DIM[op.view].toLowerCase()}${ng === 1 ? '' : 's'} (${ids.length} SKU)` : ids.length}</strong></span>
       <button type="button" class="btn btn--small" data-action="op-check-all">${grp ? 'Marcar los grupos visibles' : 'Marcar los visibles'}</button>${ids.length ? '<button type="button" class="btn btn--small btn--ghost" data-action="op-check-none">Quitar marcas</button>' : ''}
+      <button type="button" class="btn btn--small" data-action="ex-ask"${exposurePlan(op, state).ok.length ? '' : ' disabled'} title="Dar más lugar al producto sin descuento">Exponer sin oferta</button>
       <button type="button" class="btn btn--small btn--primary" data-action="rq-ask"${plan.ok.length ? '' : ' disabled'} title="Arma la solicitud para Comercial, por laboratorio">${esc(askLbl)}</button>
       ${ids.length ? (promos.length ? `<select id="op-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
       <button type="button" class="btn btn--small btn--primary" data-action="op-to-promo">Agregar los ${ids.length} marcados a la promoción</button>` : '<span class="field__hint">Para agregarlos a un plan, crea una promoción en borrador.</span>') : ''}</div>`;
   }
 
   /** Debajo de «Qué hacer»: cómo va la solicitud de oferta de ese SKU (si hay). */
+  function exposureCell(state, i) {
+    const pill = H().pill, e = state && state.ex && state.ex.reg ? EX().currentFor(state.ex.reg, i.sku, todayISO()) : null; if (!e) return '';
+    return `<span class="cell-sub">${pill('ok', 'Exposición')} ${EX().status(e, todayISO()) === 'upcoming' ? 'por empezar' : 'vigente'}</span>`;
+  }
   function requestCell(state, i) {
     const esc = H().esc, pill = H().pill, v = reqView(state, i.sku); if (v === 'none') return '';
     const r = RQ().lastFor(state.rq.reg, i.sku), d = r ? RQ().daysOpen(r, todayISO()) : 0;
@@ -203,6 +209,25 @@
     return { ok, skipped, empty, source, byLab: RQ().byLab(ok.map((i) => ({ lab: labOf(i, state), revenue: i.revenue }))) };
   }
 
+  /** Qué se expondría: los marcados o, sin marcas, los de «Exponer» que se ven; sin los que ya están en exposición. */
+  function exposurePlan(op, state) {
+    const marked = markedSkus(op, state), vis = visible(op, state), set = new Set(marked), source = marked.length ? 'marked' : 'route';
+    const pool = marked.length ? (op.result ? op.result.items.filter((i) => set.has(i.sku)) : []) : vis.filter((i) => i.route.id === 'expose');
+    const ok = [], skipped = { current: 0 };
+    pool.forEach((i) => { if (EX().currentFor(state.ex.reg, i.sku, todayISO())) skipped.current += 1; else ok.push(i); });
+    const empty = ok.length ? '' : (pool.length ? 'Esos productos ya están en exposición.' : 'No hay productos en «Exponer» con estos filtros. Marca los que quieras exponer o quita algún filtro.');
+    return { ok, skipped, empty, source, msg: '' };
+  }
+  function exposeConfirmHtml(state) {
+    const c = state.ex && state.ex.confirm; if (!c) return '';
+    const esc = H().esc;
+    return `<div class="note note--warn gd-confirm" role="alert"><strong>Se van a poner en exposición ${c.ok.length} ${c.ok.length === 1 ? 'producto' : 'productos'} sin oferta de descuento:</strong>
+      ${c.ok.slice(0, 8).map((i) => esc(`${i.sku} · ${i.name}`)).join('<br>')}${c.ok.length > 8 ? `<br>…y ${c.ok.length - 8} más` : ''}
+      ${c.skipped.current ? `<p>Quedan fuera ${c.skipped.current} que ya están en exposición.</p>` : ''}${c.msg ? `<p><strong>${esc(c.msg)}</strong></p>` : ''}
+      <div class="field-grid">${field('ex-start', 'Desde (opcional)', input('ex-start', c.start || '', 'date'))}${field('ex-end', 'Hasta (opcional)', input('ex-end', c.end || '', 'date'), 'Las fechas sirven para medir después el periodo expuesto.')}</div>
+      <p class="field__hint">${c.source === 'marked' ? 'Son los que marcaste.' : 'No marcaste ninguno: son los de «Exponer» que se ven.'} No lleva descuento ni precio, no pasa por validar ni armar promoción y no cuenta en el descuento promedio ni en la cobertura de ofertas. Sale en el plan de activación como «Exposición».</p>
+      <div class="btn-row"><button type="button" class="btn btn--primary" data-action="ex-confirm">Poner en exposición</button><button type="button" class="btn btn--ghost" data-action="ex-cancel-confirm">Cancelar</button></div></div>`;
+  }
   function confirmHtml(state) {
     const c = state.rq && state.rq.confirm; if (!c) return '';
     const esc = H().esc, sk = [];
@@ -243,7 +268,7 @@
     const shown = list.slice(0, CAP);
     const rows = shown.map((i) => `<tr${i.sku === op.sel ? ' aria-selected="true"' : ''}><td><input type="checkbox" data-action="op-chk" data-id="${esc(i.sku)}" aria-label="Marcar ${esc(i.sku)}"${op.checked[i.sku] ? ' checked' : ''}></td>
       <td class="num">${esc(i.sku)}</td><td>${esc(i.name)}<span class="cell-sub">${esc([i.category, i.brand].filter(Boolean).join(' · '))}</span></td><td>${esc(labOf(i, state) || '—')}</td>
-      <td>${pill(ROUTE_PILL[i.route.id] || 'na', OP().ROUTES[i.route.id].label)}${requestCell(state, i)}</td>
+      <td>${pill(ROUTE_PILL[i.route.id] || 'na', OP().ROUTES[i.route.id].label)}${requestCell(state, i)}${exposureCell(state, i)}</td>
       <td>${i.types.map((t) => pill(TYPE_PILL[t.id] || 'na', t.label)).join(' ')}</td><td>${pill(EV_PILL[i.evidence.level], EV_TXT[i.evidence.level])}</td>
       <td class="num">${typeof i.size === 'number' ? money(i.size) : '—'}</td><td class="num">${money(i.revenue)}<span class="cell-sub">${pct(i.revenueDeltaPct)} vs referencia</span></td>
       <td>${i.offers.length ? i.offers.map((o) => `<span class="num">${esc(o.offerId)}</span> ${pct(o.discount)}`).join('<br>') : '—'}</td>${AV ? AV.cells(state, map.get(keyOf(i))) : ''}
@@ -281,12 +306,12 @@
         ${op.msg ? `<div class="note note--${op.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(op.msg.text)}${(op.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : ''}</div></section>
       ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) + FP.guideView.actionsHtml(state, map, 'potential') : ''}
       ${op.result ? requestsPanel(state) : ''}
-      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${bulk(op, state)}${confirmHtml(state)}${AV && state.ac.msg ? AV.toolbar(state, 'potential').split('<div class="btn-row">')[0] : ''}</div>
+      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${bulk(op, state)}${confirmHtml(state)}${exposeConfirmHtml(state)}${AV && state.ac.msg ? AV.toolbar(state, 'potential').split('<div class="btn-row">')[0] : ''}</div>
         ${AV ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${op.view && op.view !== 'sku' ? groupsTable(op, state) : table(op, list, state, map)}</div></section>` : ''}
       ${AV && state.ac.sel ? AV.detail(state, map, state.ac.sel) : ''}
       ${detail(op, state)}`;
   }
 
-  FP.opportunityView = { html, val, visible, selection, markedSkus, groupsOf, requestPlan, labOf, NONE, DIM };
+  FP.opportunityView = { html, val, visible, selection, markedSkus, groupsOf, requestPlan, exposurePlan, labOf, NONE, DIM };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -248,7 +248,7 @@
         // Propuesta B, fase 1: registro de promociones (global, clave pequeña: se sincroniza sola con el equipo)
         promotions: 'promotions',
         offers: 'offers',
-        activation: 'activation', proposals: 'proposals', goals: 'goals', requests: 'requests',
+        activation: 'activation', proposals: 'proposals', goals: 'goals', requests: 'requests', exposures: 'exposures',
         // Fase 7 (solo preferencias de navegación y guía)
         uxSettings: 'uxSettings', reportBrand: 'reportBrand',
         // Fase 8.1 (solo banderas y preferencias; los datos grandes viven en IndexedDB)
