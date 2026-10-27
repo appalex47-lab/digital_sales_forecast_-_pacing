@@ -33,14 +33,14 @@ async def main():
             for k in (1, 2):
                 await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000); await q.click('[data-action="commit-staged"]')
                 await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=120000)  # el archivo sale de la revisión cuando terminó de guardarse (sin tiempos fijos)
-            await q.goto(url + '#prodevol'); await q.wait_for_selector('#pa-table table', timeout=60000); await q.wait_for_timeout(500)
+            await q.goto(url + '#prodevol'); await q.wait_for_selector('#pe-quien table', timeout=60000); await q.wait_for_timeout(500)
             if w == 1280:
                 await snap(q, 'root', R)
                 R['probe'] = await q.evaluate("""()=>{
                   const v=document.getElementById('pe-body');const fs=v.querySelector('fieldset.geo-filters');const panel=fs&&fs.closest('.panel');
                   const cs=fs&&getComputedStyle(fs), ps=panel&&getComputedStyle(panel);
                   const cards=[...v.querySelectorAll('#pa-kpis .metric-card')];
-                  const rows=[...v.querySelectorAll('#pa-table tbody tr')];
+                  const rows=[...v.querySelectorAll('#pe-quien tbody tr')];
                   const GR=['Crece','Cae','Estable','Nuevo','Sin venta'];
                   return {
                     cards: cards.length, cardsWithStatus: cards.filter(c=>c.querySelector('.pill')).length,

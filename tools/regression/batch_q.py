@@ -30,11 +30,11 @@ async def main():
         a = await q.evaluate(SEC)
         chk('Q-1 sin datos de Producto: la sección invita a cargarlos (con enlace) y «no disponible» sigue listando Categoría, Producto y Geografía', not a['hidden'] and 'Con datos de Categoría → Producto cargados' in a['text'] and all(x in a['notd'] for x in ('Categoría', 'Producto', 'Geografía')), (a['text'][:160], a['notd']))
         # cargar productos (archivo generado de la vista Producto)
-        await q.goto(u + '#prodevol'); await q.wait_for_timeout(500); await q.click('#view-prodevol [data-action="p-mock"]'); await q.wait_for_timeout(700)
+        await q.goto(u + '#prodevol'); await q.wait_for_selector('#view-prodevol [data-action="p-mock"]', state='attached', timeout=60000); await q.evaluate("document.querySelectorAll('#view-prodevol details').forEach(d=>d.open=true)"); await q.click('#view-prodevol [data-action="p-mock"]'); await q.wait_for_timeout(700)
         for k in (1, 2):
             await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=90000); await q.click('[data-action="commit-staged"]')
             await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=180000)
-        await q.goto(u + '#prodevol'); await q.wait_for_selector('#pa-table table', timeout=90000); await q.wait_for_timeout(500)
+        await q.goto(u + '#prodevol'); await q.wait_for_selector('#pe-quien table', timeout=90000); await q.wait_for_timeout(500)
         pa0 = await q.evaluate("[FP.app.state.pa.from, FP.app.state.pa.to, FP.app.state.pa.channel, FP.app.state.pa.comparison]")
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(600)
         await q.wait_for_function("FP.app.state.dx.products && FP.app.state.dx.products.result && !FP.app.state.dx.products.loading", timeout=90000); await q.wait_for_timeout(400)

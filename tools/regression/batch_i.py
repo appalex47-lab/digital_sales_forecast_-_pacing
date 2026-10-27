@@ -171,7 +171,7 @@ async def main():
         await q.evaluate("FP.app.state.dx.apiKey = ''; FP.app.state.dx.rememberKey = false; FP.app.actions['dx-remember']({checked:false})")
         # Almacenamiento: salió de Producto y vive en Configuración
         await q.goto(u + '#prodevol'); await q.wait_for_timeout(700)
-        pr = await q.evaluate("[document.getElementById('pa-status').innerText.includes('Pruebas de almacenamiento'), !!document.querySelector('#pa-status a[data-nav=\"ajustes\"]')]")
+        pr = await q.evaluate("[(document.getElementById('pa-status')||document.getElementById('pe-body')).innerText.includes('Pruebas de almacenamiento'), !!document.querySelector('#pe-body a[data-nav=\"ajustes\"]')]")
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(900); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         await q.evaluate("FP.app.state.stTab='datos';FP.app.render()"); await q.wait_for_timeout(200)
         al2 = await q.evaluate("(()=>{const t=document.getElementById('st-almacenamiento').innerText;return [/Modo:/.test(t),/Migración:/.test(t),/Espacio usado:/.test(t)&&!/Espacio usado: —/.test(t),!!document.querySelector('#st-almacenamiento [data-action=\"storage-tests\"]')]})()")
