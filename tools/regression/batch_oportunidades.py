@@ -47,6 +47,8 @@ async def main():
         if n > 0:
             rows = await q.evaluate("document.querySelectorAll('#pm-body input[data-action=\"op-chk\"]').length")
             chk('O6 hay filas con casilla', rows > 0, rows)
+            chk('O6b la sección Resultado muestra una fila: búsqueda, tipo, Filtros, Ver por y Exportar; lo demás plegado', await q.evaluate("!!document.querySelector('#op-f-q') && !!document.querySelector('#op-f-type') && !document.querySelector('#op-f-cat') && !document.querySelector('#op-x-name') && !!document.querySelector('[data-action=\"op-fold\"][data-fold=\"filters\"]') && !!document.querySelector('[data-action=\"op-fold\"][data-fold=\"export\"]')"))
+            await q.click('[data-action="op-fold"][data-fold="filters"]'); await q.click('[data-action="op-fold"][data-fold="export"]'); await q.wait_for_timeout(300)   # se abren para recorrer filtros y exportaciones
             first = await q.evaluate("FP.app.state.op.result.items[0].sku")
             await q.click(f'button[data-action="op-open"][data-id="{first}"]'); await q.wait_for_timeout(300)
             chk('O7 abre el detalle', await q.query_selector('#op-t-det') is not None or first in await body(q))
