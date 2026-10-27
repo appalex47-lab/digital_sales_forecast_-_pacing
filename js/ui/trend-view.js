@@ -616,5 +616,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { build, filters, isMaterial, extras, contributionKpis };
+  FP.trendView = { build, filters, isMaterial, extras, contributionKpis, patternLabel: (id) => (PATTERN[id] && PATTERN[id][1]) || id };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,7 +5,7 @@
  * Producto manda en canal, periodo, comparación y ruta (los filtros de Evolución se derivan de ahí en app.js · peSync).
  *
  *   1 ¿Qué pasó?  2 ¿Contra la meta?  3 ¿Quién lo mueve? (una sola tabla: participación + contribución + tendencia + patrón)
- *   4 ¿Desde cuándo y hacia dónde?  5 ¿Por qué se mueve?  6 Evidencia y detalle
+ *   4 ¿Desde cuándo y hacia dónde? (con el contexto de época)  5 ¿Por qué se mueve?  6 ¿Qué hago?  7 Evidencia y detalle
  * Etapas 3 y 4 de la fusión: las rutas #producto y #analisis son alias de esta página.
  */
 (function (root) {
@@ -63,6 +63,15 @@
     const PL = { category: ['categoría', 'categorías'], subcategory: ['subcategoría', 'subcategorías'], product: ['producto', 'productos'], sku: ['SKU', 'SKU'], region: ['región', 'regiones'], state: ['estado', 'estados'], city: ['ciudad', 'ciudades'], branch: ['sucursal', 'sucursales'], delivery: ['tipo de entrega', 'tipos de entrega'], channel: ['canal', 'canales'] };
     const lvl = (PL[a.level] || ['entidad', 'entidades'])[rows.length === 1 ? 0 : 1];
     return `De ${nw(rows.length)} ${esc(lvl)}${rows.length === 1 ? ', ' : ' analizadas, '}${nw(g)} ${g === 1 ? 'crece' : 'crecen'} y ${nw(d)} ${d === 1 ? 'cae' : 'caen'}${an ? `, ${nw(an)} con anomalía` : ''}.`;
+  }
+  function takeHacer(state) {
+    const C = FP.prodevolContext; if (!C || !state.pa.result) return '';
+    const n = C.counts(state), parts = [];
+    parts.push(`${nw(n.hypotheses)} ${n.hypotheses === 1 ? 'hipótesis por validar' : 'hipótesis por validar'}`);
+    parts.push(n.running ? `${nw(n.running)} ${n.running === 1 ? 'cosa en marcha' : 'cosas en marcha'} en Promociones` : 'nada en marcha en Promociones');
+    if (n.opportunities !== null) parts.push(n.opportunities ? `${nw(n.opportunities)} ${n.opportunities === 1 ? 'oportunidad' : 'oportunidades'}` : 'sin oportunidades');
+    const ent = state.an.selected && state.an.selected.entity;
+    return `Para ${ent ? esc(FP.productFilter && state.an.level === 'branch' ? FP.productFilter.label('branch', ent) : ent) : 'esta selección'}: ${parts.join(', ')}.`;
   }
   function take5(state) {
     const tf = takeFunnel(state); if (tf) return tf;
@@ -192,7 +201,7 @@
     return {
       noFunnel: true, goto: true,
       actions: (x) => `<button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pe-focus" data-key="${esc(x.key)}" data-target="pe-porque" title="Abre el embudo de esta fila">Embudo</button> `,
-      sub: (x) => { const e = ex(x.key); return e.role ? `<span class="cell-sub">${esc(e.role)}${e.rank ? ` · #${e.rank}` : ''}</span>` : ''; },
+      sub: (x) => { const e = ex(x.key); return (e.role ? `<span class="cell-sub">${esc(e.role)}${e.rank ? ` · #${e.rank}` : ''}</span>` : '') + (FP.prodevolContext ? FP.prodevolContext.visitMark(state, x.key) : ''); },
       cols: [
         { head: 'Peso del movimiento', cls: 'num', cell: (x) => pct(ex(x.key).movementShare) },
         { head: 'Δ participación', cls: 'num', cell: (x) => { const v = ex(x.key).shareChangePp; return fin(v) ? `${v > 0 ? '+' : ''}${v.toFixed(1)} pp` : DASH; } },
@@ -219,9 +228,9 @@
     const evoSel = `<div class="field chap__ctl"><label for="pe-evolevel" class="field__hint">Ver evolución por</label><select id="pe-evolevel" data-action="pe-evolevel"><option value="">Igual que la tabla (${esc(LV[curLvl] || curLvl)})</option>${lvls.filter((l) => l !== curLvl).map((l) => `<option value="${l}" ${state.pa.evoLevel === l ? 'selected' : ''}>${esc(LV[l] || l)}</option>`).join('')}</select></div>`;
     const rangeNote = opts && opts.range ? '<p class="note note--warning"><strong>La evolución necesita periodos de calendario.</strong> El rango libre solo aplica a la foto del periodo: elige Año, Mes, Semana o Día en Granularidad para actualizar la evolución.</p>' : '';
     const tools = early ? '' : '<div class="chap__tools"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar este periodo</button><button type="button" class="btn btn--small btn--ghost" data-action="an-export-contrib">Descargar CSV</button></div>';
-    const chips = [['pe-que', 'Qué pasó'], ['pe-meta', 'Contra la meta'], ['pe-quien', 'Quién lo mueve'], ['pe-evolucion', 'Desde cuándo'], ['pe-porque', 'Por qué'], ['pe-evidencia', 'Evidencia']]
+    const chips = [['pe-que', 'Qué pasó'], ['pe-meta', 'Contra la meta'], ['pe-quien', 'Quién lo mueve'], ['pe-evolucion', 'Desde cuándo'], ['pe-porque', 'Por qué'], ['pe-hacer', 'Qué hago'], ['pe-evidencia', 'Evidencia']]
       .map(([id, l]) => `<button type="button" class="chip" data-action="pe-jump" data-target="${id}">${esc(l)}</button>`).join('');
-    if (FP.app && FP.app.ensureFunnelSeries) FP.app.ensureFunnelSeries();   // las tasas por periodo se calculan una vez por selección
+    if (FP.app) { FP.app.ensureFunnelSeries(); FP.app.ensureSeasonalContext(); FP.app.ensureVisitDiff(); FP.app.opEnsure(); }   // se calculan una vez por selección
     el.innerHTML = `
       <section class="panel">
         <div class="panel__head"><div data-own-head>
@@ -233,12 +242,13 @@
           <div class="pe-jump" role="navigation" aria-label="Secciones de la página">${chips}</div>
         </div>
       </section>
-      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context + A.narrative}${res.kpis}`)}
+      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context + A.narrative}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : A.mix}`)}
-      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
+      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
       ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
-      ${chapter(6, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}`;
+      ${chapter(6, 'hacer', '¿Qué hago?', takeHacer(state), FP.prodevolContext ? FP.prodevolContext.actionHtml(state) : '')}
+      ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}`;
     settle(state);
   }
 

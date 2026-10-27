@@ -1946,6 +1946,70 @@
     pa.fseries = { key, loading: false, rows }; repaintPa();
   }
 
+  /**
+   * Producto y evolución · contexto de época: el cambio de este periodo contra su comparación frente al mismo cambio un año antes, y el cambio
+   * contra el mismo periodo del año anterior, para la selección (o la fila elegida). Mismo almacén; se calcula una vez por selección.
+   */
+  async function ensureSeasonalContext() {
+    const pa = state.pa, a = state.an, c = a.context;
+    if (!pa.result || pa.loading || !c || !c.focus || !c.comparison || !c.comparison.available || !c.comparison.baseline || !FP.productStore.available()) return;
+    const TE = FP.temporalEngine, lvl = a.level, ent = a.selected && a.selected.entity, meta = FP.productStore.meta || {};
+    const fkey = ent && ['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) ? { [lvl]: ent } : {};
+    const cur = { from: c.focus.from, to: c.focus.to }, base = { from: c.comparison.baseline.from, to: c.comparison.baseline.to };
+    const key = JSON.stringify([pa.channel, paFilter(pa), fkey, cur, base]);
+    if (pa.seasonal && pa.seasonal.key === key) return;
+    const run = (pa._seRun = (pa._seRun || 0) + 1);
+    pa.seasonal = { key, loading: true }; repaintPa();
+    const revenue = async (r) => {
+      if (!r || (meta.dateMin && r.from < meta.dateMin)) return null;   // el año anterior no está en los datos
+      const map = await FP.productStore.aggregate({ from: r.from, to: r.to, channel: pa.channel, groupBy: 'total', filter: { ...paFilter(pa), ...fkey } });
+      let acc = null; map.forEach((x) => { acc = x; });
+      const f = acc ? FP.productStore.finalize(acc, null) : null;
+      return f && f.revenue && Number.isFinite(f.revenue.value) ? f.revenue.value : null;
+    };
+    try {
+      const last = (r) => TE.shiftRange(r, 'year', -1, false);
+      const [P, B, P1, B1] = [await revenue(cur), await revenue(base), await revenue(last(cur)), await revenue(last(base))];
+      if (pa._seRun !== run) return;
+      const ch = (x, y) => (Number.isFinite(x) && Number.isFinite(y) && y > 0 ? x / y - 1 : null);
+      pa.seasonal = { key, loading: false, cur: P, base: B, lastCur: P1, lastBase: B1, change: ch(P, B), lastChange: ch(P1, B1), yoy: ch(P, P1) };
+    } catch (e) { if (pa._seRun === run) pa.seasonal = { key, loading: false, error: e.message }; }
+    repaintPa();
+  }
+
+  /**
+   * «Nuevo desde tu última visita»: compara la lectura de cada fila (dirección, patrón, movimiento inusual) con la que se vio la última vez
+   * con esta misma selección. La foto vive en este navegador (localStorage); se guarda al terminar de leer y se compara en la visita siguiente.
+   */
+  const PE_VISIT_KEY = 'fp.pe.visit.v1';
+  function peVisitLoad() { try { return JSON.parse(root.localStorage.getItem(PE_VISIT_KEY)) || {}; } catch (e) { return {}; } }
+  function peVisitSave(all) { try { root.localStorage.setItem(PE_VISIT_KEY, JSON.stringify(all)); } catch (e) { /* sin almacenamiento: la comparación no se guarda */ } }
+  function ensureVisitDiff() {
+    const pa = state.pa, a = state.an, c = a.context, m = (FP.productStore && FP.productStore.meta) || {};
+    if (!pa.result || pa.loading || a.loading || a.key === null || !a.rows || !a.rows.length || !c || !c.focus || !FP.prodevolContext) return;
+    const scope = JSON.stringify([pa.channel, a.level, a.periodType, a.comparison, paFilter(pa)]);
+    if (pa.visit && pa.visit.scope === scope) return;
+    const cur = {};
+    a.rows.slice(0, 400).forEach((r) => { cur[String(r.entity)] = { d: r.direction || null, p: r.pattern || null, an: r.anomaly ? (r.anomaly.direction || 'yes') : null }; });
+    const all = peVisitLoad(), base = all[scope] || null;
+    const stale = base && base.dataDay && m.dateMax && m.dateMax < base.dataDay;   // datos más viejos que los de la visita anterior: no se compara
+    const diff = base && base.entities && !stale ? FP.prodevolContext.visitDiff(base.entities, cur, (x) => FP.trendView.patternLabel(x)) : null;
+    pa.visit = { scope, first: !base, at: base ? base.at : null, items: diff ? diff.items : [] };
+    if (!stale) {
+      all[scope] = { at: new Date().toISOString(), dataDay: m.dateMax || null, focus: c.focus.key, entities: cur };
+      Object.keys(all).sort((x, y) => String(all[y].at).localeCompare(String(all[x].at))).slice(12).forEach((k) => { delete all[k]; });   // solo las 12 selecciones más recientes
+      peVisitSave(all);
+    }
+    repaintPa();
+  }
+
+  /** Oportunidades (se calculan una vez por sesión si hace falta para «¿Qué hago?»). */
+  function opEnsure() {
+    const op = state.op;
+    if (state.pa._opTried || op.result || op.loading || !FP.productStore.available() || !(FP.productStore.meta || {}).batches) return;
+    state.pa._opTried = true; opRun(false);
+  }
+
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
   async function ensureProductAnalysis() {
     const pa = state.pa;
@@ -3626,6 +3690,12 @@
       else a.reopen = { scope: 'entity', entity: key };
       render();
       if (target) setTimeout(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }, 60);
+    },
+    /** Abre Oportunidades con la selección como filtro (categoría y subcategoría) y la búsqueda por producto o SKU. */
+    'pe-open-op'() {
+      const p = paFilter(state.pa), op = state.op;
+      op.f.category = p.category || ''; op.f.subcategory = p.subcategory || ''; op.f.q = p.sku || p.product || '';
+      state.pm.tab = 'oportunidades'; root.location.hash = '#promociones';
     },
     'pe-jump'(el) { const t = document.getElementById(el.dataset.target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
     'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
@@ -5987,7 +6057,7 @@
     Object.keys(keep).forEach((k) => lsAdapter.set(`${C.storage.namespace}:${k}`, keep[k]));
     await st('Cerrando la sesión', 92);
     FP.cloud.signOut();
-    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs', 'fp.cloudGcLast'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    ['fp.route.v1', 'fp.route.origin.v1', 'fp.changes.v1', 'fp.pe.visit.v1', 'fp.cloudAuto', 'fp.cloudPrevRefs', 'fp.cloudGcLast'].forEach((k) => { try { root.localStorage.removeItem(k); } catch (e) { /* nada */ } });
     ['fp.route.origin.v1', 'fp.loginAsked'].forEach((k) => { try { root.sessionStorage.removeItem(k); } catch (e) { /* nada */ } });
   }
   async function signoutConfirm() {
@@ -6064,7 +6134,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, ensureFunnelSeries, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, ensureFunnelSeries, ensureSeasonalContext, ensureVisitDiff, opEnsure, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
