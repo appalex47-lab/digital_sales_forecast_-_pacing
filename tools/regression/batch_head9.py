@@ -75,7 +75,7 @@ async def main():
         await q.set_viewport_size({'width': 1800, 'height': 900})
         for v in ('pacing', 'segmentos', 'prodevol', 'inicio'):
             await q.goto(u + '#' + v); await q.wait_for_timeout(300)
-            r = await q.evaluate("(()=>{const h=document.querySelector('.ux-head').getBoundingClientRect();const p=[...document.querySelectorAll('main .panel')].find(e=>e.offsetParent);const l=document.querySelector('.ux-head__line');return [Math.round(h.left),p?Math.round(p.getBoundingClientRect().left):null,l?Math.round(l.getBoundingClientRect().width):null,Math.round(h.width)]})()")
+            r = await q.evaluate("(()=>{const h=document.querySelector('.ux-head').getBoundingClientRect();const p=[...document.querySelectorAll('main .panel:not(.panel--inner), main .pe-sticky')].find(e=>e.offsetParent);const l=document.querySelector('.ux-head__line');return [Math.round(h.left),p?Math.round(p.getBoundingClientRect().left):null,l?Math.round(l.getBoundingClientRect().width):null,Math.round(h.width)]})()")
             if r[1] is not None and r[0] != r[1]: bad7.append((v, r))
             if r[2] is not None and r[2] < r[3] - 2: bad7.append((v, 'línea recortada', r))
         chk('H8 el encabezado queda alineado con las fichas y sus líneas usan todo el ancho (1800 px)', not bad7, bad7)

@@ -2273,3 +2273,5 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .pe-drawer .entity-reading-panel { border: 0; box-shadow: none; padding: 0; }
 @media (prefers-reduced-motion: no-preference) { .pe-drawer { animation: pe-in .16s ease-out; } @keyframes pe-in { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } } }
 .pe-drawer [data-action="an-clear-selection"] { display: none; }   /* el cierre vive arriba del panel */
+
+@media (max-width: 760px) { .pe-fold th, .pe-fold td, .pe-fold td:first-child, .pe-fold th:first-child { white-space: normal; max-width: none; } .pe-fold .cell-sub { max-width: none; margin-left: 0; } .pe-fold:not(.pe-showx) .pe-x { display: none; } }

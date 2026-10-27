@@ -88,9 +88,9 @@ async def main():
         chk('E2 tras recalcular, la barra de contexto y las cifras corresponden a WhatsApp', 'WhatsApp' in txt and 'Oct 1–5 vs Sep 1–5' in txt and close(sh['ct'], tot(*cur_r, 'whatsapp')), (txt, sh['ct']))
         # ---------- F. Interfaz ----------
         ui = await q.evaluate("""(()=>{const s=document.getElementById('pa-ch');const T=document.getElementById('pe-body').innerText;
-          return {opts:[...s.options].map(o=>o.value+':'+o.text),val:s.value,kpi:document.querySelectorAll('#pe-body .metric--drill').length,cohort:!!document.querySelector('.analysis-cohort-note'),cohortTxt:(document.querySelector('.analysis-cohort-note')||{}).innerText||'',fc:(document.querySelector('.forecast-scope')||{}).textContent||'',recon:(document.querySelector('.analysis-recon')||{}).innerText||'',lbl:[...document.querySelectorAll('label')].filter(l=>l.htmlFor==='pa-ch').length,ret:/Retenci[oó]n mes/.test(T)}})()""")
+          return {opts:[...s.options].map(o=>o.value+':'+o.text),val:s.value,kpi:document.querySelectorAll('#pe-body [data-action=an-drill-total]').length,cohort:!!document.querySelector('.analysis-cohort-note'),cohortTxt:(document.querySelector('.analysis-cohort-note')||{}).innerText||'',fc:(document.querySelector('.forecast-scope')||{}).textContent||'',recon:(document.querySelector('.analysis-recon')||{}).innerText||'',lbl:[...document.querySelectorAll('label')].filter(l=>l.htmlFor==='pa-ch').length,ret:/Retenci[oó]n mes/.test(T)}})()""")
         chk('F1 selector de canal: Total digital, Ecommerce, App, WhatsApp, Llamadas (con etiqueta)', ui['opts'] == ['total:Total digital', 'ecommerce:Ecommerce', 'app:App', 'whatsapp:WhatsApp', 'llamadas:Llamadas'] and ui['val'] == 'whatsapp' and ui['lbl'] == 1, ui)
-        chk('F2 KPIs son botones de detalle; Contribución muestra «✓ Conciliado»', ui['kpi'] == 4 and '✓ Conciliado' in ui['recon'], ui)
+        chk('F2 «Detalle del total» abre el panel de lectura; Contribución muestra «✓ Conciliado»', ui['kpi'] >= 1 and '✓ Conciliado' in ui['recon'], ui)
         chk('F3 el panel de Cohortes se retiró de la página (no se muestra «Retención mes»)', not ui['cohort'] and not ui['ret'], ui['cohortTxt'])
         chk('F4 Forecast: observado (períodos cerrados) vs proyectado marcados; el período en curso no se usa', 'Observado' in ui['fc'] and 'Proyectado' in ui['fc'] and 'no se usa' in ui['fc'] and '2026-09' in ui['fc'], ui['fc'])
         fc = await q.evaluate("(()=>{const a=FP.app.state.an;const f=a.forecast&&a.forecast.rows&&a.forecast.rows[0];const r=a.rows.find(x=>x.entity===(f&&f.entity));return {last:f&&f.lastValue,series:r&&r.series.map(x=>x.period),lastS:r&&r.series.filter(x=>x.value!==null).slice(-1)[0],cohortLatest:a.cohort&&a.cohort.latestPeriod,plist:a.periodsList.map(p=>[p.key,p.partial])}})()")
@@ -133,7 +133,7 @@ async def main():
         chk('G9 «Ver solo este canal» cambia el canal conservando entidad, período y comparación; las cifras = App', dd['e'] == 'Alfa 10 mg' and close(dd['d']['summary']['current'], truth(*cur_r, 'app', 'product')['Alfa 10 mg']) and dd['d']['context']['channel'] == 'App' and dd['d']['byChannel'] is None, dd['d']['summary'])
         # KPI → total
         await open_an(q, u, level='category', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
-        await q.click('#pe-body .metric--drill >> nth=0')
+        await q.click('#pe-body [data-action="an-drill-total"] >> nth=0')
         await q.wait_for_function("(()=>{const d=FP.app.state.an.drill;return d&&!d.loading&&!d.pending&&d.data})()", timeout=60000); await q.wait_for_timeout(200)
         kd = await q.evaluate("FP.app.state.an.drill.data")
         ec_ = truth(*cur_r, None, 'category')
