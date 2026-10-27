@@ -82,7 +82,7 @@ async def main():
         chk('Z20 el enlace despliega sugerencias y tocar una llena la pregunta', await q.evaluate("document.querySelectorAll('.ag-chip').length>=1") and await q.evaluate("(()=>{const c=document.querySelector('.ag-chip'); const t=c.dataset.q; c.click(); return document.getElementById('ag-q').value===t})()"))
         await q.keyboard.press('Escape')
         # Análisis: el botón no tapa el asistente de Análisis que ya existe
-        await q.evaluate("location.hash='analisis'"); await q.wait_for_timeout(1200)
+        await q.evaluate("location.hash='prodevol'"); await q.wait_for_timeout(1200)
         ov = await q.evaluate("""(()=>{const a=document.getElementById('ag-fab').getBoundingClientRect(), o=document.querySelector('.analysis-assistant__fab'); if(!o) return 'sin-fab-analisis'; const r=o.getBoundingClientRect(); return !(a.right<=r.left||a.left>=r.right||a.bottom<=r.top||a.top>=r.bottom)})()""")
         chk('Z21 en Análisis los dos botones no se encimen', ov is False or ov == 'sin-fab-analisis', ov)
         # Estado de la IA visible abajo: conectada, desactivada o sin conectar (con instrucciones y enlace)

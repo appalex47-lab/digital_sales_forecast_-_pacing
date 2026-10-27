@@ -53,8 +53,8 @@ async def main():
             want = 'ok' if close(hc, T, 1) and close(hb, TB, 1) else 'diff'
             chk(f'[{name}] Diagnóstico muestra nota de cuadre correcta ({want})', bool(rc) and rc[0] == want and (want == 'ok' or ('Diferencia' in rc[1])), rc)
             # ---- Producto
-            await q.evaluate("FP.app.actions['pa-from-dx']();null"); await q.goto(u + '#producto') if False else None
-            await q.evaluate("location.hash='#producto';null")
+            await q.evaluate("FP.app.actions['pa-from-dx']();null"); await q.goto(u + '#prodevol') if False else None
+            await q.evaluate("location.hash='#prodevol';null")
             await q.wait_for_function("(()=>{const p=FP.app.state.pa;return p.result&&!p.loading&&p.from==%s})()" % json.dumps(f), timeout=60000)
             pa = await q.evaluate("(()=>{const p=FP.app.state.pa,r=p.result;return {ch:p.channel,from:r.period.from,to:r.period.to,bf:r.baseline.from,bt:r.baseline.to,cat:Object.fromEntries(r.rows.map(y=>[y.key,[y.revenue.current,y.revenue.baseline]])),tc:r.total.revenue.current,tb:r.total.revenue.baseline}})()")
             chk(f'[{name}] Producto: mismo periodo/canal/base que Diagnóstico', (pa['from'], pa['to'], pa['bf'], pa['bt'], pa['ch']) == (f, t, bf, bt, ch), pa)

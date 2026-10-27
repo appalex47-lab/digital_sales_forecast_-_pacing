@@ -13,8 +13,8 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda']
-GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','producto':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','presentacion':'medir'}
+VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','prodevol','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda']
+GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','prodevol':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','presentacion':'medir'}
 async def openref(q):
     """Abre el panel único de fecha/año del encabezado si está cerrado."""
     if not await q.is_visible('#topbar-date'):
@@ -82,7 +82,7 @@ async def main():
         await q.click('.snav__toggle[data-value="diagnosticar"]'); await q.wait_for_timeout(200)
         f2 = await q.evaluate("[location.hash, document.querySelector('.snav__toggle[data-value=\"diagnosticar\"]').getAttribute('aria-expanded')]")
         chk('R-5 tocar la sección en la que ya estás la pliega y la despliega sin cambiar de página', f1 == ['#diagnostico', 'false'] and f2 == ['#diagnostico', 'true'], (f1, f2))
-        await q.goto(u + '#producto'); await q.wait_for_timeout(400)
+        await q.goto(u + '#prodevol'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
         chk('R-5 dentro de la misma sección (Diagnosticar → Producto) sigue abierta solo esa', [x['g'] for x in n if x['exp'] == 'true'] == ['diagnosticar'], n)
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(400); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
@@ -170,8 +170,8 @@ async def main():
         chk('R-3 Diagnóstico ya no pide la API key: muestra «API key configurada» (la explicación y el enlace van en el tooltip) y conserva el botón «Generar hipótesis»', dxs['visibleKeyInput'] is False and dxs['pill'] and dxs['btn'], dxs)
         await q.evaluate("FP.app.state.dx.apiKey = ''; FP.app.state.dx.rememberKey = false; FP.app.actions['dx-remember']({checked:false})")
         # Almacenamiento: salió de Producto y vive en Configuración
-        await q.goto(u + '#producto'); await q.wait_for_timeout(700)
-        pr = await q.evaluate("[document.getElementById('pa-status').innerText.includes('Pruebas de almacenamiento'), !!document.querySelector('#pa-status a[data-nav=\"ajustes\"]')]")
+        await q.goto(u + '#prodevol'); await q.wait_for_timeout(700)
+        pr = await q.evaluate("[(document.getElementById('pa-status')||document.getElementById('pe-body')).innerText.includes('Pruebas de almacenamiento'), !!document.querySelector('#pe-body a[data-nav=\"ajustes\"]')]")
         await q.goto(u + '#ajustes'); await q.wait_for_timeout(900); await q.evaluate("document.querySelectorAll('#view-ajustes [data-pane]').forEach(e=>e.hidden=false)"); await q.wait_for_timeout(150)
         await q.evaluate("FP.app.state.stTab='datos';FP.app.render()"); await q.wait_for_timeout(200)
         al2 = await q.evaluate("(()=>{const t=document.getElementById('st-almacenamiento').innerText;return [/Modo:/.test(t),/Migración:/.test(t),/Espacio usado:/.test(t)&&!/Espacio usado: —/.test(t),!!document.querySelector('#st-almacenamiento [data-action=\"storage-tests\"]')]})()")

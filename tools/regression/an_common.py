@@ -70,9 +70,18 @@ async def load_products(q, u):
 async def open_an(q, u, **st):
     st.setdefault("metric", "revenue"); st.setdefault("periodCount", 12); st.setdefault("months", st["periodCount"])
     """Abre Análisis con el estado dado y espera a que termine de calcular ESE estado."""
-    await q.goto(u + '#analisis'); await q.wait_for_function("window.FP && FP.app && FP.app.state && FP.productStore && FP.productStore.available()", timeout=30000)
+    await q.goto(u + '#prodevol'); await q.wait_for_function("window.FP && FP.app && FP.app.state && FP.productStore && FP.productStore.available()", timeout=30000)
     await q.wait_for_function("!FP.app.state.an.loading", timeout=90000)
-    await q.evaluate("s=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null});FP.app.actions['an-clear-selection']()}", st)
+    # En «Producto y evolución» manda Producto (canal, periodo, comparación, ruta): se fijan ahí y Evolución los toma.
+    await q.evaluate("""s=>{const A=FP.app,a=A.state.an,pa=A.state.pa,TE=FP.temporalEngine,m=FP.productStore.meta;
+      const g=s.periodType||'month';
+      if(g==='day'){pa.from=pa.to=s.focusKey;pa.periodType=null}
+      else{const r=TE.focusRange(g,s.focusKey,m.dateMax);pa.from=r.from;pa.to=r.to;pa.periodType=g}
+      pa.channel=s.channel||'total';pa.comparison=s.comparison==='year_ago'?'yoy':'previous';
+      pa.drill=[];pa.geo={};pa.next=null;pa.result=null;pa.trace=null;pa.page=1;pa.touched=true;
+      pa.evoLevel=s.level||null;
+      Object.assign(a,s,{rows:[],key:null,error:null});
+      A.actions['an-clear-selection']()}""", st)
     await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.key!==null && (a.share||a.error)})()", timeout=90000); await q.wait_for_timeout(300)
     er = await q.evaluate("FP.app.state.an.error")
     if er: print('   !! an.error =', er, st)

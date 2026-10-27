@@ -67,7 +67,7 @@ async def main():
         pg.on('console', lambda m: errs.append('CONSOLE ' + m.text) if m.type == 'error' else None)
         await pg.goto(url + '#resumen'); await pg.wait_for_selector('#view-resumen:not([hidden])')
         # sin datos: estados vacíos
-        R['empty_text'] = {v: await pg.evaluate(TEXT_JS, v) for v in ['pacing','reforecast','diagnostico','recovery','medir','narrativa','producto']}
+        R['empty_text'] = {v: await pg.evaluate(TEXT_JS, v) for v in ['pacing','reforecast','diagnostico','recovery','medir','narrativa','prodevol']}
         R['selftest'] = await pg.evaluate("FP.lazy.load('selftest').then(()=>{const r=FP.selfTest.run();return {passed:r.passed,total:r.total}})")
         await pg.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await pg.click('[data-action="generate-mock"]'); await pg.wait_for_timeout(1500)
         await pg.click('[data-action="sample-targets"]'); await pg.wait_for_timeout(500)

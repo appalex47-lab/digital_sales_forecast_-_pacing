@@ -77,15 +77,15 @@ async def main():
             R['filas_tabla_segmentos'] = await q.evaluate("[...document.querySelectorAll('#view-segmentos table')].map(t=>t.querySelectorAll('tbody tr').length)")
             await timed('5_abrir_decomposicion_o_datos', "location.hash='#datos'", "document.querySelector('#view-datos')")
         else:
-            await timed('3_abrir_analisis', "location.hash='#analisis'", "window.FP&&FP.app.state.an&&!FP.app.state.an.loading&&FP.app.state.an.key!==null", 600000)
-            R['filas_tabla_analisis'] = await q.evaluate("document.querySelectorAll('#view-analisis table tbody tr').length")
+            await timed('3_abrir_analisis', "location.hash='#prodevol'", "window.FP&&FP.app.state.an&&!FP.app.state.an.loading&&FP.app.state.an.key!==null", 600000)
+            R['filas_tabla_analisis'] = await q.evaluate("document.querySelectorAll('#pe-body table tbody tr').length")
             R['entidades'] = await q.evaluate("(FP.app.state.an.rows||[]).length")
             steps = [('metric_pedidos', "FP.app.actions['an-metric']({value:'orders',dataset:{value:'orders'}})"), ('periodo_dia', "FP.app.actions['an-period-type']({value:'day'})"), ('periodo_mes', "FP.app.actions['an-period-type']({value:'month'})"),
                      ('canal_app', "FP.app.actions['an-channel']({value:'app',dataset:{value:'app'}})"), ('canal_total', "FP.app.actions['an-channel']({value:'total',dataset:{value:'total'}})"), ('nivel_sku', "FP.app.actions['an-level']({value:'sku',dataset:{value:'sku'}})"), ('nivel_categoria', "FP.app.actions['an-level']({value:'category',dataset:{value:'category'}})")]
             for nm, js in steps: await timed('4_' + nm, js, "!FP.app.state.an.loading", 600000)
             await timed('5_buscar_entidad', "FP.app.actions['an-entity-query']({value:'Cat1'})", "true")
             await timed('6_pagina_2', "FP.app.actions['an-page']({dataset:{page:'2',dir:'next'},value:'2'})", "true")
-            await timed('7_drill_primera_entidad', "(()=>{const b=document.querySelector('#view-analisis [data-action=\"an-drill\"]');if(b)b.click()})()", "!FP.app.state.an.drill||!FP.app.state.an.drill.loading", 300000)
+            await timed('7_drill_primera_entidad', "(()=>{const b=document.querySelector('#pe-body [data-action=\"an-drill\"]');if(b)b.click()})()", "!FP.app.state.an.drill||!FP.app.state.an.drill.loading", 300000)
         R['heapMB_final'] = await q.evaluate("Math.round((gc(),performance.memory.usedJSHeapSize)/1e6)"); R['errores'] = errs[:3]
         print(json.dumps(R, ensure_ascii=False, indent=1)); json.dump(R, open(OUT, 'w'), ensure_ascii=False, indent=1)
         await b.close()

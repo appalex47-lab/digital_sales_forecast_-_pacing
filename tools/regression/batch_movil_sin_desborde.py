@@ -11,7 +11,7 @@ srv = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Q, dir
 fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:500] if d != '' and not ok else '')); (fails.append(n) if not ok else None)
-VIEWS = ['inicio', 'carga', 'calidad', 'datos', 'plan', 'configuracion', 'estacionalidad', 'pacing', 'reforecast', 'diagnostico', 'analisis', 'recovery', 'medir', 'narrativa', 'segmentos', 'producto', 'clientes', 'cambios', 'proyeccion', 'ajustes', 'ayuda', 'resumen', 'presentacion']
+VIEWS = ['inicio', 'carga', 'calidad', 'datos', 'plan', 'configuracion', 'estacionalidad', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'recovery', 'medir', 'narrativa', 'segmentos', 'prodevol', 'clientes', 'cambios', 'proyeccion', 'ajustes', 'ayuda', 'resumen', 'presentacion']
 WIDE = """(()=>{const W=innerWidth; return {sw:document.documentElement.scrollWidth, W, who:[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect(); if(!r.width||r.right<=W+1) return false; for(let p=e.parentElement;p&&p!==document.body;p=p.parentElement){if(getComputedStyle(p).overflowX!=='visible') return false} return true}).slice(0,3).map(e=>e.tagName+'.'+String(e.className).slice(0,30))}})()"""
 async def main():
     async with async_playwright() as p:

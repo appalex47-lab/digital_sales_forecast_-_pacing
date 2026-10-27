@@ -1,7 +1,7 @@
 import asyncio, json, sys, hashlib, re
 from playwright.async_api import async_playwright
 ROOT=sys.argv[1]
-VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','producto','recovery','medir','narrativa','paquete','segmentos','ayuda']
+VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','prodevol','recovery','medir','narrativa','paquete','segmentos','ayuda']
 CAP="window.__dl=[];(()=>{const o=FP.exporter.download;FP.exporter.download=(n,obj)=>{window.__dl.push([n,JSON.stringify(obj)]);};})();"
 R={}
 async def main():
@@ -21,7 +21,7 @@ async def main():
             ex[view]=[hashlib.md5(re.sub(r'"[A-Za-z_]*(At|Date|Time|time|stamp|Id|id)":"[^"]*"','',x).encode()).hexdigest() for x in h]
         R['export_hash']=ex
         # pruebas de almacenamiento por su botón (vista producto)
-        await pg.goto(url+'#producto'); await pg.wait_for_timeout(800)
+        await pg.goto(url+'#prodevol'); await pg.wait_for_timeout(800)
         try:
             await pg.click('[data-action="storage-tests"]',timeout=2000); await pg.wait_for_timeout(6000)
             R['storage_ui']=await pg.evaluate("(document.body.innerText.match(/Pruebas de almacenamiento[^\\n]*|\\d+ de \\d+ correctas/)||['sin texto'])[0]")

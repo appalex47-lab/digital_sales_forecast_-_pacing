@@ -10,7 +10,7 @@ class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 h = functools.partial(Q, directory=ROOT); socketserver.TCPServer.allow_reuse_address = True
 s = socketserver.ThreadingTCPServer(('127.0.0.1', 0), h); threading.Thread(target=s.serve_forever, daemon=True).start(); port = s.server_address[1]
-VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','producto','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda','ajustes']
+VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','prodevol','reforecast','recovery','medir','narrativa','paquete','segmentos','ayuda','ajustes']
 JS = """()=>{const c=document.getElementById('ux-context');if(!c)return null;const r=e=>{const b=e.getBoundingClientRect();return {x:Math.round(b.left),y:Math.round(b.top+scrollY),w:Math.round(b.width),h:Math.round(b.height)}};
   const vis=e=>e.getBoundingClientRect().height>0&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
   const box=r(c); const hdr=document.querySelector('.app-header').getBoundingClientRect();

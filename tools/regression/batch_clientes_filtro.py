@@ -52,7 +52,7 @@ async def main():
         t = await compare('sucursal sola + Total digital', 'total', {'branch': br})
         chk('F4 combinar filtros reduce el resultado (Ecommerce ≤ Total; categoría+sucursal ≤ categoría)', e['led'] <= a['led'] + 1 and s['led'] <= e['led'] + 1, [a['led'], e['led'], s['led']])
         # Detalle temporal de una categoría en Ecommerce: columnas de clientes con esa selección
-        await q.goto(U + '#analisis'); await q.wait_for_function("FP.productStore.available()", timeout=30000); await q.wait_for_timeout(800)
+        await q.goto(U + '#prodevol'); await q.wait_for_function("FP.productStore.available()", timeout=30000); await q.wait_for_timeout(800)
         await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null})}", dict(metric='revenue', periodCount=12, months=12, level='category', channel='ecommerce', periodType='month', focusKey='2026-08', comparison='previous'))
         await q.evaluate("FP.app.render()")
         await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.rows.length>0})()", timeout=90000)
@@ -70,7 +70,7 @@ async def main():
         chk(f'F5b «nuevo en esta selección» cuenta distinto que «nuevo en la empresa» ({n_co} → {n_se})', n_co > 0 and n_se > n_co, [n_co, n_se])
         # libro anterior (sin líneas): se avisa qué recargar y no se inventa
         await q.evaluate("async()=>{const L=await FP.customerStore.load(); L.lines=null; }")   # como un libro guardado antes de esta versión
-        await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null,drill:null})}", dict(channel='app'))
+        await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null,drill:null});FP.app.state.pa.channel=s.channel;FP.app.state.pa.result=null}", dict(channel='app'))
         await q.evaluate("FP.app.render()")
         await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.rows.length>0})()", timeout=90000)
         await q.evaluate("(c)=>FP.app.actions['an-drill']({dataset:{entity:c,source:'patron'}})", cat)

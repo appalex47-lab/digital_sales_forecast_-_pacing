@@ -2413,6 +2413,7 @@
     const an = state.an;
     if (scope === 'entity') an.selected = an.rows.find((r) => r.entity === entity) || an.selected;
     an.drill = { scope, entity: scope === 'total' ? '__total__' : entity, source, path: [], loading: true, data: null, error: null };
+    state.peDrawer = true;   // Producto y evolución: la lectura se abre en el panel lateral, sin mover la pantalla
     loadDrill(); render();
   }
   async function loadDrill() {
@@ -3046,8 +3047,8 @@
         });
     },
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
-    'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
-    'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); setTimeout(() => { const t = document.getElementById('an-entity-reading'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); },
+    'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); },
     'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
     'an-filter'(el) { const k = el.dataset.fkey; if (!k || !FP.productFilter) return; resetAnalysis({ filter: FP.productFilter.cascade(state.an.filter, k, el.value) }); state.an.reopen = null; render(); },
     'gs-open'() { if (FP.search) FP.search.open(''); },
@@ -3076,8 +3077,8 @@
     'an-drill-up'(el) { const d = state.an.drill; if (!d) return; const i = Number(el.dataset.index); d.path = d.path.slice(0, i + 1); d.loading = true; loadDrill(); render(); },
     'an-drill-retry'() { const d = state.an.drill; if (!d) return; d.loading = true; loadDrill(); render(); },
     'an-drill-close'() { state.an.drill = null; render(); },
-    'an-drill-channel'(el) { const d = state.an.drill; const keep = d ? { scope: d.scope, entity: d.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.dataset.channel) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : { scope: 'total' }; render(); },
-    'an-select'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const detail = document.getElementById('an-entity-reading'); if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
+    'an-drill-channel'(el) { const d = state.an.drill; const keep = d ? { scope: d.scope, entity: d.entity } : null; const chn = FP.analysisContext.normChannel(el.dataset.channel); state.pa.channel = chn; state.ux.ctx.channel = chn; state.pa.result = null; resetAnalysis({ channel: chn }); state.an.reopen = keep && keep.scope === 'entity' ? keep : { scope: 'total' }; render(); },
+    'an-select'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); },
     /* Lleva el periodo, canal y comparación del Análisis al Diagnóstico (mismo alcance; no cambia el Análisis). */
     'an-diagnose'() {
       const f = state.an.context && state.an.context.focus;
@@ -3113,7 +3114,7 @@
       const name = String(r.entity).replace(/[^\w\-]+/g, '_').slice(0, 50);
       FP.exporter.download(`lectura_${name}.txt`, txt, 'text/plain');
     },
-    'an-clear-selection'() { state.an.selected = null; state.an.drill = null; render(); },
+    'an-clear-selection'() { state.an.selected = null; state.an.drill = null; state.peDrawer = false; render(); },
 
     /* ----- Fase 1: carga ----- */
     'pick-files'(el) { pickFiles(el); },
@@ -3682,15 +3683,23 @@
     'pe-evolevel'(el) { state.pa.evoLevel = el.value || null; state.an.selected = null; state.an.drill = null; render(); },
     /** Elegir una fila: abre su lectura (Evolución) y baja al capítulo pedido, sin cambiar de página. */
     'pe-focus'(el) {
-      const key = el.dataset.key, target = el.dataset.target;
+      const key = el.dataset.key;
       const a = state.an;
       if (state.pa.evoLevel) state.pa.evoLevel = null;   // la fila es del nivel de la tabla
       peSync();
       if (a.rows && a.rows.some((r) => r.entity === key)) openDrill({ scope: 'entity', entity: key, source: 'tabla' });
       else a.reopen = { scope: 'entity', entity: key };
       render();
-      if (target) setTimeout(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }, 60);
     },
+    /** Tablas de Producto y evolución: ver todas las filas o solo las primeras; más o menos columnas (la elección de columnas se recuerda). */
+    'pe-fold-rows'(el) { const r = (state.ux.peRows = state.ux.peRows || {}); r[el.dataset.key] = !r[el.dataset.key]; render(); },
+    'pe-fold-cols'(el) {
+      let c = {}; try { c = JSON.parse(root.localStorage.getItem('fp.pe.cols.v1') || '{}') || {}; } catch (e) { c = {}; }
+      c[el.dataset.key] = !c[el.dataset.key]; try { root.localStorage.setItem('fp.pe.cols.v1', JSON.stringify(c)); } catch (e) { /* sin almacenamiento: vale para esta sesión */ }
+      render();
+    },
+    /** Cierra el panel de lectura sin perder la entidad en foco (el embudo y «¿Qué hago?» siguen con ella). */
+    'pe-drawer-close'() { state.peDrawer = false; render(); },
     /** Abre Oportunidades con la selección como filtro (categoría y subcategoría) y la búsqueda por producto o SKU. */
     'pe-open-op'() {
       const p = paFilter(state.pa), op = state.op;
@@ -3728,7 +3737,7 @@
       const t = document.getElementById('pe-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
     'pa-to-trend'(el) { return actions['pe-focus']({ dataset: { key: el.dataset.key, target: 'pe-evolucion' } }); },
-    'an-to-product'() { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },   // el foco ya es esta entidad: se baja al capítulo del embudo
+    'an-to-product'() { state.peDrawer = false; render(); root.requestAnimationFrame(() => { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); },   // el foco ya es esta entidad: se baja al capítulo del embudo
     'an-open-trace'(el) { return actions['pa-trace']({ dataset: { key: el.dataset.sku } }); },   // la trazabilidad es del SKU: no cambia la ruta
     'pa-trace-close'() { state.pa.trace = null; render(); },
     'pa-from-dx'() {

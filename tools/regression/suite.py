@@ -1,7 +1,7 @@
 import asyncio, json, sys, hashlib
 from playwright.async_api import async_playwright
 ROOT = sys.argv[1]; TAG = sys.argv[2]
-VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','producto','recovery','medir','narrativa','paquete','segmentos','ayuda']
+VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','prodevol','recovery','medir','narrativa','paquete','segmentos','ayuda']
 R = {}
 CAP = "window.__dl=[];(()=>{const o=FP.exporter.download;FP.exporter.download=(n,obj)=>{window.__dl.push([n,JSON.stringify(obj)]);};})();"
 async def main():
@@ -31,7 +31,7 @@ async def main():
         # 4 exports (contenido determinista)
         await pg.goto(url+'#pacing'); await pg.wait_for_timeout(800); await pg.evaluate(CAP)
         ex={}
-        for view,act in [('pacing','fc-export'),('reforecast','rf-export'),('diagnostico','dx-export'),('plan','plan-export'),('narrativa','nx-export'),('producto','pa-export')]:
+        for view,act in [('pacing','fc-export'),('reforecast','rf-export'),('diagnostico','dx-export'),('plan','plan-export'),('narrativa','nx-export'),('prodevol','pa-export')]:
             await pg.goto(url+'#'+view); await pg.wait_for_timeout(700); await pg.evaluate(CAP)
             try:
                 await pg.click(f'[data-action="{act}"]', timeout=1500); await pg.wait_for_timeout(500)

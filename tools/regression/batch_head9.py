@@ -13,7 +13,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
 
-ALL = ['inicio','carga','calidad','resumen','plan','estacionalidad','datos','configuracion','proyeccion','pacing','diagnostico','producto','segmentos','analisis','reforecast','recovery','medir','narrativa','presentacion','ayuda','ajustes']
+ALL = ['inicio','carga','calidad','resumen','plan','estacionalidad','datos','configuracion','proyeccion','pacing','diagnostico','prodevol','segmentos','reforecast','recovery','medir','narrativa','presentacion','ayuda','ajustes']
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []
@@ -73,16 +73,16 @@ async def main():
         chk('H7 «Usar recorrido guiado» cierra la ventana y abre el recorrido', await q.evaluate("!document.getElementById('tour-offer') && !document.getElementById('tour-bar').hidden"))
         bad7 = []
         await q.set_viewport_size({'width': 1800, 'height': 900})
-        for v in ('pacing', 'segmentos', 'analisis', 'inicio'):
+        for v in ('pacing', 'segmentos', 'prodevol', 'inicio'):
             await q.goto(u + '#' + v); await q.wait_for_timeout(300)
-            r = await q.evaluate("(()=>{const h=document.querySelector('.ux-head').getBoundingClientRect();const p=[...document.querySelectorAll('main .panel')].find(e=>e.offsetParent);const l=document.querySelector('.ux-head__line');return [Math.round(h.left),p?Math.round(p.getBoundingClientRect().left):null,l?Math.round(l.getBoundingClientRect().width):null,Math.round(h.width)]})()")
+            r = await q.evaluate("(()=>{const h=document.querySelector('.ux-head').getBoundingClientRect();const p=[...document.querySelectorAll('main .panel:not(.panel--inner), main .pe-sticky')].find(e=>e.offsetParent);const l=document.querySelector('.ux-head__line');return [Math.round(h.left),p?Math.round(p.getBoundingClientRect().left):null,l?Math.round(l.getBoundingClientRect().width):null,Math.round(h.width)]})()")
             if r[1] is not None and r[0] != r[1]: bad7.append((v, r))
             if r[2] is not None and r[2] < r[3] - 2: bad7.append((v, 'línea recortada', r))
         chk('H8 el encabezado queda alineado con las fichas y sus líneas usan todo el ancho (1800 px)', not bad7, bad7)
         bad6 = []
         for w in (320, 390, 768, 1920):
             await q.set_viewport_size({'width': w, 'height': 800})
-            for v in ('inicio','pacing','analisis','ayuda'):
+            for v in ('inicio','pacing','prodevol','ayuda'):
                 await q.goto(u + '#' + v); await q.wait_for_timeout(250)
                 x = await q.evaluate("document.documentElement.scrollWidth-innerWidth")
                 if x > 0: bad6.append((w, v, x))

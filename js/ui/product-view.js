@@ -246,11 +246,13 @@
     }
     return `
       ${shell}
+      <div class="pe-path">
       ${gotoField}
       <nav class="breadcrumbs" aria-label="Ruta del análisis">${crumbs.join(' › ')}
         ${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}
         ${choices.length && level ? `<span class="breadcrumbs__next"><label for="pa-next" class="field__hint">Desglosar por</label>
           <select id="pa-next" data-action="pa-next">${choices.map((c) => `<option value="${c}" ${c === level ? 'selected' : ''}>${esc(levelName(c))}</option>`).join('')}</select></span>` : ''}</nav>
+      </div>
       ${geoLevel ? `<p class="field__hint">${esc(`Región, estado, ciudad, ${locTerm().toLowerCase()} y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles aquí. Una diferencia entre zonas no demuestra por sí misma una causa.`)}</p>` : ''}
       ${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
   }
