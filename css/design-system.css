@@ -2247,7 +2247,8 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .pe-fold .table { min-width: 0; width: 100%; }
 .pe-fold th, .pe-fold td { white-space: nowrap; vertical-align: middle; padding-top: 7px; padding-bottom: 7px; }
 .pe-fold td:first-child, .pe-fold th:first-child { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
-.pe-fold .cell-sub { display: block; }
+.pe-fold .cell-sub { display: block; white-space: normal; max-width: 240px; margin-left: auto; }
+.pe-fold td:first-child .cell-sub, .pe-fold td:nth-child(n+8) .cell-sub { margin-left: 0; }
 .pe-fold:not(.pe-showx) .pe-x { display: none; }
 .pe-fold tr.pe-hide { display: none; }
 .pe-fold tr.pe-row { cursor: pointer; }
