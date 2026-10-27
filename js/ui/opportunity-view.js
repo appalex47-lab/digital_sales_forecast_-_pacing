@@ -17,6 +17,12 @@
   const VIEWS = [['sku', 'SKU'], ['subcat', 'Subcategoría'], ['lab', 'Laboratorio']];
   const DIM = { subcat: 'Subcategoría', lab: 'Laboratorio' };
 
+  const ROUTE_PILL = { expose: 'ok', ask: 'warning', protect: 'na', review: 'error' };
+  const REQ_PILL = { asked: 'warning', noReply: 'error', received: 'ok', none: 'na' };
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const RQ = () => FP.requests;
+  const reqView = (state, sku) => (state && state.rq && state.rq.reg ? RQ().viewOf(state.rq.reg, sku, todayISO()) : 'none');
+
   const val = (id) => { const el = $(id); return el ? String(el.value).trim() : ''; };
   const pct = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${(v * 100).toFixed(1).replace(/\.0$/, '')} %` : '—');
   const money = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }) : '—');
@@ -39,6 +45,8 @@
       if (f.origin && !i.offers.some((o) => o.origin === f.origin)) return false;
       if (f.subcategory && (i.subcategory || NONE) !== f.subcategory) return false;
       if (f.lab && (labFn(i) || NONE) !== f.lab) return false;
+      if (f.route && i.route.id !== f.route) return false;
+      if (f.request && reqView(state, i.sku) !== f.request) return false;
       if (f.action && recs) { const r = recs.get(`sku:${i.sku}`); if (!r || r.main !== f.action) return false; }
       if (q && !(FP.offers ? FP.offers.norm(`${i.sku} ${i.name} ${i.brand} ${i.category}`) : `${i.sku} ${i.name}`.toLowerCase()).includes(q)) return false;
       return true;
@@ -55,19 +63,22 @@
     </div><div class="btn-row"><button type="button" class="btn btn--primary" data-action="op-run"${op.loading ? ' disabled' : ''}>${op.loading ? 'Calculando…' : 'Calcular oportunidades'}</button></div>`;
   }
 
+  /** Cuatro salidas: qué hacer con cada producto. Cada tarjeta filtra la lista. */
   function summary(op) {
     const esc = H().esc, r = op.result; if (!r) return '';
-    const T = OP().TYPES;
-    const kpis = Object.keys(T).map((k) => `<button type="button" class="metric-card" data-action="op-type" data-type="${k}" aria-pressed="${op.f.type === k}"><span class="metric-card__label">${esc(T[k].label)}</span><strong class="metric-card__value num">${r.counts.byType[k]}</strong></button>`).join('');
+    const R = OP().ROUTES, order = OP().ROUTE_ORDER;
+    const cards = order.map((k) => `<button type="button" class="metric-card gd-route gd-route--${k}" data-action="op-route" data-route="${k}" aria-pressed="${op.f.route === k}"><span class="metric-card__label">${esc(R[k].label)}</span><strong class="metric-card__value num">${r.counts.byRoute[k]}</strong><span class="cell-sub">${esc(money(r.counts.revenueByRoute[k]))} de venta</span><span class="field__hint">${esc(R[k].hint)}</span></button>`).join('');
     const notes = r.notes.map((n) => `<p class="field__hint">${esc(n)}</p>`).join('');
-    return `<div class="metric-grid">${kpis}</div>
-      <p class="field__hint">Periodo ${esc(r.period.from)} a ${esc(r.period.to)} contra ${esc(r.baseline.label)} (${esc(r.baseline.from)} a ${esc(r.baseline.to)}). ${r.counts.total} SKU con al menos un tipo de oportunidad. Un SKU puede tener más de un tipo.</p>${notes}`;
+    return `<div class="metric-grid" role="group" aria-label="Qué hacer con cada producto">${cards}</div>
+      <p class="field__hint">Periodo ${esc(r.period.from)} a ${esc(r.period.to)} contra ${esc(r.baseline.label)} (${esc(r.baseline.from)} a ${esc(r.baseline.to)}). ${r.counts.total} SKU con al menos un tipo de oportunidad; cada uno cae en una sola salida. Toca una tarjeta para ver solo esos productos.</p>${notes}`;
   }
 
   const EV_LABEL = { high: 'Alta', medium: 'Media', low: 'Baja' };
   /** Filtros puestos (sin la búsqueda de texto ni el tipo, que ya se ven en la primera fila). */
   function activeFilters(op) {
     const f = op.f, L = [];
+    if (f.route) L.push(['route', `Qué hacer: ${(OP().ROUTES[f.route] || {}).label || f.route}`]);
+    if (f.request) L.push(['request', `Solicitud: ${RQ().VIEW[f.request] || f.request}`]);
     if (f.category) L.push(['category', `Categoría: ${f.category}`]);
     if (f.subcategory) L.push(['subcategory', `Subcategoría: ${f.subcategory === NONE ? 'sin dato' : f.subcategory}`]);
     if (f.lab) L.push(['lab', `Laboratorio: ${f.lab === NONE ? 'sin dato' : f.lab}`]);
@@ -96,6 +107,7 @@
       ${field('op-f-lab', 'Laboratorio', selectHtml('op-f-lab', [['', 'Todos los laboratorios'], ...labs.map((c) => [c, c === NONE ? 'Sin laboratorio' : c])], f.lab || '', 'data-action="op-filter"'))}
       ${field('op-f-ev', 'Evidencia', selectHtml('op-f-ev', [['', 'Cualquiera'], ['high', 'Alta'], ['medium', 'Media'], ['low', 'Baja']], f.evidence || '', 'data-action="op-filter"'))}
       ${field('op-f-off', 'Oferta recibida', selectHtml('op-f-off', [['', 'Con o sin oferta'], ['yes', 'Ya tiene oferta recibida'], ['no', 'Sin oferta recibida']], f.withOffer || '', 'data-action="op-filter"'))}
+      ${field('op-f-req', 'Solicitud a Comercial', selectHtml('op-f-req', [['', 'Cualquiera'], ...Object.keys(RQ().VIEW).map((k) => [k, RQ().VIEW[k]])], f.request || '', 'data-action="op-filter"'))}
       ${field('op-f-org', 'Origen de la oferta', selectHtml('op-f-org', [['', 'Cualquiera'], ...Object.keys((FP.offers && FP.offers.ORIGINS) || {}).map((k) => [k, FP.offers.ORIGINS[k]])], f.origin || '', 'data-action="op-filter"'))}
     </div>` : '';
     return `${top}${chips}${grid}${exportPanel(op, state)}`;
@@ -162,10 +174,64 @@
   function bulk(op, state) {
     const esc = H().esc, ids = markedSkus(op, state), grp = op.view && op.view !== 'sku', ng = grp ? Object.keys(op.checkedG || {}).filter((k) => op.checkedG[k]).length : 0;
     const promos = state.pm.reg.promotions.filter((p) => ['draft', 'proposed'].includes(p.status));
+    const plan = requestPlan(op, state), askLbl = ids.length ? `Pedir oferta de los ${plan.ok.length} marcados` : (plan.ok.length ? `Pedir oferta de los ${plan.ok.length} de «Pedir oferta»` : 'Pedir oferta');
     return `<div class="btn-row"><span class="field__hint">Marcados: <strong>${grp ? `${ng} ${DIM[op.view].toLowerCase()}${ng === 1 ? '' : 's'} (${ids.length} SKU)` : ids.length}</strong></span>
       <button type="button" class="btn btn--small" data-action="op-check-all">${grp ? 'Marcar los grupos visibles' : 'Marcar los visibles'}</button>${ids.length ? '<button type="button" class="btn btn--small btn--ghost" data-action="op-check-none">Quitar marcas</button>' : ''}
+      <button type="button" class="btn btn--small btn--primary" data-action="rq-ask"${plan.ok.length ? '' : ' disabled'} title="Arma la solicitud para Comercial, por laboratorio">${esc(askLbl)}</button>
       ${ids.length ? (promos.length ? `<select id="op-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
       <button type="button" class="btn btn--small btn--primary" data-action="op-to-promo">Agregar los ${ids.length} marcados a la promoción</button>` : '<span class="field__hint">Para agregarlos a un plan, crea una promoción en borrador.</span>') : ''}</div>`;
+  }
+
+  /** Debajo de «Qué hacer»: cómo va la solicitud de oferta de ese SKU (si hay). */
+  function requestCell(state, i) {
+    const esc = H().esc, pill = H().pill, v = reqView(state, i.sku); if (v === 'none') return '';
+    const r = RQ().lastFor(state.rq.reg, i.sku), d = r ? RQ().daysOpen(r, todayISO()) : 0;
+    return `<span class="cell-sub">${pill(REQ_PILL[v], RQ().VIEW[v])}${v === 'asked' || v === 'noReply' ? ` hace ${d} ${d === 1 ? 'día' : 'días'}` : ''}</span>`;
+  }
+
+  /**
+   * Qué se pediría ahora: los SKU marcados (o, sin marcas, los de «Pedir oferta» que se ven) que no tengan ya una solicitud abierta
+   * ni una oferta recibida. Devuelve { ok:[item], skipped:{open,hasOffer}, empty, source }.
+   */
+  function requestPlan(op, state) {
+    const marked = markedSkus(op, state), vis = visible(op, state), set = new Set(marked);
+    const source = marked.length ? 'marked' : 'route';
+    const pool = marked.length ? (op.result ? op.result.items.filter((i) => set.has(i.sku)) : []) : vis.filter((i) => i.route.id === 'ask');
+    const open = RQ().openSkus(state.rq.reg), skipped = { open: 0, hasOffer: 0 }, ok = [];
+    pool.forEach((i) => { if (open.has(i.sku)) skipped.open += 1; else if (i.offers.length) skipped.hasOffer += 1; else ok.push(i); });
+    const empty = ok.length ? '' : (pool.length ? 'Esos productos ya tienen una solicitud abierta o una oferta recibida: no hay nada nuevo que pedir.' : 'No hay productos en «Pedir oferta» con estos filtros. Marca los que quieras pedir o quita algún filtro.');
+    return { ok, skipped, empty, source, byLab: RQ().byLab(ok.map((i) => ({ lab: labOf(i, state), revenue: i.revenue }))) };
+  }
+
+  function confirmHtml(state) {
+    const c = state.rq && state.rq.confirm; if (!c) return '';
+    const esc = H().esc, sk = [];
+    if (c.skipped.open) sk.push(`${c.skipped.open} ya tienen una solicitud abierta`);
+    if (c.skipped.hasOffer) sk.push(`${c.skipped.hasOffer} ya tienen una oferta recibida`);
+    return `<div class="note note--warn gd-confirm" role="alert"><strong>Se va a pedir la oferta de ${c.ok.length} ${c.ok.length === 1 ? 'producto' : 'productos'} a Comercial:</strong>
+      <ul class="plain-list">${c.byLab.slice(0, 10).map((x) => `<li>${esc(x.lab)} · ${x.skus} SKU · ${esc(money(x.revenue))} de venta del periodo</li>`).join('')}${c.byLab.length > 10 ? `<li>…y ${c.byLab.length - 10} laboratorios más</li>` : ''}</ul>
+      ${sk.length ? `<p>Quedan fuera: ${sk.map(esc).join('; ')}.</p>` : ''}
+      <p class="field__hint">${c.source === 'marked' ? 'Son los que marcaste.' : 'No marcaste ninguno: son los de «Pedir oferta» que se ven.'} Se descarga un Excel por laboratorio, sin costos ni márgenes, para que Comercial lo pida. No se manda nada solo.</p>
+      <div class="btn-row"><button type="button" class="btn btn--primary" data-action="rq-confirm">Pedir y descargar el Excel</button><button type="button" class="btn btn--ghost" data-action="rq-cancel-confirm">Cancelar</button></div></div>`;
+  }
+
+  /** Seguimiento: cuántas están pedidas, sin respuesta (7 días) y recibidas; la lista se despliega. */
+  function requestsPanel(state) {
+    const esc = H().esc, pill = H().pill, rq = state.rq; if (!rq || !rq.reg) return '';
+    const today = todayISO(), S = RQ().summary(rq.reg, today), fold = (state.op.fold || {}).requests, all = rq.reg.requests.slice().reverse();
+    if (!all.length) return '';
+    const chips = [['asked', 'Pedidas', S.asked], ['noReply', 'Sin respuesta', S.noReply], ['received', 'Recibidas', S.received]].map(([k, l, n]) => `<button type="button" class="btn btn--small${state.op.f.request === k ? ' btn--primary' : ''}" data-action="rq-filter" data-v="${k}" aria-pressed="${state.op.f.request === k}">${l} ${n}</button>`).join(' ');
+    const rows = all.slice(0, 200).map((x) => { const st = RQ().status(x, today), d = RQ().daysOpen(x, today);
+      return `<tr><td class="num">${esc(x.reqId)}<span class="cell-sub">${esc(x.batchId)}</span></td><td class="num">${esc(x.sku)}</td><td>${esc(x.name)}<span class="cell-sub">${esc(x.lab || 'Sin laboratorio')}</span></td>
+        <td>${esc(String(x.askedAt).slice(0, 10))}<span class="cell-sub">${esc(x.askedBy)} · a ${esc(x.to)}</span></td><td>${pill(REQ_PILL[st] || 'na', st === 'noReply' ? 'Sin respuesta' : RQ().STATE[st])}${st === 'asked' || st === 'noReply' ? `<span class="cell-sub">hace ${d} ${d === 1 ? 'día' : 'días'}</span>` : st === 'received' ? `<span class="cell-sub">${esc(x.offerId)}</span>` : ''}</td>
+        <td>${x.state === 'asked' ? `<button type="button" class="btn btn--small btn--ghost" data-action="rq-cancel" data-id="${esc(x.reqId)}">Cancelar</button>` : ''}</td></tr>`; }).join('');
+    const folios = [...new Set(all.filter((x) => x.state === 'asked').map((x) => x.batchId))];
+    const table = fold ? `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Solicitudes, se desliza"><table class="table ds-table"><thead><tr><th>Folio</th><th>SKU</th><th>Producto</th><th>Pedida</th><th>Estado</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${folios.length ? `<div class="btn-row"><span class="field__hint">Volver a descargar el Excel de un folio:</span>${folios.slice(0, 6).map((f) => `<button type="button" class="btn btn--small" data-action="rq-redo" data-id="${esc(f)}">${esc(f)}</button>`).join(' ')}</div>` : ''}
+      <p class="field__hint">«Sin respuesta» = pedida hace ${RQ().WAIT_DAYS} días o más y sin oferta. La solicitud se cierra sola cuando llega una oferta de ese SKU (archivo o captura a mano).</p>` : '';
+    return `<section class="panel" aria-labelledby="rq-t"><div class="panel__head"><div><h2 class="panel__title" id="rq-t">Solicitudes a Comercial · ${S.open} abiertas${S.noReply ? ` · ${S.noReply} sin respuesta` : ''}</h2>
+      <p class="panel__desc">Las ofertas que pediste desde aquí y cómo van.</p></div><button type="button" class="btn btn--small" data-action="op-fold" data-fold="requests" aria-expanded="${!!fold}">${fold ? 'Ocultar' : 'Ver la lista'} ${fold ? '▴' : '▾'}</button></div>
+      <div class="panel__body"><div class="btn-row">${chips}</div>${table}</div></section>`;
   }
 
   /** Laboratorio de un producto: el de su oferta recibida y, si no tiene, el del catálogo de producto (columna Marca / Laboratorio). */
@@ -177,16 +243,17 @@
     const shown = list.slice(0, CAP);
     const rows = shown.map((i) => `<tr${i.sku === op.sel ? ' aria-selected="true"' : ''}><td><input type="checkbox" data-action="op-chk" data-id="${esc(i.sku)}" aria-label="Marcar ${esc(i.sku)}"${op.checked[i.sku] ? ' checked' : ''}></td>
       <td class="num">${esc(i.sku)}</td><td>${esc(i.name)}<span class="cell-sub">${esc([i.category, i.brand].filter(Boolean).join(' · '))}</span></td><td>${esc(labOf(i, state) || '—')}</td>
+      <td>${pill(ROUTE_PILL[i.route.id] || 'na', OP().ROUTES[i.route.id].label)}${requestCell(state, i)}</td>
       <td>${i.types.map((t) => pill(TYPE_PILL[t.id] || 'na', t.label)).join(' ')}</td><td>${pill(EV_PILL[i.evidence.level], EV_TXT[i.evidence.level])}</td>
       <td class="num">${typeof i.size === 'number' ? money(i.size) : '—'}</td><td class="num">${money(i.revenue)}<span class="cell-sub">${pct(i.revenueDeltaPct)} vs referencia</span></td>
       <td>${i.offers.length ? i.offers.map((o) => `<span class="num">${esc(o.offerId)}</span> ${pct(o.discount)}`).join('<br>') : '—'}</td>${AV ? AV.cells(state, map.get(keyOf(i))) : ''}
       <td><button type="button" class="btn btn--small" data-action="op-open" data-id="${esc(i.sku)}">Abrir</button>${AV ? ` <button type="button" class="btn btn--small btn--ghost" data-action="ac-open" data-key="${esc(keyOf(i))}">Ver razón</button>` : ''}</td></tr>`).join('');
     const more = list.length > shown.length ? `<p class="field__hint">Se muestran los primeros ${CAP}; afina con la búsqueda o los filtros.</p>` : '';
-    return `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Lista de SKU, se desliza"><table class="table ds-table pm-wide"><thead><tr><th></th><th>SKU</th><th>Producto</th><th>Laboratorio</th><th>Tipo de oportunidad</th><th>Evidencia</th><th>Tamaño</th><th>Venta del periodo</th><th>Oferta recibida</th>${AV ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
+    return `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Lista de SKU, se desliza"><table class="table ds-table pm-wide"><thead><tr><th></th><th>SKU</th><th>Producto</th><th>Laboratorio</th><th>Qué hacer</th><th>Tipo de oportunidad</th><th>Evidencia</th><th>Tamaño</th><th>Venta del periodo</th><th>Oferta recibida</th>${AV ? AV.headCells(state) : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}
       <p class="field__hint">${list.length} SKU con estos filtros. «Tamaño» solo existe para demanda no convertida (vistas × diferencia de conversión contra la mediana de su categoría × venta por pedido): sirve para ordenar, no es un pronóstico.</p>`;
   }
 
-  function detail(op) {
+  function detail(op, state) {
     const esc = H().esc, pill = H().pill; if (!op.sel || !op.result) return '';
     const i = op.result.items.find((x) => x.sku === op.sel); if (!i) return '';
     const types = i.types.map((t) => `<li>${pill(TYPE_PILL[t.id] || 'na', t.label)} <strong>${esc(t.objective)}.</strong> ${esc(t.reason)}<br><span class="field__hint">${esc(t.warning)}</span></li>`).join('');
@@ -194,7 +261,8 @@
     const off = i.offers.length ? `<ul class="plain-list">${i.offers.map((o) => `<li><span class="num">${esc(o.offerId)}</span> · ${pct(o.discount)} de descuento · ${esc(FP.offers.STATE[o.state] || o.state)}</li>`).join('')}</ul>` : '<p>Todavía no hay una oferta recibida para este SKU.</p>';
     return `<section class="panel" aria-labelledby="op-t-det"><div class="panel__head"><div><h2 class="panel__title" id="op-t-det">${esc(i.sku)} · ${esc(i.name)} ${pill(EV_PILL[i.evidence.level], EV_TXT[i.evidence.level])}</h2>
       <p class="panel__desc">${esc([i.category, i.brand].filter(Boolean).join(' · '))}</p></div><button type="button" class="btn btn--small" data-action="op-close">Cerrar</button></div>
-      <div class="panel__body"><h3>Por qué aparece</h3><ul class="plain-list">${types}</ul>
+      <div class="panel__body"><h3>Qué hacer</h3><p>${pill(ROUTE_PILL[i.route.id] || 'na', OP().ROUTES[i.route.id].label)} ${esc(i.route.why)}</p>${(() => { const r = state && state.rq && state.rq.reg ? RQ().lastFor(state.rq.reg, i.sku) : null; return r ? `<p class="field__hint">Solicitud ${esc(r.reqId)} (${esc(RQ().STATE[r.state])}): pedida el ${esc(String(r.askedAt).slice(0, 10))} por ${esc(r.askedBy)} a ${esc(r.to)}.</p>` : ''; })()}
+        <h3>Por qué aparece</h3><ul class="plain-list">${types}</ul>
         <h3>Evidencia</h3>${ev}
         <h3>Datos del periodo</h3><dl class="facts"><div><dt>Venta</dt><dd>${money(i.revenue)} (referencia ${money(i.revenueBase)}, ${pct(i.revenueDeltaPct)})</dd></div><div><dt>Unidades</dt><dd>${int(i.units)}</dd></div><div><dt>Vistas de ficha</dt><dd>${int(i.views)}</dd></div>
           <div><dt>Conversión</dt><dd>${pct(i.conversion)} (mediana de su categoría: ${pct(i.categoryMedianConversion)})</dd></div><div><dt>Peso en su categoría</dt><dd>${pct(i.categoryShare)}</dd></div></dl>
@@ -207,17 +275,18 @@
     const op = state.op, esc = H().esc;
     const noData = !(FP.productStore && FP.productStore.available() && (FP.productStore.meta || {}).batches);
     const list = visible(op, state), AV = FP.activationView, map = AV ? AV.recs(state) : new Map();
-    return `<section class="panel" aria-labelledby="op-t"><div class="panel__head"><div><h2 class="panel__title" id="op-t">Oportunidades del canal digital</h2>
-      <p class="panel__desc">Productos que, con los datos de tu propio canal, merecen una conversación con Comercial o Precios. No es un puntaje ni un pronóstico: cada fila dice por qué aparece, con qué evidencia y qué falta decidir. Un producto de mucha venta aparece como «sostener o proteger», no como candidato a descuento.</p></div></div>
+    return `<section class="panel" aria-labelledby="op-t"><div class="panel__head"><div><h2 class="panel__title" id="op-t">Qué impulsar en el canal digital</h2>
+      <p class="panel__desc">Con los datos de tu propio canal, cada producto con oportunidad cae en una sola salida: <strong>exponer</strong> (darle más lugar, con o sin descuento), <strong>pedir oferta</strong> a Comercial, <strong>sostener o proteger</strong> o <strong>revisar la causa</strong>. No es un puntaje ni un pronóstico: cada fila dice por qué aparece, con qué evidencia y qué falta decidir. Un producto de mucha venta aparece como «sostener o proteger», no como candidato a descuento.</p></div></div>
       <div class="panel__body">${noData ? '<div class="empty"><strong>Todavía no hay datos de producto</strong>Carga la venta (y el funnel) por producto en «Carga de datos» para ver oportunidades.</div>' : controls(op)}
         ${op.msg ? `<div class="note note--${op.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(op.msg.text)}${(op.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : ''}</div></section>
       ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) + FP.guideView.actionsHtml(state, map, 'potential') : ''}
-      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${bulk(op, state)}${AV && state.ac.msg ? AV.toolbar(state, 'potential').split('<div class="btn-row">')[0] : ''}</div>
+      ${op.result ? requestsPanel(state) : ''}
+      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${bulk(op, state)}${confirmHtml(state)}${AV && state.ac.msg ? AV.toolbar(state, 'potential').split('<div class="btn-row">')[0] : ''}</div>
         ${AV ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${op.view && op.view !== 'sku' ? groupsTable(op, state) : table(op, list, state, map)}</div></section>` : ''}
       ${AV && state.ac.sel ? AV.detail(state, map, state.ac.sel) : ''}
-      ${detail(op)}`;
+      ${detail(op, state)}`;
   }
 
-  FP.opportunityView = { html, val, visible, selection, markedSkus, groupsOf, NONE, DIM };
+  FP.opportunityView = { html, val, visible, selection, markedSkus, groupsOf, requestPlan, labOf, NONE, DIM };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -44,7 +44,7 @@
       <div class="field-grid">
         ${field('ac-p-disc', 'Descuento que cuenta como alto (%)', input('ac-p-disc', P.discountHigh, 'number', 'data-action="ac-param" min="0" max="100" step="1"'), 'Aplica a ofertas recibidas.')}
         ${field('ac-p-slots', 'Espacios de banner principal', input('ac-p-slots', P.bannerSlots, 'number', 'data-action="ac-param" min="0" max="20" step="1"'), 'Compiten por venta; el descuento no da ventaja.')}
-        ${field('ac-p-mode', 'Cómo se reparte el tope', modeSel, 'Compartido: los espacios de banner se reparten entre Ofertas recibidas y Oportunidades. Uno por pestaña: cada una tiene los suyos.')}
+        ${field('ac-p-mode', 'Cómo se reparte el tope', modeSel, 'Compartido: los espacios de banner se reparten entre Ofertas y plan y Qué impulsar. Uno por pestaña: cada una tiene los suyos.')}
         ${field('ac-p-chronic', 'Categorías de uso crónico', input('ac-p-chronic', P.chronicCategories, 'text', 'data-action="ac-param" placeholder="Ej. ENDOCRINOLOGÍA"'), 'Para oportunidades. Si el archivo de ofertas trae la columna «Crónico / agudo», esa tiene prioridad sobre esta lista.')}
       </div>
       <p class="field__hint">Reglas, en orden. Cada sugerencia explica cuál aplicó y qué dato falta.</p>

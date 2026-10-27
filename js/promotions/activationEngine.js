@@ -127,7 +127,7 @@
       const bucket = P.bannerMode === 'perTab' ? r.tab : 'all';
       if (used[bucket] < slots) { used[bucket] += 1; return; }
       r.main = SPACE.home; r.second = 'Banner si queda espacio'; r.priority = 'Media'; r.banner = false;
-      r.bannerNote = `El banner se limita a ${slots} espacio(s)${P.bannerMode === 'perTab' ? ' en esta pestaña' : ' entre Ofertas recibidas y Oportunidades'}, por mayor venta; pasa a cuadrícula.`;
+      r.bannerNote = `El banner se limita a ${slots} espacio(s)${P.bannerMode === 'perTab' ? ' en esta pestaña' : ' entre Ofertas y plan y Qué impulsar'}, por mayor venta; pasa a cuadrícula.`;
       r.why += ` ${r.bannerNote}`;
     });
     return out;

@@ -2970,3 +2970,10 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 ## Versión de los archivos (caché del navegador)
 
 `index.html` carga cada script y hoja de estilo con `?v=…`. Si el valor no cambia, el navegador sigue usando el archivo viejo aunque ya esté publicado el nuevo. **Antes de subir cualquier cambio a un archivo existente, corre `node tools/bump-version.js`** (cambia la versión en todo `index.html`).
+
+## Solicitudes de oferta (Qué impulsar → Comercial)
+
+- `js/promotions/requestStore.js` (`FP.requests`): registro `{ version, seq, batchSeq, requests[] }` guardado con la clave `requests`. Estados guardados: `asked`, `received`, `cancelled`; «Sin respuesta» se calcula al leer (`status(req, today)`, `WAIT_DAYS = 7`). `create` omite SKU con solicitud abierta; `reconcile(reg, offers)` cierra las abiertas cuando hay una oferta no descartada del SKU recibida desde el día de la solicitud (se llama desde `autoValidateOffers`, `loadRequests` y la captura a mano).
+- `FP.opportunities.routeOf/ROUTES` asigna a cada SKU una sola salida; `counts.byRoute` y `counts.revenueByRoute` alimentan las tarjetas.
+- `FP.promotionExport.buildRequestBook` arma el Excel (hoja «Solicitud» ordenada por laboratorio y hoja «Por laboratorio»); no incluye costos, márgenes ni precios.
+- Acciones en `app.js`: `op-route`, `rq-ask`, `rq-confirm`, `rq-cancel-confirm`, `rq-redo`, `rq-cancel`, `rq-filter`. Pruebas: `tools/test-requests.js` y `tools/regression/batch_pedir_oferta.py`.

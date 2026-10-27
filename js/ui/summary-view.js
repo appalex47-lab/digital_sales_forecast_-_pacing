@@ -25,7 +25,7 @@
   function funnel(r) {
     const esc = H().esc, f = r.funnel;
     const steps = [
-      ['Oportunidades detectadas', f.detected === null ? '—' : int(f.detected), f.detected === null ? 'Calcúlalas en la pestaña Oportunidades' : 'Viene de la pestaña Oportunidades'],
+      ['Oportunidades detectadas', f.detected === null ? '—' : int(f.detected), f.detected === null ? 'Calcúlalas en la pestaña Qué impulsar' : 'Viene de la pestaña Qué impulsar'],
       ['SKU propuestos', int(f.proposed), 'En propuestas exportadas'],
       ['Con oferta recibida', int(f.withOffer), f.proposed ? `${pct(f.withOffer / f.proposed)} de los propuestos` : ''],
       ['Validadas o seleccionadas', int(f.validated), 'Entre los propuestos'],
@@ -37,7 +37,7 @@
   function table(r) {
     const esc = H().esc, name = S().GROUPS[r.group], t = r.total;
     const line = (label, x, strong) => `<tr>${strong ? `<td><strong>${esc(label)}</strong></td>` : `<td>${esc(label)}</td>`}<td class="num">${int(x.sp)}</td><td>${bar(x.cover)}</td><td class="num">${int(x.sin)}</td><td class="num">${int(x.of)}</td><td class="num">${disc(x.avg)}</td><td class="num">${int(x.sel)}</td><td class="num">${int(x.pr)}</td><td class="num">${int(x.fuera)}</td></tr>`;
-    if (!r.rows.length) return '<div class="empty"><strong>Todavía no hay datos que resumir</strong>Exporta una propuesta desde Oportunidades o recibe ofertas en Ofertas recibidas.</div>';
+    if (!r.rows.length) return '<div class="empty"><strong>Todavía no hay datos que resumir</strong>Exporta una propuesta desde Qué impulsar o recibe ofertas en Ofertas y plan.</div>';
     return `<div class="table-wrap"><table class="table ds-table"><thead><tr><th>${esc(name)}</th><th>SKU propuestos</th><th>Cobertura de ofertas</th><th>Sin oferta</th><th>Ofertas recibidas</th><th>Descuento prom.</th><th>Seleccionadas</th><th>En promoción</th><th>Recibidas fuera de propuesta</th></tr></thead>
       <tbody>${r.rows.map((x) => line(x.label, x, false)).join('')}</tbody><tfoot>${line('Total', t, true)}</tfoot></table></div>
       <p class="field__hint">Un SKU con varias ofertas cuenta una vez en «SKU» y varias veces en «Ofertas recibidas»; su laboratorio, programa y categoría salen de su oferta con mayor descuento. «Sin oferta» son SKU propuestos sin ninguna oferta recibida. «Recibidas fuera de propuesta» son ofertas de SKU que no estaban en ninguna propuesta exportada. Las ofertas descartadas no cuentan.</p>`;
@@ -62,7 +62,7 @@
     const seg = Object.entries(S().GROUPS).map(([k, l]) => `<button type="button" class="btn btn--small${k === r.group ? ' btn--primary' : ''}" data-action="sm-group" data-g="${k}" aria-pressed="${k === r.group}">${esc(l)}</button>`).join(' ');
     const p = r.pending, go = (to, n, text) => `<li><strong>${int(n)}</strong> ${esc(text)}${to && n ? ` <button type="button" class="btn btn--small btn--ghost" data-action="sm-go" data-to="${to}">Ver</button>` : ''}</li>`;
     const props = r.proposals.length ? `<div class="table-wrap"><table class="table ds-table"><thead><tr><th>Nombre</th><th>Fecha</th><th>Quién</th><th>SKU</th></tr></thead><tbody>${r.proposals.slice(0, 15).map((x) => `<tr><td>${esc(x.name)}<span class="cell-sub num">${esc(x.id)}</span></td><td class="num">${esc(when(x.at))}</td><td>${esc(x.by || '—')}</td><td class="num">${int(x.skus.length)}</td></tr>`).join('')}</tbody></table></div>${r.proposals.length > 15 ? `<p class="field__hint">Se muestran las 15 más recientes de ${r.proposals.length}.</p>` : ''}`
-      : '<p class="field__hint">Todavía no se ha exportado ninguna propuesta. Al exportar el Excel de una propuesta desde Oportunidades se registra aquí su nombre, fecha y lista de SKU.</p>';
+      : '<p class="field__hint">Todavía no se ha exportado ninguna propuesta. Al exportar el Excel de una propuesta desde Qué impulsar se registra aquí su nombre, fecha y lista de SKU.</p>';
     return `<section class="panel" aria-labelledby="sm-t"><div class="panel__head"><div><h2 class="panel__title" id="sm-t">Resumen de promociones</h2>
       <p class="panel__desc">Qué pedimos, qué llegó y qué falta, agrupado por categoría, laboratorio o programa. Solo cuenta lo registrado en la herramienta: no calcula venta ni efecto.</p></div></div>
       <div class="panel__body">${msg}<div class="field-grid">${field('sm-camp', 'Campaña de las ofertas', camp)}</div>
