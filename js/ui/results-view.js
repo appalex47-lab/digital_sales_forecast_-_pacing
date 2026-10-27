@@ -131,6 +131,35 @@
       <div class="panel__body">${ctl}${rs.msg ? `<div class="note note--${rs.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(rs.msg.text)}</div>` : ''}${body}</div></section>`;
   }
 
+  /** «Medir una exposición»: venta real de los SKU expuestos contra su línea base, con las fechas de la exposición. */
+  function exposurePanel(state) {
+    const esc = H().esc, pill = H().pill, ex = state.rs.ex, E = FP.exposures; if (!E || !state.ex || !state.ex.reg || !state.ex.reg.items.length) return '';
+    const noData = !(FP.productStore && FP.productStore.available() && (FP.productStore.meta || {}).batches);
+    const bs = E.batches(state.ex.reg), meas = bs.filter((b) => b.measurable.length), r = ex.result && ex.result.promoId === ex.batchId ? ex.result : null;
+    const ctl = noData ? '<div class="empty"><strong>Todavía no hay datos de producto</strong>La medición lee la venta por SKU y día: carga la venta en «Carga de datos».</div>'
+      : !meas.length ? '<div class="empty"><strong>Ninguna exposición tiene fecha de inicio</strong>Al ponerla en exposición desde Qué impulsar, escribe «Desde» (y «Hasta» si sabes cuándo termina) para poder medirla.</div>'
+        : `<div class="field-grid">${field('rs-ex-batch', 'Exposición', selectHtml('rs-ex-batch', [['', 'Elige un folio'], ...meas.map((b) => [b.batchId, `${b.batchId} · ${b.measurable.length} SKU · desde ${b.measurable.map((e) => e.start).sort()[0]}`])], ex.batchId || '', 'data-action="rs-ex-pick"'))}</div>
+          <div class="btn-row"><button type="button" class="btn btn--primary" data-action="rs-ex-run"${ex.loading || !ex.batchId ? ' disabled' : ''}>${ex.loading ? 'Calculando…' : 'Medir exposición'}</button></div>`;
+    let body = '';
+    if (r) {
+      const c = r.concepts, est = pill('warning', 'Estimado'), card = (t, tag, b, h) => `<div class="metric-card"><span class="metric-card__label">${esc(t)} ${tag}</span>${b}${h ? `<span class="field__hint">${esc(h)}</span>` : ''}</div>`;
+      body = `<div class="metric-grid">
+        ${card('Crecimiento observado', est, `<strong class="metric-card__value num">${pct(c.observedGrowth.revenue)}</strong><span class="cell-sub">venta · unidades ${pct(c.observedGrowth.units)}</span>`, c.observedGrowth.note)}
+        ${card('Venta incremental estimada', est, `<strong class="metric-card__value num">${signedMoney(c.incremental.revenue)}</strong><span class="cell-sub">${c.incremental.range ? `rango ${signedMoney(c.incremental.range[0])} a ${signedMoney(c.incremental.range[1])}` : 'un solo periodo comparable'}</span>`, c.incremental.note)}
+        ${card('Efecto causal demostrado', pill('error', 'No demostrado'), '<strong class="metric-card__value">No demostrado</strong>', 'Sin grupo de control, esta herramienta no establece que la exposición causó el cambio.')}
+      </div>
+      <p class="field__hint">Venta durante la exposición (real): <strong>${money(r.totals.actual.revenue)}</strong> · línea base (estimada): <strong>${money(r.totals.expected.revenue)}</strong> · ${r.counts.evaluable} de ${r.counts.total} SKU evaluables. Corte de datos: ${esc(r.dataMax || '—')}.</p>
+        ${trackPanel(r)}
+        <h3>Avisos</h3><ul class="plain-list">${r.warnings.filter((w) => w.code !== 'planned_dates').map((w) => `<li>${pill(w.level === 'warn' ? 'warning' : 'na', w.level === 'warn' ? 'Atención' : 'Nota')} ${esc(w.text)}</li>`).join('')}</ul>
+        <h3>Por SKU</h3>${skuTable(r)}
+        <p class="field__hint">Una exposición no es una promoción: no tiene descuento, así que el cambio de venta puede venir del lugar que se le dio, de la temporada o de otras acciones. Los días de promociones registradas del mismo SKU se sacan de la base. No se guarda el corte: se calcula cada vez con la venta cargada.</p>`;
+    }
+    const nos = bs.filter((b) => b.noStart).reduce((a, b) => a + b.noStart, 0);
+    return `<section class="panel" aria-labelledby="rs-t-x"><div class="panel__head"><div><h2 class="panel__title" id="rs-t-x">Medir una exposición</h2>
+      <p class="panel__desc">Compara la venta de los SKU expuestos, desde su fecha de inicio, contra su propia línea base (28 días anteriores, lunes con lunes). Sin fecha de fin se mide hasta la última venta cargada.${nos ? ` ${nos} exposición(es) sin fecha de inicio no se pueden medir.` : ''}</p></div></div>
+      <div class="panel__body">${ctl}${ex.msg ? `<div class="note note--${ex.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(ex.msg.text)}</div>` : ''}${body}</div></section>`;
+  }
+
   function historyPanel(state) {
     const esc = H().esc, pill = H().pill, rs = state.rs, f = rs.f, reg = state.pm.reg;
     const list = filtered(state).sort((a, b) => ((b.plannedStart || '') > (a.plannedStart || '') ? 1 : -1));
@@ -161,6 +190,6 @@
         : '<div class="empty"><strong>Ninguna promoción coincide</strong>Cuando una promoción se publique o se cierre aparecerá aquí.</div>'}</div></section>`;
   }
 
-  function html(state) { return `${evaluationPanel(state)}${historyPanel(state)}`; }
+  function html(state) { return `${evaluationPanel(state)}${exposurePanel(state)}${historyPanel(state)}`; }
   FP.resultsView = { html, val, filtered };
 })(typeof window !== 'undefined' ? window : globalThis);

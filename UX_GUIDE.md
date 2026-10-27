@@ -749,3 +749,8 @@ Búsqueda, tipo de oportunidad, «Filtros (N activos)», «Ver por» y «Exporta
 - En Qué impulsar, «Exponer sin oferta» usa los marcados o, sin marcas, los de la salida «Exponer» que se ven. Pide tu nombre y fechas opcionales (sirven para medir el periodo expuesto); si las fechas son inválidas avisa y conserva lo escrito.
 - Una exposición **no es una oferta**: no lleva descuento ni precio, no pasa por validar ni armar promoción y no cuenta en el descuento promedio ni en la cobertura de ofertas. Sale en el plan de activación con origen «Exposición (sin oferta)».
 - Cualquier persona con nombre puede ponerla o quitarla; se guarda quién y cuándo. El panel «Exposición sin oferta» vive en Ofertas y plan. Estados por fechas: Por empezar, Vigente, Terminada, Quitada.
+
+## Medir una exposición
+
+- En Resultados e historial, el panel «Medir una exposición» compara la venta real de los SKU de un folio de exposición, desde su fecha de inicio, contra su propia línea base (28 días anteriores, lunes con lunes, sin días de otras promociones ni eventos). Sin fecha de fin mide hasta la última venta cargada; si se quitó antes, hasta ese día.
+- Es una estimación: no hay descuento ni grupo de control, así que el efecto causal sale siempre «No demostrado». Las exposiciones sin fecha de inicio no se pueden medir. El corte no se guarda: se calcula cada vez.

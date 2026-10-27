@@ -2982,3 +2982,5 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 
 - `js/promotions/exposureStore.js` (`FP.exposures`, clave `exposures`): registro `{ seq, batchSeq, items[] }` con folios `EXP-0001` / `E-00001`. Registro aparte del de ofertas a propósito, para que no entre en `FP.summary` ni en descuento promedio o cobertura. `status(e, today)` calcula por fechas; `currentFor` evita repetir una vigente.
 - Acciones: `ex-ask`, `ex-confirm`, `ex-cancel-confirm`, `ex-remove`, `of-fold` (panel). Pruebas: `tools/test-exposures.js`, `tools/regression/batch_exposicion.py`.
+
+- Medición de exposiciones: `FP.exposures.batches/asPromotion` arman una «promoción» temporal (no se guarda) para `FP.promotionEvaluation.evaluate`, con canal `total` y las promociones registradas tratadas como del mismo canal para sacar sus días de la base. Acciones `rs-ex-pick`, `rs-ex-run`; estado `state.rs.ex`.

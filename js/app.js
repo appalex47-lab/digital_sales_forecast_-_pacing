@@ -38,7 +38,7 @@
     ac: { reg: null, sel: null, msg: null },   // «Activación sugerida» (columnas de Ofertas recibidas y Oportunidades)
     of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
     op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '', route: '', request: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
-    rs: { promoId: '', loading: false, result: null, msg: null, f: { q: '', status: '', objective: '', space: '', mechanic: '', category: '', rec: '', from: '', to: '' } },   // «Resultados e historial»   // «Ofertas recibidas» (pestaña de Promociones)   // «Promociones» (registro compartido del equipo)
+    rs: { ex: { batchId: '', loading: false, result: null, msg: null }, promoId: '', loading: false, result: null, msg: null, f: { q: '', status: '', objective: '', space: '', mechanic: '', category: '', rec: '', from: '', to: '' } },   // «Resultados e historial»   // «Ofertas recibidas» (pestaña de Promociones)   // «Promociones» (registro compartido del equipo)
     cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
@@ -904,6 +904,17 @@
   const ofV = (id) => FP.offerView.val(id);
   const opV = (id) => FP.opportunityView.val(id);
   const rsV = (id) => FP.resultsView.val(id);
+  /** Mide un folio de exposiciones con el mismo motor de las promociones (venta real contra línea base por día de la semana). */
+  async function rsExRun() {
+    const ex = state.rs.ex, b = FP.exposures.batches(state.ex.reg).find((x) => x.batchId === ex.batchId);
+    if (!b || !b.measurable.length) { ex.msg = { kind: 'bad', text: 'Elige un folio de exposición con fecha de inicio.' }; render(); return; }
+    ex.loading = true; ex.msg = null; ex.result = null; render();
+    try {
+      const promo = FP.exposures.asPromotion(b, (FP.productStore.meta || {}).dateMax || '');
+      ex.result = await FP.promotionEvaluation.evaluate(promo, { promotions: state.pm.reg.promotions.map((q) => Object.assign({}, q, { channel: 'total' })), events: state.events || [] });
+    } catch (e) { ex.msg = { kind: 'bad', text: `No pude calcular la medición: ${e.message || e}` }; }
+    ex.loading = false; render();
+  }
   /** Evaluación de una promoción: lee la venta diaria por SKU del almacén de productos y compara contra su línea base. */
   async function rsRun() {
     const rs = state.rs, p = rs.promoId ? FP.promotions.find(state.pm.reg, rs.promoId) : null;
@@ -4935,6 +4946,8 @@
     },
     'rs-pick'() { state.rs.promoId = rsV('rs-promo'); state.rs.result = null; state.rs.msg = null; render(); },
     async 'rs-run'() { await rsRun(); },
+    'rs-ex-pick'() { const ex = state.rs.ex; ex.batchId = rsV('rs-ex-batch'); ex.result = null; ex.msg = null; render(); },
+    async 'rs-ex-run'() { await rsExRun(); },
     'rs-open'(el) { state.rs.promoId = el.dataset.id; state.rs.result = null; state.rs.msg = null; render(); try { document.getElementById('rs-t').scrollIntoView({ block: 'start' }); } catch (e) { /* sin scroll */ } },
     'rs-filter'() { const f = state.rs.f; f.q = rsV('rs-f-q'); f.status = rsV('rs-f-status'); f.objective = rsV('rs-f-obj'); f.space = rsV('rs-f-space'); f.mechanic = rsV('rs-f-mech'); f.category = rsV('rs-f-cat'); f.rec = rsV('rs-f-rec'); f.from = rsV('rs-f-from'); f.to = rsV('rs-f-to'); render(); },
     'rs-save'() {
