@@ -51,6 +51,7 @@ async def main():
         t = await body(q)
         chk('S1 sin SKU no se aprueba', 'Agrega al menos un SKU' in t, t[-300:])
         # SKU
+        if not await q.query_selector('#pm-s-sku'): await click(q, '[data-action="pm-fold"][data-fold="skus"]')   # los SKU vienen plegados
         await fill(q, 'pm-s-sku', 'DEMO-001'); await fill(q, 'pm-s-name', 'Crema demo'); await fill(q, 'pm-s-mech', '2 x 1')
         await click(q, '[data-action="pm-sku-add"]')
         await q.select_option('#pm-s-origin', 'manual'); await fill(q, 'pm-s-sku', 'DEMO-002')
@@ -70,14 +71,17 @@ async def main():
         await click(q, '[data-action="pm-status"][data-to="published"]')
         t = await body(q)
         chk('P1 publicar avisa de SKU sin fecha real y sin activaciones', '2 SKU sin fecha real' in t and 'No hay activaciones' in t, t[:400])
+        if not await q.query_selector('#pm-rs-0'): await click(q, '[data-action="pm-fold"][data-fold="skus"]')   # aprobada: los SKU vienen plegados
         await fill(q, 'pm-rs-0', '2026-11-06'); await fill(q, 'pm-re-0', '2026-11-18')
         await click(q, '[data-action="pm-sku-dates"][data-i="0"]')
         await q.select_option('#pm-a-space', 'banner'); await fill(q, 'pm-a-start', '2026-11-05'); await fill(q, 'pm-a-end', '2026-11-18')
         await click(q, '[data-action="pm-act-add"]')
         await fill(q, 'pm-i-text', 'El banner entró un día tarde'); await click(q, '[data-action="pm-inc-add"]')
+        await q.evaluate("FP.app.state.pm.fold={skus:true,baseline:true,history:true}; FP.app.render()"); await q.wait_for_timeout(300)   # SKU, línea base e historial vienen plegados
         t = await body(q)
         chk('E1 registra fechas reales, activación e incidencia', '2026-11-06' in t and 'ACV_001' in t and 'entró un día tarde' in t, t[:100])
         await q.select_option('[data-action="pm-act-status"]', 'live'); await q.wait_for_timeout(250)
+        await q.evaluate("FP.app.state.pm.fold={skus:true,baseline:true,history:true}; FP.app.render()"); await q.wait_for_timeout(300)   # SKU, línea base e historial vienen plegados
         t = await body(q)
         chk('E2 el estado de la activación queda en el historial', 'ACV_001: Planeada → Publicada' in t, t[-400:])
         # El reloj fijo es 20-nov: ya terminó la vigencia
@@ -89,6 +93,7 @@ async def main():
         chk('D1b regresar a En marcha pide el motivo', 'escribe el motivo' in t.lower(), t[-300:])
         await fill(q, 'pm-st-back', 'Faltaba registrar una activación')
         await click(q, '[data-action="pm-status"][data-to="published"]')
+        await q.evaluate("FP.app.state.pm.fold={skus:true,baseline:true,history:true}; FP.app.render()"); await q.wait_for_timeout(300)   # SKU, línea base e historial vienen plegados
         t = await body(q)
         chk('D1c con motivo regresa a En marcha y queda en el historial', 'En marcha' in t and 'Faltaba registrar una activación' in t, t[:300])
         await click(q, '[data-action="pm-status"][data-to="measuring"]')

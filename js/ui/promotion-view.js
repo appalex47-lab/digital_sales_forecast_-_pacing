@@ -49,7 +49,7 @@
       <p class="field__hint">Se registra como creada por: <strong>${esc(pm.actor || '(escribe tu nombre arriba)')}</strong>.</p></div></section>`;
   }
 
-  function detail(reg, p, actor, camps) {
+  function detail(reg, p, actor, camps, fold) {
     const esc = H().esc, pill = H().pill, Pm = P();
     const editable = !['closed', 'cancelled'].includes(p.status);
     const early = ['draft', 'proposed'].includes(p.status);
@@ -136,7 +136,15 @@
     const history = `<section class="panel" aria-labelledby="pm-t-h"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-h">Historial</h2><p class="panel__desc">Solo se agrega, no se edita.</p></div></div>
       <div class="panel__body"><ul class="plain-list">${hist}</ul></div></section>`;
     const concl = p.conclusion ? `<section class="panel"><div class="panel__body"><strong>Conclusión.</strong> ${esc(p.conclusion)} <strong>Recomendación:</strong> ${esc(Pm.RECOMMENDATIONS[p.recommendation] || '—')}</div></section>` : '';
-    return head + skus + baseline + exec + status + concl + history;
+    // SKU, línea base e historial vienen plegados; se abren con un clic (todo viene cerrado; se abre con un clic)
+    const F = fold || {}, wrap = (key, label, extra, html, dflt) => {
+      if (!html) return '';
+      const open = key in F ? !!F[key] : !!dflt;
+      return `<div class="gd-foldrow"><button type="button" class="gd-fold" data-action="pm-fold" data-fold="${key}" data-open="${open ? 1 : 0}" aria-expanded="${open}"><span>${esc(label)}${extra ? ` <span class="cell-sub">${esc(extra)}</span>` : ''}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>${open ? html : ''}`;
+    };
+    return head + wrap('skus', `SKU de la promoción (${p.skus.length})`, p.skus.length ? '' : 'todavía sin SKU', skus, false)
+      + wrap('baseline', 'Línea base congelada', p.baseline ? 'congelada' : 'sin congelar', baseline, false) + exec + status + concl
+      + wrap('history', `Historial (${p.history.length})`, '', history, false);
   }
 
   function histText(h) {
@@ -187,7 +195,7 @@
       <section class="panel" aria-labelledby="pm-t-l"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-l">Registro (${reg.promotions.length})</h2></div></div>
         <div class="panel__body panel__body--flush">${listHtml(reg, pm.sel)}</div></section>
       ${FP.goalsView ? FP.goalsView.html(state) : ''}
-      ${sel ? detail(reg, sel, pm.actor, FP.goals ? FP.goals.campaignsOf(state.of.reg, reg.promotions, state.cg && state.cg.reg) : []) : ''}`;
+      ${sel ? detail(reg, sel, pm.actor, FP.goals ? FP.goals.campaignsOf(state.of.reg, reg.promotions, state.cg && state.cg.reg) : [], pm.fold) : ''}`;
   }
 
   FP.promotionView = { render, val };
