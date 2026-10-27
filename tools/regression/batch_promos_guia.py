@@ -47,6 +47,10 @@ async def main():
         cs = await q.evaluate("[...document.querySelectorAll('.gd-card__n')].reduce((t,e)=>t+parseInt(e.innerText),0)")
         chk('S5 las tarjetas no cuentan más que las ofertas activas', cs <= n_act, cs)
         chk('L1 la lista de ofertas es deslizable, con encabezado fijo y sin «Mostrar más»', await q.evaluate("!!document.querySelector('.gd-scroll table thead') && !document.querySelector('[data-action=of-more]') && document.querySelectorAll('.gd-tab').length === 5"))
+        chk('L2 Exportar viene plegado y se abre con un clic', await q.evaluate("!!document.querySelector('[data-action=\"of-fold\"][data-fold=export]') && !document.querySelector('.gd-exp')") )
+        await q.click('[data-action="of-fold"][data-fold="export"]'); await q.wait_for_timeout(300)
+        chk('L3 el menú Exportar trae el plan de activación en Excel y CSV', await q.evaluate("!!document.querySelector('.gd-exp [data-action=ac-export-xlsx]') && !!document.querySelector('.gd-exp [data-action=ac-export-csv]')"))
+        await q.click('[data-action="of-fold"][data-fold="export"]'); await q.wait_for_timeout(200)
         # 3. Validación automática: las recibidas sin ninguna alerta ya no quedan pendientes
         await q.evaluate("FP.app.state.of.reg.offers.forEach(o=>{if(o.state==='validated'&&!o.history.some(h=>h.note==='Sin alertas: validada automáticamente')){}})")
         pend = await q.evaluate("(()=>{const an=FP.offers.analyze(FP.app.state.of.reg);return FP.app.state.of.reg.offers.filter(o=>o.state==='received'&&!FP.guide.alerts(an.get(o.offerId)).length&&!o.history.some(h=>h.field==='state')).length})()")

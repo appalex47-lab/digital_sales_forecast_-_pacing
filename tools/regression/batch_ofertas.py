@@ -100,9 +100,9 @@ async def main():
         await q.wait_for_timeout(300)
         await click(q, f'[data-action="of-open"][data-id="{oid}"]')
         await click(q, f'[data-action="of-state"][data-to="selected"][data-id="{oid}"]')
-        has = await q.evaluate("!!document.getElementById('of-b-promo')")
-        chk('P1 aparece el selector de promoción destino', has)
         await q.evaluate("(i)=>{FP.app.state.of.checked={}; FP.app.state.of.checked[i]=true; FP.app.render()}", oid); await q.wait_for_timeout(300)   # el destino ahora recibe las marcadas
+        has = await q.evaluate("!!document.getElementById('of-b-promo')")
+        chk('P1 con ofertas marcadas aparece el selector de promoción destino', has)
         await click(q, '[data-action="of-to-promo"]')
         t = await body(q); chk('P2 agrega la seleccionada a la promoción', '1 ofertas se agregaron' in t, t[:300])
         sk = await q.evaluate("JSON.stringify(FP.promotionNotes.registry().promotions[0].skus.map(s=>[s.sku,s.origin,s.offerId]))")

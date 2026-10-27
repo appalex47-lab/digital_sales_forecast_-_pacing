@@ -92,7 +92,8 @@
     const st = [['', 'Todos los estados'], ...Object.entries(O().STATE)];
     const top = `<div class="btn-row gd-ftop"><label class="gd-search"><span class="visually-hidden">Buscar</span>${input('of-f-q', f.q || '', 'search', 'data-action="of-filter" placeholder="Buscar SKU, producto, laboratorio…"')}</label>
       <button type="button" class="btn${act.length ? ' btn--primary-soft' : ''}" data-action="of-fold" data-fold="filters" aria-expanded="${!!fold.filters}">Filtros${act.length ? ` · ${act.length} ${act.length === 1 ? 'activo' : 'activos'}` : ''} ${fold.filters ? '▴' : '▾'}</button>
-      <button type="button" class="btn" data-action="of-fold" data-fold="cols" aria-expanded="${!!fold.cols}">Columnas ${fold.cols ? '▴' : '▾'}</button></div>`;
+      <button type="button" class="btn" data-action="of-fold" data-fold="cols" aria-expanded="${!!fold.cols}">Columnas ${fold.cols ? '▴' : '▾'}</button>
+      ${reg.offers.length ? `<button type="button" class="btn" data-action="of-fold" data-fold="export" aria-expanded="${!!fold.export}">Exportar ${fold.export ? '▴' : '▾'}</button>` : ''}</div>`;
     const chips = act.length ? `<div class="btn-row gd-chiprow"><span class="field__hint">Filtros puestos:</span>${act.map(([k, t]) => `<button type="button" class="gd-fchip" data-action="of-clear" data-key="${k}" aria-label="Quitar filtro ${esc(t)}">${esc(t)} ×</button>`).join('')}<button type="button" class="btn btn--small btn--ghost" data-action="of-clear" data-key="all">Quitar todos</button></div>` : '';
     const grid = fold.filters ? `<div class="field-grid">
       ${field('of-f-state', 'Estado', selectHtml('of-f-state', st, f.state || '', 'data-action="of-filter"'))}
@@ -104,7 +105,9 @@
     const TABS = [['', 'Todas', reg.offers.length], ['received', 'Por revisar', cnt.received], ['validated', 'Validadas', cnt.validated], ['selected', 'En promoción', cnt.selected], ['discarded', 'Descartadas', cnt.discarded]];
     const tabs = `<div class="gd-tabs" role="group" aria-label="Estado de la oferta">${TABS.map(([k, l, n]) => `<button type="button" class="gd-tab" data-action="of-tab" data-s="${k}" aria-pressed="${(f.state || '') === k}">${esc(l)} <span class="num">${n}</span></button>`).join('')}</div>
       <p class="field__hint">Las ofertas sin ninguna alerta se validan solas al cargarlas. «Por revisar» son las que traen alertas o las que devolviste a mano.</p>`;
-    return `${tabs}${top}${chips}${grid}${colBox}`;
+    const exp = fold.export && reg.offers.length ? `<div class="note gd-exp" role="group" aria-label="Exportar"><p class="field__hint">Se exportan las filas visibles de esta pestaña, con la acción sugerida de cada una. Solo es un plan: no activa nada.</p>
+      <div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="ac-export-xlsx" data-tab="offer">Plan de activación (Excel)</button><button type="button" class="btn btn--small" data-action="ac-export-csv" data-tab="offer">Plan de activación (CSV)</button></div></div>` : '';
+    return `${tabs}${top}${chips}${grid}${colBox}${exp}`;
   }
 
   /** Ofertas que pasan los filtros (incluida la acción sugerida elegida en el conteo). La usan la tabla y «Marcar las visibles». */
@@ -116,7 +119,7 @@
   function tableHtml(reg, of, an, state, map) {
     const esc = H().esc, pill = H().pill, AV = FP.activationView, C = of.cols || {};
     const list = visible(state); const shown = list.slice(0, CAP);
-    if (!reg.offers.length) return '<div class="empty"><strong>Todavía no hay ofertas recibidas</strong>Carga el archivo que te manda el proveedor o comercial con «Cargar archivo de ofertas». Cada oferta queda como «Recibida», con su origen y fecha.</div>';
+    if (!reg.offers.length) return '<div class="empty"><strong>Todavía no hay ofertas recibidas</strong>Carga el archivo que te manda el proveedor o comercial, o captura a mano los productos que quieras exponer o promocionar, con «Cargar archivo de ofertas». Cada una queda con su origen y fecha.</div>';
     if (!list.length) return '<div class="empty"><strong>Ninguna oferta coincide con los filtros</strong>Quita algún filtro para verlas.</div>';
     const rows = shown.map((o) => {
       const codes = an.get(o.offerId) || [], lv = O().levelOf(codes), n = codes.filter((c) => O().ISSUE[c].level !== 'info').length;
@@ -136,13 +139,14 @@
     const esc = H().esc; const ids = Object.keys(of.checked).filter((k) => of.checked[k]);
     const promos = (FP.promotionNotes && FP.promotionNotes.registry ? FP.promotionNotes.registry() : { promotions: [] }).promotions.filter((p) => ['draft', 'proposed'].includes(p.status));
     const selectedCount = ids.length;
+    if (!ids.length) return `<div class="btn-row"><span class="field__hint">Marcadas: <strong>0</strong></span><button type="button" class="btn btn--small" data-action="of-check-all">Marcar las visibles</button></div>`;
     return `<div class="btn-row"><span class="field__hint">Marcadas: <strong>${ids.length}</strong></span>
       <button type="button" class="btn btn--small" data-action="of-check-all">Marcar las visibles</button><button type="button" class="btn btn--small btn--ghost" data-action="of-check-none">Quitar marcas</button>
-      <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="validated"${ids.length ? '' : ' disabled'}>Validar marcadas</button>
-      <button type="button" class="btn btn--small btn--primary" data-action="gd-build-marked"${ids.length ? '' : ' disabled'}>Armar promoción con las marcadas</button>
-      <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="marked"${ids.length ? '' : ' disabled'}>Eliminar marcadas</button></div>
-      <div class="btn-row">${promos.length ? `${selectedCount ? '' : ''}<select id="of-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
-      <button type="button" class="btn btn--small" data-action="of-to-promo"${selectedCount ? '' : ' disabled'}>Agregar las ${selectedCount} marcadas a esa promoción</button>` : '<span class="field__hint">Para agregar ofertas a una promoción existente, crea una en la pestaña Promociones (en borrador o propuesta).</span>'}</div>`;
+      <button type="button" class="btn btn--small btn--primary" data-action="of-bulk" data-to="validated">Validar marcadas</button>
+      <button type="button" class="btn btn--small btn--primary" data-action="gd-build-marked">Armar promoción con las marcadas</button>
+      ${promos.length ? `<select id="of-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
+      <button type="button" class="btn btn--small" data-action="of-to-promo">Agregarlas a esa promoción</button>` : ''}
+      <button type="button" class="btn btn--small btn--ghost btn--danger-text" data-action="rm-offers-ask" data-kind="marked">Eliminar marcadas</button></div>`;
   }
 
   function detailHtml(reg, o, an, actor) {
@@ -210,7 +214,7 @@
       ${pendingHtml(of)}
       ${batchesHtml(reg, of)}
       <section class="panel" aria-labelledby="of-t-l"><div class="panel__head"><div><h2 class="panel__title" id="of-t-l">Ofertas (${reg.offers.length})</h2></div></div>
-        <div class="panel__body">${filtersHtml(reg, of)}${reg.offers.length ? bulkHtml(reg, of) : ''}${AV && reg.offers.length ? AV.toolbar(state, 'offer') : ''}</div>
+        <div class="panel__body">${filtersHtml(reg, of)}${reg.offers.length ? bulkHtml(reg, of) : ''}${AV && reg.offers.length && state.ac.msg ? AV.toolbar(state, 'offer').split('<div class="btn-row">')[0] : ''}</div>
         ${AV && reg.offers.length ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${tableHtml(reg, of, an, state, map)}</div></section>
       ${AV && state.ac.sel && state.ac.sel.indexOf('offer:') === 0 ? AV.detail(state, map, state.ac.sel) : ''}
