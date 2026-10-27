@@ -40,30 +40,37 @@
 
 
   /**
-   * Contexto que Categoría → Producto y Evolución y patrones comparten con el resto. El canal siempre se comparte; periodo y comparación
-   * solo si la persona los cambió en esa vista (`touched`), para que visitarla con su periodo por defecto no pise el de Diagnóstico.
+   * Contexto que Categoría → Producto y Evolución y patrones comparten con el resto.
+   *  · Canal y selección (ruta de categoría/producto y filtros de ubicación): siempre se comparten; la selección es una sola.
+   *  · Periodo y comparación: solo si la persona los cambió en esa vista (`touched`), para que visitarla con su periodo por defecto no pise el de Diagnóstico.
    */
+  const SEL_KEYS = () => (FP.productFilter ? FP.productFilter.KEYS : ['category', 'subcategory', 'product', 'state', 'city', 'branch', 'delivery']);
+  const selKey = (o) => JSON.stringify(Object.keys(o || {}).filter((k) => o[k]).sort().map((k) => [k, o[k]]));
   function paContext(pa) {
     const r = { channel: pa.channel || 'total' };
+    const path = FP.app && FP.app.paFilter ? FP.app.paFilter(pa) : null;
+    if (path) {
+      const f = {}, dropped = [];
+      Object.keys(path).forEach((k) => { if (SEL_KEYS().includes(k)) f[k] = path[k]; else dropped.push(k); });
+      r.sel = { filter: f, dropped };
+    }
     if (!pa.touched) return r;
     r.comparison = pa.comparison === 'yoy' ? 'actual_vs_yoy' : 'actual_vs_previous';
     if (pa.from && pa.to) {
-      if (['month', 'year'].includes(pa.periodType)) { r.periodType = pa.periodType; r.periodKey = pa.from.slice(0, pa.periodType === 'year' ? 4 : 7); }
-      else if (pa.from.endsWith('-01') && pa.from.slice(0, 7) === pa.to.slice(0, 7)) { r.periodType = 'month'; r.periodKey = pa.from.slice(0, 7); }
+      const g = FP.app && FP.app.paGran ? FP.app.paGran(pa) : 'range', TE = FP.temporalEngine;
+      if (g === 'day') { r.periodType = 'day'; r.periodKey = pa.from; }
+      else if (['year', 'month', 'week'].includes(g) && TE) { r.periodType = g; r.periodKey = TE.periodKey(pa.from, g); }
       else { r.periodType = 'range'; r.periodKey = pa.from; }
     }
     return r;
   }
   function anContext(a) {
     const r = { channel: a.channel || 'total' };
+    if (FP.productFilter) r.sel = { filter: FP.productFilter.active(a.filter), dropped: [] };
     if (!a.ctxTouched) return r;
     r.comparison = a.comparison === 'year_ago' ? 'actual_vs_yoy' : 'actual_vs_previous';
     const f = a.context && a.context.focus;
-    if (f && f.key) {
-      if (a.periodType === 'year') { r.periodType = 'year'; r.periodKey = String(f.key).slice(0, 4); }
-      else if (a.periodType === 'month') { r.periodType = 'month'; r.periodKey = String(f.key).slice(0, 7); }
-      else if (f.to) { r.periodType = 'month'; r.periodKey = String(f.to).slice(0, 7); }   // semana/día → el mes que los contiene
-    }
+    if (f && f.key && ['year', 'month', 'week', 'day'].includes(a.periodType)) { r.periodType = a.periodType; r.periodKey = String(f.key); }
     return r;
   }
 
@@ -104,27 +111,46 @@
       pa.channel = c.channel || pa.channel || 'total';
       if (c.comparison === 'actual_vs_yoy') pa.comparison = 'yoy'; else if (c.comparison === 'actual_vs_previous') pa.comparison = 'previous';
       const TE = FP.temporalEngine, meta = (FP.productStore && FP.productStore.meta) || {};
-      const type = ['year', 'month', 'week'].includes(c.periodType) && c.periodKey ? c.periodType : null;
-      const key = type ? c.periodKey : monthKey, kt = type || 'month';
+      const gt = ['year', 'month', 'week', 'day'].includes(c.periodType) && c.periodKey ? c.periodType : null;
+      const key = gt ? c.periodKey : monthKey, kt = gt || 'month';
       if (key && TE && meta.dateMax) {
-        let r = null; try { r = TE.focusRange(kt, key, meta.dateMax); } catch (e) { r = null; }
-        if (r && r.from && r.to && r.from <= r.to && r.from >= (meta.dateMin || r.from)) { pa.from = r.from; pa.to = r.to; pa.periodType = kt; if (!type) notes.push('Categoría → Producto trabaja por mes, semana o año: se muestra el mes del periodo elegido.'); }
+        let r = null; try { r = kt === 'day' ? { from: key, to: key } : TE.focusRange(kt, key, meta.dateMax); } catch (e) { r = null; }
+        if (r && r.from && r.to && r.from <= r.to && r.from >= (meta.dateMin || r.from) && r.from <= meta.dateMax) { pa.from = r.from; pa.to = r.to; pa.periodType = kt === 'day' ? null : kt; if (!gt) notes.push('Categoría → Producto trabaja por año, mes, semana o día: se muestra el mes del periodo elegido.'); }
         else notes.push('Los datos de productos no llegan al periodo elegido: se conserva el periodo que ya tenía esta vista.');
       }
+      // selección única: la ruta de Producto es el filtro de Evolución (SKU y región solo existen como ruta)
+      let selChanged = false;
+      if (c.sel && c.sel.filter && FP.app && FP.app.paFromSelection) {
+        const mine = {}; Object.entries(FP.app.paFilter(pa)).forEach(([k, v]) => { if (SEL_KEYS().includes(k)) mine[k] = v; });
+        if (selKey(mine) !== selKey(c.sel.filter)) { FP.app.paFromSelection(c.sel.filter, pa.channel); selChanged = true; }
+      }
       pa.touched = false;
-      if (JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]) !== before) { pa.result = null; pa.trace = null; pa.page = 1; pa.note = null; }
+      if (selChanged || JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]) !== before) { pa.result = null; pa.trace = null; pa.page = 1; pa.note = null; }
     } else if (view === 'analisis' && state.an) {
       const a = state.an, patch = {};
       const ch = FP.analysisContext.normChannel(c.channel || 'total');
       if (ch !== a.channel) patch.channel = ch;
       if (c.comparison === 'actual_vs_yoy' && a.comparison !== 'year_ago') patch.comparison = 'year_ago';
       else if (c.comparison === 'actual_vs_previous' && a.comparison !== 'previous') patch.comparison = 'previous';
-      const type = ['year', 'month'].includes(c.periodType) && c.periodKey ? c.periodType : null;
+      const type = ['year', 'month', 'week', 'day'].includes(c.periodType) && c.periodKey ? c.periodType : null;
       const key = type ? c.periodKey : monthKey;
       if (key) {
         const t = type || 'month';
-        if (a.periodType !== t || a.focusKey !== key) { Object.assign(patch, { periodType: t, focusKey: key }); if (a.periodType !== t) { const pc = t === 'year' ? 3 : 12; patch.periodCount = pc; patch.months = pc; } }
-        if (!type) notes.push('Evolución y patrones lee por año o mes: se muestra el mes del periodo elegido.');
+        if (a.periodType !== t || a.focusKey !== key) { Object.assign(patch, { periodType: t, focusKey: key }); if (a.periodType !== t) { const pc = { year: 3, month: 12, week: 12, day: 30 }[t]; patch.periodCount = pc; patch.months = pc; } }
+        if (!type) notes.push('Evolución y patrones lee por año, mes, semana o día: se muestra el mes del periodo elegido.');
+      }
+      // selección única: el filtro de Evolución es la ruta de Producto
+      if (c.sel && c.sel.filter && FP.productFilter) {
+        const PF = FP.productFilter; let f = {};
+        PF.KEYS.forEach((k) => { if (c.sel.filter[k]) f = PF.cascade(f, k, c.sel.filter[k]); });
+        if (selKey(PF.active(a.filter)) !== selKey(f)) {
+          patch.filter = f;
+          if (f[a.level]) {   // no se analiza «por categoría» una selección que ya es una categoría: se baja al siguiente nivel
+            const HIER = ['category', 'subcategory', 'product', 'sku'], deep = Math.max(...HIER.map((k, i) => (f[k] ? i : -1)));
+            patch.level = HIER[deep + 1] || HIER.find((k) => !f[k]) || 'sku';
+          }
+          if (c.sel.dropped && c.sel.dropped.length) notes.push('Evolución y patrones no filtra por SKU ni región: se omitió ese nivel de la selección.');
+        }
       }
       if (Object.keys(patch).length) { if (FP.app && FP.app.resetAnalysis) FP.app.resetAnalysis(patch); else Object.assign(a, patch); }
       a.ctxTouched = false;

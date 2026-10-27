@@ -208,16 +208,29 @@
         : `<strong>${esc(displayKey(d.level, d.key))}</strong>`))];
     const geoLevel = ['region', 'state', 'city', 'branch', 'delivery'].includes(level) || geoActive || pa.drill.some((d) => ['region', 'state', 'city', 'branch', 'delivery'].includes(d.level));
     const geoKeys = [['region', 'Región'], ['state', 'Estado'], ['city', 'Ciudad'], ['branch', locTerm()], ['delivery', 'Tipo de entrega']];
+    // periodo: el mismo control de calendario que Evolución y patrones (año, mes, semana o día); «Rango» conserva desde–hasta
+    const TE = FP.temporalEngine, meta = PS().meta || {}, gran = FP.app.paGran(pa);
+    let periodField;
+    if (gran === 'range' || !TE || !meta.dateMin || !meta.dateMax) {
+      periodField = `<div class="field"><label for="pa-from" class="field__hint">Desde</label><input id="pa-from" type="date" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"></div><div class="field"><label for="pa-to" class="field__hint">Hasta</label><input id="pa-to" type="date" value="${esc(pa.to || '')}" data-action="pa-setting" data-key="to"></div>`;
+    } else {
+      const fopts = TE.options(meta.dateMin, meta.dateMax, gran, gran === 'day' ? 90 : 24), fkey = gran === 'day' ? pa.to : TE.periodKey(pa.from, gran);
+      periodField = `<div class="field"><label for="pa-focus" class="field__hint">Periodo</label><select id="pa-focus" data-action="pa-focus">${fopts.slice().reverse().map((o) => `<option value="${esc(o.key)}" ${o.key === fkey ? 'selected' : ''}>${esc(TE.label(gran, o.key, o.range))}</option>`).join('')}</select></div>`;
+    }
     const paChips = geoKeys.filter(([k]) => pa.geo[k]).map(([k, l]) => ({ key: 'geo:' + k, text: `${l}: ${pa.geo[k]}` }));
     const shell = FP.filterShell.html({ page: 'pa', open: Boolean(state.fs && state.fs.pa), chips: paChips,
-      primary: `<div class="field"><label for="pa-from" class="field__hint">Desde</label><input id="pa-from" type="date" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"></div><div class="field"><label for="pa-to" class="field__hint">Hasta</label><input id="pa-to" type="date" value="${esc(pa.to || '')}" data-action="pa-setting" data-key="to"></div><div class="field"><label for="pa-ch" class="field__hint">Canal</label>
+      primary: `<div class="field"><label for="pa-ch" class="field__hint">Canal</label>
           <select id="pa-ch" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
-            `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`,
-      groups: [
-        { title: 'Comparación y vista', html: `<div class="field"><label for="pa-cmp" class="field__hint">Comparar contra</label>
+            `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+          <div class="field"><label for="pa-gran" class="field__hint">Granularidad</label>
+          <select id="pa-gran" data-action="pa-gran">${[['year', 'Año'], ['month', 'Mes'], ['week', 'Semana'], ['day', 'Día'], ['range', 'Rango (desde–hasta)']].map(([v, l]) => `<option value="${v}" ${gran === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+          ${periodField}
+          <div class="field"><label for="pa-cmp" class="field__hint">Comparar contra</label>
           <select id="pa-cmp" data-action="pa-setting" data-key="comparison">
             <option value="previous" ${pa.comparison === 'previous' ? 'selected' : ''}>Periodo anterior (misma duración)</option>
-            <option value="yoy" ${pa.comparison === 'yoy' ? 'selected' : ''}>Mismo periodo del año anterior</option></select></div><div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
+            <option value="yoy" ${pa.comparison === 'yoy' ? 'selected' : ''}>Mismo periodo del año anterior</option></select></div>`,
+      groups: [
+        { title: 'Vista', html: `<div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
           <select id="pa-viewby" data-action="pa-viewby">${roots.map(([v, l]) => `<option value="${v}" ${pa.viewBy === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div><div class="field"><label for="pa-top" class="field__hint">Mostrar (solo visual)</label>
           <select id="pa-top" data-action="pa-setting" data-key="topN">${C().products.topN.map((n) => `<option value="${n}" ${String(pa.topN) === String(n) ? 'selected' : ''}>${n ? `Top ${n}` : 'Todos (paginado)'}</option>`).join('')}</select></div><div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--small" data-action="pa-from-dx" ${state.dx && state.dx.run ? '' : 'disabled'}>Usar periodo y canal del diagnóstico</button></div>` },
         { title: 'Geografía y operación (solo análisis de productos)', html: (av.region || av.state || av.city || av.branch || av.delivery) ? `${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}

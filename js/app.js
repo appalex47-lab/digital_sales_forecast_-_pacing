@@ -1866,6 +1866,12 @@
   }
   /** Niveles que se pueden elegir como siguiente desglose (los que no están ya en la ruta ni en los filtros). */
   function paNextChoices(pa) { const used = paUsed(pa), ok = paAvailable(); return PA_ALL.filter((l) => !used.has(l) && ok(l)); }
+  /** Granularidad del periodo de Producto: año, mes, semana, día o rango libre (desde–hasta). */
+  function paGran(pa) {
+    if (['year', 'month', 'week'].includes(pa.periodType)) return pa.periodType;
+    if (pa.from && pa.to && pa.from === pa.to) return 'day';
+    return 'range';
+  }
   function paFilter(pa) {
     const f = {};
     pa.drill.forEach((d) => { f[d.level] = d.key; });
@@ -1890,6 +1896,7 @@
     if (!pa.to || !pa.from) {
       pa.to = m.dateMax;
       pa.from = `${m.dateMax.slice(0, 7)}-01`;
+      if (!pa.periodType) pa.periodType = 'month';   // mes en curso: se compara con los mismos días del mes anterior, igual que Evolución
     }
     if (!pa.counts) { pa.counts = await FP.productStore.counts(); pa.estimate = await repo.estimate(); }
     const level = paLevel(pa) || 'sku';
@@ -3521,6 +3528,24 @@
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
     },
+    'pa-gran'(el) {
+      const pa = state.pa, g = el.value || el.dataset.value, TE = FP.temporalEngine, m = FP.productStore.meta || {};
+      if (!g || !m.dateMax) return;
+      pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
+      if (g === 'range') { pa.periodType = null; render(); return; }   // conserva el desde–hasta actual
+      const anchor = pa.to || m.dateMax;
+      if (g === 'day') { pa.from = pa.to = anchor; pa.periodType = null; }
+      else { const r = TE.focusRange(g, TE.periodKey(anchor, g), m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
+      render();
+    },
+    'pa-focus'(el) {
+      const pa = state.pa, g = paGran(pa), TE = FP.temporalEngine, m = FP.productStore.meta || {}, key = el.value || el.dataset.value;
+      if (!key || g === 'range' || !m.dateMax) return;
+      pa.touched = true; pa.note = null; pa.trace = null; pa.result = null; pa.page = 1;
+      if (g === 'day') { pa.from = pa.to = key; pa.periodType = null; }
+      else { const r = TE.focusRange(g, key, m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
+      render();
+    },
     'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
     'pa-drill'(el) {
       const pa = state.pa, lvl = paLevel(pa);
@@ -3558,6 +3583,7 @@
       pa.touched = true;
       resetAnalysis({ filter: f, level: lvl, channel: FP.analysisContext.normChannel(pa.channel) });
       state.an.reopen = { scope: 'entity', entity: el.dataset.key };
+      state.ux.routeCtx = { sel: { filter: f, dropped: [] } };   // la selección compartida viaja con el salto
       root.location.hash = '#analisis';
     },
     'an-to-product'(el) {
@@ -3567,12 +3593,14 @@
       if (a.level !== 'channel' && ent) f[a.level] = ent;
       paFromSelection(f, a.channel);
       a.ctxTouched = true;
+      state.ux.routeCtx = { sel: { filter: f, dropped: [] } };   // la entidad abierta es parte de la ruta de Producto
       root.location.hash = '#producto';
     },
     'an-open-trace'(el) {
       const a = state.an, pa = state.pa;
       paFromSelection({ sku: el.dataset.sku }, a.channel);
       pa.pendingTrace = el.dataset.sku; a.ctxTouched = true;
+      state.ux.routeCtx = { sel: { filter: { sku: el.dataset.sku }, dropped: [] } };
       root.location.hash = '#producto';
     },
     'pa-trace-close'() { state.pa.trace = null; render(); },
@@ -5977,7 +6005,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, resetAnalysis, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(

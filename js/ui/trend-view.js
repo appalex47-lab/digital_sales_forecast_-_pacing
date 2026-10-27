@@ -102,11 +102,11 @@
     if (Number(a.minSharePct) !== 0.5) chips.push({ key: 'minSharePct', text: Number(a.minSharePct) > 0 ? `Materialidad ≥ ${a.minSharePct} %` : 'Materialidad: todas' });
     if (Number(a.minImpact) > 0) chips.push({ key: 'minImpact', text: `Impacto ≥ ${a.minImpact}` });
     const shell = FP.filterShell.html({ page: 'an', open: Boolean(state.fs && state.fs.an),
-      primary: [F_an_channel, F_an_focus, F_an_comparison].join(''),
+      primary: [F_an_channel, F_an_period_type, F_an_focus, F_an_comparison].join(''),
       chips,
       groups: [
         { title: 'Qué', html: F_an_metric + F_an_level },
-        { title: 'Cuándo', html: F_an_period_type + F_an_period_count },
+        { title: 'Cuándo', html: F_an_period_count },
         { title: 'Producto y ubicación (filtra toda la página)', html: pageFilterFields(a) },
         { title: 'Resultados', html: F_an_state + F_an_entity_query + F_an_pattern + F_an_signal + F_an_anomaly_direction + F_an_min_share + F_an_min_impact }
       ] });
