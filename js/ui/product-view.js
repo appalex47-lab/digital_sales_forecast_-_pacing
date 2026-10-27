@@ -261,13 +261,14 @@
     // Métrica del periodo: valor, referencia y variación. El estado del dato (Disponible / Parcial / Faltante…) sigue siendo un badge con texto.
     const kp = (k, label) => { const c = t.current[k], b = t.baseline[k]; const d = fin(c && c.value) && fin(b && b.value) && b.value !== 0 ? c.value / b.value - 1 : null;
       return FP.pacingView.card(label, metricVal(k, c), `vs ${metricVal(k, b)} · ${esc(F().signedPercent(d, 1))}`, null, statusPill(c.status)); };
+    const nf = Boolean(extra && extra.noFunnel);   // otra página muestra el embudo en su propio módulo
     out.kpis = `
       <div class="subhead"><h3 class="panel__title">${esc(levelName(r.level))} · ${esc(r.period.from)} a ${esc(r.period.to)}</h3>
         <span class="field__hint">Referencia: ${esc(r.baseline.from)} a ${esc(r.baseline.to)} (${esc(r.baseline.label)}) · ${r.elapsedMs} ms</span></div>
-      <div class="metric-grid metric-grid--3">${kp('revenue', 'Venta')}${kp('orders', 'Pedidos')}${kp('units', 'Unidades')}${kp('aov', 'AOV')}${kp('conversionRate', 'CR')}${kp('views', 'Vistas')}</div>
-      <div class="metric-grid metric-grid--3">${kp('cartRate', 'Vista → carrito')}${kp('checkoutRate', 'Carrito → checkout')}${kp('purchaseRate', 'Checkout → compra')}</div>
+      <div class="metric-grid metric-grid--3">${kp('revenue', 'Venta')}${kp('orders', 'Pedidos')}${kp('units', 'Unidades')}${kp('aov', 'AOV')}${nf ? '' : kp('conversionRate', 'CR') + kp('views', 'Vistas')}</div>
+      ${nf ? '' : `<div class="metric-grid metric-grid--3">${kp('cartRate', 'Vista → carrito')}${kp('checkoutRate', 'Carrito → checkout')}${kp('purchaseRate', 'Checkout → compra')}</div>`}
       <p class="field__hint">Venta, pedidos y unidades vienen del archivo de venta; vistas y el resto del funnel, de GA4. CR y AOV son calculados ("calc."). Estado, sucursal y tipo de entrega ocurren después de la vista: ahí el funnel y el CR no están disponibles. Los valores inválidos o negativos se excluyen automáticamente del cálculo y se conservan como incidencias de calidad; faltante, inválido y no disponible nunca se muestran como 0.
-        ${t.current.trackingCoverage && fin(t.current.trackingCoverage.value) ? `Cobertura de tracking (compras GA4 ÷ unidades reales): ${esc(F().percent(t.current.trackingCoverage.value, 0))}${t.current.trackingCoverage.value < 1 - C().products.signals.trackingGapPct ? ' — posible pérdida de medición en GA4.' : ''}` : ''}</p>
+        ${!nf && t.current.trackingCoverage && fin(t.current.trackingCoverage.value) ? `Cobertura de tracking (compras GA4 ÷ unidades reales): ${esc(F().percent(t.current.trackingCoverage.value, 0))}${t.current.trackingCoverage.value < 1 - C().products.signals.trackingGapPct ? ' — posible pérdida de medición en GA4.' : ''}` : ''}</p>
       ${r.compensation.text ? `<p class="note">${esc(r.compensation.text)}</p>` : ''}
       ${r.concentration.decline.groups ? `<p class="field__hint">Deterioro concentrado: ${r.concentration.decline.top} de ${r.concentration.decline.groups} grupos explican el 80 % de las caídas (${esc(r.concentration.decline.topKeys.slice(0, 5).join(', '))}${r.concentration.decline.top > 5 ? '…' : ''}).</p>` : ''}`;
 

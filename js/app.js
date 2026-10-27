@@ -1920,6 +1920,34 @@
     return g === 'range';
   }
 
+  /**
+   * Producto y evolución · tasas del embudo por periodo (vista→carrito, carrito→checkout, checkout→compra) para el foco: la entidad elegida
+   * o toda la selección. Usa los mismos periodos que Evolución (`an.periodsList`) y el mismo almacén; se calcula una vez por selección.
+   */
+  async function ensureFunnelSeries() {
+    const pa = state.pa, a = state.an;
+    if (!pa.result || pa.loading || !FP.productStore || !FP.productStore.available() || !FP.funnelEngine) return;
+    const periods = a.periodsList;
+    if (!Array.isArray(periods) || !periods.length) return;   // los arma Evolución al terminar
+    const lvl = a.level, ent = a.selected && a.selected.entity ? a.selected.entity : null;
+    const fkey = ent && ['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) ? { [lvl]: ent } : {};
+    const key = JSON.stringify([pa.channel, paFilter(pa), fkey, periods.map((p) => p.key)]);
+    if (pa.fseries && pa.fseries.key === key) return;
+    const run = (pa._fsRun = (pa._fsRun || 0) + 1);
+    pa.fseries = { key, loading: true, rows: [] }; repaintPa();
+    const rows = [];
+    try {
+      for (const p of periods) {
+        const map = await FP.productStore.aggregate({ from: p.from, to: p.to, channel: pa.channel, groupBy: 'total', filter: { ...paFilter(pa), ...fkey } });
+        if (pa._fsRun !== run) return;
+        let acc = null; map.forEach((x) => { acc = x; });
+        rows.push({ period: p.key, label: p.label || p.key, partial: !!p.partial, v: acc ? FP.funnelEngine.pick(FP.productStore.finalize(acc, null)) : null });
+      }
+    } catch (e) { if (pa._fsRun === run) { pa.fseries = { key, loading: false, rows: [], error: e.message }; repaintPa(); } return; }
+    if (pa._fsRun !== run) return;
+    pa.fseries = { key, loading: false, rows }; repaintPa();
+  }
+
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
   async function ensureProductAnalysis() {
     const pa = state.pa;
@@ -6042,7 +6070,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, clearOldPages, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, clearOldPages, ensureFunnelSeries, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
