@@ -70,7 +70,7 @@
     parts.push(`${nw(n.hypotheses)} ${n.hypotheses === 1 ? 'hipótesis por validar' : 'hipótesis por validar'}`);
     parts.push(n.running ? `${nw(n.running)} ${n.running === 1 ? 'cosa en marcha' : 'cosas en marcha'} en Promociones` : 'nada en marcha en Promociones');
     if (n.opportunities !== null) parts.push(n.opportunities ? `${nw(n.opportunities)} ${n.opportunities === 1 ? 'oportunidad' : 'oportunidades'}` : 'sin oportunidades');
-    const ent = state.an.selected && state.an.selected.entity;
+    const ent = state.peFocusKey !== null && state.peFocusKey !== undefined ? state.peFocusKey : (state.an.selected && state.an.selected.entity);
     return `Para ${ent ? esc(FP.productFilter && state.an.level === 'branch' ? FP.productFilter.label('branch', ent) : ent) : 'esta selección'}: ${parts.join(', ')}.`;
   }
   function take5(state) {
@@ -92,7 +92,7 @@
 
   /** El foco del embudo: la entidad elegida (si está en la tabla) o toda la selección. */
   function funnelFocus(state) {
-    const r = state.pa.result, ent = state.an.selected && state.an.selected.entity;
+    const r = state.pa.result, ent = state.peFocusKey !== null && state.peFocusKey !== undefined ? state.peFocusKey : (state.an.selected && state.an.selected.entity);
     const row = ent ? r.rows.find((x) => String(x.key) === String(ent)) : null;
     if (row) return { label: entName(state, row.key), cur: FE().pick(row.current), base: FE().pick(row.baseline), isRow: true };
     return { label: 'Toda la selección', cur: FE().pick(r.total.current), base: FE().pick(r.total.baseline), isRow: false };
@@ -135,7 +135,7 @@
     const r = state.pa.result, FEn = FE();
     const body = r.rows.slice(0, 25).map((x) => {
       const c = FEn.pick(x.current), b = FEn.pick(x.baseline), cmp = c && b ? FEn.compare(c, b) : (c ? FEn.compare(c, null) : null);
-      const name = `<button type="button" class="link-btn" data-action="an-select" data-entity="${esc(x.key)}" title="Ver la lectura de esta fila">${esc(entName(state, x.key))}</button>`;
+      const name = `<button type="button" class="link-btn" data-action="pe-pick" data-entity="${esc(x.key)}" title="Usar esta fila como foco de los bloques 1, 3 y 4">${esc(entName(state, x.key))}</button>`;
       if (!cmp) return `<tr><th scope="row">${name}</th><td colspan="6"><span class="cell-sub">Sin funnel para esta fila</span></td></tr>`;
       const cell = (i) => { const s = cmp.steps[i]; return `<td class="num">${pc1(s.rateCur)}<span class="cell-sub ${dcls(s.deltaPp)}">${pp1(s.deltaPp)}</span></td>`; };
       const dv = cmp.steps[0].deltaPct;
@@ -194,57 +194,91 @@
     const cmp = FE().compare(f.cur, f.base);
     return `<div class="fnl-blocks">${funnelSteps(state, f, cmp)}${funnelWhere(state)}${funnelMonthly(state, f)}${funnelSplit(state, f)}</div>`;
   }
-  /** Columnas que Evolución suma a la tabla de Producto: una sola tabla para «cuánto pesa» y «cuánto explica». */
+  /** Lo que la tabla de «¿Quién lo mueve?» suma a la de Producto: el rol bajo el nombre, el cambio de participación y si la entidad gana o pierde lugar. */
   function extraCols(state) {
     const ex = FP.trendView.extras(state);
-    const pct = (v) => (v === null || v === undefined || !fin(v) ? DASH : `${(v * 100).toFixed(1)} %`);
+    const shareRows = new Map(((state.an.share && state.an.share.rows) || []).map((r) => [String(r.entity), r]));
+    const MIX = { gaining: ['ok', 'Gana lugar'], losing: ['error', 'Pierde lugar'], stable: ['na', 'Estable'], new: ['ok', 'Nueva'], lost: ['error', 'Perdida'] };
     return {
       noFunnel: true, goto: true,
-      actions: (x) => `<button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pe-focus" data-key="${esc(x.key)}" data-target="pe-porque" title="Abre el embudo de esta fila">Embudo</button> `,
       sub: (x) => { const e = ex(x.key); return (e.role ? `<span class="cell-sub">${esc(e.role)}${e.rank ? ` · #${e.rank}` : ''}</span>` : '') + (FP.prodevolContext ? FP.prodevolContext.visitMark(state, x.key) : ''); },
-      cols: [
-        { head: 'Peso del movimiento', cls: 'num', cell: (x) => pct(ex(x.key).movementShare) },
-        { head: 'Δ participación', cls: 'num', cell: (x) => { const v = ex(x.key).shareChangePp; return fin(v) ? `${v > 0 ? '+' : ''}${v.toFixed(1)} pp` : DASH; } },
-        { head: 'Tendencia', cell: (x) => ex(x.key).spark || DASH },
-        { head: 'Patrón / inicio', cell: (x) => { const e = ex(x.key); return e.pattern ? `${e.pattern}<span class="cell-sub">Inicio ${esc(e.since || DASH)}</span>` : DASH; } },
-        { head: 'Persist.', cls: 'num', cell: (x) => { const v = ex(x.key).persist; return v === null ? DASH : `${v} per.`; } },
-        { head: 'Primera pista', cell: (x) => ex(x.key).clue || DASH }
-      ]
+      partSub: (x) => { const v = ex(x.key).shareChangePp; return fin(v) ? `<span class="cell-sub">${Math.abs(v) < 0.05 ? '0.0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`} pp</span>` : ''; },
+      mix: (x) => { const r = shareRows.get(String(x.key)), m = r && MIX[r.status]; return m ? H().pill(m[0], m[1]) : DASH; }
     };
   }
 
+  /* ---------- Ficha de la entidad (panel lateral): lo que ya no cabe en las tablas ---------- */
+  function fichaHtml(state, key) {
+    const r = state.pa.result; if (!r || key === null || key === undefined) return '';
+    const a = state.an, PV = FP.productView, name = entName(state, key);
+    const x = r.rows.find((q) => String(q.key) === String(key));
+    if (!x) return `<section class="pe-ficha"><h3 class="pe-ficha__t">${esc(name)}</h3><p class="field__hint">Esta entidad no es una fila de la tabla de ${esc(PV.LEVEL[r.level] || r.level)}: abajo está su lectura de evolución.</p></section>`;
+    const ex = FP.trendView.extras(state)(x.key), id = (q) => String(q.entity) === String(x.key);
+    const sh = ((a.share && a.share.rows) || []).find(id), pv = ((a.pvm && a.pvm.rows) || []).find(id), ar = (a.rows || []).find(id);
+    const dm = (k) => { const d = x.drivers && x.drivers[k]; return d && fin(d.deltaPct) ? F().signedPercent(d.deltaPct, 1) : DASH; };
+    const pct = (v) => (v === null || v === undefined || !fin(v) ? DASH : `${(v * 100).toFixed(1)} %`);
+    const pp = (v) => (fin(v) ? `${Math.abs(v) < 0.05 ? '0.0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`} pp` : DASH);
+    const item = (l, v, hint) => `<div><dt${hint ? ` title="${esc(hint)}"` : ''}>${esc(l)}</dt><dd>${v}</dd></div>`;
+    const dl = [
+      item('Participación', `${esc(F().percent(x.share, 1))}${fin(ex.shareChangePp) ? ` (${esc(pp(ex.shareChangePp))})` : ''}`),
+      item('Peso del movimiento', esc(pct(ex.movementShare)), 'Cuánto del movimiento bruto (subidas y bajadas) es de esta entidad. No es la contribución: esa mide el cambio neto y puede pasar de 100 %.'),
+      item('Ranking', sh && sh.rankBaseline ? `${sh.rankBaseline} → ${sh.rankCurrent || DASH}` : DASH),
+      item('Pedidos Δ', esc(dm('orders'))), item('Vistas Δ', esc(dm('views'))),
+      item('Conversión (CR)', PV.metricVal('conversionRate', x.current && x.current.conversionRate)),
+      item('AOV', PV.metricVal('aov', x.current && x.current.aov)),
+      item('Precio promedio', pv && pv.p0 !== null && pv.p1 !== null ? `${esc(F().currency(pv.p0, 0))} → ${esc(F().currency(pv.p1, 0))}` : DASH),
+      item('Persistencia', ex.persist === null ? DASH : `${ex.persist} per.`),
+      item('Acumulado', ar && fin(ar.cumulativeChange) ? esc(F().signedPercent(ar.cumulativeChange, 1)) : DASH)
+    ].join('');
+    const sig = (x.signals || []).map((q) => `<span class="chip" title="${esc(q.evidence)}">Patrón ${esc(q.pattern)}</span>`).join(' ');
+    const act = r.level === 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`
+      : `<button type="button" class="btn btn--small btn--primary" data-action="pa-drill" data-key="${esc(x.key)}">Desglosar ›</button>`;
+    return `<section class="pe-ficha" aria-label="Ficha de ${esc(name)}">
+      <div><span class="chap__q">Ficha · ${esc(PV.LEVEL[r.level] || r.level)}</span><h3 class="pe-ficha__t">${esc(name)}</h3></div>
+      <div class="pe-mini"><div><b>${esc(F().currency(x.revenue.current, 0))}</b><span>Venta</span></div><div><b>${esc(F().signedPercent(x.revenue.deltaPct, 1))}</b><span>vs referencia</span></div><div><b>${esc(F().percent(x.contribution, 1))}</b><span>Contribución</span></div></div>
+      <dl class="pe-dl">${dl}</dl>
+      ${ex.clue && ex.clue !== DASH ? `<p class="pe-ficha__p"><b>Primera pista:</b> ${ex.clue}</p>` : ''}
+      ${sig ? `<p class="pe-ficha__p"><b>Señales:</b> ${sig}</p>` : ''}
+      <div class="chap__tools">${act}</div></section>`;
+  }
+  /** Sin historia suficiente para clasificar patrones (p. ej. vista anual con 2 años): se dice dónde falta, cuántos periodos hacen falta y cómo conseguirlo. */
+  function noHistory(state) {
+    const a = state.an, g = FP.app.paGran(state.pa), n = (a.periodsList || []).length, min = FP.trendEngine.DEFAULTS.minPeriods;
+    const U = { year: ['año', 'años'], month: ['mes', 'meses'], week: ['semana', 'semanas'], day: ['día', 'días'] }[g] || ['periodo', 'periodos'];
+    const NEXT = { year: 'mes', month: 'semana', week: 'día' }[g];
+    return `<div class="note note--warning pe-nohist"><strong>Con ${n} ${n === 1 ? U[0] : U[1]} no se puede clasificar el patrón.</strong> Se necesitan al menos ${min} periodos con datos; mientras tanto la tabla de Tendencia, Patrón y Cierre proyectado no puede llenarse.${NEXT ? ` <button type="button" class="btn btn--small btn--primary" data-action="pe-finer">Ver por ${NEXT}</button>` : ''}</div>`;
+  }
 
   /* ---------- Tablas que caben: pocas columnas y pocas filas por defecto ---------- */
   const FOLD_ROWS = 5;
   const FOLDS = [
-    { key: 'main', sel: '#pe-quien .chap__block table', extras: ['Participación', 'Peso del movimiento', 'Δ participación', 'Persist.', 'Primera pista', 'Pedidos Δ', 'Vistas Δ', 'CR', 'AOV', 'Señales', ''],
-      row: (tr) => { const b = tr.querySelector('button[data-action="pe-focus"]'); return b ? { action: 'pe-focus', key: b.dataset.key } : null; } },
-    { key: 'evo', sel: '#an-trend-table table', extras: ['Acumulado'],
-      row: (tr) => { const b = tr.querySelector('[data-action="an-select"],[data-action="an-drill"]'); return b ? { action: 'an-select', key: b.dataset.entity, entity: b.dataset.entity } : null; } },
-    { key: 'where', sel: 'table[data-pe-fold="where"]', extras: [], row: null }
+    { key: 'main', sel: '#pe-quien .chap__block table' },
+    { key: 'meta', sel: 'table[data-pe-fold="meta"]' },
+    { key: 'evo', sel: '#an-trend-table table' },
+    { key: 'where', sel: 'table[data-pe-fold="where"]' },
+    { key: 'pvm', sel: 'table[data-pe-fold="pvm"]' }
   ];
-  const COLS_KEY = 'fp.pe.cols.v1';
-  const loadCols = () => { try { return JSON.parse(root.localStorage.getItem(COLS_KEY) || '{}') || {}; } catch (e) { return {}; } };
   function foldState(state) { state.ux.peRows = state.ux.peRows || {}; return state.ux.peRows; }
+  /** Cada tabla muestra las primeras filas y se abre con «Ver las N»; la fila entera abre la ficha de su entidad (clic o Enter). */
   function enhance(el, state) {
-    const cols = loadCols(), rowsOpen = foldState(state);
+    const rowsOpen = foldState(state);
     FOLDS.forEach((f) => {
       const table = el.querySelector(f.sel); if (!table || !table.tBodies[0]) return;
       const wrap = table.closest('.table-wrap'); if (!wrap) return;
-      const head = [...(table.tHead || table).rows[0].cells].map((c) => c.textContent.trim());
-      const xi = head.map((h, i) => (f.extras.includes(h) ? i : -1)).filter((i) => i >= 0);
-      [...table.rows].forEach((tr) => { xi.forEach((i) => { if (tr.cells[i]) tr.cells[i].classList.add('pe-x'); }); });
-      const trs = [...table.tBodies[0].rows], open = Boolean(rowsOpen[f.key]), showX = Boolean(cols[f.key]);
+      const trs = [...table.tBodies[0].rows], open = Boolean(rowsOpen[f.key]);
       trs.forEach((tr, i) => {
         if (!open && i >= FOLD_ROWS) tr.classList.add('pe-hide');
-        const c0 = tr.cells[0]; if (c0 && c0.textContent.trim().length > 26) c0.title = c0.textContent.trim();
-        const r = f.row && f.row(tr);
-        if (r) { tr.dataset.action = r.action; tr.dataset.peKey = r.key; if (r.entity) tr.dataset.entity = r.entity; if (r.action === 'pe-focus') tr.dataset.key = r.key; tr.tabIndex = 0; tr.classList.add('pe-row'); tr.setAttribute('aria-label', `Abrir la lectura de ${(c0 ? c0.textContent : r.key).trim().replace(/\s+/g, ' ')}`); }
+        const c0 = tr.cells[0]; if (c0 && c0.textContent.trim().length > 26) c0.title = c0.textContent.trim().replace(/\s+/g, ' ');
+        const key = tr.dataset.peKey;
+        if (key !== undefined) {
+          tr.dataset.action = tr.dataset.peAct || 'pe-focus'; tr.dataset.key = key; tr.dataset.entity = key; tr.tabIndex = 0; tr.classList.add('pe-row');
+          tr.setAttribute('aria-label', `Abrir la ficha de ${(c0 ? c0.textContent : key).trim().replace(/\s+/g, ' ')}`);
+          if (state.peFocusKey !== null && state.peFocusKey !== undefined && String(state.peFocusKey) === String(key)) tr.classList.add('is-selected');
+        }
       });
-      wrap.classList.add('pe-fold'); if (showX) wrap.classList.add('pe-showx');
+      wrap.classList.add('pe-fold');
       const bar = document.createElement('div'); bar.className = 'pe-tt';
       bar.innerHTML = `<span class="pe-tt__n">${open || trs.length <= FOLD_ROWS ? trs.length : FOLD_ROWS} de ${trs.length} filas</span><span class="pe-tt__sp"></span>`
-        + (xi.length ? `<button type="button" class="btn btn--small btn--ghost" data-action="pe-fold-cols" data-key="${f.key}" aria-pressed="${showX}">${showX ? 'Menos columnas' : 'Más columnas'}</button>` : '')
         + (trs.length > FOLD_ROWS ? `<button type="button" class="btn btn--small btn--ghost" data-action="pe-fold-rows" data-key="${f.key}" aria-expanded="${open}">${open ? `Ver solo ${FOLD_ROWS}` : `Ver las ${trs.length}`}</button>` : '');
       wrap.parentNode.insertBefore(bar, wrap);
     });
@@ -281,6 +315,7 @@
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('pe-drawer') && FP.app) FP.app.actions['pe-drawer-close'](); });
     }
     root.__peBarUpd = upd; upd();
+    if (!root.__peToggle) { root.__peToggle = true; document.addEventListener('toggle', (e) => { const t = e.target; if (t && t.matches && t.matches('details.drill-fold') && FP.app) FP.app.state.an.drillOpen = t.open; }, true); }   // plegar «Detalle y trazabilidad» no lo borra: se recuerda abierto o cerrado
   }
 
   function render(state, opts) {
@@ -301,15 +336,20 @@
     const chips = [['pe-que', 'Qué pasó'], ['pe-meta', 'Contra la meta'], ['pe-quien', 'Quién lo mueve'], ['pe-evolucion', 'Desde cuándo'], ['pe-porque', 'Por qué'], ['pe-hacer', 'Qué hago'], ['pe-evidencia', 'Evidencia']]
       .map(([id, l]) => `<button type="button" class="pe-jump__b" data-action="pe-jump" data-target="${id}">${esc(l)}</button>`).join('');
     if (FP.app) { FP.app.ensureFunnelSeries(); FP.app.ensureSeasonalContext(); FP.app.ensureVisitDiff(); FP.app.opEnsure(); }   // se calculan una vez por selección
-    const focusEnt = state.an.selected && state.an.selected.entity;
-    const focusStrip = focusEnt ? `<p class="pe-focus">Foco: <b>${esc(entName(state, focusEnt))}</b> <button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Quitar foco</button></p>` : '';
+    const focusEnt = state.peFocusKey !== null && state.peFocusKey !== undefined ? state.peFocusKey : (state.an.selected && state.an.selected.entity);
+    const gUnit = { year: 'año', month: 'mes', week: 'semana' }[state.peBack && state.peBack.gran];
+    const backStrip = state.peBack && gUnit ? `<p class="pe-focus">Viendo el periodo por ${{ year: 'mes', month: 'semana', week: 'día' }[state.peBack.gran]}. <button type="button" class="btn btn--small btn--ghost" data-action="pe-back">Volver a ${gUnit}</button></p>` : '';
+    const focusStrip = backStrip + (focusEnt !== null && focusEnt !== undefined ? `<p class="pe-focus">Foco: <b>${esc(entName(state, focusEnt))}</b> <button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Quitar foco</button></p>` : '');
     const help = ef.hint ? `<details class="disclosure pe-note"><summary>Cómo leer patrón, señal y materialidad</summary><p class="field__hint">${ef.hint.replace(/^<p[^>]*>|<\/p>$/g, '')}</p></details>` : '';
     const totalBtn = early ? '' : '<button type="button" class="btn btn--small btn--ghost" data-action="an-drill-total" data-source="kpi">Detalle del total</button>';
+    const hist = !early && !(state.an.rows || []).length && !state.an.loading && state.an.key !== null && !(opts && opts.range);
     const evoTools = early ? '' : `<div class="chap__tools">${totalBtn}</div>`;
-    const wasOpen = Boolean($('pe-drawer')), prevScroll = wasOpen ? ($('pe-drawer').querySelector('.pe-drawer__body') || {}).scrollTop || 0 : 0;
-    const drawerOn = Boolean(state.peDrawer && !early && A.reading && (state.an.selected || state.an.drill));
-    const drawer = drawerOn ? `<button type="button" class="pe-scrim" data-action="pe-drawer-close" aria-label="Cerrar la lectura" tabindex="-1"></button><aside class="pe-drawer" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Lectura de la entidad"><div class="pe-drawer__top"><button type="button" class="btn btn--small" id="pe-drawer-x" data-action="pe-drawer-close">Cerrar ✕</button></div><div class="pe-drawer__body">${A.reading}</div></aside>` : '';
-    if (state.an.selected) state.peLastKey = state.an.selected.entity;
+    const wasOpen = Boolean($('pe-drawer'));
+    const hasFocus = focusEnt !== null && focusEnt !== undefined;
+    const drawerOn = Boolean(state.peDrawer && !early && (state.an.selected || state.an.drill || hasFocus));
+    const noRow = drawerOn && !state.an.selected;
+    const drawerBody = drawerOn ? `${hasFocus ? fichaHtml(state, focusEnt) : ''}${noRow && !(state.an.rows || []).length && !state.an.loading ? noHistory(state) : ''}${A.reading || ''}` : '';
+    if (hasFocus) state.peLastKey = focusEnt;
     el.innerHTML = `
       <section class="panel pe-title">
         <div class="panel__head"><div data-own-head>
@@ -317,21 +357,33 @@
         </div></div>
       </section>
       <div class="pe-sticky" id="pe-bar">${controls}${focusStrip}<div class="pe-jump" role="navigation" aria-label="Capítulos de la página">${chips}</div></div>
-      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context + A.narrative}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}`)}
+      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}${early ? '' : `<details class="disclosure pe-note"><summary>Resumen en texto y cómo se calcula</summary>${A.narrative}</details>`}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
-      ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : A.mix}`)}
-      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}${evoSel}${evoTools}${A.table}${A.forecast}`)}
+      ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : `<details class="disclosure pe-note"><summary>Mix Intelligence · quién gana y quién pierde participación</summary>${A.mix}</details>`}`)}
+      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}${evoSel}${evoTools}${hist ? noHistory(state) : A.table}${A.forecast}`)}
       ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
       ${chapter(6, 'hacer', '¿Qué hago?', takeHacer(state), FP.prodevolContext ? FP.prodevolContext.actionHtml(state) : '')}
       ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}
-      ${drawer}`;
+      `;
     enhance(el, state);
+    // El panel vive fuera de #pe-body: los repintados de la página no lo tocan (sin parpadeo, sin perder el desplazamiento ni la animación de entrada).
+    let dock = $('pe-drawer-root');
+    if (!dock) { dock = document.createElement('div'); dock.id = 'pe-drawer-root'; el.parentNode.insertBefore(dock, el.nextSibling); }
     if (drawerOn) {
-      const body = $('pe-drawer').querySelector('.pe-drawer__body');
-      if (wasOpen) { if (body) body.scrollTop = prevScroll; } else { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
-    } else if (wasOpen && state.peLastKey !== undefined) {
-      const row = [...el.querySelectorAll('tr[data-pe-key]')].find((t) => String(t.dataset.peKey) === String(state.peLastKey));
-      if (row) row.focus({ preventScroll: true });
+      let dr = $('pe-drawer');
+      if (!dr) {
+        dock.innerHTML = '<button type="button" class="pe-scrim" data-action="pe-drawer-close" aria-label="Cerrar la lectura" tabindex="-1"></button><aside class="pe-drawer pe-drawer--in" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Lectura de la entidad"><div class="pe-drawer__top"><button type="button" class="btn btn--small" id="pe-drawer-x" data-action="pe-drawer-close">Cerrar ✕</button></div><div class="pe-drawer__body"></div></aside>';
+        dr = $('pe-drawer'); dr.addEventListener('animationend', () => dr.classList.remove('pe-drawer--in'), { once: true });
+      }
+      const body = dr.querySelector('.pe-drawer__body');
+      if (body._peHtml !== drawerBody) { const top = body.scrollTop; body.innerHTML = drawerBody; body._peHtml = drawerBody; body.scrollTop = top; }   // solo se reescribe si cambió
+      if (!wasOpen) { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
+    } else if (dock.firstChild) {
+      dock.textContent = '';
+      if (wasOpen && state.peLastKey !== undefined) {
+        const row = [...el.querySelectorAll('tr[data-pe-key]')].find((t) => String(t.dataset.peKey) === String(state.peLastKey));
+        if (row) row.focus({ preventScroll: true });
+      }
     }
     bindBar();
     settle(state);

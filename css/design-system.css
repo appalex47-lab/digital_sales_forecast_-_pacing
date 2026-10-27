@@ -2271,7 +2271,28 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .pe-drawer__top { display: flex; justify-content: flex-end; padding: var(--ds-s3) var(--ds-s4); border-bottom: 1px solid var(--ds-border); }
 .pe-drawer__body { overflow: auto; padding: var(--ds-s4); display: grid; gap: var(--ds-s4); align-content: start; }
 .pe-drawer .entity-reading-panel { border: 0; box-shadow: none; padding: 0; }
-@media (prefers-reduced-motion: no-preference) { .pe-drawer { animation: pe-in .16s ease-out; } @keyframes pe-in { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } } }
+@media (prefers-reduced-motion: no-preference) { .pe-drawer--in { animation: pe-in .16s ease-out; } @keyframes pe-in { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } } }
 .pe-drawer [data-action="an-clear-selection"] { display: none; }   /* el cierre vive arriba del panel */
 
 @media (max-width: 760px) { .pe-fold th, .pe-fold td, .pe-fold td:first-child, .pe-fold th:first-child { white-space: normal; max-width: none; } .pe-fold .cell-sub { max-width: none; margin-left: 0; } .pe-fold:not(.pe-showx) .pe-x { display: none; } }
+
+/* ficha de la entidad, detalle plegable y aviso de poca historia */
+.pe-ficha { display: grid; gap: var(--ds-s3); padding-bottom: var(--ds-s4); border-bottom: 1px solid var(--ds-border); }
+.pe-ficha__t { margin: 2px 0 0; font-size: var(--ds-fs-section); }
+.pe-ficha__p { margin: 0; font-size: var(--ds-fs-helper); color: var(--ds-text-2); }
+.pe-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ds-s2); }
+.pe-mini > div { border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); padding: 8px 10px; display: grid; }
+.pe-mini b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.pe-mini span { font-size: var(--ds-fs-caption); color: var(--ds-text-muted); }
+.pe-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px var(--ds-s4); margin: 0; border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); padding: 10px 12px; font-size: var(--ds-fs-helper); }
+.pe-dl dt { color: var(--ds-text-muted); font-size: var(--ds-fs-caption); }
+.pe-dl dd { margin: 0 0 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.drill-fold { border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); background: var(--ds-surface); }
+.drill-fold > summary { cursor: pointer; padding: 10px 14px; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: var(--ds-s2); }
+.drill-fold > summary::-webkit-details-marker { display: none; }
+.drill-fold > summary::after { content: "▾"; color: var(--ds-text-muted); } .drill-fold[open] > summary::after { content: "▴"; }
+.drill-fold > :not(summary) { margin-left: 14px; margin-right: 14px; } .drill-fold > :last-child { margin-bottom: 14px; }
+.drill-fold > summary:focus-visible { outline: 3px solid var(--ds-accent); outline-offset: 2px; }
+.pe-nohist { display: flex; gap: var(--ds-s3); align-items: center; flex-wrap: wrap; }
+.pe-nohist strong { flex: 1 1 260px; font-weight: 600; }
+.pe-quien-kpi .metric { padding: var(--ds-s2) var(--ds-s3); }

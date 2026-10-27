@@ -286,24 +286,19 @@
     const page = n ? 1 : Math.max(1, Math.min(pa.page || 1, Math.ceil(rows.length / size)));
     const shown = n ? rows.slice(0, n) : rows.slice((page - 1) * size, page * size);
     const dm = (row, k) => { const x = row.drivers[k]; return fin(x.deltaPct) ? F().signedPercent(x.deltaPct, 1) : '—'; };
-    const xc = (extra && extra.cols) || [];   // columnas que otra página suma a la tabla (por ejemplo, la contribución y el patrón de Evolución)
+    // Una pregunta, una tabla: aquí solo el peso de cada grupo en el resultado. El tiempo (tendencia, patrón) vive en «¿Desde cuándo?»,
+    // las causas en «¿Por qué?» y el resto de la fila (pedidos, vistas, CR, AOV, señales…) en la ficha del panel lateral.
+    const mixOf = (extra && extra.mix) || (() => '');
     out.table = `<div class="table-wrap"><table class="table ds-table table--dense">
-      <thead><tr><th${r.level === 'state' ? ' data-help="estadoProducto"' : ''}>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
-        <th class="num">Contribución</th><th>${r.level === 'state' ? 'Situación' : 'Estado'}</th>${xc.map((c) => `<th class="${c.cls || ''}">${c.head}</th>`).join('')}<th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
-      <tbody>${shown.map((x) => `<tr>
+      <thead><tr><th${r.level === 'state' ? ' data-help="estadoProducto"' : ''}>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th>
+        <th class="num">Contribución</th><th class="num">Participación</th><th>Mezcla</th></tr></thead>
+      <tbody>${shown.map((x) => `<tr data-pe-key="${esc(x.key)}" data-pe-act="pe-focus">
         <td><strong>${esc(displayKey(r.level, x.key))}</strong>${x.geography && x.geography.path.length > 1 ? `<span class="cell-sub">${esc(x.geography.path.slice(0, -1).map((g) => g.name).join(' › '))}</span>` : ''}${x.current && x.current.conflicts ? `<span class="cell-sub">${x.current.conflicts} SKU-días en conflicto</span>` : ''}${extra && extra.sub ? extra.sub(x) : ''}</td>
         <td class="num">${esc(F().currency(x.revenue.current, 0))}</td><td class="num">${esc(F().currency(x.revenue.baseline, 0))}</td>
         <td class="num">${esc(FP.pacingView.signed('revenue', x.revenue.delta))}<span class="cell-sub">${esc(F().signedPercent(x.revenue.deltaPct, 1))}</span></td>
-        <td class="num">${esc(F().percent(x.share, 1))}</td>
         <td class="num">${esc(F().percent(x.contribution, 1))}</td>
-        <td>${H().pill(...(GROWTH[x.status] || ['na', x.status]))}</td>
-        ${xc.map((c) => `<td class="${c.cls || ''}">${c.cell(x)}</td>`).join('')}
-        <td class="num">${esc(dm(x, 'orders'))}</td><td class="num">${esc(dm(x, 'views'))}</td>
-        <td class="num">${metricVal('conversionRate', x.current && x.current.conversionRate)}</td>
-        <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>
-        <td>${x.signals.map((s) => `<span class="chip" title="${esc(s.evidence)}">Patrón ${esc(s.pattern)}</span>`).join(' ')}</td>
-        <td>${r.level !== 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}" ${x.key === '(sin dato)' || x.key === '(inválido)' ? 'title="Abre los renglones sin este dato"' : ''}>Ver ›</button>`
-          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${extra && extra.actions ? extra.actions(x) : ''}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
+        <td class="num">${esc(F().percent(x.share, 1))}${extra && extra.partSub ? extra.partSub(x) : ''}</td>
+        <td>${mixOf(x)}</td></tr>`).join('')}</tbody></table></div>
       ${n ? `<p class="field__hint">Top ${n} de ${F().integer(rows.length)} por |contribución|. El Top N es solo visual: todos los SKU siguen guardados y en los totales.</p>`
         : `<div class="pager"><span>${F().integer((page - 1) * size + 1)}–${F().integer(Math.min(page * size, rows.length))} de ${F().integer(rows.length)}</span>
           <div class="btn-row"><button type="button" class="btn btn--small" data-action="pa-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
@@ -344,5 +339,5 @@
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }
 
-  FP.productView = { renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml };
+  FP.productView = { renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml, metricVal, displayKey, levelName, GROWTH };
 })(typeof window !== 'undefined' ? window : globalThis);
