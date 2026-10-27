@@ -129,7 +129,7 @@
     const cov = r.total.current.trackingCoverage && fin(r.total.current.trackingCoverage.value) ? r.total.current.trackingCoverage.value : null;
     const covNote = cov === null ? '' : ` Cobertura de tracking (compras GA4 ÷ unidades reales): ${esc(F().percent(cov, 0))}${cov < 1 - FP.config.products.signals.trackingGapPct ? ' — posible pérdida de medición en GA4: lee las tasas con cuidado.' : '.'}`;
     return `<div class="panel panel--inner"><div class="panel__head"><div><h4 class="panel__title">1 · ${esc(f.label)}: de la vista de ficha a la compra</h4><p class="panel__desc">La marca vertical es la referencia (${esc(r.baseline.label)}).</p></div></div><div class="fnl">${rows}</div>
-      <p class="field__hint">Las vistas vienen de GA4 y son vistas de ficha, no sesiones. «Compró (GA4)» cuenta artículos comprados, no pedidos. Región, estado, sucursal y tipo de entrega ocurren después de la ficha: ahí el funnel no está disponible.${covNote}</p></div>`;
+      <details class="disclosure pe-note"><summary>Cómo se mide</summary><p class="field__hint">Las vistas vienen de GA4 y son vistas de ficha, no sesiones. «Compró (GA4)» cuenta artículos comprados, no pedidos. Región, estado, sucursal y tipo de entrega ocurren después de la ficha: ahí el funnel no está disponible.${covNote}</p></details></div>`;
   }
   function funnelWhere(state) {
     const r = state.pa.result, FEn = FE();
@@ -146,8 +146,8 @@
     const tot = FEn.compare(FEn.pick(r.total.current), FEn.pick(r.total.baseline));
     const foot = tot ? `<tfoot><tr><th scope="row">Total</th><td class="num">${tot.steps[0].deltaPct === null ? DASH : F().signedPercent(tot.steps[0].deltaPct, 1)}</td>${[1, 2, 3].map((i) => `<td class="num">${pc1(tot.steps[i].rateCur)}</td>`).join('')}<td class="num">${pc1(tot.cr.cur, 2)}</td><td></td></tr></tfoot>` : '';
     return `<div class="panel panel--inner"><div class="panel__head"><div><h4 class="panel__title">2 · Dónde se pierde</h4><p class="panel__desc">Tasa de cada paso contra la referencia, en puntos porcentuales. Elige una fila para verla en los bloques 1, 3 y 4.</p></div></div>
-      <div class="table-wrap"><table class="table ds-table table--dense"><thead><tr><th>${esc(FP.productView.LEVEL[r.level] || r.level)}</th><th class="num">Vistas</th><th class="num">${FEn.TRANSITIONS[0]}</th><th class="num">${FEn.TRANSITIONS[1]}</th><th class="num">${FEn.TRANSITIONS[2]}</th><th class="num" title="Compras GA4 ÷ vistas de ficha">Compras ÷ vistas</th><th>Paso más débil</th></tr></thead><tbody>${body}</tbody>${foot}</table></div>
-      <p class="field__hint">Un paso se marca como débil si su tasa cae más de ${FEn.WEAK_PP} pp contra la referencia. «Compras ÷ vistas» usa las compras de GA4; el CR del capítulo 3 usa pedidos ÷ vistas, por eso pueden diferir. ${r.rows.length > 25 ? `Se muestran las 25 primeras de ${r.rows.length}.` : ''}</p></div>`;
+      <div class="table-wrap"><table class="table ds-table table--dense" data-pe-fold="where"><thead><tr><th>${esc(FP.productView.LEVEL[r.level] || r.level)}</th><th class="num">Vistas</th><th class="num">${FEn.TRANSITIONS[0]}</th><th class="num">${FEn.TRANSITIONS[1]}</th><th class="num">${FEn.TRANSITIONS[2]}</th><th class="num" title="Compras GA4 ÷ vistas de ficha">Compras ÷ vistas</th><th>Paso más débil</th></tr></thead><tbody>${body}</tbody>${foot}</table></div>
+      <details class="disclosure pe-note"><summary>Cómo se marca un paso débil</summary><p class="field__hint">Un paso se marca como débil si su tasa cae más de ${FEn.WEAK_PP} pp contra la referencia. «Compras ÷ vistas» usa las compras de GA4; el CR del capítulo 3 usa pedidos ÷ vistas, por eso pueden diferir. ${r.rows.length > 25 ? `Se muestran las 25 primeras de ${r.rows.length}.` : ''}</p></details></div>`;
   }
   function miniChart(title, vals, labels, cu, re) {
     const pts = vals.map((v, i) => ({ v, i })).filter((x) => x.v !== null && fin(x.v));
@@ -213,6 +213,76 @@
     };
   }
 
+
+  /* ---------- Tablas que caben: pocas columnas y pocas filas por defecto ---------- */
+  const FOLD_ROWS = 5;
+  const FOLDS = [
+    { key: 'main', sel: '#pe-quien .chap__block table', extras: ['Participación', 'Peso del movimiento', 'Δ participación', 'Persist.', 'Primera pista', 'Pedidos Δ', 'Vistas Δ', 'CR', 'AOV', 'Señales', ''],
+      row: (tr) => { const b = tr.querySelector('button[data-action="pe-focus"]'); return b ? { action: 'pe-focus', key: b.dataset.key } : null; } },
+    { key: 'evo', sel: '#an-trend-table table', extras: ['Acumulado'],
+      row: (tr) => { const b = tr.querySelector('[data-action="an-select"],[data-action="an-drill"]'); return b ? { action: 'an-select', key: b.dataset.entity, entity: b.dataset.entity } : null; } },
+    { key: 'where', sel: 'table[data-pe-fold="where"]', extras: [], row: null }
+  ];
+  const COLS_KEY = 'fp.pe.cols.v1';
+  const loadCols = () => { try { return JSON.parse(root.localStorage.getItem(COLS_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  function foldState(state) { state.ux.peRows = state.ux.peRows || {}; return state.ux.peRows; }
+  function enhance(el, state) {
+    const cols = loadCols(), rowsOpen = foldState(state);
+    FOLDS.forEach((f) => {
+      const table = el.querySelector(f.sel); if (!table || !table.tBodies[0]) return;
+      const wrap = table.closest('.table-wrap'); if (!wrap) return;
+      const head = [...(table.tHead || table).rows[0].cells].map((c) => c.textContent.trim());
+      const xi = head.map((h, i) => (f.extras.includes(h) ? i : -1)).filter((i) => i >= 0);
+      [...table.rows].forEach((tr) => { xi.forEach((i) => { if (tr.cells[i]) tr.cells[i].classList.add('pe-x'); }); });
+      const trs = [...table.tBodies[0].rows], open = Boolean(rowsOpen[f.key]), showX = Boolean(cols[f.key]);
+      trs.forEach((tr, i) => {
+        if (!open && i >= FOLD_ROWS) tr.classList.add('pe-hide');
+        const c0 = tr.cells[0]; if (c0 && c0.textContent.trim().length > 26) c0.title = c0.textContent.trim();
+        const r = f.row && f.row(tr);
+        if (r) { tr.dataset.action = r.action; tr.dataset.peKey = r.key; if (r.entity) tr.dataset.entity = r.entity; if (r.action === 'pe-focus') tr.dataset.key = r.key; tr.tabIndex = 0; tr.classList.add('pe-row'); tr.setAttribute('aria-label', `Abrir la lectura de ${(c0 ? c0.textContent : r.key).trim().replace(/\s+/g, ' ')}`); }
+      });
+      wrap.classList.add('pe-fold'); if (showX) wrap.classList.add('pe-showx');
+      const bar = document.createElement('div'); bar.className = 'pe-tt';
+      bar.innerHTML = `<span class="pe-tt__n">${open || trs.length <= FOLD_ROWS ? trs.length : FOLD_ROWS} de ${trs.length} filas</span><span class="pe-tt__sp"></span>`
+        + (xi.length ? `<button type="button" class="btn btn--small btn--ghost" data-action="pe-fold-cols" data-key="${f.key}" aria-pressed="${showX}">${showX ? 'Menos columnas' : 'Más columnas'}</button>` : '')
+        + (trs.length > FOLD_ROWS ? `<button type="button" class="btn btn--small btn--ghost" data-action="pe-fold-rows" data-key="${f.key}" aria-expanded="${open}">${open ? `Ver solo ${FOLD_ROWS}` : `Ver las ${trs.length}`}</button>` : '');
+      wrap.parentNode.insertBefore(bar, wrap);
+    });
+    if (!el._peKeys) {   // clic o teclado (Enter, espacio) sobre una fila abre su lectura
+      el._peKeys = true;
+      el.addEventListener('click', (e) => {
+        const tr = e.target.closest && e.target.closest('tr.pe-row');
+        if (!tr || e.target.closest('button, a, input, select, label, summary')) return;
+        const a = FP.app && FP.app.actions[tr.dataset.action]; if (a) a(tr);
+      });
+      el.addEventListener('keydown', (e) => {
+        if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches || !e.target.matches('tr.pe-row')) return;
+        e.preventDefault(); const a = FP.app && FP.app.actions[e.target.dataset.action]; if (a) a(e.target);
+      });
+    }
+  }
+
+  /* ---------- Barra fija: alto bajo la cabecera, modo compacto y capítulo activo ---------- */
+  function bindBar() {
+    const upd = () => {
+      const bar = $('pe-bar'), hd = document.querySelector('.app-header');
+      if (!bar) return;
+      if (hd) root.document.documentElement.style.setProperty('--pe-top', `${Math.round(hd.getBoundingClientRect().height)}px`);
+      const bb = bar.getBoundingClientRect(), top = bb.bottom + 8;
+      bar.classList.toggle('is-compact', (root.scrollY || 0) > 160);
+      let on = null;
+      ['que', 'meta', 'quien', 'evolucion', 'porque', 'hacer', 'evidencia'].forEach((id) => { const c = $('pe-' + id); if (c && c.getBoundingClientRect().top <= top + 4) on = id; });
+      bar.querySelectorAll('.pe-jump__b').forEach((b) => { const is = on && b.dataset.target === 'pe-' + on; b.classList.toggle('is-on', Boolean(is)); if (is) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
+    };
+    if (!root.__peBar) {
+      root.__peBar = true; let t = 0;
+      const tick = () => { if (t) return; t = root.requestAnimationFrame(() => { t = 0; root.__peBarUpd && root.__peBarUpd(); }); };
+      root.addEventListener('scroll', tick, { passive: true }); root.addEventListener('resize', tick);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('pe-drawer') && FP.app) FP.app.actions['pe-drawer-close'](); });
+    }
+    root.__peBarUpd = upd; upd();
+  }
+
   function render(state, opts) {
     const el = $('pe-body'); if (!el) return;
     const PV = FP.productView, TV = FP.trendView;
@@ -229,26 +299,41 @@
     const rangeNote = opts && opts.range ? '<p class="note note--warning"><strong>La evolución necesita periodos de calendario.</strong> El rango libre solo aplica a la foto del periodo: elige Año, Mes, Semana o Día en Granularidad para actualizar la evolución.</p>' : '';
     const tools = early ? '' : '<div class="chap__tools"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar este periodo</button><button type="button" class="btn btn--small btn--ghost" data-action="an-export-contrib">Descargar CSV</button></div>';
     const chips = [['pe-que', 'Qué pasó'], ['pe-meta', 'Contra la meta'], ['pe-quien', 'Quién lo mueve'], ['pe-evolucion', 'Desde cuándo'], ['pe-porque', 'Por qué'], ['pe-hacer', 'Qué hago'], ['pe-evidencia', 'Evidencia']]
-      .map(([id, l]) => `<button type="button" class="chip" data-action="pe-jump" data-target="${id}">${esc(l)}</button>`).join('');
+      .map(([id, l]) => `<button type="button" class="pe-jump__b" data-action="pe-jump" data-target="${id}">${esc(l)}</button>`).join('');
     if (FP.app) { FP.app.ensureFunnelSeries(); FP.app.ensureSeasonalContext(); FP.app.ensureVisitDiff(); FP.app.opEnsure(); }   // se calculan una vez por selección
+    const focusEnt = state.an.selected && state.an.selected.entity;
+    const focusStrip = focusEnt ? `<p class="pe-focus">Foco: <b>${esc(entName(state, focusEnt))}</b> <button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Quitar foco</button></p>` : '';
+    const help = ef.hint ? `<details class="disclosure pe-note"><summary>Cómo leer patrón, señal y materialidad</summary><p class="field__hint">${ef.hint.replace(/^<p[^>]*>|<\/p>$/g, '')}</p></details>` : '';
+    const totalBtn = early ? '' : '<button type="button" class="btn btn--small btn--ghost" data-action="an-drill-total" data-source="kpi">Detalle del total</button>';
+    const evoTools = early ? '' : `<div class="chap__tools">${totalBtn}</div>`;
+    const wasOpen = Boolean($('pe-drawer')), prevScroll = wasOpen ? ($('pe-drawer').querySelector('.pe-drawer__body') || {}).scrollTop || 0 : 0;
+    const drawerOn = Boolean(state.peDrawer && !early && A.reading && (state.an.selected || state.an.drill));
+    const drawer = drawerOn ? `<button type="button" class="pe-scrim" data-action="pe-drawer-close" aria-label="Cerrar la lectura" tabindex="-1"></button><aside class="pe-drawer" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Lectura de la entidad"><div class="pe-drawer__top"><button type="button" class="btn btn--small" id="pe-drawer-x" data-action="pe-drawer-close">Cerrar ✕</button></div><div class="pe-drawer__body">${A.reading}</div></aside>` : '';
+    if (state.an.selected) state.peLastKey = state.an.selected.entity;
     el.innerHTML = `
-      <section class="panel">
+      <section class="panel pe-title">
         <div class="panel__head"><div data-own-head>
           <h2 class="panel__title" id="t-pe">Producto y evolución</h2>
-          <p class="panel__desc">Aquí viven ahora Categoría → Producto y Evolución y patrones: sus rutas (#producto y #analisis) abren el capítulo equivalente.</p>
         </div></div>
-        <div class="panel__body">${controls}
-          ${ef.hint ? `<p class="field__hint">${ef.hint.replace(/^<p[^>]*>|<\/p>$/g, '')}</p>` : ''}
-          <div class="pe-jump" role="navigation" aria-label="Secciones de la página">${chips}</div>
-        </div>
       </section>
+      <div class="pe-sticky" id="pe-bar">${controls}${focusStrip}<div class="pe-jump" role="navigation" aria-label="Capítulos de la página">${chips}</div></div>
       ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context + A.narrative}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : A.mix}`)}
-      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
+      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}${evoSel}${evoTools}${A.table}${A.forecast}`)}
       ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
       ${chapter(6, 'hacer', '¿Qué hago?', takeHacer(state), FP.prodevolContext ? FP.prodevolContext.actionHtml(state) : '')}
-      ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}`;
+      ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}
+      ${drawer}`;
+    enhance(el, state);
+    if (drawerOn) {
+      const body = $('pe-drawer').querySelector('.pe-drawer__body');
+      if (wasOpen) { if (body) body.scrollTop = prevScroll; } else { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
+    } else if (wasOpen && state.peLastKey !== undefined) {
+      const row = [...el.querySelectorAll('tr[data-pe-key]')].find((t) => String(t.dataset.peKey) === String(state.peLastKey));
+      if (row) row.focus({ preventScroll: true });
+    }
+    bindBar();
     settle(state);
   }
 
