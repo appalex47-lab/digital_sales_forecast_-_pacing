@@ -190,7 +190,8 @@
     const ex = FP.trendView.extras(state);
     const pct = (v) => (v === null || v === undefined || !fin(v) ? DASH : `${(v * 100).toFixed(1)} %`);
     return {
-      noFunnel: true,
+      noFunnel: true, goto: true,
+      actions: (x) => `<button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pe-focus" data-key="${esc(x.key)}" data-target="pe-porque" title="Abre el embudo de esta fila">Embudo</button> `,
       sub: (x) => { const e = ex(x.key); return e.role ? `<span class="cell-sub">${esc(e.role)}${e.rank ? ` · #${e.rank}` : ''}</span>` : ''; },
       cols: [
         { head: 'Peso del movimiento', cls: 'num', cell: (x) => pct(ex(x.key).movementShare) },
@@ -211,9 +212,11 @@
       return;
     }
     const ef = TV.filters(state, true);
-    const controls = PV.controlsHtml(state, { groups: ef.groups, chips: ef.chips });
+    const controls = PV.controlsHtml(state, { groups: ef.groups, chips: ef.chips, goto: true });
     const res = PV.resultParts(state, extraCols(state));
     const A = TV.build(state, true), early = A.early !== undefined;
+    const lvls = FP.app.paNextChoices(state.pa), curLvl = FP.app.paLevel(state.pa) || 'sku', LV = PV.LEVEL;
+    const evoSel = `<div class="field chap__ctl"><label for="pe-evolevel" class="field__hint">Ver evolución por</label><select id="pe-evolevel" data-action="pe-evolevel"><option value="">Igual que la tabla (${esc(LV[curLvl] || curLvl)})</option>${lvls.filter((l) => l !== curLvl).map((l) => `<option value="${l}" ${state.pa.evoLevel === l ? 'selected' : ''}>${esc(LV[l] || l)}</option>`).join('')}</select></div>`;
     const rangeNote = opts && opts.range ? '<p class="note note--warning"><strong>La evolución necesita periodos de calendario.</strong> El rango libre solo aplica a la foto del periodo: elige Año, Mes, Semana o Día en Granularidad para actualizar la evolución.</p>' : '';
     const tools = early ? '' : '<div class="chap__tools"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar este periodo</button><button type="button" class="btn btn--small btn--ghost" data-action="an-export-contrib">Descargar CSV</button></div>';
     const chips = [['pe-que', 'Qué pasó'], ['pe-meta', 'Contra la meta'], ['pe-quien', 'Quién lo mueve'], ['pe-evolucion', 'Desde cuándo'], ['pe-porque', 'Por qué'], ['pe-evidencia', 'Evidencia']]
@@ -232,9 +235,9 @@
       ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : A.context + A.narrative}${res.kpis}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : A.mix}`)}
-      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
+      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
       ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
-      ${chapter(6, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}`)}`;
+      ${chapter(6, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}`;
   }
 
   FP.prodevolView = { render };

@@ -41,6 +41,24 @@
     return active(o);
   }
 
+  /** Opciones de «Ir a…»: categoría, subcategoría, producto y SKU, cada una con la ruta completa que lleva a ella. */
+  let gotoCache = null;
+  function gotoOptions(limit = 3000) {
+    const PS = FP.productStore, cat = PS && PS.catalog ? PS.catalog.list : [];
+    if (gotoCache && gotoCache.src === cat && gotoCache.n === cat.length) return gotoCache.map;
+    const map = new Map();
+    const path = (c, upTo) => ['category', 'subcategory', 'product', 'sku'].slice(0, upTo).map((lv) => ({ level: lv, key: lv === 'product' ? (c.product || c.sku) : c[lv] })).filter((x) => x.key);
+    cat.forEach((c) => {
+      if (map.size >= limit) return;
+      if (c.category) map.set(`${c.category} · categoría`, path(c, 1));
+      if (c.subcategory) map.set(`${c.subcategory}${c.category ? ` (${c.category})` : ''} · subcategoría`, path(c, 2));
+      if (c.product || c.sku) map.set(`${c.product || c.sku}${c.product && c.sku ? ` (${c.sku})` : ''} · producto`, path(c, 3));
+      if (c.sku) map.set(`${c.sku} · SKU`, path(c, 4));
+    });
+    gotoCache = { src: cat, n: cat.length, map };
+    return map;
+  }
+
   /** «Categoría Diabetes · Sucursal 108» para rótulos. */
   /** Rótulo de un valor: la sucursal se muestra por su nombre (nombre_sucursal); el código solo si no hay nombre. */
   function label(key, value) {
@@ -50,5 +68,5 @@
   }
   const describe = (f) => KEYS.filter((k) => f && f[k]).map((k) => `${LABEL[k]} ${label(k, f[k])}`).join(' · ');
 
-  FP.productFilter = { KEYS, LABEL, active, isActive, options, cascade, describe, label };
+  FP.productFilter = { KEYS, LABEL, active, isActive, options, cascade, describe, label, gotoOptions };
 })(typeof window !== 'undefined' ? window : globalThis);

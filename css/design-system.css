@@ -2202,3 +2202,6 @@ body.gs-lock{overflow:hidden}
 .fnl-chart__cur { fill: var(--ds-driver); }
 .fnl-chart__prev { fill: var(--ds-surface); stroke: var(--ds-text-muted); stroke-width: 1.5; }
 tr.is-total th, tr.is-total td { font-weight: 600; }
+.chap__ctl { max-width: 340px; }
+.pa-goto { max-width: 420px; margin: var(--ds-s3) 0; }
+.pa-goto input { width: 100%; }

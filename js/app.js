@@ -1913,7 +1913,9 @@
       const path = paFilter(pa); let f = {}; PF.KEYS.forEach((k) => { if (path[k]) f = PF.cascade(f, k, path[k]); });
       if (JSON.stringify(Object.entries(PF.active(a.filter)).sort()) !== JSON.stringify(Object.entries(f).sort())) patch.filter = f;
     }
-    const lvl = paLevel(pa) || 'sku';   // el nivel de la tabla de Producto es el nivel que se analiza en el tiempo
+    // el nivel que se analiza en el tiempo es el de la tabla, salvo que la persona elija otro («Ver evolución por»)
+    if (pa.evoLevel && (paUsed(pa).has(pa.evoLevel) || !paAvailable()(pa.evoLevel))) pa.evoLevel = null;
+    const lvl = pa.evoLevel || paLevel(pa) || 'sku';
     if (['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) && a.level !== lvl) patch.level = lvl;
     if (Object.keys(patch).length) resetAnalysis(patch);
     a.ctxTouched = false;   // el contexto compartido lo lleva Producto
@@ -3610,6 +3612,26 @@
       else { const r = TE.focusRange(g, key, m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
       render();
     },
+    /** «Ir a…»: salta directo a una categoría, subcategoría, producto o SKU (la ruta completa). */
+    'pa-goto'(el) {
+      const PF = FP.productFilter, p = PF && PF.gotoOptions().get(String(el.value || '').trim());
+      if (!p) return;   // texto que no es una opción: se ignora sin cambiar nada
+      const pa = state.pa;
+      pa.drill = p.map((x) => ({ level: x.level, key: x.key })); pa.next = null; pa.result = null; pa.trace = null; pa.page = 1; pa.evoLevel = null; pa.touched = true;
+      render();
+    },
+    'pe-evolevel'(el) { state.pa.evoLevel = el.value || null; state.an.selected = null; state.an.drill = null; render(); },
+    /** Elegir una fila: abre su lectura (Evolución) y baja al capítulo pedido, sin cambiar de página. */
+    'pe-focus'(el) {
+      const key = el.dataset.key, target = el.dataset.target;
+      const a = state.an;
+      if (state.pa.evoLevel) state.pa.evoLevel = null;   // la fila es del nivel de la tabla
+      peSync();
+      if (a.rows && a.rows.some((r) => r.entity === key)) openDrill({ scope: 'entity', entity: key, source: 'tabla' });
+      else a.reopen = { scope: 'entity', entity: key };
+      render();
+      if (target) setTimeout(() => { const t = document.getElementById(target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }, 60);
+    },
     'pe-jump'(el) { const t = document.getElementById(el.dataset.target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
     'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
     'pa-drill'(el) {
@@ -3641,6 +3663,7 @@
       const t = document.getElementById(state.view === 'prodevol' ? 'pe-trace' : 'pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
     'pa-to-trend'(el) {
+      if (state.view === 'prodevol') return actions['pe-focus']({ dataset: { key: el.dataset.key, target: 'pe-evolucion' } });
       // Producto → Evolución: la misma selección (ruta y geografía, canal y periodo) y la entidad de la fila abierta en su lectura.
       const pa = state.pa, PF = FP.productFilter; if (!PF) return;
       const lvl = el.dataset.level, path = paFilter(pa);
@@ -3652,6 +3675,7 @@
       root.location.hash = '#analisis';
     },
     'an-to-product'(el) {
+      if (state.view === 'prodevol') { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }   // el foco ya es esta entidad: se baja al capítulo del embudo
       // Evolución → Producto: la selección de la página y la entidad abierta pasan como ruta del análisis de productos (embudo, CR y patrones).
       const a = state.an, pa = state.pa, PF = FP.productFilter, ent = el.dataset.entity;
       const f = { ...(PF ? PF.active(a.filter) : {}) };
@@ -3662,6 +3686,7 @@
       root.location.hash = '#producto';
     },
     'an-open-trace'(el) {
+      if (state.view === 'prodevol') return actions['pa-trace']({ dataset: { key: el.dataset.sku } });   // la trazabilidad es del SKU, no cambia la ruta
       const a = state.an, pa = state.pa;
       paFromSelection({ sku: el.dataset.sku }, a.channel);
       pa.pendingTrace = el.dataset.sku; a.ctxTouched = true;

@@ -154,10 +154,11 @@
         </section>`;
   }
 
-  function renderStatus(state) {
+  /** Resumen de los datos de productos (SKU‑días, archivos, funnel, geografía) con sus botones. */
+  function statusHtml(state) {
     const pa = state.pa;
     const m = PS().meta || {};
-    $('pa-status').innerHTML = `
+    return `
       <div class="stack">
         <section><h3 class="ds-h4">Datos de productos</h3>
           ${PS().available() && m.batches ? `<ul class="plain-list">
@@ -176,6 +177,7 @@
         </section>
       </div>`;
   }
+  function renderStatus(state) { $('pa-status').innerHTML = statusHtml(state); }
 
   /** Término del negocio para "sucursal" (Business Context, Fase 8.2); el resto de textos no cambia en esta fase. */
   const locTerm = () => { const t = C().business && C().business.terms && C().business.terms.location; return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Sucursal'; };
@@ -238,8 +240,14 @@
         ${sel('branch', locTerm(), opts.branches, (b) => b.code, (b) => (b.name !== b.code ? `${b.name} (${b.code})` : b.code))}
         ${sel('delivery', 'Tipo de entrega', opts.deliveries)}` : '' }
       ].concat((extra && extra.groups) || []) });
+    let gotoField = '';
+    if (extra && extra.goto && FP.productFilter && FP.productFilter.gotoOptions) {
+      const opts = [...FP.productFilter.gotoOptions().keys()];
+      gotoField = `<div class="field pa-goto"><label for="pa-goto" class="field__hint">Ir a…</label><input id="pa-goto" type="search" list="pa-goto-list" autocomplete="off" placeholder="Categoría, producto o SKU" data-action="pa-goto"><datalist id="pa-goto-list">${opts.map((o) => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>`;
+    }
     return `
       ${shell}
+      ${gotoField}
       <nav class="breadcrumbs" aria-label="Ruta del análisis">${crumbs.join(' › ')}
         ${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}
         ${choices.length && level ? `<span class="breadcrumbs__next"><label for="pa-next" class="field__hint">Desglosar por</label>
@@ -295,7 +303,7 @@
         <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>
         <td>${x.signals.map((s) => `<span class="chip" title="${esc(s.evidence)}">Patrón ${esc(s.pattern)}</span>`).join(' ')}</td>
         <td>${r.level !== 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}" ${x.key === '(sin dato)' || x.key === '(inválido)' ? 'title="Abre los renglones sin este dato"' : ''}>Ver ›</button>`
-          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
+          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${extra && extra.actions ? extra.actions(x) : ''}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
       ${n ? `<p class="field__hint">Top ${n} de ${F().integer(rows.length)} por |contribución|. El Top N es solo visual: todos los SKU siguen guardados y en los totales.</p>`
         : `<div class="pager"><span>${F().integer((page - 1) * size + 1)}–${F().integer(Math.min(page * size, rows.length))} de ${F().integer(rows.length)}</span>
           <div class="btn-row"><button type="button" class="btn btn--small" data-action="pa-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
@@ -347,5 +355,5 @@
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }
 
-  FP.productView = { render, renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts };
+  FP.productView = { render, renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml };
 })(typeof window !== 'undefined' ? window : globalThis);
