@@ -192,7 +192,7 @@
     if (!FE().pick(r.total.current)) return funnelMissing(state);
     if (!f.cur) return `<p class="note"><strong>${esc(f.label)} no tiene funnel en este periodo.</strong> Elige otra fila de la tabla «Dónde se pierde».</p>${funnelWhere(state)}`;
     const cmp = FE().compare(f.cur, f.base);
-    return `<div class="fnl-blocks">${funnelSteps(state, f, cmp)}${funnelWhere(state)}${funnelMonthly(state, f)}${funnelSplit(state, f)}</div>`;
+    return `<div class="fnl-blocks">${funnelSteps(state, f, cmp)}${funnelWhere(state)}<details class="disclosure pe-note"><summary>Ver más · tasas por periodo y reparto del cambio por factor</summary><div class="fnl-blocks">${funnelMonthly(state, f)}${funnelSplit(state, f)}</div></details></div>`;
   }
   /** Lo que la tabla de «¿Quién lo mueve?» suma a la de Producto: el rol bajo el nombre, el cambio de participación y si la entidad gana o pierde lugar. */
   function extraCols(state) {
@@ -360,8 +360,8 @@
       ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}${early ? '' : `<details class="disclosure pe-note"><summary>Resumen en texto y cómo se calcula</summary>${A.narrative}</details>`}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : `<details class="disclosure pe-note"><summary>Mix Intelligence · quién gana y quién pierde participación</summary>${A.mix}</details>`}`)}
-      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}${evoSel}${evoTools}${hist ? noHistory(state) : A.table}${A.forecast}`)}
-      ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
+      ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}<div class="pe-evotools">${evoSel}${evoTools}</div>${hist ? noHistory(state) : A.table}${A.forecast}`)}
+      ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<details class="disclosure pe-note"><summary>Dónde se concentra la variación y señales de patrón</summary><div class="chap__block">${res.signals}</div></details>` : ''}`)}
       ${chapter(6, 'hacer', '¿Qué hago?', takeHacer(state), FP.prodevolContext ? FP.prodevolContext.actionHtml(state) : '')}
       ${chapter(7, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}
       `;

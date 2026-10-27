@@ -71,7 +71,7 @@
     let c1;
     if (fin(s.change) && fin(s.lastChange)) {
       const d = (s.change - s.lastChange) * 100, word = d < -2 ? 'Peor que la misma época del año pasado' : d > 2 ? 'Mejor que la misma época del año pasado' : 'En línea con la misma época del año pasado';
-      c1 = `<b>${esc(word)}</b><span class="hint">Este periodo contra su comparación: ${esc(pc(s.change))}. Hace un año, el mismo cambio fue ${esc(pc(s.lastChange))} (${nw(`${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)} pp`)}). Solo hay un año de referencia: no es un índice estacional.</span>`;
+      c1 = `<b>${esc(word)}</b><span class="hint">Este periodo: ${esc(pc(s.change))}; hace un año: ${esc(pc(s.lastChange))} (${nw(`${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)} pp`)}). Un solo año de referencia: no es un índice estacional.</span>`;
     } else c1 = '<b>Sin referencia del año anterior</b><span class="hint">Para saber si esto es normal en esta época hacen falta los mismos periodos del año pasado en los datos de productos.</span>';
     // 2 · año anterior
     const c2 = fin(s.yoy) ? `<b>${esc(pc(s.yoy))}</b><span class="hint">${esc(F().currency(s.cur, 0))} contra ${esc(F().currency(s.lastCur, 0))} en el mismo periodo del año anterior.</span>` : '<b>—</b><span class="hint">No hay datos del mismo periodo del año anterior.</span>';
