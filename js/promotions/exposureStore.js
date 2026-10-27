@@ -74,11 +74,33 @@
     return ok({ exposure: e });
   }
 
+  /**
+   * Folios con exposiciones medibles: los que tienen al menos una con fecha de inicio. Devuelve [{ batchId, items, measurable, noStart }].
+   */
+  function batches(reg) {
+    const m = new Map();
+    reg.items.forEach((e) => { const x = m.get(e.batchId) || { batchId: e.batchId, items: [] }; x.items.push(e); m.set(e.batchId, x); });
+    return [...m.values()].map((x) => Object.assign(x, { measurable: x.items.filter((e) => e.start), noStart: x.items.filter((e) => !e.start).length })).reverse();
+  }
+  /**
+   * Una «promoción» solo para medir un folio de exposiciones con el mismo motor de evaluación (no se guarda ni cuenta como promoción).
+   * Ventana de cada SKU: de su inicio a su fin; sin fin, hasta la última venta cargada; si se quitó antes, hasta el día en que se quitó.
+   */
+  function asPromotion(batch, dateMax) {
+    const skus = batch.measurable.map((e) => {
+      const rm = e.state === 'removed' ? String((e.history[e.history.length - 1] || {}).at || '').slice(0, 10) : '';
+      let end = e.end || dateMax || e.start; if (rm && rm < end) end = rm;
+      return { sku: e.sku, name: e.name, origin: 'exposure', realStart: e.start, realEnd: end };
+    });
+    const starts = skus.map((s) => s.realStart).sort(), ends = skus.map((s) => s.realEnd).sort();
+    return { promoId: batch.batchId, name: `Exposición ${batch.batchId}`, channel: 'total', status: 'published', plannedStart: starts[0] || '', plannedEnd: ends[ends.length - 1] || '', skus, baseline: null };
+  }
+
   function summary(reg, today) {
     const s = { active: 0, upcoming: 0, ended: 0, removed: 0 };
     reg.items.forEach((e) => { s[status(e, today)] += 1; });
     return s;
   }
 
-  FP.exposures = { STATUS, createRegistry, hydrate, add, remove, status, currentFor, lastFor, summary, isISO };
+  FP.exposures = { batches, asPromotion, STATUS, createRegistry, hydrate, add, remove, status, currentFor, lastFor, summary, isISO };
 })(typeof window !== 'undefined' ? window : globalThis);
