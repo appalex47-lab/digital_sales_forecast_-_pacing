@@ -3076,7 +3076,7 @@
     'an-drill-up'(el) { const d = state.an.drill; if (!d) return; const i = Number(el.dataset.index); d.path = d.path.slice(0, i + 1); d.loading = true; loadDrill(); render(); },
     'an-drill-retry'() { const d = state.an.drill; if (!d) return; d.loading = true; loadDrill(); render(); },
     'an-drill-close'() { state.an.drill = null; render(); },
-    'an-drill-channel'(el) { const d = state.an.drill; const keep = d ? { scope: d.scope, entity: d.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.dataset.channel) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : { scope: 'total' }; render(); },
+    'an-drill-channel'(el) { const d = state.an.drill; const keep = d ? { scope: d.scope, entity: d.entity } : null; const chn = FP.analysisContext.normChannel(el.dataset.channel); state.pa.channel = chn; state.ux.ctx.channel = chn; state.pa.result = null; resetAnalysis({ channel: chn }); state.an.reopen = keep && keep.scope === 'entity' ? keep : { scope: 'total' }; render(); },
     'an-select'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); setTimeout(() => { const detail = document.getElementById('an-entity-reading'); if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0); },
     /* Lleva el periodo, canal y comparación del Análisis al Diagnóstico (mismo alcance; no cambia el Análisis). */
     'an-diagnose'() {
