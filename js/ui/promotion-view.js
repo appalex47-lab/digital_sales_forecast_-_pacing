@@ -136,13 +136,13 @@
     const history = `<section class="panel" aria-labelledby="pm-t-h"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-h">Historial</h2><p class="panel__desc">Solo se agrega, no se edita.</p></div></div>
       <div class="panel__body"><ul class="plain-list">${hist}</ul></div></section>`;
     const concl = p.conclusion ? `<section class="panel"><div class="panel__body"><strong>Conclusión.</strong> ${esc(p.conclusion)} <strong>Recomendación:</strong> ${esc(Pm.RECOMMENDATIONS[p.recommendation] || '—')}</div></section>` : '';
-    // SKU, línea base e historial vienen plegados; se abren con un clic (los SKU quedan abiertos mientras la promoción está en borrador o propuesta, para poder agregarlos)
+    // SKU, línea base e historial vienen plegados; se abren con un clic (todo viene cerrado; se abre con un clic)
     const F = fold || {}, wrap = (key, label, extra, html, dflt) => {
       if (!html) return '';
       const open = key in F ? !!F[key] : !!dflt;
       return `<div class="gd-foldrow"><button type="button" class="gd-fold" data-action="pm-fold" data-fold="${key}" data-open="${open ? 1 : 0}" aria-expanded="${open}"><span>${esc(label)}${extra ? ` <span class="cell-sub">${esc(extra)}</span>` : ''}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>${open ? html : ''}`;
     };
-    return head + wrap('skus', `SKU de la promoción (${p.skus.length})`, p.skus.length ? '' : 'todavía sin SKU', skus, early)
+    return head + wrap('skus', `SKU de la promoción (${p.skus.length})`, p.skus.length ? '' : 'todavía sin SKU', skus, false)
       + wrap('baseline', 'Línea base congelada', p.baseline ? 'congelada' : 'sin congelar', baseline, false) + exec + status + concl
       + wrap('history', `Historial (${p.history.length})`, '', history, false);
   }

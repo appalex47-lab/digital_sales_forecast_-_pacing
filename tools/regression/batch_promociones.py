@@ -51,6 +51,7 @@ async def main():
         t = await body(q)
         chk('S1 sin SKU no se aprueba', 'Agrega al menos un SKU' in t, t[-300:])
         # SKU
+        if not await q.query_selector('#pm-s-sku'): await click(q, '[data-action="pm-fold"][data-fold="skus"]')   # los SKU vienen plegados
         await fill(q, 'pm-s-sku', 'DEMO-001'); await fill(q, 'pm-s-name', 'Crema demo'); await fill(q, 'pm-s-mech', '2 x 1')
         await click(q, '[data-action="pm-sku-add"]')
         await q.select_option('#pm-s-origin', 'manual'); await fill(q, 'pm-s-sku', 'DEMO-002')
