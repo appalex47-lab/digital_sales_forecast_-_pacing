@@ -50,41 +50,21 @@
   /** Selectores en cascada de producto y ubicación (se combinan con el Canal y filtran TODA la página). */
   /** Nombre a mostrar de una entidad: en el nivel Sucursal, el nombre_sucursal (la clave interna sigue siendo el código). */
   const EN = (e) => { try { const an = FP.app && FP.app.state && FP.app.state.an; return an && an.level === 'branch' && FP.productFilter ? FP.productFilter.label('branch', e) : e; } catch (x) { return e; } };
-  function pageFilterFields(a) {
-    const PF = FP.productFilter; if (!PF) return '';
-    const f = PF.active(a.filter), opts = PF.options(f);
-    return PF.KEYS.map((k) => `<div class="field"><label for="an-f-${k}">${esc(PF.LABEL[k])}</label><select id="an-f-${k}" data-action="an-filter" data-fkey="${k}"><option value="">Todas</option>${(opts[k] || []).map((v) => `<option value="${esc(v)}" ${f[k] === v ? 'selected' : ''}>${esc(PF.label(k, v))}</option>`).join('')}</select></div>`).join('');
-  }
-  /** Filtros de Evolución. `embedded`: en lugar del HTML devuelve los grupos y chips propios (periodo, canal, selección y nivel los pone la otra página). */
-  function filters(state, embedded) {
+  /** Filtros propios de Evolución (grupos, chips, nota de comparación y ayuda); canal, periodo, selección y nivel los pone Producto y evolución. */
+  function filters(state) {
     const a = state.an;
-    const levels = Object.entries(LEVEL);
     const availablePatterns = [...new Set((a.rows || []).map(r => r.pattern).filter(Boolean))];
     const patterns = [['all', 'Todos'], ...availablePatterns.map(k => [k, PATTERN[k]?.[1] || k])];
     const signalLabels = { structural_decline:'Deterioro estructural', structural_growth:'Crecimiento estructural', early_warning:'Alerta temprana', trend_break:'Ruptura de tendencia', recovery:'Recuperación', anomaly:'Anomalía' };
     const availableSignals = [...new Set((a.rows || []).map(r => r.advanced?.signal).filter(Boolean))];
     const signals = [['all','Todas'], ...availableSignals.map(k => [k, signalLabels[k] || k])];
     const pt = a.periodType || 'month', count = a.periodCount || a.months || 12;
-    const periodLabel = {year:'Año',month:'Mes',week:'Semana',day:'Día'}[pt] || 'Mes';
-    const unit = {year:'años',month:'meses',week:'semanas',day:'días'}[pt] || 'meses';
-    const comparison = a.comparison === 'year_ago' ? 'mismo período del año anterior' : 'período anterior';
-    const sh = a.share || {};
-    const t = a.temporal || {};
-    const meta = FP.productStore?.meta || {};
-    const opts = (meta.dateMin && meta.dateMax && FP.temporalEngine) ? FP.temporalEngine.options(meta.dateMin, meta.dateMax, pt, pt === 'day' ? 90 : 24) : [];
-    const defaultFocus = [...opts].reverse().find(x => !x.partial)?.key || opts.at(-1)?.key || '';
-    const focusKey = a.focusKey || defaultFocus;
     const ci = a.comparisonInfo || null;
     const comparisonNote = ci && ci.message ? `<div class="note note--warning analysis-comparison-warning"><strong>Comparación no disponible (N/A).</strong> ${esc(ci.message)} Puedes cambiar la comparación o el canal sin recargar la página.</div>`
       : ci && ci.partial ? `<div class="note analysis-comparison-info"><strong>Período en curso.</strong> ${esc(ci.note || '')}</div>`
       : ci && ci.truncated ? `<div class="note analysis-comparison-info">${esc(ci.note || '')}</div>` : '';
-    const F_an_channel = `<div class="field"><label for="an-channel">Canal</label><select id="an-channel" data-action="an-channel">${FP.analysisContext.channelList().map(c => `<option value="${c}" ${c === (a.channel || 'total') ? 'selected' : ''}>${esc(FP.analysisContext.channelLabel(c))}</option>`).join('')}</select></div>`;
     const F_an_metric = `<div class="field"><label for="an-metric">Métrica</label><select id="an-metric" data-action="an-metric">${Object.entries(FP.analysisContext.METRICS).map(([k, m]) => `<option value="${k}" ${k === (a.metric || 'revenue') ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></div>`;
-    const F_an_period_type = `<div class="field"><label for="an-period-type">Granularidad</label><select id="an-period-type" data-action="an-period-type"><option value="year" ${pt==='year'?'selected':''}>Año</option><option value="month" ${pt==='month'?'selected':''}>Mes</option><option value="week" ${pt==='week'?'selected':''}>Semana</option><option value="day" ${pt==='day'?'selected':''}>Día</option></select></div>`;
-    const F_an_focus = `<div class="field"><label for="an-focus">Periodo focal</label><select id="an-focus" data-action="an-focus">${opts.length ? opts.slice().reverse().map(o => `<option value="${esc(o.key)}" ${o.key===focusKey?'selected':''}>${esc(FP.temporalEngine.label(pt,o.key,o.range))}</option>`).join('') : '<option>Sin periodos</option>'}</select></div>`;
     const F_an_period_count = `<div class="field"><label for="an-period-count">Historia</label><input id="an-period-count" type="number" min="3" max="${pt==='day'?90:24}" step="1" value="${count}" data-action="an-period-count"></div>`;
-    const F_an_comparison = `<div class="field"><label for="an-comparison">Comparación principal</label><select id="an-comparison" data-action="an-comparison"><option value="previous" ${a.comparison!=='year_ago'?'selected':''}>Período anterior</option><option value="year_ago" ${a.comparison==='year_ago'?'selected':''}>Mismo periodo año anterior</option></select></div>`;
-    const F_an_level = `<div class="field"><label for="an-level">Analizar por</label><select id="an-level" data-action="an-level">${levels.map(([v,l])=>`<option value="${v}" ${v===a.level?'selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
     const F_an_state = `<div class="field"><label for="an-state">Estado actual</label><select id="an-state" data-action="an-state">${STATE_ORDER.map(([v, l]) => `<option value="${v}" ${v === (a.stateFilter || 'all') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
     const F_an_entity_query = `<div class="field"><label for="an-entity-query">Buscar</label><input id="an-entity-query" type="search" value="${esc(a.entityQuery || '')}" placeholder="Producto, categoría, SKU…" data-action="an-entity-query"></div>`;
     const F_an_pattern = `<div class="field"><label for="an-pattern">Patrón</label><select id="an-pattern" data-action="an-pattern">${patterns.map(([v,l])=>`<option value="${v}" ${v===a.pattern?'selected':''}>${l}</option>`).join('')}</select></div>`;
@@ -102,25 +82,10 @@
     if (a.anomalyDirection && a.anomalyDirection !== 'all') chips.push({ key: 'anomalyDirection', text: 'Anomalía filtrada' });
     if (Number(a.minSharePct) !== 0.5) chips.push({ key: 'minSharePct', text: Number(a.minSharePct) > 0 ? `Materialidad ≥ ${a.minSharePct} %` : 'Materialidad: todas' });
     if (Number(a.minImpact) > 0) chips.push({ key: 'minImpact', text: `Impacto ≥ ${a.minImpact}` });
-    const spec = { page: 'an', open: Boolean(state.fs && state.fs.an),
-      primary: [F_an_channel, F_an_period_type, F_an_focus, F_an_comparison].join(''),
-      chips,
-      groups: [
-        { title: 'Qué', html: F_an_metric + F_an_level },
-        { title: 'Cuándo', html: F_an_period_count },
-        { title: 'Producto y ubicación (filtra toda la página)', html: pageFilterFields(a) },
-        { title: 'Resultados', html: F_an_state + F_an_entity_query + F_an_pattern + F_an_signal + F_an_anomaly_direction + F_an_min_share + F_an_min_impact }
-      ] };
-    if (embedded) {   // la otra página pone canal, periodo, selección y nivel; aquí quedan métrica, historia y los filtros de resultado
-      return { groups: [{ title: 'Qué mirar', html: F_an_metric + F_an_period_count }, spec.groups[3]],
-        chips: chips.filter((c) => !c.key.startsWith('f:')).map((c) => ({ ...c, key: 'an:' + c.key })), comparisonNote };
-    }
-    const shell = FP.filterShell.html(spec);
-    return `<div class="analysis-filter-bar">${shell}
-      ${PFm && PFm.isActive(pf) ? '<p class="field__hint">Todo lo de esta página (series, patrones, pronóstico, detalle, asistente) se calcula solo con la selección de producto o ubicación, dentro del canal elegido. El Puente al plan no aplica: la meta existe por canal.</p>' : ''}
-      <p class="field__hint">Patrón y señal clasifican la forma de la serie; «Anomalía» filtra movimientos inusuales; «Impacto mínimo» oculta cambios pequeños; «Materialidad» oculta entidades que pesan menos de ese % del total (por defecto 0.5 %), porque su movimiento suele ser ruido. Contribución y totales siguen incluyéndolas.</p>
-      ${comparisonNote}
-    </div>`;
+    // la página pone canal, periodo, selección y nivel; aquí quedan métrica, historia y los filtros de resultado
+    return { groups: [{ title: 'Qué mirar', html: F_an_metric + F_an_period_count }, { title: 'Resultados', html: F_an_state + F_an_entity_query + F_an_pattern + F_an_signal + F_an_anomaly_direction + F_an_min_share + F_an_min_impact }],
+      chips: chips.filter((c) => !c.key.startsWith('f:')).map((c) => ({ ...c, key: 'an:' + c.key })), comparisonNote,
+      hint: '<p class="field__hint">Patrón y señal clasifican la forma de la serie; «Anomalía» filtra movimientos inusuales; «Impacto mínimo» oculta cambios pequeños; «Materialidad» oculta entidades que pesan menos de ese % del total (por defecto 0.5 %), porque su movimiento suele ser ruido. Contribución y totales siguen incluyéndolas.</p>' };
   }
   /** Contexto vigente: Canal · Período · Comparación · Nivel · Métrica (siempre visible). */
   function contextBar(a) {
@@ -567,8 +532,8 @@
     }
   }
 
-  /** Arma las partes de la página. `embedded`: otra página aporta los filtros (no se incluyen). Devuelve {early} si no hay nada que mostrar todavía. */
-  function build(state, embedded) {
+  /** Arma las partes de Evolución para Producto y evolución. Devuelve {early} si no hay nada que mostrar todavía. */
+  function build(state) {
     const a = state.an;
     MK = (a.context && a.context.metric) || a.metric || 'revenue';
     const filteredRows = (a.rows || []).filter((r) => {
@@ -590,8 +555,8 @@
       return { early: `<div class="empty"><strong>Faltan datos de productos</strong>Carga y guarda datos de productos para construir las series históricas de Evolución.</div>` };
     }
     if (a.loading && !a.rows.length) { const pr = a.progress || { frac: 0, label: 'Preparando', startedAt: Date.now() };
-      return { early: `${embedded ? '' : safe('Filtros', () => filters(state))}${FP.ui.loader.html({ id: 'an-loader', title: 'Construyendo evolución histórica…', label: pr.label, pct: Math.min(99, Math.round(pr.frac * 100)), t0: pr.startedAt, hint: 'Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.' })}` }; }
-    if (a.error) return { early: `${embedded ? '' : safe('Filtros', () => filters(state))}<div class="empty empty--error"><strong>No se pudo calcular Evolución</strong>${esc(a.error)}</div>` };
+      return { early: `${FP.ui.loader.html({ id: 'an-loader', title: 'Construyendo evolución histórica…', label: pr.label, pct: Math.min(99, Math.round(pr.frac * 100)), t0: pr.startedAt, hint: 'Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.' })}` }; }
+    if (a.error) return { early: `<div class="empty empty--error"><strong>No se pudo calcular Evolución</strong>${esc(a.error)}</div>` };
     const total = filteredRows.length, allTotal=a.rows.length, growth = filteredRows.filter((r) => r.direction === 'growth').length, decline = filteredRows.filter((r) => r.direction === 'decline').length;
     const sh=a.share||{}; const tm=a.temporal||{}; const ci2=a.comparisonInfo||{}; const cur=typeof tm.currentTotal==='number'?tm.currentTotal:(typeof sh.currentTotal==='number'?sh.currentTotal:null), base=ci2.comparable&&typeof sh.baselineTotal==='number'?sh.baselineTotal:null, delta=cur!==null&&base!==null?cur-base:null, deltaPct=FP.analysisContext.pctChange(cur,base);
     const fcMap = new Map(((a.forecast && a.forecast.rows) || []).map((x) => [x.entity, x]));
@@ -604,7 +569,6 @@
     a._filteredRows = filteredRows;
     const hiddenMat = (a.rows || []).filter((r) => !isMaterial(a, r)).length;
     return {
-      filters: embedded ? '' : safe('Filtros', () => filters(state)),
       context: safe('Contexto', () => contextBar(a)),
       narrative: safe('Narrativa', () => narrativePanel(a)),
       kpis: `<div class="metric-grid trend-kpis">
@@ -622,12 +586,6 @@
       forecast: `<details class="disclosure analysis-forecast-fold"><summary>Forecast por entidad (método anterior, con backtest)</summary>${safe('Forecast de tendencias', () => forecastPanel(a))}</details>`,
       assistant: safe('Asistente de análisis', () => analysisAssistant(a))
     };
-  }
-  /** Página independiente de Evolución y patrones. */
-  function render(state) {
-    const el = $('an-content'); if (!el) return;
-    const P = build(state, false);
-    el.innerHTML = P.early !== undefined ? P.early : [P.filters, P.context, P.narrative, P.kpis, P.table, P.reading, P.contribution, P.pvm, P.bridge, P.mix, P.forecast, P.assistant].join('');
   }
 
   /* ---------- Piezas de Evolución que otra página reutiliza ---------- */
@@ -658,5 +616,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { render, build, filters, isMaterial, extras, contributionKpis };
+  FP.trendView = { build, filters, isMaterial, extras, contributionKpis };
 })(typeof window !== 'undefined' ? window : globalThis);

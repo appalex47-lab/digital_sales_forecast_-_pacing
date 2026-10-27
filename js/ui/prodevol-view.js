@@ -211,10 +211,10 @@
       el.innerHTML = '<section class="panel"><div class="panel__body"><div class="empty"><strong>Todavía no hay datos de productos</strong>Carga el archivo de venta por producto (y, si quieres CR y embudo, el de funnel de GA4) en Carga de datos. <a class="btn btn--small btn--primary" href="#carga">Ir a Carga de datos</a></div></div></section>';
       return;
     }
-    const ef = TV.filters(state, true);
+    const ef = TV.filters(state);
     const controls = PV.controlsHtml(state, { groups: ef.groups, chips: ef.chips, goto: true });
     const res = PV.resultParts(state, extraCols(state));
-    const A = TV.build(state, true), early = A.early !== undefined;
+    const A = TV.build(state), early = A.early !== undefined;
     const lvls = FP.app.paNextChoices(state.pa), curLvl = FP.app.paLevel(state.pa) || 'sku', LV = PV.LEVEL;
     const evoSel = `<div class="field chap__ctl"><label for="pe-evolevel" class="field__hint">Ver evolución por</label><select id="pe-evolevel" data-action="pe-evolevel"><option value="">Igual que la tabla (${esc(LV[curLvl] || curLvl)})</option>${lvls.filter((l) => l !== curLvl).map((l) => `<option value="${l}" ${state.pa.evoLevel === l ? 'selected' : ''}>${esc(LV[l] || l)}</option>`).join('')}</select></div>`;
     const rangeNote = opts && opts.range ? '<p class="note note--warning"><strong>La evolución necesita periodos de calendario.</strong> El rango libre solo aplica a la foto del periodo: elige Año, Mes, Semana o Día en Granularidad para actualizar la evolución.</p>' : '';
@@ -229,10 +229,11 @@
           <p class="panel__desc">Aquí viven ahora Categoría → Producto y Evolución y patrones: sus rutas (#producto y #analisis) abren el capítulo equivalente.</p>
         </div></div>
         <div class="panel__body">${controls}
+          ${ef.hint ? `<p class="field__hint">${ef.hint.replace(/^<p[^>]*>|<\/p>$/g, '')}</p>` : ''}
           <div class="pe-jump" role="navigation" aria-label="Secciones de la página">${chips}</div>
         </div>
       </section>
-      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : A.context + A.narrative}${res.kpis}`)}
+      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context + A.narrative}${res.kpis}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : A.mix}`)}
       ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}

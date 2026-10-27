@@ -177,7 +177,6 @@
         </section>
       </div>`;
   }
-  function renderStatus(state) { $('pa-status').innerHTML = statusHtml(state); }
 
   /** Término del negocio para "sucursal" (Business Context, Fase 8.2); el resto de textos no cambia en esta fase. */
   const locTerm = () => { const t = C().business && C().business.terms && C().business.terms.location; return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Sucursal'; };
@@ -255,7 +254,6 @@
       ${geoLevel ? `<p class="field__hint">${esc(`Región, estado, ciudad, ${locTerm().toLowerCase()} y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles aquí. Una diferencia entre zonas no demuestra por sí misma una causa.`)}</p>` : ''}
       ${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
   }
-  function renderControls(state) { $('pa-controls').innerHTML = controlsHtml(state); }
 
   /** HTML de los resultados (KPIs, tabla, señales y trazabilidad), para pintarlos aquí o dentro de otra página. */
   function resultParts(state, extra) {
@@ -332,17 +330,6 @@
       <p class="field__hint">Archivo → fila → fecha → canal → SKU → métrica. Venta y funnel se muestran en renglones separados porque son archivos distintos. Valores observados tal como venían; los faltantes e inválidos no se convierten en 0.</p>`;
     return out;
   }
-  function renderResult(state) {
-    const o = resultParts(state);
-    $('pa-kpis').innerHTML = o.kpis; $('pa-table').innerHTML = o.table; $('pa-signals').innerHTML = o.signals; $('pa-trace').innerHTML = o.trace;
-  }
-
-  function render(state) {
-    renderStatus(state);
-    renderControls(state);
-    renderResult(state);
-  }
-
   /** Tabla de calidad por columna (venta): nivel, llenado y lo que se pierde si falta. Se usa en la revisión de la carga (abierta: ahí decide si se guarda) y en Calidad de datos (cerrada: es detalle). */
   function columnsTable(columns, label, open) {
     if (!columns || !columns.length) return '';
@@ -355,5 +342,5 @@
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }
 
-  FP.productView = { render, renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml };
+  FP.productView = { renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml };
 })(typeof window !== 'undefined' ? window : globalThis);

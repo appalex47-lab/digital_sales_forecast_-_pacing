@@ -595,19 +595,6 @@
       </div></details>
   </main>
 
-  <!-- ===================== Vista: Análisis → Evolución (Análisis 1) ===================== -->
-  <main class="app-main" data-view="analisis" id="view-analisis" hidden>
-    <div class="ux-explainer" id="ux-exp-analisis"></div>
-    <div class="why-hub-slot" id="why-hub-analisis"></div>
-    <section class="panel" aria-labelledby="t-an">
-      <div class="panel__head"><div data-own-head>
-        <h2 class="panel__title" id="t-an">Evolución y patrones</h2>
-        <p class="panel__desc">No solo muestra si una entidad cayó o creció: identifica desde cuándo, cuánto tiempo lleva, si acelera o desacelera y si existe recuperación. Los resultados son descriptivos y trazables.</p>
-      </div></div>
-      <div class="panel__body" id="an-content"></div>
-    </section>
-  </main>
-
   <!-- ===================== Vista: Recovery Center (Fase 6) ===================== -->
   <main class="app-main" data-view="recovery" id="view-recovery" hidden>
     <div class="ux-explainer" id="ux-exp-recovery"></div>
@@ -736,27 +723,6 @@
   <main class="app-main" data-view="prodevol" id="view-prodevol" hidden>
     <div class="why-hub-slot" id="why-hub-prodevol"></div>
     <div id="pe-body"></div>
-  </main>
-
-  <!-- ===================== Vista: Categoría → Producto (Fase 8.1) ===================== -->
-  <main class="app-main" data-view="producto" id="view-producto" hidden>
-    <div class="why-hub-slot" id="why-hub-producto"></div>
-    <section class="panel" aria-labelledby="t-pa">
-      <div class="panel__head"><div data-own-head>
-        <h2 class="panel__title" id="t-pa">Categoría → Producto</h2>
-        <p class="panel__desc">Negocio → canal → categoría → subcategoría → producto → SKU. Qué grupos pesan (participación) y cuáles explican el cambio (contribución). Datos diarios por SKU guardados en IndexedDB.</p>
-      </div></div>
-      <div class="panel__body" id="pa-status"></div>
-    </section>
-    <section class="panel"><div class="panel__body" id="pa-controls"></div><div class="panel__body" id="pa-kpis"></div></section>
-    <section class="panel"><div class="panel__body panel__body--flush" id="pa-table"></div></section>
-    <section class="panel" aria-labelledby="t-pasig">
-      <div class="panel__head"><div><h2 class="panel__title" id="t-pasig">Señales por patrón</h2>
-        <p class="panel__desc">Combinaciones de tráfico, CR, pedidos y AOV que merecen investigación. No son causas.</p></div>
-        <div><button type="button" class="btn btn--small btn--primary" data-action="pa-export">Exportar category_product_analysis_export.json</button></div></div>
-      <div class="panel__body" id="pa-signals"></div>
-    </section>
-    <section class="panel"><div class="panel__body" id="pa-trace"></div></section>
   </main>
 
   <section class="ux-next-wrap" id="ux-next" aria-label="Siguiente paso"></section>

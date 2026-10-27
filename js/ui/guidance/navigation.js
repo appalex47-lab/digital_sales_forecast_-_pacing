@@ -25,8 +25,7 @@
     const c = { ...state.ux.ctx };
     // Narrativa y Paquete trabajan sobre la misma selección que Diagnóstico (periodo y canal se pueden cambiar en ellas)
     if (view === 'diagnostico' || view === 'narrativa' || view === 'presentacion' || view === 'segmentos') Object.assign(c, pick(state.dx.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
-    else if ((view === 'producto' || view === 'prodevol') && state.pa) Object.assign(c, paContext(state.pa));
-    else if (view === 'analisis' && state.an) Object.assign(c, anContext(state.an));
+    else if (view === 'prodevol' && state.pa) Object.assign(c, paContext(state.pa));
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
     else if (view === 'reforecast') { c.channel = state.rf.channel; if (state.rf.month && state.rf.period !== 'months') { c.periodType = 'month'; c.periodKey = state.rf.month; } }
@@ -40,7 +39,7 @@
 
 
   /**
-   * Contexto que Categoría → Producto y Evolución y patrones comparten con el resto.
+   * Contexto de Producto y evolución que se comparte con el resto.
    *  · Canal y selección (ruta de categoría/producto y filtros de ubicación): siempre se comparten; la selección es una sola.
    *  · Periodo y comparación: solo si la persona los cambió en esa vista (`touched`), para que visitarla con su periodo por defecto no pise el de Diagnóstico.
    */
@@ -62,15 +61,6 @@
       else if (['year', 'month', 'week'].includes(g) && TE) { r.periodType = g; r.periodKey = TE.periodKey(pa.from, g); }
       else { r.periodType = 'range'; r.periodKey = pa.from; }
     }
-    return r;
-  }
-  function anContext(a) {
-    const r = { channel: a.channel || 'total' };
-    if (FP.productFilter) r.sel = { filter: FP.productFilter.active(a.filter), dropped: [] };
-    if (!a.ctxTouched) return r;
-    r.comparison = a.comparison === 'year_ago' ? 'actual_vs_yoy' : 'actual_vs_previous';
-    const f = a.context && a.context.focus;
-    if (f && f.key && ['year', 'month', 'week', 'day'].includes(a.periodType)) { r.periodType = a.periodType; r.periodKey = String(f.key); }
     return r;
   }
 
@@ -106,7 +96,7 @@
     } else if (view === 'reforecast') {
       state.rf.channel = c.channel || 'total'; state.rf.tableChannel = c.channel || 'total';
       if (monthKey) state.rf.month = monthKey;
-    } else if ((view === 'producto' || view === 'prodevol') && state.pa) {
+    } else if (view === 'prodevol' && state.pa) {
       const pa = state.pa, before = JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]);
       pa.channel = c.channel || pa.channel || 'total';
       if (c.comparison === 'actual_vs_yoy') pa.comparison = 'yoy'; else if (c.comparison === 'actual_vs_previous') pa.comparison = 'previous';
@@ -126,34 +116,6 @@
       }
       pa.touched = false;
       if (selChanged || JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]) !== before) { pa.result = null; pa.trace = null; pa.page = 1; pa.note = null; }
-    } else if (view === 'analisis' && state.an) {
-      const a = state.an, patch = {};
-      const ch = FP.analysisContext.normChannel(c.channel || 'total');
-      if (ch !== a.channel) patch.channel = ch;
-      if (c.comparison === 'actual_vs_yoy' && a.comparison !== 'year_ago') patch.comparison = 'year_ago';
-      else if (c.comparison === 'actual_vs_previous' && a.comparison !== 'previous') patch.comparison = 'previous';
-      const type = ['year', 'month', 'week', 'day'].includes(c.periodType) && c.periodKey ? c.periodType : null;
-      const key = type ? c.periodKey : monthKey;
-      if (key) {
-        const t = type || 'month';
-        if (a.periodType !== t || a.focusKey !== key) { Object.assign(patch, { periodType: t, focusKey: key }); if (a.periodType !== t) { const pc = { year: 3, month: 12, week: 12, day: 30 }[t]; patch.periodCount = pc; patch.months = pc; } }
-        if (!type) notes.push('Evolución y patrones lee por año, mes, semana o día: se muestra el mes del periodo elegido.');
-      }
-      // selección única: el filtro de Evolución es la ruta de Producto
-      if (c.sel && c.sel.filter && FP.productFilter) {
-        const PF = FP.productFilter; let f = {};
-        PF.KEYS.forEach((k) => { if (c.sel.filter[k]) f = PF.cascade(f, k, c.sel.filter[k]); });
-        if (selKey(PF.active(a.filter)) !== selKey(f)) {
-          patch.filter = f;
-          if (f[a.level]) {   // no se analiza «por categoría» una selección que ya es una categoría: se baja al siguiente nivel
-            const HIER = ['category', 'subcategory', 'product', 'sku'], deep = Math.max(...HIER.map((k, i) => (f[k] ? i : -1)));
-            patch.level = HIER[deep + 1] || HIER.find((k) => !f[k]) || 'sku';
-          }
-          if (c.sel.dropped && c.sel.dropped.length) notes.push('Evolución y patrones no filtra por SKU ni región: se omitió ese nivel de la selección.');
-        }
-      }
-      if (Object.keys(patch).length) { if (FP.app && FP.app.resetAnalysis) FP.app.resetAnalysis(patch); else Object.assign(a, patch); }
-      a.ctxTouched = false;
     } else if (view === 'inicio') {
       state.ux.home.channel = c.channel || 'total';
       if ((c.periodType === 'year' || c.periodType === 'month') && c.periodKey) {

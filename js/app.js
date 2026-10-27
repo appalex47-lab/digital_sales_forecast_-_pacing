@@ -21,7 +21,7 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
@@ -1526,7 +1526,7 @@
     if (v === 'pacing' && fcReal) { learn('pacing-seen'); learn('forecast-seen'); }
     else if (v === 'reforecast' && state.rf.run) learn('reforecast-seen');
     else if (v === 'diagnostico' && state.dx.run && state.dx.run.signals && state.dx.run.signals.length) learn('signal-seen');
-    else if (v === 'producto' && state.pa.result && ['region', 'state', 'city', 'branch', 'delivery'].includes(state.pa.result.level)) learn('product-geo-seen');
+    else if (v === 'prodevol' && state.pa.result && ['region', 'state', 'city', 'branch', 'delivery'].includes(state.pa.result.level)) learn('product-geo-seen');
   }
 
   /**
@@ -1668,9 +1668,8 @@
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
     else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
-    else if (state.view === 'analisis') { clearPe(); FP.trendView.render(state); ensureTrendAnalysis(); }
     else if (state.view === 'prodevol') {
-      clearOldPages(); const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis();
+      const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis();
     }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
@@ -1682,7 +1681,6 @@
         if (el) setTimeout(() => { el.scrollIntoView({ block: 'start' }); try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 0);
       }
     }
-    else if (state.view === 'producto') { clearPe(); FP.productView.render(state); ensureProductAnalysis(); }
   }
 
   /* ================= Pipeline de importación ================= */
@@ -1891,11 +1889,8 @@
   }
 
   /* ----- Producto y evolución: una página, dos motores (Producto y Evolución) con una sola selección ----- */
-  const repaintAn = () => { if (state.view === 'analisis') FP.trendView.render(state); else if (state.view === 'prodevol') FP.prodevolView.render(state); };
-  const repaintPa = () => { if (state.view === 'producto') FP.productView.render(state); else if (state.view === 'prodevol') FP.prodevolView.render(state); };
-  /** Las páginas viejas y la nueva comparten ids: al pintar una se vacía la otra. */
-  function clearPe() { const el = document.getElementById('pe-body'); if (el) el.innerHTML = ''; }
-  function clearOldPages() { ['pa-status', 'pa-controls', 'pa-kpis', 'pa-table', 'pa-signals', 'pa-trace', 'an-content'].forEach((id) => { const el = document.getElementById(id); if (el) el.innerHTML = ''; }); }
+  const repaintAn = () => { if (state.view === 'prodevol') FP.prodevolView.render(state); };
+  const repaintPa = repaintAn;
   /**
    * Producto manda en canal, periodo, comparación y ruta; Evolución (`state.an`) los toma de él antes de calcular.
    * Devuelve true si el periodo es un rango libre (Evolución necesita calendario y lo avisa).
@@ -1920,7 +1915,6 @@
     const lvl = pa.evoLevel || paLevel(pa) || 'sku';
     if (['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) && a.level !== lvl) patch.level = lvl;
     if (Object.keys(patch).length) resetAnalysis(patch);
-    a.ctxTouched = false;   // el contexto compartido lo lleva Producto
     return g === 'range';
   }
 
@@ -1982,7 +1976,6 @@
   const aggF = (args) => FP.productStore.aggregate({ ...args, filter: { ...pageFilter(), ...(args.filter || {}) } });
   /** Cambia una parte del contexto de Análisis y descarta TODO resultado derivado (sin contexto viejo en pantalla). */
   function resetAnalysis(patch) {
-    if (patch && ('periodType' in patch || 'focusKey' in patch || 'comparison' in patch)) state.an.ctxTouched = true;   // la persona cambió periodo o comparación: se comparte con las demás vistas al salir
     Object.assign(state.an, patch || {}, { page: 1, forecastPage: 1, rows: [], advanced: [], groups: [], selected: null, key: null, error: null, priorities: null, risks: null, forecast: null,
       temporal: null, share: null, contribution: null, pvm: null, bridge: null, cohort: null, narrative: null, drill: null, context: null, comparisonInfo: null, reconciliation: null, partialComparison: null,
       ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } });
@@ -2365,7 +2358,7 @@
     if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; repaintAn(); return; }
     const token = d.token = Math.random(); d.loading = true; d.pending = false; d.error = null; d.step = 'Leyendo el período actual…'; d.data = null;
     const TE = FP.temporalEngine, PS = FP.productStore, mine = () => d.token === token;
-    const repaint = () => { if (mine() && (state.view === 'analisis' || state.view === 'prodevol')) { try { repaintAn(); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
+    const repaint = () => { if (mine() && state.view === 'prodevol') { try { repaintAn(); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
     // Salida de emergencia: si algo tarda demasiado (datos muy grandes), se avisa y se ofrece reintentar en vez de quedarse cargando.
     const watchdog = setTimeout(() => { if (mine() && d.loading) { d.loading = false; d.pending = false; d.error = 'El detalle tarda más de lo normal (90 s). Puede seguir calculándose; si no aparece, pulsa «Reintentar» o acota el período.'; repaint(); } }, an.drillTimeoutMs || 90000);
     try {
@@ -3662,39 +3655,11 @@
       const pa = state.pa;
       const rows = await FP.productStore.skuTrace({ sku: el.dataset.key, from: pa.result.baseline.from < pa.from ? pa.result.baseline.from : pa.from, to: pa.to, channel: pa.channel });
       pa.trace = { sku: el.dataset.key, rows }; render();
-      const t = document.getElementById(state.view === 'prodevol' ? 'pe-trace' : 'pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const t = document.getElementById('pe-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-    'pa-to-trend'(el) {
-      if (state.view === 'prodevol') return actions['pe-focus']({ dataset: { key: el.dataset.key, target: 'pe-evolucion' } });
-      // Producto → Evolución: la misma selección (ruta y geografía, canal y periodo) y la entidad de la fila abierta en su lectura.
-      const pa = state.pa, PF = FP.productFilter; if (!PF) return;
-      const lvl = el.dataset.level, path = paFilter(pa);
-      let f = {}; PF.KEYS.forEach((k) => { if (path[k] && k !== lvl) f = PF.cascade(f, k, path[k]); });
-      pa.touched = true;
-      resetAnalysis({ filter: f, level: lvl, channel: FP.analysisContext.normChannel(pa.channel) });
-      state.an.reopen = { scope: 'entity', entity: el.dataset.key };
-      state.ux.routeCtx = { sel: { filter: f, dropped: [] } };   // la selección compartida viaja con el salto
-      root.location.hash = '#analisis';
-    },
-    'an-to-product'(el) {
-      if (state.view === 'prodevol') { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }   // el foco ya es esta entidad: se baja al capítulo del embudo
-      // Evolución → Producto: la selección de la página y la entidad abierta pasan como ruta del análisis de productos (embudo, CR y patrones).
-      const a = state.an, pa = state.pa, PF = FP.productFilter, ent = el.dataset.entity;
-      const f = { ...(PF ? PF.active(a.filter) : {}) };
-      if (a.level !== 'channel' && ent) f[a.level] = ent;
-      paFromSelection(f, a.channel);
-      a.ctxTouched = true;
-      state.ux.routeCtx = { sel: { filter: f, dropped: [] } };   // la entidad abierta es parte de la ruta de Producto
-      root.location.hash = '#producto';
-    },
-    'an-open-trace'(el) {
-      if (state.view === 'prodevol') return actions['pa-trace']({ dataset: { key: el.dataset.sku } });   // la trazabilidad es del SKU, no cambia la ruta
-      const a = state.an, pa = state.pa;
-      paFromSelection({ sku: el.dataset.sku }, a.channel);
-      pa.pendingTrace = el.dataset.sku; a.ctxTouched = true;
-      state.ux.routeCtx = { sel: { filter: { sku: el.dataset.sku }, dropped: [] } };
-      root.location.hash = '#producto';
-    },
+    'pa-to-trend'(el) { return actions['pe-focus']({ dataset: { key: el.dataset.key, target: 'pe-evolucion' } }); },
+    'an-to-product'() { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },   // el foco ya es esta entidad: se baja al capítulo del embudo
+    'an-open-trace'(el) { return actions['pa-trace']({ dataset: { key: el.dataset.sku } }); },   // la trazabilidad es del SKU: no cambia la ruta
     'pa-trace-close'() { state.pa.trace = null; render(); },
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
@@ -6099,7 +6064,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, clearOldPages, ensureFunnelSeries, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, ensureFunnelSeries, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
