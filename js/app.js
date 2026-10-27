@@ -4535,6 +4535,7 @@
     'sm-filter'() { state.sm.campaign = FP.summaryView.val('sm-camp'); state.sm.msg = null; render(); },
     // —— Guía «Ahora haz esto» y resumen con acciones de un clic (solo usan las reglas de siempre; nada se activa en el sitio ni en la app) ——
     // —— Filtros plegados, columnas, conteo de acciones y eliminar (ofertas y promociones) ——
+    'pm-fold'(el) { const f = state.pm.fold = state.pm.fold || {}; f[el.dataset.fold] = el.dataset.open !== '1'; render(); },
     'of-fold'(el) { const f = state.of.fold = state.of.fold || {}; f[el.dataset.fold] = !f[el.dataset.fold]; render(); },
     'of-col'(el) {
       const c = state.of.cols = state.of.cols || loadOfCols(); c[el.dataset.col] = !!el.checked;
