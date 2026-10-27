@@ -33,7 +33,7 @@
     { id: 'monitorear', question: '¿Cómo voy?', label: 'Monitorear', verb: 'Compara y proyecta',
       description: 'Plan contra actual, gap, cumplimiento, forecast y alertas.', views: ['pacing', 'cambios'] },
     { id: 'diagnosticar', question: '¿Por qué?', label: 'Diagnosticar', verb: 'Diagnostica',
-      description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'producto', 'segmentos', 'analisis', 'clientes'] },
+      description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'prodevol', 'producto', 'segmentos', 'analisis', 'clientes'] },
     { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
       description: 'Reforecast, escenarios, plan de acción y promociones.', views: ['reforecast', 'recovery', 'promociones'] },
     { id: 'medir', question: '¿Funcionó?', label: 'Medir y aprender', verb: 'Mide',
@@ -102,6 +102,10 @@
       action: 'Descompón la brecha en Volumen × CR × AOV y revisa las señales por dimensión.',
       produces: 'Drivers, señales e hipótesis que orientan dónde investigar — nunca una causa confirmada.',
       help: ['hecho', 'driver', 'senal', 'hipotesis', 'atribucion'] },
+    prodevol: { title: 'Producto y evolución', group: 'diagnosticar', purpose: 'Qué categorías, productos y SKU mueven el resultado y desde cuándo crecen o caen, con una sola selección, periodo y comparación.',
+      action: 'Elige canal, periodo y una ruta (categoría → producto → SKU) y lee primero qué pesa y qué cambió, y después desde cuándo y hacia dónde va.',
+      produces: 'La foto del periodo y la evolución de cada grupo, con sus patrones y su lectura.',
+      help: ['participacion', 'contribucion', 'historico', 'senal'] },
     producto: { title: 'Categoría → Producto', group: 'diagnosticar', purpose: 'Qué categorías, productos y SKU explican el crecimiento, el deterioro o la brecha.',
       action: 'Explora la jerarquía del catálogo (y su geografía, si tienes datos de sucursal) y compara la contribución de cada grupo.',
       produces: 'Los grupos o {{products}} que más explican el cambio, con sus señales.',
@@ -385,7 +389,7 @@
 
   /** Paso de la metodología que corresponde a cada vista (para "estás aquí"). */
   const VIEW_STEP = { proyeccion: 'meta', resumen: 'meta', plan: 'plan', estacionalidad: 'plan', configuracion: 'plan', carga: 'real', calidad: 'real', datos: 'real',
-    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing', clientes: 'senales', promociones: 'recovery' };
+    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', prodevol: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing', clientes: 'senales', promociones: 'recovery' };
 
   /* Fase 9.1 — Microlearning: una idea por evento real, una sola vez, solo en modo Aprendiz. */
   const LESSONS = [

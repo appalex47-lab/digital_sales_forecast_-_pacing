@@ -25,7 +25,7 @@
     const c = { ...state.ux.ctx };
     // Narrativa y Paquete trabajan sobre la misma selección que Diagnóstico (periodo y canal se pueden cambiar en ellas)
     if (view === 'diagnostico' || view === 'narrativa' || view === 'presentacion' || view === 'segmentos') Object.assign(c, pick(state.dx.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
-    else if (view === 'producto' && state.pa) Object.assign(c, paContext(state.pa));
+    else if ((view === 'producto' || view === 'prodevol') && state.pa) Object.assign(c, paContext(state.pa));
     else if (view === 'analisis' && state.an) Object.assign(c, anContext(state.an));
     else if (view === 'recovery' && !state.rc.imported) Object.assign(c, pick(state.rc.settings, ['channel', 'periodType', 'periodKey', 'comparison']));
     else if (view === 'pacing') { c.channel = state.fc.channel; if (state.fc.month && state.fc.period !== 'months') { c.periodType = 'month'; c.periodKey = state.fc.month; } }
@@ -106,7 +106,7 @@
     } else if (view === 'reforecast') {
       state.rf.channel = c.channel || 'total'; state.rf.tableChannel = c.channel || 'total';
       if (monthKey) state.rf.month = monthKey;
-    } else if (view === 'producto' && state.pa) {
+    } else if ((view === 'producto' || view === 'prodevol') && state.pa) {
       const pa = state.pa, before = JSON.stringify([pa.channel, pa.comparison, pa.from, pa.to, pa.periodType]);
       pa.channel = c.channel || pa.channel || 'total';
       if (c.comparison === 'actual_vs_yoy') pa.comparison = 'yoy'; else if (c.comparison === 'actual_vs_previous') pa.comparison = 'previous';
@@ -209,6 +209,7 @@
     reforecast: I('<path d="M4 18l5-6 4 3 7-9"/><path d="M16 6h4v4"/>'),
     diagnostico: I('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
     producto: I('<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
+    prodevol: I('<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
     analisis: I('<path d="M4 18V8M10 18V5M16 18v-9M22 18H2"/><path d="M4 5l6-2 6 3 6-4"/>'),
     recovery: I('<path d="M4 12a8 8 0 108-8"/><path d="M4 4v5h5"/>'),
     medir: I('<path d="M5 20V10M12 20V4M19 20v-6"/>'),

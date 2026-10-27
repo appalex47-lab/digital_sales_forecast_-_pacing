@@ -2168,3 +2168,12 @@ body.gs-lock{overflow:hidden}
   .qstep__chev { top: auto; bottom: var(--ds-s3); }
 }
 .qnow .btn { min-height: 44px; }
+
+/* ---------- Producto y evolución (historia de lectura) ---------- */
+.chap { display: grid; gap: var(--ds-s4); padding: var(--ds-s4); margin-bottom: var(--ds-gap-section); background: var(--ds-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); min-width: 0; scroll-margin-top: var(--ds-s4); }
+.chap__h { display: flex; gap: var(--ds-s3); align-items: flex-start; }
+.chap__q { display: block; font-size: var(--ds-fs-caption); letter-spacing: .06em; text-transform: uppercase; color: var(--ds-text-muted); font-weight: 700; }
+.chap__t { margin: 2px 0 0; font-size: var(--ds-fs-section); line-height: 1.4; font-weight: 600; max-width: 75ch; text-wrap: balance; }
+.chap__block { min-width: 0; }
+.pe-jump { display: flex; flex-wrap: wrap; gap: var(--ds-s2); margin-top: var(--ds-s3); }
+.nw { white-space: nowrap; }

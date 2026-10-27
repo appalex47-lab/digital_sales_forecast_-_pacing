@@ -21,7 +21,7 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'producto', 'analisis', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
@@ -1668,7 +1668,8 @@
     else if (state.view === 'narrativa') { ensureNarrative(); FP.narrativeView.render(state); }
     else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
-    else if (state.view === 'analisis') { FP.trendView.render(state); ensureTrendAnalysis(); }
+    else if (state.view === 'analisis') { clearPe(); FP.trendView.render(state); ensureTrendAnalysis(); }
+    else if (state.view === 'prodevol') { clearOldPages(); const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis(); }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
     else if (state.view === 'ajustes') {
@@ -1679,7 +1680,7 @@
         if (el) setTimeout(() => { el.scrollIntoView({ block: 'start' }); try { el.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 0);
       }
     }
-    else if (state.view === 'producto') { FP.productView.render(state); ensureProductAnalysis(); }
+    else if (state.view === 'producto') { clearPe(); FP.productView.render(state); ensureProductAnalysis(); }
   }
 
   /* ================= Pipeline de importación ================= */
@@ -1887,6 +1888,38 @@
     pa.channel = FP.analysisContext.normChannel(channel); pa.next = null; pa.result = null; pa.trace = null; pa.page = 1; pa.note = null;
   }
 
+  /* ----- Producto y evolución: una página, dos motores (Producto y Evolución) con una sola selección ----- */
+  const repaintAn = () => { if (state.view === 'analisis') FP.trendView.render(state); else if (state.view === 'prodevol') FP.prodevolView.render(state); };
+  const repaintPa = () => { if (state.view === 'producto') FP.productView.render(state); else if (state.view === 'prodevol') FP.prodevolView.render(state); };
+  /** Las páginas viejas y la nueva comparten ids: al pintar una se vacía la otra. */
+  function clearPe() { const el = document.getElementById('pe-body'); if (el) el.innerHTML = ''; }
+  function clearOldPages() { ['pa-status', 'pa-controls', 'pa-kpis', 'pa-table', 'pa-signals', 'pa-trace', 'an-content'].forEach((id) => { const el = document.getElementById(id); if (el) el.innerHTML = ''; }); }
+  /**
+   * Producto manda en canal, periodo, comparación y ruta; Evolución (`state.an`) los toma de él antes de calcular.
+   * Devuelve true si el periodo es un rango libre (Evolución necesita calendario y lo avisa).
+   */
+  function peSync() {
+    const pa = state.pa, a = state.an, TE = FP.temporalEngine, PF = FP.productFilter, m = (FP.productStore && FP.productStore.meta) || {};
+    if (!m.dateMax) return false;
+    if (!pa.to || !pa.from) { pa.to = m.dateMax; pa.from = `${m.dateMax.slice(0, 7)}-01`; if (!pa.periodType) pa.periodType = 'month'; }
+    const g = paGran(pa), patch = {};
+    const ch = FP.analysisContext.normChannel(pa.channel); if (ch !== a.channel) patch.channel = ch;
+    const cmp = pa.comparison === 'yoy' ? 'year_ago' : 'previous'; if (cmp !== a.comparison) patch.comparison = cmp;
+    if (g !== 'range') {
+      const key = g === 'day' ? pa.from : TE.periodKey(pa.from, g);
+      if (a.periodType !== g || a.focusKey !== key) { Object.assign(patch, { periodType: g, focusKey: key }); if (a.periodType !== g) { const pc = { year: 3, month: 12, week: 12, day: 30 }[g]; patch.periodCount = pc; patch.months = pc; } }
+    }
+    if (PF) {
+      const path = paFilter(pa); let f = {}; PF.KEYS.forEach((k) => { if (path[k]) f = PF.cascade(f, k, path[k]); });
+      if (JSON.stringify(Object.entries(PF.active(a.filter)).sort()) !== JSON.stringify(Object.entries(f).sort())) patch.filter = f;
+    }
+    const lvl = paLevel(pa) || 'sku';   // el nivel de la tabla de Producto es el nivel que se analiza en el tiempo
+    if (['category', 'subcategory', 'product', 'sku', 'region', 'state', 'city', 'branch', 'delivery'].includes(lvl) && a.level !== lvl) patch.level = lvl;
+    if (Object.keys(patch).length) resetAnalysis(patch);
+    a.ctxTouched = false;   // el contexto compartido lo lleva Producto
+    return g === 'range';
+  }
+
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
   async function ensureProductAnalysis() {
     const pa = state.pa;
@@ -1908,7 +1941,7 @@
     const res = await FP.productAnalysis.run({ from: pa.from, to: pa.to, periodType: pa.periodType, comparison: pa.comparison, channel: pa.channel, level, filter, next: level === 'sku' ? null : paLevel(probe) });
     if (pa.key !== key) return;
     pa.result = res; pa.loading = false; pa.page = 1;
-    if (state.view === 'producto') FP.productView.render(state);
+    repaintPa();
     if (pa.pendingTrace) { const sku = pa.pendingTrace; pa.pendingTrace = null; await actions['pa-trace']({ dataset: { key: sku } }); }   // llegó desde «Ver trazabilidad completa» de Evolución
   }
 
@@ -2052,7 +2085,7 @@
     an.loading = true; an.error = null; an.key = key;
     const runId = an._run = (an._run || 0) + 1, STALE = { stale: true }, chk = () => { if (an._run !== runId) throw STALE; };
     startAnLoader(an, periods.length);
-    if (state.view === 'analisis') FP.trendView.render(state);   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
+    repaintAn();   // muestra la barra de carga de inmediato (antes quedaba la tabla vacía hasta terminar)
     ctx.filter = pageFilter(); an.context = ctx;
     const aggTotal = async (range) => {
       if (!range || range.to < range.from) return null;
@@ -2279,7 +2312,7 @@
       if (e === STALE) return;   // una corrida más nueva (por ejemplo, otro «Analizar por») ya tomó el control
       an.rows = []; an.selected = null; an.error = e && e.message ? e.message : String(e);
     } finally {
-      if (an._run === runId) { an.loading = false; stopAnLoader(an); if (state.view === 'analisis') FP.trendView.render(state); }
+      if (an._run === runId) { an.loading = false; stopAnLoader(an); repaintAn(); }
     }
   }
   /* ========== Análisis · drill-down (KPI → variación → señal → entidad → canal → producto → período → registro fuente) ========== */
@@ -2297,10 +2330,10 @@
     const an = state.an, d = an.drill, ctx = an.context, ci = an.comparisonInfo;
     if (!d) return;
     // Nunca dejar «Cargando…» sin salida: si falta el contexto del análisis, se dice (antes se salía en silencio y quedaba cargando para siempre)
-    if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; if (state.view === 'analisis') FP.trendView.render(state); return; }
+    if (!ctx || !ci) { d.loading = false; d.pending = false; d.error = 'El análisis aún no tiene contexto (se está recalculando). Pulsa «Reintentar» en unos segundos.'; repaintAn(); return; }
     const token = d.token = Math.random(); d.loading = true; d.pending = false; d.error = null; d.step = 'Leyendo el período actual…'; d.data = null;
     const TE = FP.temporalEngine, PS = FP.productStore, mine = () => d.token === token;
-    const repaint = () => { if (mine() && state.view === 'analisis') { try { FP.trendView.render(state); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
+    const repaint = () => { if (mine() && (state.view === 'analisis' || state.view === 'prodevol')) { try { repaintAn(); } catch (e) { try { console.error('[Detalle] render', e); } catch (_) { /* sin consola */ } } } };
     // Salida de emergencia: si algo tarda demasiado (datos muy grandes), se avisa y se ofrece reintentar en vez de quedarse cargando.
     const watchdog = setTimeout(() => { if (mine() && d.loading) { d.loading = false; d.pending = false; d.error = 'El detalle tarda más de lo normal (90 s). Puede seguir calculándose; si no aparece, pulsa «Reintentar» o acota el período.'; repaint(); } }, an.drillTimeoutMs || 90000);
     try {
@@ -2856,7 +2889,7 @@
     'an-forecast-page'(el) { const rows = state.an.forecast && Array.isArray(state.an.forecast.rows) ? state.an.forecast.rows : []; const pages = Math.max(1, Math.ceil(rows.length/6)); state.an.forecastPage = Math.max(1, Math.min(pages, Number(el.dataset.value)||1)); render(); },
     'an-assistant-toggle'() {
       state.an.assistant = { ...state.an.assistant, open: !state.an.assistant.open };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
     },
     'an-assistant-question'(el) {
       state.an.assistant = { ...state.an.assistant, question: el.value || '' };
@@ -2866,7 +2899,7 @@
       const q = String(a.question || '').trim();
       if (!q || !FP.cohereAnalysisAssistant) return;
       state.an.assistant = { ...a, open: true, status: 'busy', result: null, errors: [] };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
       const wantsPanorama = a.panorama || PANORAMA_RE.test(q);
       (wantsPanorama ? buildPanorama() : Promise.resolve({ ok: true, panorama: null }))
         .then((pr) => (pr.ok ? FP.cohereAnalysisAssistant.ask(q, state, { apiKey: state.dx.apiKey, model: state.dx.model, panorama: pr.panorama })
@@ -2874,24 +2907,24 @@
         .then(r => {
           const history = [...(state.an.assistant.history || []), { question: q, result: r.result, errors: r.errors || [], ok: r.ok }].slice(-5);
           state.an.assistant = { ...state.an.assistant, status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [], history, question: '', panorama: false };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         })
         .catch(e => {
           state.an.assistant = { ...state.an.assistant, status: 'error', result: null, errors: [e?.message || String(e)] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         });
     },
     'an-assistant-group'(el) {
       const g = Number(el.dataset.group); state.an.assistant = { ...state.an.assistant, group: String(state.an.assistant.group) === String(g) ? null : g };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
     },
     'an-assistant-suggest'(el) {
       const q = el.dataset.question || '';
       const isPan = el.dataset.panorama === '1';
       state.an.assistant = { ...state.an.assistant, open: true, question: q, panorama: isPan, panBusy: isPan && !(state.an._panorama), pan: isPan && state.an._panorama ? state.an._panorama.value : state.an.assistant.pan };
-      if (state.view === 'analisis') FP.trendView.render(state);
-      if (isPan) buildPanorama().then((pr) => { state.an.assistant = { ...state.an.assistant, panBusy: false, pan: pr.ok ? pr.panorama : null }; if (state.view === 'analisis') FP.trendView.render(state); })
-        .catch(() => { state.an.assistant = { ...state.an.assistant, panBusy: false }; if (state.view === 'analisis') FP.trendView.render(state); });
+      repaintAn();
+      if (isPan) buildPanorama().then((pr) => { state.an.assistant = { ...state.an.assistant, panBusy: false, pan: pr.ok ? pr.panorama : null }; repaintAn(); })
+        .catch(() => { state.an.assistant = { ...state.an.assistant, panBusy: false }; repaintAn(); });
       const input = document.getElementById('an-assistant-input');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     },
@@ -2899,7 +2932,7 @@
       const n = state.an.narrative;
       if (!n || !n.ready || !FP.cohereNarrative) return;
       state.an.ai = { status: 'busy', result: null, errors: [] };
-      if (state.view === 'analisis') FP.trendView.render(state);
+      repaintAn();
       const sections = Object.fromEntries((n.layers || []).map((layer) => {
         const claims = (n.sections?.[layer.id] || []).map((c) => c.id);
         return [layer.id, { claims, empty: claims.length === 0 }];
@@ -2916,11 +2949,11 @@
       FP.cohereNarrative.narrate(payload, { apiKey: state.dx.apiKey, model: state.dx.model })
         .then(r => {
           state.an.ai = { status: r.ok ? 'ok' : 'error', result: r.result, errors: r.errors || [] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         })
         .catch(e => {
           state.an.ai = { status: 'error', result: null, errors: [e?.message || String(e)] };
-          if (state.view === 'analisis') FP.trendView.render(state);
+          repaintAn();
         });
     },
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
@@ -2936,13 +2969,16 @@
         if (k.startsWith('f:')) return actions['an-filter']({ dataset: { fkey: k.slice(2) }, value: '' });
         const reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
         if (k in reset) { state.an[k] = reset[k]; state.an.page = 1; render(); }
+      } else if (pg === 'pa' && k.startsWith('an:')) {   // chip de resultado de Evolución dentro de Producto y evolución
+        const kk = k.slice(3), reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
+        if (kk in reset) { state.an[kk] = reset[kk]; state.an.page = 1; render(); }
       } else if (pg === 'pa' && k.startsWith('geo:')) actions['pa-geo']({ dataset: { key: k.slice(4) }, value: '' });
       else if (pg === 'cu' && k.startsWith('cu:')) { const f = state.cu.opts.filter = state.cu.opts.filter || {}; const kk = k.slice(3); f[kk] = undefined; if (kk === 'category') { f.subcategory = undefined; f.product = undefined; } else if (kk === 'subcategory') f.product = undefined; else if (kk === 'state') f.branch = undefined; state.cu.status = 'idle'; render(); }
     },
     'fs-clear'(el) {
       const pg = el.dataset.fsPage;
       if (pg === 'an') { Object.assign(state.an, { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0, page: 1 }); actions['an-filter-clear'](); }
-      else if (pg === 'pa') actions['pa-geo-clear']();
+      else if (pg === 'pa') { if (state.view === 'prodevol') Object.assign(state.an, { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0, page: 1 }); actions['pa-geo-clear'](); }
       else if (pg === 'cu') actions['cu-clear-filter']();
     },
     'an-filter-clear'() { resetAnalysis({ filter: {} }); state.an.reopen = null; render(); },
@@ -3546,6 +3582,7 @@
       else { const r = TE.focusRange(g, key, m.dateMax); pa.from = r.from; pa.to = r.to; pa.periodType = g; }
       render();
     },
+    'pe-jump'(el) { const t = document.getElementById(el.dataset.target); if (t) t.scrollIntoView({ behavior: root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
     'pa-viewby'(el) { const pa = state.pa; pa.viewBy = el.dataset.value || el.value; pa.drill = []; pa.next = null; pa.result = null; pa.trace = null; render(); },
     'pa-drill'(el) {
       const pa = state.pa, lvl = paLevel(pa);
@@ -6005,7 +6042,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, paGran, paFromSelection, clearOldPages, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(

@@ -190,7 +190,8 @@
     return key;
   };
 
-  function renderControls(state) {
+  /** HTML de los controles (filtros, ruta y desglose). `extra` permite a otra página sumar grupos y chips al mismo contenedor. */
+  function controlsHtml(state, extra) {
     const pa = state.pa;
     const opts = PS().available() ? PS().geoOptions(pa.geo) : { regions: [], states: [], cities: [], branches: [], deliveries: [], available: {} };
     const av = opts.available;
@@ -218,7 +219,7 @@
       periodField = `<div class="field"><label for="pa-focus" class="field__hint">Periodo</label><select id="pa-focus" data-action="pa-focus">${fopts.slice().reverse().map((o) => `<option value="${esc(o.key)}" ${o.key === fkey ? 'selected' : ''}>${esc(TE.label(gran, o.key, o.range))}</option>`).join('')}</select></div>`;
     }
     const paChips = geoKeys.filter(([k]) => pa.geo[k]).map(([k, l]) => ({ key: 'geo:' + k, text: `${l}: ${pa.geo[k]}` }));
-    const shell = FP.filterShell.html({ page: 'pa', open: Boolean(state.fs && state.fs.pa), chips: paChips,
+    const shell = FP.filterShell.html({ page: 'pa', open: Boolean(state.fs && state.fs.pa), chips: [...paChips, ...((extra && extra.chips) || [])],
       primary: `<div class="field"><label for="pa-ch" class="field__hint">Canal</label>
           <select id="pa-ch" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) =>
             `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
@@ -236,8 +237,8 @@
         { title: 'Geografía y operación (solo análisis de productos)', html: (av.region || av.state || av.city || av.branch || av.delivery) ? `${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}
         ${sel('branch', locTerm(), opts.branches, (b) => b.code, (b) => (b.name !== b.code ? `${b.name} (${b.code})` : b.code))}
         ${sel('delivery', 'Tipo de entrega', opts.deliveries)}` : '' }
-      ] });
-    $('pa-controls').innerHTML = `
+      ].concat((extra && extra.groups) || []) });
+    return `
       ${shell}
       <nav class="breadcrumbs" aria-label="Ruta del análisis">${crumbs.join(' › ')}
         ${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}
@@ -246,18 +247,21 @@
       ${geoLevel ? `<p class="field__hint">${esc(`Región, estado, ciudad, ${locTerm().toLowerCase()} y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles aquí. Una diferencia entre zonas no demuestra por sí misma una causa.`)}</p>` : ''}
       ${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
   }
+  function renderControls(state) { $('pa-controls').innerHTML = controlsHtml(state); }
 
-  function renderResult(state) {
+  /** HTML de los resultados (KPIs, tabla, señales y trazabilidad), para pintarlos aquí o dentro de otra página. */
+  function resultParts(state) {
+    const out = { kpis: '', table: '', signals: '', trace: '' };
     const pa = state.pa;
     const r = pa.result;
-    if (!PS().available() || !(PS().meta || {}).batches) { ['pa-kpis', 'pa-table', 'pa-signals', 'pa-trace'].forEach((id) => { $(id).innerHTML = ''; });
-      $('pa-kpis').innerHTML = '<div class="empty"><strong>Todavía no hay datos de productos</strong>Carga el archivo de venta (fecha, canal, SKU, estado, sucursal, tipo de entrega y al menos una métrica) y, si quieres CR y funnel, el archivo de funnel de GA4. <a class="btn btn--small btn--primary" href="#carga">Ir a Carga de datos</a></div>'; return; }
-    if (pa.loading || !r) { $('pa-kpis').innerHTML = FP.loader.html('Calculando desde los datos guardados en este navegador…', { key: 'productos' }); return; }
+    if (!PS().available() || !(PS().meta || {}).batches) {
+      out.kpis = '<div class="empty"><strong>Todavía no hay datos de productos</strong>Carga el archivo de venta (fecha, canal, SKU, estado, sucursal, tipo de entrega y al menos una métrica) y, si quieres CR y funnel, el archivo de funnel de GA4. <a class="btn btn--small btn--primary" href="#carga">Ir a Carga de datos</a></div>'; return out; }
+    if (pa.loading || !r) { out.kpis = FP.loader.html('Calculando desde los datos guardados en este navegador…', { key: 'productos' }); return out; }
     const t = r.total;
     // Métrica del periodo: valor, referencia y variación. El estado del dato (Disponible / Parcial / Faltante…) sigue siendo un badge con texto.
     const kp = (k, label) => { const c = t.current[k], b = t.baseline[k]; const d = fin(c && c.value) && fin(b && b.value) && b.value !== 0 ? c.value / b.value - 1 : null;
       return FP.pacingView.card(label, metricVal(k, c), `vs ${metricVal(k, b)} · ${esc(F().signedPercent(d, 1))}`, null, statusPill(c.status)); };
-    $('pa-kpis').innerHTML = `
+    out.kpis = `
       <div class="subhead"><h3 class="panel__title">${esc(levelName(r.level))} · ${esc(r.period.from)} a ${esc(r.period.to)}</h3>
         <span class="field__hint">Referencia: ${esc(r.baseline.from)} a ${esc(r.baseline.to)} (${esc(r.baseline.label)}) · ${r.elapsedMs} ms</span></div>
       <div class="metric-grid metric-grid--3">${kp('revenue', 'Venta')}${kp('orders', 'Pedidos')}${kp('units', 'Unidades')}${kp('aov', 'AOV')}${kp('conversionRate', 'CR')}${kp('views', 'Vistas')}</div>
@@ -273,7 +277,7 @@
     const page = n ? 1 : Math.max(1, Math.min(pa.page || 1, Math.ceil(rows.length / size)));
     const shown = n ? rows.slice(0, n) : rows.slice((page - 1) * size, page * size);
     const dm = (row, k) => { const x = row.drivers[k]; return fin(x.deltaPct) ? F().signedPercent(x.deltaPct, 1) : '—'; };
-    $('pa-table').innerHTML = `<div class="table-wrap"><table class="table ds-table table--dense">
+    out.table = `<div class="table-wrap"><table class="table ds-table table--dense">
       <thead><tr><th${r.level === 'state' ? ' data-help="estadoProducto"' : ''}>${esc(levelName(r.level))}</th><th class="num">Venta</th><th class="num">Referencia</th><th class="num">Δ venta</th><th class="num">Participación</th>
         <th class="num">Contribución</th><th>${r.level === 'state' ? 'Situación' : 'Estado'}</th><th class="num">Pedidos Δ</th><th class="num">Vistas Δ</th><th class="num">CR</th><th class="num">AOV</th><th>Señales</th><th></th></tr></thead>
       <tbody>${shown.map((x) => `<tr>
@@ -288,7 +292,7 @@
         <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>
         <td>${x.signals.map((s) => `<span class="chip" title="${esc(s.evidence)}">Patrón ${esc(s.pattern)}</span>`).join(' ')}</td>
         <td>${r.level !== 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}" ${x.key === '(sin dato)' || x.key === '(inválido)' ? 'title="Abre los renglones sin este dato"' : ''}>Ver ›</button>`
-          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
+          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" style="white-space:nowrap" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
       ${n ? `<p class="field__hint">Top ${n} de ${F().integer(rows.length)} por |contribución|. El Top N es solo visual: todos los SKU siguen guardados y en los totales.</p>`
         : `<div class="pager"><span>${F().integer((page - 1) * size + 1)}–${F().integer(Math.min(page * size, rows.length))} de ${F().integer(rows.length)}</span>
           <div class="btn-row"><button type="button" class="btn btn--small" data-action="pa-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
@@ -300,12 +304,12 @@
     const geoHtml = `${gsig.length ? `<h4>Dónde se concentra la variación</h4><ul class="alert-list">${gsig.map((g) => `<li>${H().pill(g.type === 'geo_concentration' ? 'warning' : 'na', g.dimension === 'branch' ? locTerm() : 'Estado')} <span>${esc(g.label)}
         <span class="cell-sub">${esc(`${levelName(g.level)} · ${g.period.from} a ${g.period.to} vs ${g.baseline.from} a ${g.baseline.to} · venta · ${g.note}`)}</span></span></li>`).join('')}</ul>` : ''}
       ${gIssues.length ? `<details class="disclosure"><summary>Calidad de la geografía (${gIssues.length})</summary><ul class="plain-list">${gIssues.map((i) => `<li>${H().pill('warning', ISSUE[i.type] || i.type)} ${esc(i.message)}</li>`).join('')}</ul></details>` : ''}`;
-    $('pa-signals').innerHTML = geoHtml + (r.signals.length ? `<ul class="alert-list">${r.signals.slice(0, 30).map((s) => `<li>${H().pill('warning', `Patrón ${s.pattern}`)} <span><strong>${esc(s.key)}</strong>: ${esc(s.label)} <span class="cell-sub">${esc(s.evidence)} · ${esc(s.note)}</span></span></li>`).join('')}</ul>`
+    out.signals = geoHtml + (r.signals.length ? `<ul class="alert-list">${r.signals.slice(0, 30).map((s) => `<li>${H().pill('warning', `Patrón ${s.pattern}`)} <span><strong>${esc(s.key)}</strong>: ${esc(s.label)} <span class="cell-sub">${esc(s.evidence)} · ${esc(s.note)}</span></span></li>`).join('')}</ul>`
       : `<p class="note">Sin patrones de señales con los umbrales actuales${(r.mappedMetrics && r.mappedMetrics.funnel || []).includes('views') ? '' : ' (sin el archivo de funnel no se evalúan los patrones de tráfico, CR ni las tasas del embudo)'}.</p>`);
 
     const tr = pa.trace;
     const cellTxt = (x, m) => (fin(x[m]) ? esc(F().integer(x[m])) : `<span class="val val--missing">${esc(x[`${m}State`] === 'invalid' ? 'inválido' : 'falta')}</span>`);
-    $('pa-trace').innerHTML = !tr ? '<p class="field__hint">En el nivel SKU usa "Trazabilidad" para ver cada día con su archivo y fila de origen (venta y funnel por separado).</p>' : `
+    out.trace = !tr ? '<p class="field__hint">En el nivel SKU usa "Trazabilidad" para ver cada día con su archivo y fila de origen (venta y funnel por separado).</p>' : `
       <div class="subhead"><h3 class="panel__title">Trazabilidad · ${esc(tr.sku)}</h3><button type="button" class="btn btn--ghost btn--small" data-action="pa-trace-close">Cerrar</button></div>
       <div class="table-wrap table-wrap--tall"><table class="table ds-table"><thead><tr><th>Fecha</th><th>Canal</th><th>Archivo</th><th>Región · estado · ciudad · sucursal · entrega</th>
         ${PS().metricsOf('sales').map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}${PS().metricsOf('funnel').map((m) => `<th class="num">${esc(PS().label(m))}</th>`).join('')}<th>Origen</th></tr></thead>
@@ -315,6 +319,11 @@
           ${PS().metricsOf('funnel').map((m) => `<td class="num">${x.kind === 'funnel' ? cellTxt(x, m) : ''}</td>`).join('')}
           <td><span class="cell-sub">${esc(x.fileName || x.batchId)} · fila ${x.row}${x.conflict ? ' · conflicto' : ''}${x.multiplicity ? ' · suma de varias filas' : ''}</span></td></tr>`).join('')}</tbody></table></div>
       <p class="field__hint">Archivo → fila → fecha → canal → SKU → métrica. Venta y funnel se muestran en renglones separados porque son archivos distintos. Valores observados tal como venían; los faltantes e inválidos no se convierten en 0.</p>`;
+    return out;
+  }
+  function renderResult(state) {
+    const o = resultParts(state);
+    $('pa-kpis').innerHTML = o.kpis; $('pa-table').innerHTML = o.table; $('pa-signals').innerHTML = o.signals; $('pa-trace').innerHTML = o.trace;
   }
 
   function render(state) {
@@ -335,5 +344,5 @@
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }
 
-  FP.productView = { render, renderStaging, storageBlock, LEVEL, columnsTable };
+  FP.productView = { render, renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts };
 })(typeof window !== 'undefined' ? window : globalThis);

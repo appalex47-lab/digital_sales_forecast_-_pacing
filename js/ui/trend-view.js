@@ -55,7 +55,8 @@
     const f = PF.active(a.filter), opts = PF.options(f);
     return PF.KEYS.map((k) => `<div class="field"><label for="an-f-${k}">${esc(PF.LABEL[k])}</label><select id="an-f-${k}" data-action="an-filter" data-fkey="${k}"><option value="">Todas</option>${(opts[k] || []).map((v) => `<option value="${esc(v)}" ${f[k] === v ? 'selected' : ''}>${esc(PF.label(k, v))}</option>`).join('')}</select></div>`).join('');
   }
-  function filters(state) {
+  /** Filtros de Evolución. `embedded`: en lugar del HTML devuelve los grupos y chips propios (periodo, canal, selección y nivel los pone la otra página). */
+  function filters(state, embedded) {
     const a = state.an;
     const levels = Object.entries(LEVEL);
     const availablePatterns = [...new Set((a.rows || []).map(r => r.pattern).filter(Boolean))];
@@ -101,7 +102,7 @@
     if (a.anomalyDirection && a.anomalyDirection !== 'all') chips.push({ key: 'anomalyDirection', text: 'Anomalía filtrada' });
     if (Number(a.minSharePct) !== 0.5) chips.push({ key: 'minSharePct', text: Number(a.minSharePct) > 0 ? `Materialidad ≥ ${a.minSharePct} %` : 'Materialidad: todas' });
     if (Number(a.minImpact) > 0) chips.push({ key: 'minImpact', text: `Impacto ≥ ${a.minImpact}` });
-    const shell = FP.filterShell.html({ page: 'an', open: Boolean(state.fs && state.fs.an),
+    const spec = { page: 'an', open: Boolean(state.fs && state.fs.an),
       primary: [F_an_channel, F_an_period_type, F_an_focus, F_an_comparison].join(''),
       chips,
       groups: [
@@ -109,7 +110,12 @@
         { title: 'Cuándo', html: F_an_period_count },
         { title: 'Producto y ubicación (filtra toda la página)', html: pageFilterFields(a) },
         { title: 'Resultados', html: F_an_state + F_an_entity_query + F_an_pattern + F_an_signal + F_an_anomaly_direction + F_an_min_share + F_an_min_impact }
-      ] });
+      ] };
+    if (embedded) {   // la otra página pone canal, periodo, selección y nivel; aquí quedan métrica, historia y los filtros de resultado
+      return { groups: [{ title: 'Qué mirar', html: F_an_metric + F_an_period_count }, spec.groups[3]],
+        chips: chips.filter((c) => !c.key.startsWith('f:')).map((c) => ({ ...c, key: 'an:' + c.key })), comparisonNote };
+    }
+    const shell = FP.filterShell.html(spec);
     return `<div class="analysis-filter-bar">${shell}
       ${PFm && PFm.isActive(pf) ? '<p class="field__hint">Todo lo de esta página (series, patrones, pronóstico, detalle, asistente) se calcula solo con la selección de producto o ubicación, dentro del canal elegido. El Puente al plan no aplica: la meta existe por canal.</p>' : ''}
       <p class="field__hint">Patrón y señal clasifican la forma de la serie; «Anomalía» filtra movimientos inusuales; «Impacto mínimo» oculta cambios pequeños; «Materialidad» oculta entidades que pesan menos de ese % del total (por defecto 0.5 %), porque su movimiento suele ser ruido. Contribución y totales siguen incluyéndolas.</p>
@@ -561,7 +567,8 @@
     }
   }
 
-  function render(state) {
+  /** Arma las partes de la página. `embedded`: otra página aporta los filtros (no se incluyen). Devuelve {early} si no hay nada que mostrar todavía. */
+  function build(state, embedded) {
     const a = state.an;
     MK = (a.context && a.context.metric) || a.metric || 'revenue';
     const filteredRows = (a.rows || []).filter((r) => {
@@ -579,13 +586,12 @@
     const page = Math.max(1, Math.min(pageCount, Number(a.page) || 1));
     if (a.page !== page) a.page = page;
     const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
-    const el = $('an-content'); if (!el) return;
     if (!FP.productStore || !FP.productStore.available()) {
-      el.innerHTML = `<div class="empty"><strong>Faltan datos de productos</strong>Carga y guarda datos de productos para construir las series históricas de Evolución.</div>`; return;
+      return { early: `<div class="empty"><strong>Faltan datos de productos</strong>Carga y guarda datos de productos para construir las series históricas de Evolución.</div>` };
     }
     if (a.loading && !a.rows.length) { const pr = a.progress || { frac: 0, label: 'Preparando', startedAt: Date.now() };
-      el.innerHTML = `${safe('Filtros', () => filters(state))}${FP.ui.loader.html({ id: 'an-loader', title: 'Construyendo evolución histórica…', label: pr.label, pct: Math.min(99, Math.round(pr.frac * 100)), t0: pr.startedAt, hint: 'Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.' })}`; return; }
-    if (a.error) { el.innerHTML = `${safe('Filtros', () => filters(state))}<div class="empty empty--error"><strong>No se pudo calcular Evolución</strong>${esc(a.error)}</div>`; return; }
+      return { early: `${embedded ? '' : safe('Filtros', () => filters(state))}${FP.ui.loader.html({ id: 'an-loader', title: 'Construyendo evolución histórica…', label: pr.label, pct: Math.min(99, Math.round(pr.frac * 100)), t0: pr.startedAt, hint: 'Se agregan los períodos desde los datos guardados en este navegador. Puedes esperar aquí: no es un error.' })}` }; }
+    if (a.error) return { early: `${embedded ? '' : safe('Filtros', () => filters(state))}<div class="empty empty--error"><strong>No se pudo calcular Evolución</strong>${esc(a.error)}</div>` };
     const total = filteredRows.length, allTotal=a.rows.length, growth = filteredRows.filter((r) => r.direction === 'growth').length, decline = filteredRows.filter((r) => r.direction === 'decline').length;
     const sh=a.share||{}; const tm=a.temporal||{}; const ci2=a.comparisonInfo||{}; const cur=typeof tm.currentTotal==='number'?tm.currentTotal:(typeof sh.currentTotal==='number'?sh.currentTotal:null), base=ci2.comparable&&typeof sh.baselineTotal==='number'?sh.baselineTotal:null, delta=cur!==null&&base!==null?cur-base:null, deltaPct=FP.analysisContext.pctChange(cur,base);
     const fcMap = new Map(((a.forecast && a.forecast.rows) || []).map((x) => [x.entity, x]));
@@ -597,22 +603,33 @@
     const anomalyCount=filteredRows.filter(r=>r.anomaly).length;
     a._filteredRows = filteredRows;
     const hiddenMat = (a.rows || []).filter((r) => !isMaterial(a, r)).length;
-    el.innerHTML = `${safe('Filtros', () => filters(state))}${safe('Contexto', () => contextBar(a))}${safe('Narrativa', () => narrativePanel(a))}
-      <div class="metric-grid trend-kpis">
+    return {
+      filters: embedded ? '' : safe('Filtros', () => filters(state)),
+      context: safe('Contexto', () => contextBar(a)),
+      narrative: safe('Narrativa', () => narrativePanel(a)),
+      kpis: `<div class="metric-grid trend-kpis">
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver detalle del período actual"><span>${ML()} actual <small>${esc(ci2.current?.label || tm.focus?.label || '—')}</small></span><strong>${money(cur)}</strong></button>
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver detalle del período de comparación"><span>${ML()} comparable <small>${esc(ci2.baseline?.label || '—')}</small></span><strong>${money(base)}</strong></button>
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver de dónde viene el cambio en pesos"><span>Cambio${D()}</span><strong>${money(delta)}</strong></button>
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver de dónde viene el cambio porcentual"><span>Cambio %</span><strong>${signedPct(deltaPct)}</strong></button>
-      </div>
-      ${total ? `<p class="field__hint trend-count">${F().integer(total)} de ${F().integer(allTotal)} entidades · ${growth} crecen · ${decline} caen${anomalyCount ? ` · ${anomalyCount} con anomalía` : ''}${hiddenMat ? ` · ${F().integer(hiddenMat)} ocultas por materialidad (menos de ${a.minSharePct} % del total)` : ''}</p><div class="table-wrap trend-table-wrap" id="an-trend-table"><table class="table ds-table trend-table"><thead><tr><th>Entidad</th><th>Ahora</th><th>Patrón / inicio</th><th class="num">Actual${D()}</th><th class="num">Cambio${D()}</th><th class="num">Cambio %</th><th class="num">Acumulado</th><th class="num" data-help="cierreProyectado">Cierre proyectado</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row"><div class="entity-cell"><button type="button" class="link-btn" data-action="an-drill" data-source="patron" data-entity="${esc(EN(r.entity))}" aria-label="Leer entidad ${esc(EN(r.entity))}" title="Ver la historia de ${esc(EN(r.entity))}">${esc(EN(r.entity))}</button></div></th><td>${statePill(r)}</td><td>${pill(r.pattern)}<span class="cell-sub">Inicio ${esc(r.startPeriod || F().DASH)}</span></td><td class="num">${money(r.currentValue)}</td><td class="num">${money(r.recentAbsoluteChange)}</td><td class="num">${signedPct(r.percentageChange)}</td><td class="num">${signedPct(r.cumulativeChange)}</td>${closeCell(r)}</tr>`).join('')}</tbody></table></div><div class="pager trend-pager" aria-label="Paginación de evolución y patrones"><span>${F().integer((page - 1) * pageSize + 1)}–${F().integer(Math.min(page * pageSize, filteredRows.length))} de ${F().integer(filteredRows.length)} entidades</span><div class="btn-row"><button type="button" class="btn btn--small" data-action="an-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><span class="num" aria-current="page">Página ${page} de ${pageCount}</span><button type="button" class="btn btn--small" data-action="an-page" data-value="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>Siguiente</button></div></div>` : `<div class="empty"><strong>No hay suficiente historia</strong>Se necesitan al menos ${FP.trendEngine.DEFAULTS.minPeriods} períodos con datos para clasificar una entidad.</div>`}
-      <section class="panel panel--inner entity-reading-panel" id="an-entity-reading"><div class="panel__head"><div><h3 class="panel__title">Lectura de la entidad</h3></div><div class="panel__actions"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar esto</button>${a.selected && a.level !== 'channel' ? `<button type="button" class="btn btn--small btn--ghost" data-action="an-to-product" data-entity="${esc(a.selected.entity)}" title="Abre Categoría → Producto con esta selección, canal y periodo: embudo, CR y patrones">Ver embudo y señales</button>` : ''}${a.selected ? '<button type="button" class="btn btn--small btn--ghost" data-action="an-export-reading">Descargar lectura</button><button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Cerrar lectura</button>' : ''}</div></div><div class="panel__body">${a.drill && a.drill.scope === 'total' ? '' : selectedCard(a)}${safe('Detalle y trazabilidad', () => drillPanel(a))}</div></section>
-      ${safe('Contribución y origen', () => contributionPanel(a))}
-      ${safe('Volumen, precio y mezcla', () => pvmPanel(a))}
-      ${safe('Puente al plan', () => bridgePanel(a))}
-      ${safe('Participación y mix', () => shareMixPanel(a))}
-      <details class="disclosure analysis-forecast-fold"><summary>Forecast por entidad (método anterior, con backtest)</summary>${safe('Forecast de tendencias', () => forecastPanel(a))}</details>
-      ${safe('Asistente de análisis', () => analysisAssistant(a))}`;
+      </div>`,
+      table: `${total ? `<p class="field__hint trend-count">${F().integer(total)} de ${F().integer(allTotal)} entidades · ${growth} crecen · ${decline} caen${anomalyCount ? ` · ${anomalyCount} con anomalía` : ''}${hiddenMat ? ` · ${F().integer(hiddenMat)} ocultas por materialidad (menos de ${a.minSharePct} % del total)` : ''}</p><div class="table-wrap trend-table-wrap" id="an-trend-table"><table class="table ds-table trend-table"><thead><tr><th>Entidad</th><th>Ahora</th><th>Patrón / inicio</th><th class="num">Actual${D()}</th><th class="num">Cambio${D()}</th><th class="num">Cambio %</th><th class="num">Acumulado</th><th class="num" data-help="cierreProyectado">Cierre proyectado</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row"><div class="entity-cell"><button type="button" class="link-btn" data-action="an-drill" data-source="patron" data-entity="${esc(EN(r.entity))}" aria-label="Leer entidad ${esc(EN(r.entity))}" title="Ver la historia de ${esc(EN(r.entity))}">${esc(EN(r.entity))}</button></div></th><td>${statePill(r)}</td><td>${pill(r.pattern)}<span class="cell-sub">Inicio ${esc(r.startPeriod || F().DASH)}</span></td><td class="num">${money(r.currentValue)}</td><td class="num">${money(r.recentAbsoluteChange)}</td><td class="num">${signedPct(r.percentageChange)}</td><td class="num">${signedPct(r.cumulativeChange)}</td>${closeCell(r)}</tr>`).join('')}</tbody></table></div><div class="pager trend-pager" aria-label="Paginación de evolución y patrones"><span>${F().integer((page - 1) * pageSize + 1)}–${F().integer(Math.min(page * pageSize, filteredRows.length))} de ${F().integer(filteredRows.length)} entidades</span><div class="btn-row"><button type="button" class="btn btn--small" data-action="an-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><span class="num" aria-current="page">Página ${page} de ${pageCount}</span><button type="button" class="btn btn--small" data-action="an-page" data-value="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>Siguiente</button></div></div>` : `<div class="empty"><strong>No hay suficiente historia</strong>Se necesitan al menos ${FP.trendEngine.DEFAULTS.minPeriods} períodos con datos para clasificar una entidad.</div>`}`,
+      reading: `<section class="panel panel--inner entity-reading-panel" id="an-entity-reading"><div class="panel__head"><div><h3 class="panel__title">Lectura de la entidad</h3></div><div class="panel__actions"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar esto</button>${a.selected && a.level !== 'channel' ? `<button type="button" class="btn btn--small btn--ghost" data-action="an-to-product" data-entity="${esc(a.selected.entity)}" title="Abre Categoría → Producto con esta selección, canal y periodo: embudo, CR y patrones">Ver embudo y señales</button>` : ''}${a.selected ? '<button type="button" class="btn btn--small btn--ghost" data-action="an-export-reading">Descargar lectura</button><button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Cerrar lectura</button>' : ''}</div></div><div class="panel__body">${a.drill && a.drill.scope === 'total' ? '' : selectedCard(a)}${safe('Detalle y trazabilidad', () => drillPanel(a))}</div></section>`,
+      contribution: safe('Contribución y origen', () => contributionPanel(a)),
+      pvm: safe('Volumen, precio y mezcla', () => pvmPanel(a)),
+      bridge: safe('Puente al plan', () => bridgePanel(a)),
+      mix: safe('Participación y mix', () => shareMixPanel(a)),
+      forecast: `<details class="disclosure analysis-forecast-fold"><summary>Forecast por entidad (método anterior, con backtest)</summary>${safe('Forecast de tendencias', () => forecastPanel(a))}</details>`,
+      assistant: safe('Asistente de análisis', () => analysisAssistant(a))
+    };
   }
+  /** Página independiente de Evolución y patrones. */
+  function render(state) {
+    const el = $('an-content'); if (!el) return;
+    const P = build(state, false);
+    el.innerHTML = P.early !== undefined ? P.early : [P.filters, P.context, P.narrative, P.kpis, P.table, P.reading, P.contribution, P.pvm, P.bridge, P.mix, P.forecast, P.assistant].join('');
+  }
+
   /** Materialidad: oculta de la tabla de patrones las entidades que pesan menos de X % del total (en el periodo actual o en el base). En Contribución la tabla también las oculta (con aviso), pero el cambio neto y la concentración incluyen todas las entidades. */
   function isMaterial(a, r) {
     const pct = Number(a.minSharePct) || 0; if (pct <= 0) return true;
@@ -620,5 +637,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { render, isMaterial };
+  FP.trendView = { render, build, filters, isMaterial };
 })(typeof window !== 'undefined' ? window : globalThis);
