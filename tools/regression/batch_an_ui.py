@@ -19,7 +19,7 @@ async def main():
         for w in (1920, 1440, 1280, 1100, 768, 600, 390, 360, 320):
             await q.set_viewport_size({'width': w, 'height': 900}); await q.wait_for_timeout(250)
             r = await q.evaluate("""(()=>{const doc=document.documentElement.scrollWidth-innerWidth;
-              const out=[];document.querySelectorAll('#pe-body .analysis-context,#pe-body .drill,#pe-body .metric--drill,#pe-body #an-channel,#pe-body .drill__crumbs').forEach(e=>{const r=e.getBoundingClientRect();if(r.right>innerWidth+1||r.left<-1)out.push(e.className||e.id)});
+              const out=[];document.querySelectorAll('#pe-body .analysis-context,#pe-body .drill,#pe-body .metric--drill,#pe-body #pa-ch,#pe-body .drill__crumbs').forEach(e=>{const r=e.getBoundingClientRect();if(r.right>innerWidth+1||r.left<-1)out.push(e.className||e.id)});
               return {doc,out:[...new Set(out)]}})()""")
             if r['doc'] > 0 or r['out']: bad.append((w, r))
         chk('UI-1 sin desborde horizontal (selector de canal, contexto, KPIs y detalle) de 320 a 1920 px', not bad, bad[:3])
@@ -37,8 +37,8 @@ async def main():
           const parse=x=>x.match(/\\d+/g).slice(0,3).map(Number);return {fg:parse(s.color),bg:parse(s.backgroundColor),fs:parseFloat(s.fontSize),bfg:parse(eb.color)}})()""")
         chk('UI-4 contraste AA (≥ 4.5:1) del texto de la barra de contexto', ratio(c['fg'], c['bg']) >= 4.5 and ratio(c['bfg'], c['bg']) >= 4.5, (ratio(c['fg'], c['bg']), ratio(c['bfg'], c['bg'])))
         # teclado: se llega al selector de canal y se cambia con teclado
-        await q.focus('#an-channel'); await q.keyboard.press('ArrowDown'); await q.wait_for_timeout(100)
-        v = await q.evaluate("document.getElementById('an-channel').value")
+        await q.focus('#pa-ch'); await q.keyboard.press('ArrowDown'); await q.wait_for_timeout(100)
+        v = await q.evaluate("document.getElementById('pa-ch').value")
         chk('UI-5 el selector de canal se opera con teclado', v in ('ecommerce', 'app', 'whatsapp', 'llamadas'), v)
         chk('Sin errores de página', not q._errs, q._errs[:3])
         await b.close()

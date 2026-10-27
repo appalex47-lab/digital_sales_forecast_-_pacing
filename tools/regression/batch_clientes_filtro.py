@@ -70,7 +70,7 @@ async def main():
         chk(f'F5b «nuevo en esta selección» cuenta distinto que «nuevo en la empresa» ({n_co} → {n_se})', n_co > 0 and n_se > n_co, [n_co, n_se])
         # libro anterior (sin líneas): se avisa qué recargar y no se inventa
         await q.evaluate("async()=>{const L=await FP.customerStore.load(); L.lines=null; }")   # como un libro guardado antes de esta versión
-        await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null,drill:null})}", dict(channel='app'))
+        await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null,drill:null});FP.app.state.pa.channel=s.channel;FP.app.state.pa.result=null}", dict(channel='app'))
         await q.evaluate("FP.app.render()")
         await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.rows.length>0})()", timeout=90000)
         await q.evaluate("(c)=>FP.app.actions['an-drill']({dataset:{entity:c,source:'patron'}})", cat)

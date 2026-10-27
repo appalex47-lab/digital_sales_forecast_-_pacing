@@ -11,14 +11,14 @@ async def run(b, w, h, tag):
     await open_an(q, u, level='category', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
     # frena la lectura para poder ver la carga
     await q.evaluate("(()=>{const o=FP.productStore.aggregate;FP.productStore.aggregate=async function(...a){await new Promise(r=>setTimeout(r,120));return o.apply(this,a);};})()")
-    await q.evaluate("FP.app.actions['an-level']({value:'subcategory',dataset:{value:'subcategory'}})")
+    await q.evaluate("FP.app.actions['pe-evolevel']({value:'subcategory'})")
     await q.wait_for_selector('#an-loader', timeout=5000)
     await q.wait_for_timeout(1200)
     r = await q.evaluate("(()=>{const e=document.getElementById('an-loader');return e?{w:e.querySelector('.ldr__bar i').style.width,t:e.querySelector('.ldr__pct').innerText+' '+e.querySelector('.ldr__time').innerText,now:e.getAttribute('aria-valuenow')}:null})()")
     chk(f'{tag}1 se ve una barra de carga con porcentaje y segundos', r and r['w'] not in ('', '0%') and '%' in r['t'] and 'transcurridos' in r['t'], r)
-    chk(f'{tag}1b durante la carga los filtros (Analizar por, Canal…) siguen visibles', await q.evaluate("!!document.getElementById('an-channel') && !!document.querySelector('[data-action=an-level]')"), None)
+    chk(f'{tag}1b durante la carga los filtros (Canal, periodo…) siguen visibles', await q.evaluate("!!document.getElementById('pa-ch')"), None)
     # cambio rápido de nivel mientras carga: gana el último y se terminan mostrando datos
-    await q.evaluate("FP.app.actions['an-level']({value:'product',dataset:{value:'product'}})")
+    await q.evaluate("FP.app.actions['pe-evolevel']({value:'product'})")
     await q.wait_for_function("!FP.app.state.an.loading && FP.app.state.an.rows.length>0", timeout=90000)
     await q.wait_for_timeout(400)
     lv = await q.evaluate("[FP.app.state.an.level, FP.app.state.an.rows.length, !!document.querySelector('#an-trend-table'), !document.getElementById('an-loader')]")
