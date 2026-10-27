@@ -35,7 +35,7 @@ async def run(b, w, h, tag):
     chk(f'{tag}6 quitar el chip limpia el filtro', await q.evaluate("!document.querySelector('.fshell__chip')"), None)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}7 sin desborde horizontal ({ov}px)', ov <= 1, ov)
     # Productos
-    await q.evaluate("location.hash='#producto'"); await q.wait_for_timeout(1200)
+    await q.evaluate("location.hash='#prodevol'"); await q.wait_for_timeout(1200)
     ok = await q.evaluate("!!document.querySelector('#pa-controls .fshell')")
     chk(f'{tag}8 Productos usa el mismo contenedor', ok, None)
     chk(f'{tag}8b Canal, granularidad, periodo y comparación a la vista (Desde/Hasta solo en modo Rango) y geografía en el panel', await vis('#pa-ch') and await vis('#pa-gran') and await vis('#pa-focus') and await vis('#pa-cmp') and not await vis('#pa-from'), None)

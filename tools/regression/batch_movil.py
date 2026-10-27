@@ -46,7 +46,7 @@ async def main():
         chk('M-8 tocar la sección abierta la pliega', s3 == 0, s3)
         await q.click('.snav__toggle[data-value="diagnosticar"]'); await q.wait_for_timeout(250); await q.click('a[data-nav="producto"]'); await q.wait_for_timeout(450)
         s4 = await q.evaluate("[location.hash, document.body.classList.contains('nav-open'), document.querySelector('.menu-toggle').getAttribute('aria-expanded')]")
-        chk('M-9 elegir una página cambia de vista y cierra el panel', s4 == ['#producto', False, 'false'], s4)
+        chk('M-9 elegir una página cambia de vista y cierra el panel', s4 == ['#prodevol', False, 'false'], s4)
         # datos primero
         await q.goto(u + '#pacing'); await q.wait_for_timeout(500)
         mo = await q.evaluate("(()=>{const m=document.getElementById('ux-more'),bt=document.querySelector('.ux-head__morebtn');return {more:getComputedStyle(m).display,btn:getComputedStyle(bt).display,exp:bt.getAttribute('aria-expanded'),top:Math.round(document.querySelector('#view-pacing table, #view-pacing svg, #view-pacing .kpi, #view-pacing .ds-kpi, #view-pacing canvas').getBoundingClientRect().top+scrollY)}})()")
@@ -84,7 +84,7 @@ async def main():
         cv2 = await q.evaluate("document.getElementById('ux-more').dataset.open")
         chk('M-23 al recargar la página vuelve a llegar plegado', cv2 == 'false', cv2)
         # Producto a 320 px: el botón de exportar no se sale de la pantalla
-        await q.set_viewport_size({'width': 320, 'height': 740}); await q.goto(u + '#producto'); await q.wait_for_timeout(600)
+        await q.set_viewport_size({'width': 320, 'height': 740}); await q.goto(u + '#prodevol'); await q.wait_for_timeout(600)
         ov320 = await q.evaluate("document.documentElement.scrollWidth-innerWidth")
         chk('M-24 Producto a 320 px sin desborde horizontal (botón con nombre de archivo largo)', ov320 <= 0, ov320)
         await q.set_viewport_size({'width': 375, 'height': 740})

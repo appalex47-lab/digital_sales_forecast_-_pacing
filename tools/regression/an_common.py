@@ -70,7 +70,7 @@ async def load_products(q, u):
 async def open_an(q, u, **st):
     st.setdefault("metric", "revenue"); st.setdefault("periodCount", 12); st.setdefault("months", st["periodCount"])
     """Abre Análisis con el estado dado y espera a que termine de calcular ESE estado."""
-    await q.goto(u + '#analisis'); await q.wait_for_function("window.FP && FP.app && FP.app.state && FP.productStore && FP.productStore.available()", timeout=30000)
+    await q.goto(u + '#prodevol'); await q.wait_for_function("window.FP && FP.app && FP.app.state && FP.productStore && FP.productStore.available()", timeout=30000)
     await q.wait_for_function("!FP.app.state.an.loading", timeout=90000)
     await q.evaluate("s=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null});FP.app.actions['an-clear-selection']()}", st)
     await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.key!==null && (a.share||a.error)})()", timeout=90000); await q.wait_for_timeout(300)

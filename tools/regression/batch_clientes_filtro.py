@@ -52,7 +52,7 @@ async def main():
         t = await compare('sucursal sola + Total digital', 'total', {'branch': br})
         chk('F4 combinar filtros reduce el resultado (Ecommerce ≤ Total; categoría+sucursal ≤ categoría)', e['led'] <= a['led'] + 1 and s['led'] <= e['led'] + 1, [a['led'], e['led'], s['led']])
         # Detalle temporal de una categoría en Ecommerce: columnas de clientes con esa selección
-        await q.goto(U + '#analisis'); await q.wait_for_function("FP.productStore.available()", timeout=30000); await q.wait_for_timeout(800)
+        await q.goto(U + '#prodevol'); await q.wait_for_function("FP.productStore.available()", timeout=30000); await q.wait_for_timeout(800)
         await q.evaluate("(s)=>{const a=FP.app.state.an;Object.assign(a,s,{rows:[],key:null,error:null})}", dict(metric='revenue', periodCount=12, months=12, level='category', channel='ecommerce', periodType='month', focusKey='2026-08', comparison='previous'))
         await q.evaluate("FP.app.render()")
         await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.rows.length>0})()", timeout=90000)

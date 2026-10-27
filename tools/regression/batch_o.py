@@ -44,7 +44,7 @@ async def main():
         chk('O-4 cada archivo vacío dice que no tenía datos, el motivo, qué falta y en qué vista llenarlo', e0.get('status') == 'empty' and e0.get('reason') and isinstance(e0.get('missing'), list) and e0.get('whereToFill') == 'pacing', e0)
         # ---------- datos completos: plan + real + escenario/acción/medición + productos ----------
         await prepare(q, u)
-        await q.goto(u + '#producto'); await q.wait_for_timeout(500); await q.click('[data-action="p-mock"]'); await q.wait_for_timeout(700)
+        await q.goto(u + '#prodevol'); await q.wait_for_timeout(500); await q.click('[data-action="p-mock"]'); await q.wait_for_timeout(700)
         for k in (1, 2):
             await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=90000); await q.click('[data-action="commit-staged"]')
             await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=180000)

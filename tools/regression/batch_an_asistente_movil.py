@@ -12,7 +12,7 @@ async def main():
         await open_an(q, u, level='product', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
         info = await q.evaluate("({partial: FP.app.state.an.comparisonInfo && FP.app.state.an.comparisonInfo.partial, rows: (FP.app.state.an.rows||[]).length})")
         chk('M0 hay un mes parcial (octubre, hasta el 5) con entidades', info['rows'] > 0, info)
-        r = await q.evaluate("""(()=>{const bad=[];let n=0;document.querySelectorAll('#view-analisis table.table--cards').forEach(t=>{t.querySelectorAll('tbody tr').forEach(tr=>{const c=tr.querySelector('th,td');if(!c)return;n++;const w=c.getBoundingClientRect().width,rw=tr.getBoundingClientRect().width;if(rw>0&&w<0.8*rw)bad.push([t.className.slice(0,40),Math.round(w),Math.round(rw)])})});return {n,bad:bad.slice(0,6)}})()""")
+        r = await q.evaluate("""(()=>{const bad=[];let n=0;document.querySelectorAll('#pe-body table.table--cards').forEach(t=>{t.querySelectorAll('tbody tr').forEach(tr=>{const c=tr.querySelector('th,td');if(!c)return;n++;const w=c.getBoundingClientRect().width,rw=tr.getBoundingClientRect().width;if(rw>0&&w<0.8*rw)bad.push([t.className.slice(0,40),Math.round(w),Math.round(rw)])})});return {n,bad:bad.slice(0,6)}})()""")
         chk('M1 en tarjetas (375 px) el nombre de la entidad ocupa todo el ancho de la tarjeta', r['n'] > 0 and not r['bad'], r)
         ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth")
         chk('M2 sin desborde horizontal', ov <= 0, ov)

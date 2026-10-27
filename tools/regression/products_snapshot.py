@@ -17,8 +17,8 @@ CTRL = """(id)=>{const m=document.getElementById(id);return [...m.querySelectorA
 TEXT = """(id)=>{const m=document.getElementById(id);const ds=[...m.querySelectorAll('details')];const pv=ds.map(d=>d.open);ds.forEach(d=>d.open=true);const t=m.innerText.replace(/\\s+/g,' ').trim();ds.forEach((d,i)=>d.open=pv[i]);return t}"""
 UNNAMED = """(id)=>{const m=document.getElementById(id);const vis=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length);return [...m.querySelectorAll('button,input:not([type=hidden]),select,textarea')].filter(vis).filter(e=>{const n=(e.getAttribute('aria-label')||'').trim()||(e.innerText||'').trim()||(e.title||'').trim()||(e.id&&document.querySelector('label[for="'+e.id+'"]')?'x':'')||(e.closest('label')?'x':'');return !n}).map(e=>e.tagName+'#'+e.id+'.'+(e.getAttribute('data-action')||''))}"""
 async def snap(q, tag, R):
-    R[tag] = {'tables': json.loads(TS.sub('<ts>', json.dumps(await q.evaluate(TABLES, 'view-producto')))), 'controls': await q.evaluate(CTRL, 'view-producto'),
-              'text': TS.sub('<ts>', await q.evaluate(TEXT, 'view-producto')), 'unnamed': await q.evaluate(UNNAMED, 'view-producto')}
+    R[tag] = {'tables': json.loads(TS.sub('<ts>', json.dumps(await q.evaluate(TABLES, 'pe-body')))), 'controls': await q.evaluate(CTRL, 'pe-body'),
+              'text': TS.sub('<ts>', await q.evaluate(TEXT, 'pe-body')), 'unnamed': await q.evaluate(UNNAMED, 'pe-body')}
 async def main():
     port = serve(); url = f'http://127.0.0.1:{port}/index.html'; R = {}; errs = []
     async with async_playwright() as p:
@@ -28,16 +28,16 @@ async def main():
             q.on('pageerror', lambda e: errs.append(str(e))); q.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
             await q.goto(url + '#resumen'); await q.wait_for_selector('#view-resumen:not([hidden])')
             await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1300)
-            await q.goto(url + '#producto'); await q.wait_for_timeout(500)
+            await q.goto(url + '#prodevol'); await q.wait_for_timeout(500)
             await q.click('[data-action="p-mock"]'); await q.wait_for_timeout(700)
             for k in (1, 2):
                 await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=60000); await q.click('[data-action="commit-staged"]')
                 await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=120000)  # el archivo sale de la revisión cuando terminó de guardarse (sin tiempos fijos)
-            await q.goto(url + '#producto'); await q.wait_for_selector('#pa-table table', timeout=60000); await q.wait_for_timeout(500)
+            await q.goto(url + '#prodevol'); await q.wait_for_selector('#pa-table table', timeout=60000); await q.wait_for_timeout(500)
             if w == 1280:
                 await snap(q, 'root', R)
                 R['probe'] = await q.evaluate("""()=>{
-                  const v=document.getElementById('view-producto');const fs=v.querySelector('fieldset.geo-filters');const panel=fs&&fs.closest('.panel');
+                  const v=document.getElementById('pe-body');const fs=v.querySelector('fieldset.geo-filters');const panel=fs&&fs.closest('.panel');
                   const cs=fs&&getComputedStyle(fs), ps=panel&&getComputedStyle(panel);
                   const cards=[...v.querySelectorAll('#pa-kpis .metric-card')];
                   const rows=[...v.querySelectorAll('#pa-table tbody tr')];
@@ -47,7 +47,7 @@ async def main():
                     tablesNoDs: [...v.querySelectorAll('table')].filter(t=>!t.classList.contains('ds-table')).length,
                     tok: (()=>{const r=getComputedStyle(document.documentElement);const c=n=>{const i=document.createElement('i');i.style.color=r.getPropertyValue(n);document.body.appendChild(i);return getComputedStyle(i).color};return {surface2:c('--ds-surface-2'),border:c('--ds-border')}})(),
                     geo: fs ? {bg: cs.backgroundColor, panelBg: ps.backgroundColor, border: cs.borderTopStyle+' '+cs.borderTopWidth, borderColor: cs.borderTopColor, radius: cs.borderTopLeftRadius, minw: cs.minWidth, legend: (fs.querySelector('legend')||{}).innerText||'', selects: fs.querySelectorAll('select[data-action="pa-geo"]').length} : null,
-                    geoOutside: [...document.querySelectorAll('[data-action="pa-geo"]')].filter(e=>!e.closest('#view-producto')).length,
+                    geoOutside: [...document.querySelectorAll('[data-action="pa-geo"]')].filter(e=>!e.closest('#pe-body')).length,
                     geoInProductOutsideFieldset: [...v.querySelectorAll('[data-action="pa-geo"]')].filter(e=>!e.closest('fieldset.geo-filters')).length,
                     navHasGeo: /regi[oó]n|ciudad|sucursal|estado de/i.test(document.querySelector('.app-nav').innerText),
                     growth: rows.map(r=>(r.querySelector('.pill')||{innerText:''}).innerText.trim()).filter(t=>!GR.includes(t)).length,
@@ -73,10 +73,10 @@ async def main():
                     await q.wait_for_timeout(200)
                 await q.click('[data-action="pa-trace"]')
                 await q.wait_for_function("FP.app.state.pa.trace", timeout=60000); await q.wait_for_timeout(300); await snap(q, 'trace', R)
-                await q.goto(url + '#producto'); await q.wait_for_timeout(600)
+                await q.goto(url + '#prodevol'); await q.wait_for_timeout(600)
             R.setdefault('overflow', {})[str(w)] = await q.evaluate("document.documentElement.scrollWidth-window.innerWidth")
             if SHOTS:
-                os.makedirs(SHOTS, exist_ok=True); await q.goto(url + '#producto'); await q.wait_for_timeout(700)
+                os.makedirs(SHOTS, exist_ok=True); await q.goto(url + '#prodevol'); await q.wait_for_timeout(700)
                 await q.screenshot(path=f'{SHOTS}/producto_data_{w}.png', full_page=True)
             await c.close()
         await b.close()

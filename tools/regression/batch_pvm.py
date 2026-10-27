@@ -92,7 +92,7 @@ async def main():
             chk(f'M2 métrica {met}: contexto lo declara, PVM/puente «no aplica», contribución concilia y no hay «$» en KPIs', r['ctx'] == met and r['pvm'] == 'not_applicable' and r['br'] == 'not_applicable' and r['cont'] == 'available' and r['lab'] in r['txt'] and '$' not in r['kpi'], (r['txt'], r['kpi'], r['pvm'], r['br']))
         # ---- Pantalla ----
         await open_an(q, u, level='product', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
-        ui = await q.evaluate("""(()=>{const T=document.getElementById('an-content').innerText;const s=document.getElementById('an-metric');
+        ui = await q.evaluate("""(()=>{const T=document.getElementById('pe-body').innerText;const s=document.getElementById('an-metric');
           return {opts:[...s.options].map(o=>o.value+':'+o.text),val:s.value,pvm:(document.getElementById('an-pvm')||{}).innerText||'',br:(document.getElementById('an-bridge')||{}).innerText||''}})()""")
         chk('U1 selector de métrica: Venta · Pedidos · Unidades', ui['opts'] == ['revenue:Venta', 'orders:Pedidos', 'units:Unidades'] and ui['val'] == 'revenue', ui['opts'])
         chk('U2 panel PVM: lectura, «✓ Conciliado», método y límites', 'Volumen · Precio · Mezcla' in ui['pvm'] and 'Lectura:' in ui['pvm'] and '✓ Conciliado' in ui['pvm'] and 'Método y límites' in ui['pvm'], ui['pvm'][:500])
