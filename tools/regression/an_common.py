@@ -79,9 +79,8 @@ async def open_an(q, u, **st):
       else{const r=TE.focusRange(g,s.focusKey,m.dateMax);pa.from=r.from;pa.to=r.to;pa.periodType=g}
       pa.channel=s.channel||'total';pa.comparison=s.comparison==='year_ago'?'yoy':'previous';
       pa.drill=[];pa.geo={};pa.next=null;pa.result=null;pa.trace=null;pa.page=1;pa.touched=true;
-      pa.evoLevel=s.level&&s.level!=='sku'?s.level:null;
+      pa.evoLevel=s.level||null;
       Object.assign(a,s,{rows:[],key:null,error:null});
-      if(s.level==='sku'){pa.evoLevel=null}
       A.actions['an-clear-selection']()}""", st)
     await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.key!==null && (a.share||a.error)})()", timeout=90000); await q.wait_for_timeout(300)
     er = await q.evaluate("FP.app.state.an.error")
