@@ -275,7 +275,7 @@
         <td class="num">${metricVal('aov', x.current && x.current.aov)}</td>
         <td>${x.signals.map((s) => `<span class="chip" title="${esc(s.evidence)}">Patrón ${esc(s.pattern)}</span>`).join(' ')}</td>
         <td>${r.level !== 'sku' ? `<button type="button" class="btn btn--small" data-action="pa-drill" data-key="${esc(x.key)}" ${x.key === '(sin dato)' || x.key === '(inválido)' ? 'title="Abre los renglones sin este dato"' : ''}>Ver ›</button>`
-          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}</td></tr>`).join('')}</tbody></table></div>
+          : `<button type="button" class="btn btn--small" data-action="pa-trace" data-key="${esc(x.key)}">Trazabilidad</button>`}${x.key === '(sin dato)' || x.key === '(inválido)' ? '' : ` <button type="button" class="btn btn--small btn--ghost" data-action="pa-to-trend" data-level="${esc(r.level)}" data-key="${esc(x.key)}" title="Abre Evolución y patrones con esta misma selección, canal y periodo: desde cuándo cae o crece">Evolución</button>`}</td></tr>`).join('')}</tbody></table></div>
       ${n ? `<p class="field__hint">Top ${n} de ${F().integer(rows.length)} por |contribución|. El Top N es solo visual: todos los SKU siguen guardados y en los totales.</p>`
         : `<div class="pager"><span>${F().integer((page - 1) * size + 1)}–${F().integer(Math.min(page * size, rows.length))} de ${F().integer(rows.length)}</span>
           <div class="btn-row"><button type="button" class="btn btn--small" data-action="pa-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>

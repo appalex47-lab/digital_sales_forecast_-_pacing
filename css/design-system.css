@@ -1399,6 +1399,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 .why-hub__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--ds-s3); }
 .why-hub__item { display: grid; gap: 2px; padding: var(--ds-s2) var(--ds-s3); border-radius: var(--ds-r-sm, 6px); border: 1px solid transparent; }
 .why-hub__item span { font-size: var(--ds-fs-helper); color: var(--ds-text-muted); }
+.why-hub__item .why-hub__src { font-size: var(--ds-fs-helper); color: var(--ds-text-muted); opacity: .85; }
 .why-hub__item.is-current { background: var(--ds-accent-soft); border-color: var(--ds-accent); }
 .why-hub .link-btn { justify-self: start; font-weight: 650; }
 #view-diagnostico .pacing-more { margin: var(--ds-s3) 0 0; }

@@ -1873,6 +1873,14 @@
     return f;
   }
 
+  /** Traduce una selección de producto/ubicación (filtro de Evolución) a la ruta de Categoría → Producto. */
+  function paFromSelection(f, channel) {
+    const pa = state.pa;
+    pa.drill = ['category', 'subcategory', 'product', 'sku'].filter((k) => f[k]).map((k) => ({ level: k, key: f[k] }));
+    pa.geo = {}; ['region', 'state', 'city', 'branch', 'delivery'].forEach((k) => { if (f[k]) pa.geo[k] = f[k]; });
+    pa.channel = FP.analysisContext.normChannel(channel); pa.next = null; pa.result = null; pa.trace = null; pa.page = 1; pa.note = null;
+  }
+
   /** Calcula el análisis de productos (asíncrono) si cambió algún parámetro. */
   async function ensureProductAnalysis() {
     const pa = state.pa;
@@ -1894,6 +1902,7 @@
     if (pa.key !== key) return;
     pa.result = res; pa.loading = false; pa.page = 1;
     if (state.view === 'producto') FP.productView.render(state);
+    if (pa.pendingTrace) { const sku = pa.pendingTrace; pa.pendingTrace = null; await actions['pa-trace']({ dataset: { key: sku } }); }   // llegó desde «Ver trazabilidad completa» de Evolución
   }
 
   /** Filtro de página de Evolución y patrones (categoría, producto, sucursal…): se suma a TODA lectura de productos. */
@@ -1901,6 +1910,7 @@
   const aggF = (args) => FP.productStore.aggregate({ ...args, filter: { ...pageFilter(), ...(args.filter || {}) } });
   /** Cambia una parte del contexto de Análisis y descarta TODO resultado derivado (sin contexto viejo en pantalla). */
   function resetAnalysis(patch) {
+    if (patch && ('periodType' in patch || 'focusKey' in patch || 'comparison' in patch)) state.an.ctxTouched = true;   // la persona cambió periodo o comparación: se comparte con las demás vistas al salir
     Object.assign(state.an, patch || {}, { page: 1, forecastPage: 1, rows: [], advanced: [], groups: [], selected: null, key: null, error: null, priorities: null, risks: null, forecast: null,
       temporal: null, share: null, contribution: null, pvm: null, bridge: null, cohort: null, narrative: null, drill: null, context: null, comparisonInfo: null, reconciliation: null, partialComparison: null,
       ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } });
@@ -3506,7 +3516,7 @@
       const pa = state.pa, k = el.dataset.key;
       if (k === 'topN') { pa.topN = Number(el.value); pa.page = 1; render(); return; }
       if ((k === 'from' || k === 'to') && !Cal.isValidISODate(el.value)) { FP.ui.toast('Fecha inválida.'); render(); return; }
-      pa[k] = el.value; pa.note = null; if (k === 'from' || k === 'to') pa.periodType = null;
+      pa[k] = el.value; pa.note = null; if (k !== 'channel') pa.touched = true; if (k === 'from' || k === 'to') pa.periodType = null;
       if (k === 'channel') state.ux.ctx.channel = el.value;
       if (pa.from && pa.to && pa.from > pa.to) { FP.ui.toast('"Desde" debe ser anterior a "Hasta".'); return; }
       pa.result = null; render();
@@ -3540,11 +3550,36 @@
       pa.trace = { sku: el.dataset.key, rows }; render();
       const t = document.getElementById('pa-trace'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
+    'pa-to-trend'(el) {
+      // Producto → Evolución: la misma selección (ruta y geografía, canal y periodo) y la entidad de la fila abierta en su lectura.
+      const pa = state.pa, PF = FP.productFilter; if (!PF) return;
+      const lvl = el.dataset.level, path = paFilter(pa);
+      let f = {}; PF.KEYS.forEach((k) => { if (path[k] && k !== lvl) f = PF.cascade(f, k, path[k]); });
+      pa.touched = true;
+      resetAnalysis({ filter: f, level: lvl, channel: FP.analysisContext.normChannel(pa.channel) });
+      state.an.reopen = { scope: 'entity', entity: el.dataset.key };
+      root.location.hash = '#analisis';
+    },
+    'an-to-product'(el) {
+      // Evolución → Producto: la selección de la página y la entidad abierta pasan como ruta del análisis de productos (embudo, CR y patrones).
+      const a = state.an, pa = state.pa, PF = FP.productFilter, ent = el.dataset.entity;
+      const f = { ...(PF ? PF.active(a.filter) : {}) };
+      if (a.level !== 'channel' && ent) f[a.level] = ent;
+      paFromSelection(f, a.channel);
+      a.ctxTouched = true;
+      root.location.hash = '#producto';
+    },
+    'an-open-trace'(el) {
+      const a = state.an, pa = state.pa;
+      paFromSelection({ sku: el.dataset.sku }, a.channel);
+      pa.pendingTrace = el.dataset.sku; a.ctxTouched = true;
+      root.location.hash = '#producto';
+    },
     'pa-trace-close'() { state.pa.trace = null; render(); },
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
       if (!x) return;
-      Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note, result: null });
+      Object.assign(state.pa, { from: x.from, to: x.to, periodType: x.periodType, channel: x.channel, comparison: x.comparison, note: x.note, result: null, touched: true });
       render();
     },
     async 'pa-export'() {
@@ -5942,7 +5977,7 @@
     if (op && FP.bgTask) FP.bgTask.finish(state.cloud.msg);   // desde otra pantalla: aviso con el resultado (el texto completo queda en Cuenta)
   }
 
-  FP.app = { cloudProvider, state, actions, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
+  FP.app = { cloudProvider, state, actions, resetAnalysis, calibrateNow, calAutoCheck, pcalAnalysis, pcalAutoCheck, projParams, render, demoInfo, saveStore, savingChain, paLevel, paNextChoices, paFilter, periodRange, storage, repo, lsStorage, lsAdapter, retryMigration: async () => { migrationState = await FP.storageMigration.migrate({ ls: lsStorage, lsAdapter, repo, force: true }); state.storage.migration = migrationState; return migrationState; } };
 
   // Pantalla de arranque (index.html): se retira al terminar init(); si init() falla se muestra el aviso en lugar de dejar la pantalla en blanco.
   const start = () => init().then(
