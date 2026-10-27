@@ -201,6 +201,20 @@
       <div class="panel__body">${of.manual.msg ? `<div class="note note--warn" role="alert">${esc(of.manual.msg)}</div>` : ''}<div class="field-grid">${MF.map(([k, l, t]) => ctl(k, l, t)).join('')}</div>
         <div class="btn-row"><button type="button" class="btn btn--primary" data-action="of-manual-save">Guardar oferta</button></div></div></section>`;
   }
+  /** Exposiciones: productos que se exponen sin oferta de descuento. No cuentan en los totales de ofertas. */
+  function exposuresPanel(state) {
+    const esc = H().esc, pill = H().pill, ex = state.ex; if (!ex || !ex.reg || !ex.reg.items.length) return '';
+    const today = new Date().toISOString().slice(0, 10), E = FP.exposures, S = E.summary(ex.reg, today), fold = (state.of.fold || {}).exposures;
+    const rows = ex.reg.items.slice().reverse().slice(0, 200).map((e) => { const st = E.status(e, today);
+      return `<tr><td class="num">${esc(e.expId)}<span class="cell-sub">${esc(e.batchId)}</span></td><td class="num">${esc(e.sku)}</td><td>${esc(e.name)}<span class="cell-sub">${esc(e.lab || 'Sin laboratorio')}</span></td>
+        <td>${e.start || e.end ? `${esc(e.start || '…')} a ${esc(e.end || 'sin fin')}` : 'Sin fechas'}</td><td>${pill(st === 'active' ? 'ok' : st === 'upcoming' ? 'warning' : 'na', E.STATUS[st])}</td><td>${esc(e.createdBy)}<span class="cell-sub">${esc(String(e.createdAt).slice(0, 10))}</span></td>
+        <td>${e.state === 'active' ? `<button type="button" class="btn btn--small btn--ghost" data-action="ex-remove" data-id="${esc(e.expId)}">Quitar</button>` : ''}</td></tr>`; }).join('');
+    const table = fold ? `<div class="table-wrap gd-scroll" tabindex="0" aria-label="Exposiciones, se desliza"><table class="table ds-table"><thead><tr><th>Folio</th><th>SKU</th><th>Producto</th><th>Fechas</th><th>Estado</th><th>Puso</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="field__hint">Una exposición no es una oferta: no lleva descuento, no pasa por validar ni armar promoción y no cuenta en el descuento promedio ni en la cobertura de ofertas. Las fechas, si las hay, sirven para medir el periodo expuesto.</p>` : '';
+    return `<section class="panel" aria-labelledby="ex-t"><div class="panel__head"><div><h2 class="panel__title" id="ex-t">Exposición sin oferta · ${S.active} vigentes${S.upcoming ? ` · ${S.upcoming} por empezar` : ''}</h2>
+      <p class="panel__desc">Productos que se exponen en el sitio o la app sin descuento. Se ponen desde Qué impulsar.</p></div><button type="button" class="btn btn--small" data-action="of-fold" data-fold="exposures" aria-expanded="${!!fold}">${fold ? 'Ocultar' : 'Ver la lista'} ${fold ? '▴' : '▾'}</button></div>
+      ${table ? `<div class="panel__body">${table}</div>` : ''}</section>`;
+  }
   function html(state) {
     const of = state.of, reg = of.reg, an = O().analyze(reg), esc = H().esc, AV = FP.activationView, map = AV ? AV.recs(state) : new Map();
     const sel = of.sel ? O().find(reg, of.sel) : null;
@@ -208,6 +222,7 @@
       <p class="panel__desc">Recibe, valida y selecciona las ofertas que mandan proveedores o comercial. Los descuentos y precios son los del archivo (o la cuenta 1 − precio final ÷ PMP, marcada como calculada). Recibir una oferta no activa nada en la web ni en la app.</p></div>
       <div class="btn-row"><label class="btn btn--primary" for="of-file">Cargar archivo de ofertas</label><button type="button" class="btn" data-action="of-manual-open">Capturar una oferta</button><button type="button" class="btn btn--ghost" data-action="of-template">Descargar plantilla</button><input id="of-file" type="file" accept=".xlsx,.csv" data-action="of-file" style="position:absolute;left:-9999px"></div></div>
       <div class="panel__body">${counters(reg, an)}</div></section>
+      ${exposuresPanel(state)}
       ${FP.guideView ? FP.guideView.offerSummary(state, an, map) : ''}
       ${FP.guideView && reg.offers.length ? FP.guideView.actionsHtml(state, map, 'offer') : ''}
       ${manualHtml(of)}

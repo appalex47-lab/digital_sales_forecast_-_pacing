@@ -2977,3 +2977,8 @@ La vista Proyección mide, con tus propios cierres, qué regla habría proyectad
 - `FP.opportunities.routeOf/ROUTES` asigna a cada SKU una sola salida; `counts.byRoute` y `counts.revenueByRoute` alimentan las tarjetas.
 - `FP.promotionExport.buildRequestBook` arma el Excel (hoja «Solicitud» ordenada por laboratorio y hoja «Por laboratorio»); no incluye costos, márgenes ni precios.
 - Acciones en `app.js`: `op-route`, `rq-ask`, `rq-confirm`, `rq-cancel-confirm`, `rq-redo`, `rq-cancel`, `rq-filter`. Pruebas: `tools/test-requests.js` y `tools/regression/batch_pedir_oferta.py`.
+
+## Exposición sin oferta
+
+- `js/promotions/exposureStore.js` (`FP.exposures`, clave `exposures`): registro `{ seq, batchSeq, items[] }` con folios `EXP-0001` / `E-00001`. Registro aparte del de ofertas a propósito, para que no entre en `FP.summary` ni en descuento promedio o cobertura. `status(e, today)` calcula por fechas; `currentFor` evita repetir una vigente.
+- Acciones: `ex-ask`, `ex-confirm`, `ex-cancel-confirm`, `ex-remove`, `of-fold` (panel). Pruebas: `tools/test-exposures.js`, `tools/regression/batch_exposicion.py`.

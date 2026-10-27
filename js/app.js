@@ -33,6 +33,7 @@
     sm: { reg: null, group: 'cat', campaign: '', msg: null },   // pestaña «Resumen» + registro de propuestas exportadas
     gd: { stepsOpen: false, undo: null, confirm: null },
     rm: { log: null, confirm: null },   // eliminar ofertas y promociones: registro y confirmación en curso   // guía «Ahora haz esto» y acciones de un clic
+    ex: { reg: null, confirm: null },   // «Exposición»: productos que se exponen sin oferta de descuento
     rq: { reg: null, confirm: null },   // solicitudes de oferta a Comercial (se piden desde Oportunidades)
     ac: { reg: null, sel: null, msg: null },   // «Activación sugerida» (columnas de Ofertas recibidas y Oportunidades)
     of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
@@ -844,6 +845,8 @@
   }
   if (FP.goalsView) { FP.goalsView.campaignSkus = cgCampaignSkus; FP.goalsView.campaignOffers = cgCampaignOffers; FP.goalsView.campaignDays = cgCampaignDays; }
   function saveProposals() { return saveOk(storage.save(K.proposals, state.sm.reg), 'las propuestas exportadas'); }
+  function loadExposures() { const env = storage.load(K.exposures); state.ex.reg = FP.exposures.hydrate(env && env.data); state.ex.confirm = null; }
+  function saveExposures() { return saveOk(storage.save(K.exposures, state.ex.reg), 'las exposiciones'); }
   function loadRequests() { const env = storage.load(K.requests); state.rq.reg = FP.requests.hydrate(env && env.data); state.rq.confirm = null; reconcileRequests(false); }
   function saveRequests() { return saveOk(storage.save(K.requests, state.rq.reg), 'las solicitudes de oferta'); }
   /** Cierra solas las solicitudes cuyo SKU ya recibió una oferta. Se llama al cargar y al guardar un archivo o una captura. */
@@ -871,7 +874,7 @@
     list.forEach((i) => {
       const o = i.offers.slice().sort((a, b) => (b.discount || 0) - (a.discount || 0))[0], rec = map.get(o ? `offer:${o.offerId}` : `sku:${i.sku}`); if (!rec) return;
       const full = o ? state.of.reg.offers.find((x) => x.offerId === o.offerId) : null;
-      rows.push(Object.assign({ sku: i.sku, name: i.name, category: i.category, lab: i.brand, origin: o ? 'Oportunidad con oferta recibida' : 'Oportunidad', offer: o ? [pctTxt(o.discount), full && full.mechanic].filter(Boolean).join(' · ') : '', program: full ? full.program : '', rec, ext: extOf(i.sku, rec) }, stateInfo(rec.key)));
+      rows.push(Object.assign({ sku: i.sku, name: i.name, category: i.category, lab: i.brand, origin: o ? 'Oportunidad con oferta recibida' : (state.ex.reg && FP.exposures.currentFor(state.ex.reg, i.sku, new Date().toISOString().slice(0, 10)) ? 'Exposición (sin oferta)' : 'Oportunidad'), offer: o ? [pctTxt(o.discount), full && full.mechanic].filter(Boolean).join(' · ') : '', program: full ? full.program : '', rec, ext: extOf(i.sku, rec) }, stateInfo(rec.key)));
     });
     return { rows, total: state.op.result ? state.op.result.counts.total : 0 };
   }
@@ -2745,7 +2748,7 @@
       loadReforecastSettings();
       loadRecovery();
       loadPromotions();
-      loadOffers(); loadRemovalLog(); loadRequests();
+      loadOffers(); loadRemovalLog(); loadRequests(); loadExposures();
       loadActivation();
       loadProposals(); loadGoals();
       loadBusinessContext(); loadBrand(); loadCalibration(); loadProjCalibration();
@@ -4820,6 +4823,29 @@
     },
     'op-route'(el) { const f = state.op.f; f.route = f.route === el.dataset.route ? '' : (FP.opportunities.ROUTES[el.dataset.route] ? el.dataset.route : ''); state.op.limit = 50; render(); },
     /** «Pedir oferta»: arma la lista (marcados o, si no hay marcas, los de «Pedir oferta» visibles sin solicitud abierta) y la muestra antes de pedir. */
+    /** «Exponer sin oferta»: arma la lista (marcados o los de «Exponer» que se ven) y pide fechas opcionales antes de guardar. */
+    'ex-ask'() {
+      const op = state.op;
+      if (!state.pm.actor) { op.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: la exposición guarda quién la puso.' }; render(); return; }
+      const plan = FP.opportunityView.exposurePlan(op, state);
+      if (!plan.ok.length) { op.msg = { kind: 'bad', text: plan.empty }; render(); return; }
+      state.ex.confirm = plan; op.msg = null; render();
+    },
+    'ex-cancel-confirm'() { state.ex.confirm = null; render(); },
+    'ex-confirm'() {
+      const op = state.op, plan = state.ex.confirm; if (!plan) return;
+      const start = opV('ex-start'), end = opV('ex-end');
+      const r = FP.exposures.add(state.ex.reg, plan.ok.map((i) => ({ sku: i.sku, productCode: i.productCode, name: i.name, category: i.category, lab: FP.opportunityView.labOf(i, state), reasons: i.types.map((t) => `${t.label}: ${t.reason}`) })), { by: state.pm.actor, start, end });
+      if (!r.ok) { plan.msg = r.error; plan.start = start; plan.end = end; render(); return; }   // se queda abierta para corregir las fechas
+      state.ex.confirm = null; saveExposures();
+      op.msg = { kind: 'ok', text: `${r.created.length} productos quedaron en exposición (${r.batchId})${start || end ? ` ${start ? 'desde ' + start : ''}${end ? ' hasta ' + end : ''}` : ' sin fechas'}. Ya salen en el plan de activación como «Exposición». No cuentan en el descuento promedio ni en la cobertura de ofertas.${r.skipped.length ? ` ${r.skipped.length} ya estaban en exposición.` : ''}`, warnings: [] };
+      op.checked = {}; op.checkedG = {}; render();
+    },
+    'ex-remove'(el) {
+      const r = FP.exposures.remove(state.ex.reg, el.dataset.id, { by: state.pm.actor });
+      const msg = r.ok ? { kind: 'ok', text: `Se quitó la exposición ${el.dataset.id}.` } : { kind: 'bad', text: r.error };
+      if (r.ok) saveExposures(); state.op.msg = msg; state.of.msg = msg; render();
+    },
     'rq-ask'() {
       const op = state.op, rq = state.rq;
       if (!state.pm.actor) { op.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: la solicitud guarda quién la pidió.' }; render(); return; }
@@ -5602,7 +5628,7 @@
     loadDiagnosticSettings();
     loadRecovery();
     loadPromotions();
-    loadOffers(); loadRemovalLog(); loadRequests();
+    loadOffers(); loadRemovalLog(); loadRequests(); loadExposures();
     loadActivation(); loadProposals(); loadGoals();
     loadBusinessContext();
     loadCalibration();
@@ -5705,7 +5731,7 @@
   const SIGNOUT_KEEP = ['uxSettings', 'productSettings', 'cohereApiKey', 'storageMigration', 'onboardingDone'];
   const signout = { phase: 'idle', audit: null, busy: false, ack: false, msg: '' };
   const baseOf = (k) => String(k).split(':')[0];
-  const KEY_LABEL = { removalLog: 'Registro de eliminaciones', projectionCalibration: 'Calibración de la proyección', confidenceCalibration: 'Calibración de la confianza', actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', requests: 'Solicitudes de oferta', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
+  const KEY_LABEL = { removalLog: 'Registro de eliminaciones', projectionCalibration: 'Calibración de la proyección', confidenceCalibration: 'Calibración de la confianza', actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', requests: 'Solicitudes de oferta', exposures: 'Exposiciones', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
   const keyName = (k) => { const b = baseOf(k), y = String(k).split(':')[1]; return `${KEY_LABEL[b] || b}${y && /^\d{4}$/.test(y) ? ' ' + y : ''}`; };
   /** Compara lo local con la nube (solo lectura). Devuelve { ok, unsynced:[texto], checked } o { ok:false, error }. */
   async function signoutAudit() {

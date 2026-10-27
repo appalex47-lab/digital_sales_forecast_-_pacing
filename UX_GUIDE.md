@@ -743,3 +743,9 @@ Búsqueda, tipo de oportunidad, «Filtros (N activos)», «Ver por» y «Exporta
 - **Pedir oferta:** el botón usa los marcados o, sin marcas, los de «Pedir oferta» que se ven. Antes de pedir muestra la lista por laboratorio y qué queda fuera (ya pedidos o con oferta recibida). Pide el nombre de quien la hace. Descarga un Excel para Comercial, agrupado por laboratorio, sin costos ni márgenes; no se manda nada solo.
 - **Seguimiento:** panel «Solicitudes a Comercial» con Pedidas, Sin respuesta (7 días o más) y Recibidas. La solicitud se cierra sola cuando llega una oferta de ese SKU, por archivo o captura a mano, no descartada y posterior a la solicitud. Se puede cancelar y volver a descargar el Excel de un folio. Con todo al día y solicitudes sin respuesta, la barra de arriba avisa «Insiste con Comercial».
 - Los folios son `PED-0001` (el pedido) y `SOL-00001` (cada SKU).
+
+## Exposición sin oferta
+
+- En Qué impulsar, «Exponer sin oferta» usa los marcados o, sin marcas, los de la salida «Exponer» que se ven. Pide tu nombre y fechas opcionales (sirven para medir el periodo expuesto); si las fechas son inválidas avisa y conserva lo escrito.
+- Una exposición **no es una oferta**: no lleva descuento ni precio, no pasa por validar ni armar promoción y no cuenta en el descuento promedio ni en la cobertura de ofertas. Sale en el plan de activación con origen «Exposición (sin oferta)».
+- Cualquier persona con nombre puede ponerla o quitarla; se guarda quién y cuándo. El panel «Exposición sin oferta» vive en Ofertas y plan. Estados por fechas: Por empezar, Vigente, Terminada, Quitada.
