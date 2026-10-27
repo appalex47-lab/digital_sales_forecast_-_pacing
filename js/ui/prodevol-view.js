@@ -357,7 +357,7 @@
         </div></div>
       </section>
       <div class="pe-sticky" id="pe-bar">${controls}${focusStrip}<div class="pe-jump" role="navigation" aria-label="Capítulos de la página">${chips}</div></div>
-      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}${early ? '' : `<details class="disclosure pe-note"><summary>Resumen en texto y cómo se calcula</summary>${A.narrative}</details>`}`)}
+      ${chapter(1, 'que', '¿Qué pasó?', take1(state), `${early ? '' : ef.comparisonNote + A.context}${FP.prodevolContext ? FP.prodevolContext.visitHtml(state) : ''}${res.kpis}${early ? '' : `<details class="disclosure pe-note"><summary>Resumen en texto y cómo se calcula</summary>${A.narrative}</details>`}`)}
       ${chapter(2, 'meta', '¿Contra la meta?', take2(state), early ? '' : A.bridge)}
       ${chapter(3, 'quien', '¿Quién lo mueve?', take3(state), `${early ? '' : TV.contributionKpis(state)}${tools}<div class="chap__block">${res.table}</div>${early ? '' : `<details class="disclosure pe-note"><summary>Mix Intelligence · quién gana y quién pierde participación</summary>${A.mix}</details>`}`)}
       ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${FP.prodevolContext ? FP.prodevolContext.seasonalHtml(state) : ''}${help}${evoSel}${evoTools}${hist ? noHistory(state) : A.table}${A.forecast}`)}

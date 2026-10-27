@@ -2045,6 +2045,7 @@
   const aggF = (args) => FP.productStore.aggregate({ ...args, filter: { ...pageFilter(), ...(args.filter || {}) } });
   /** Cambia una parte del contexto de Análisis y descarta TODO resultado derivado (sin contexto viejo en pantalla). */
   function resetAnalysis(patch) {
+    state.peFocusKey = null; state.peDrawer = false;   // otra selección: el foco y el panel de la anterior ya no aplican
     Object.assign(state.an, patch || {}, { page: 1, forecastPage: 1, rows: [], advanced: [], groups: [], selected: null, key: null, error: null, priorities: null, risks: null, forecast: null,
       temporal: null, share: null, contribution: null, pvm: null, bridge: null, cohort: null, narrative: null, drill: null, context: null, comparisonInfo: null, reconciliation: null, partialComparison: null,
       ai: { status: null, result: null, errors: [] }, assistant: { open: false, question: '', status: 'idle', result: null, errors: [], history: [] } });
