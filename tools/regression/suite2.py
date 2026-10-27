@@ -1,7 +1,7 @@
 import asyncio, json, sys, hashlib, re
 from playwright.async_api import async_playwright
 ROOT=sys.argv[1]
-VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','producto','recovery','medir','narrativa','paquete','segmentos','ayuda']
+VIEWS=['inicio','negocio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','reforecast','diagnostico','prodevol','recovery','medir','narrativa','paquete','segmentos','ayuda']
 CAP="window.__dl=[];(()=>{const o=FP.exporter.download;FP.exporter.download=(n,obj)=>{window.__dl.push([n,JSON.stringify(obj)]);};})();"
 R={}
 async def main():

@@ -71,7 +71,7 @@ async def main():
         # ---------- encabezados sin saltos, un solo h1 ----------
         H = """()=>{const H=[...document.querySelectorAll('.app-main:not([hidden]) h1,.app-main:not([hidden]) h2,.app-main:not([hidden]) h3,.app-main:not([hidden]) h4')].filter(e=>e.getBoundingClientRect().height>0).map(e=>+e.tagName[1]);let sk=0;for(let i=1;i<H.length;i++)if(H[i]>H[i-1]+1)sk++;return {sk,h1:document.querySelectorAll('h1').length,n:H.length}}"""
         skips = {}
-        for v in ('inicio', 'carga', 'calidad', 'datos', 'resumen', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'diagnostico', 'producto', 'reforecast', 'recovery', 'medir', 'narrativa', 'presentacion', 'segmentos', 'ayuda', 'ajustes'):
+        for v in ('inicio', 'carga', 'calidad', 'datos', 'resumen', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'diagnostico', 'prodevol', 'reforecast', 'recovery', 'medir', 'narrativa', 'presentacion', 'segmentos', 'ayuda', 'ajustes'):
             await q.goto(u + '#' + v); await q.wait_for_timeout(300)
             r = await q.evaluate(H)
             if r['sk'] or r['h1'] != 1: skips[v] = r

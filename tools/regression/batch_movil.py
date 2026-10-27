@@ -44,7 +44,7 @@ async def main():
         await q.click('.snav__toggle[data-value="medir"]'); await q.wait_for_timeout(300)
         s3 = await q.evaluate("[...document.querySelectorAll('.snav__toggle')].filter(t=>t.getAttribute('aria-expanded')==='true').length")
         chk('M-8 tocar la sección abierta la pliega', s3 == 0, s3)
-        await q.click('.snav__toggle[data-value="diagnosticar"]'); await q.wait_for_timeout(250); await q.click('a[data-nav="producto"]'); await q.wait_for_timeout(450)
+        await q.click('.snav__toggle[data-value="diagnosticar"]'); await q.wait_for_timeout(250); await q.click('a[data-nav="prodevol"]'); await q.wait_for_timeout(450)
         s4 = await q.evaluate("[location.hash, document.body.classList.contains('nav-open'), document.querySelector('.menu-toggle').getAttribute('aria-expanded')]")
         chk('M-9 elegir una página cambia de vista y cierra el panel', s4 == ['#prodevol', False, 'false'], s4)
         # datos primero
