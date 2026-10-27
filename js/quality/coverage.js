@@ -106,11 +106,22 @@
     // duplicados: registros de más = todos − vigentes. El agrupamiento por llave (un arreglo por llave) solo se hace si los hay.
     const duplicateRecords = recs.length - uniq.length;
     const duplicateKeys = duplicateRecords > 0 ? S().findDuplicates(store, dataType).length : 0;
-    const rowsRead = bats.reduce((a, b) => a + b.rowCount, 0);
-    const rejected = bats.reduce((a, b) => a + b.rejected, 0);
+    let rowsRead = 0, rejected = 0, errCount = 0, warnCount = 0;
+    const issuesByType = {};
+    for (let i = 0; i < bats.length; i++) {
+      const b = bats[i];
+      rowsRead += b.rowCount || 0;
+      rejected += b.rejected || 0;
+      const list = b.issues || [];
+      for (let j = 0; j < list.length; j++) {
+        const iss = list[j];
+        if (iss.severity === 'error') errCount++;
+        else if (iss.severity === 'warning') warnCount++;
+        issuesByType[iss.type] = (issuesByType[iss.type] || 0) + 1;
+      }
+    }
     let valid = 0, warning = 0, error = 0, quarantined = 0;          // una sola pasada para los cuatro conteos
     for (let i = 0; i < recs.length; i++) { const st = recs[i].status; if (st === 'valid') valid++; else if (st === 'warning') warning++; else if (st === 'error') error++; else if (st === 'quarantined') quarantined++; }
-    const issues = bats.flatMap((b) => b.issues);
     const out = {
       dataType,
       label: C().dataTypes[dataType].label,
@@ -124,8 +135,8 @@
       missingDates: coverage.missingDates.length,
       missingChannels: coverage.missingChannels.length,
       datesWithMissingChannels: coverage.datesWithMissingChannels,
-      issueCounts: { error: issues.filter((i) => i.severity === 'error').length, warning: issues.filter((i) => i.severity === 'warning').length },
-      issuesByType: issues.reduce((acc, i) => { acc[i.type] = (acc[i.type] || 0) + 1; return acc; }, {}),
+      issueCounts: { error: errCount, warning: warnCount },
+      issuesByType,
       coverage
     };
     // Segmentos (Fase 5) son un desglose opcional de periodos elegidos: los huecos de fechas no degradan el estado.

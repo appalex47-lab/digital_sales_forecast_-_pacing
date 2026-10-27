@@ -102,15 +102,23 @@
     $('data-batches').innerHTML = list.length ? `<div class="table-wrap"><table class="table ds-table">
       <thead><tr><th>Archivo</th><th>Tipo</th><th>Importado</th><th class="num">Filas</th><th class="num">Importadas</th>
         <th class="num">Rechazadas</th><th class="num">Errores</th><th class="num">Advertencias</th><th><span class="visually-hidden">Acciones</span></th></tr></thead>
-      <tbody>${list.map((b) => `<tr>
+      <tbody>${list.map((b) => {
+        let errs = 0, warns = 0;
+        const issList = b.issues || [];
+        for (let j = 0; j < issList.length; j++) {
+          if (issList[j].severity === 'error') errs++;
+          else if (issList[j].severity === 'warning') warns++;
+        }
+        return `<tr>
         <td><strong>${esc(b.fileName)}</strong></td>
         <td>${esc(C().dataTypes[b.dataType].label)}</td>
         <td class="num">${esc(b.importedAt.slice(0, 16).replace('T', ' '))}</td>
         <td class="num">${F().integer(b.rowCount)}</td><td class="num">${F().integer(b.accepted)}</td><td class="num">${F().integer(b.rejected)}</td>
-        <td class="num">${F().integer(b.issues.filter((i) => i.severity === 'error').length)}</td>
-        <td class="num">${F().integer(b.issues.filter((i) => i.severity === 'warning').length)}</td>
+        <td class="num">${F().integer(errs)}</td>
+        <td class="num">${F().integer(warns)}</td>
         <td><button type="button" class="btn btn--small btn--quiet" data-action="remove-batch" data-id="${b.id}">Quitar</button></td>
-      </tr>`).join('')}</tbody></table></div>
+      </tr>`;
+      }).join('')}</tbody></table></div>
       <p class="field__hint">Quitar un archivo borra sus registros y su registro de errores. Úsalo para reemplazar una carga con duplicados o errores.</p>`
       : '<div class="empty"><strong>Sin archivos importados</strong>Los archivos aparecen aquí después de confirmar la importación.</div>';
   }
