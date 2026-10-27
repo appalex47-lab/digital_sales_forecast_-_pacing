@@ -24,10 +24,10 @@ async def main():
         q, errs = await boot(c)
         await q.evaluate("location.hash='#promociones'"); await q.wait_for_timeout(700)
         tabs = await q.evaluate("[...document.querySelectorAll('[data-action=\"pm-tab\"]')].map(b=>b.textContent.trim())")
-        chk('O1 cinco pestañas: Resumen, Oportunidades, Ofertas recibidas…', len(tabs) == 5 and tabs[0].startswith('Resumen') and tabs[1].startswith('Oportunidades') and tabs[2].startswith('Ofertas'), tabs)
+        chk('O1 cinco pestañas: Resumen, Qué impulsar, Ofertas y plan…', len(tabs) == 5 and tabs[0].startswith('Resumen') and tabs[1].startswith('Qué impulsar') and tabs[2].startswith('Ofertas y plan'), tabs)
         await q.click('[data-action="pm-tab"][data-tab="oportunidades"]'); await q.wait_for_timeout(500)
         t = await body(q)
-        chk('O2 sin datos de producto lo dice y no calcula', ('productos' in t.lower()) and 'Calcular' not in t.split('\n')[0] and not await q.query_selector('#op-t-det'), t[:300])
+        chk('O2 sin datos de producto lo dice y no calcula', ('datos de producto' in t.lower()) and 'Calcular' not in t.split('\n')[0] and not await q.query_selector('#op-t-det'), t[:300])
         r = await q.evaluate("""(async()=>{
           const gen = FP.mockProducts.generate({ from: '2026-08-01', to: '2026-09-30', skus: 80 });
           const s1 = FP.productImport.stage(gen.sales, { fileName: 'venta.csv', kind: 'sales' }); const r1 = await FP.productImport.process(s1, {});

@@ -33,9 +33,10 @@
     sm: { reg: null, group: 'cat', campaign: '', msg: null },   // pestaña «Resumen» + registro de propuestas exportadas
     gd: { stepsOpen: false, undo: null, confirm: null },
     rm: { log: null, confirm: null },   // eliminar ofertas y promociones: registro y confirmación en curso   // guía «Ahora haz esto» y acciones de un clic
+    rq: { reg: null, confirm: null },   // solicitudes de oferta a Comercial (se piden desde Oportunidades)
     ac: { reg: null, sel: null, msg: null },   // «Activación sugerida» (columnas de Ofertas recibidas y Oportunidades)
     of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
-    op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
+    op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '', route: '', request: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
     rs: { promoId: '', loading: false, result: null, msg: null, f: { q: '', status: '', objective: '', space: '', mechanic: '', category: '', rec: '', from: '', to: '' } },   // «Resultados e historial»   // «Ofertas recibidas» (pestaña de Promociones)   // «Promociones» (registro compartido del equipo)
     cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
@@ -843,6 +844,12 @@
   }
   if (FP.goalsView) { FP.goalsView.campaignSkus = cgCampaignSkus; FP.goalsView.campaignOffers = cgCampaignOffers; FP.goalsView.campaignDays = cgCampaignDays; }
   function saveProposals() { return saveOk(storage.save(K.proposals, state.sm.reg), 'las propuestas exportadas'); }
+  function loadRequests() { const env = storage.load(K.requests); state.rq.reg = FP.requests.hydrate(env && env.data); state.rq.confirm = null; reconcileRequests(false); }
+  function saveRequests() { return saveOk(storage.save(K.requests, state.rq.reg), 'las solicitudes de oferta'); }
+  /** Cierra solas las solicitudes cuyo SKU ya recibió una oferta. Se llama al cargar y al guardar un archivo o una captura. */
+  function reconcileRequests(persist) {
+    try { if (!state.rq.reg || !state.of.reg) return 0; const done = FP.requests.reconcile(state.rq.reg, state.of.reg.offers, { by: 'Automático' }); if (done.length && persist) saveRequests(); return done.length; } catch (e) { return 0; }
+  }
   function loadActivation() { const env = storage.load(K.activation); state.ac.reg = FP.activation.hydrate(env && env.data); state.ac.sel = null; state.ac.msg = null; }
   function saveActivation() { return saveOk(storage.save(K.activation, state.ac.reg), 'la activación'); }
   const acV = (id) => FP.activationView.val(id);
@@ -887,7 +894,7 @@
   }
   /** Las ofertas Recibidas sin ninguna alerta pasan solas a «Validada» (por «Automático»). Se llama al cargar y al guardar un archivo. */
   function autoValidateOffers(persist) {
-    try { const done = FP.guide.autoValidate(state.of.reg, 'Automático'); if (done.length && persist) saveOffers(); return done.length; } catch (e) { return 0; }
+    try { const done = FP.guide.autoValidate(state.of.reg, 'Automático'); if (done.length && persist) saveOffers(); reconcileRequests(true); return done.length; } catch (e) { return 0; }
   }
   function saveOffers() { return saveOk(storage.save(K.offers, state.of.reg), 'las ofertas recibidas'); }
   function ofMsg(r, okText) { state.of.msg = r.ok ? { kind: 'ok', text: okText, warnings: [r.warning].filter(Boolean) } : { kind: 'bad', text: r.error }; if (r.ok) saveOffers(); render(); return r; }
@@ -902,6 +909,13 @@
     try { rs.result = await FP.promotionEvaluation.evaluate(p, { promotions: state.pm.reg.promotions, events: state.events || [] }); }
     catch (e) { rs.msg = { kind: 'bad', text: `No pude calcular la evaluación: ${e.message || e}` }; }
     rs.loading = false; render();
+  }
+  /** Excel de una solicitud: por laboratorio, sin costos ni márgenes. reqs = solicitudes del folio; items = oportunidades de esos SKU. */
+  function rqDownload(batchId, reqs, items) {
+    const op = state.op, first = reqs[0] || {}, bySku = new Map(items.map((i) => [i.sku, i])), rows = [];
+    reqs.forEach((x) => { const i = bySku.get(x.sku); if (i) rows.push({ item: i, lab: x.lab || 'Sin laboratorio', reqId: x.reqId }); });
+    const book = FP.promotionExport.buildRequestBook(rows, { folio: batchId, to: first.to || 'Comercial', by: first.askedBy, at: String(first.askedAt || '').slice(0, 10), period: op.result && op.result.period, baseline: op.result && op.result.baseline, waitDays: FP.requests.WAIT_DAYS });
+    FP.xlsxWriter.download(`solicitud_ofertas_${batchId}_${FP.promotionExport.fileStamp()}.xlsx`, FP.xlsxWriter.build(book));
   }
   /** Oportunidades del canal: reglas explícitas sobre la comparación por SKU que ya calcula Categoría → Producto. */
   async function opRun(force) {
@@ -2731,7 +2745,7 @@
       loadReforecastSettings();
       loadRecovery();
       loadPromotions();
-      loadOffers(); loadRemovalLog();
+      loadOffers(); loadRemovalLog(); loadRequests();
       loadActivation();
       loadProposals(); loadGoals();
       loadBusinessContext(); loadBrand(); loadCalibration(); loadProjCalibration();
@@ -4475,6 +4489,7 @@
       saveOffers();
       m.v = { campaignName: v.campaignName, origin: v.origin, start: v.start, end: v.end, lab: v.lab }; m.msg = '';
       state.of.f = { batchId: r.batch.batchId }; state.of.limit = 60;
+      reconcileRequests(true);
       state.of.msg = { kind: 'ok', text: `Oferta ${r.offer.offerId} guardada como «Recibida» en ${r.batch.batchId}. Puedes capturar otra.` }; render();
     },
     'of-template'() { FP.xlsxWriter.download('plantilla_ofertas.xlsx', FP.xlsxWriter.build(FP.promotionExport.buildOfferTemplateBook())); },
@@ -4603,6 +4618,7 @@
         state.of.f = (d.fstate || d.fissue) ? Object.assign({}, d.fstate ? { state: d.fstate } : {}, d.fissue ? { issue: d.fissue } : {}) : {}; state.of.limit = 60;
         if (d.manual) state.of.manual = state.of.manual || { v: {}, msg: '' };
       }
+      if (tab === 'oportunidades' && d.frequest && FP.requests.VIEW[d.frequest]) { state.op.f.request = d.frequest; state.op.limit = 50; state.op.fold = state.op.fold || {}; state.op.fold.requests = true; }
       if (d.open && FP.promotions.find(state.pm.reg, d.open)) state.pm.sel = d.open;
       if (['resumen', 'oportunidades', 'ofertas'].includes(tab) && !state.op.result && !state.op.loading) opRun(false);
       render();
@@ -4800,12 +4816,44 @@
     async 'op-run'() { await opRun(true); },
     'op-filter'() {
       const f = state.op.f, g = (id, key) => (document.getElementById(id) ? opV(id) : (f[key] || ''));   // lo plegado no está en la página: conserva su valor
-      f.q = opV('op-f-q'); f.type = opV('op-f-type'); f.category = g('op-f-cat', 'category'); f.evidence = g('op-f-ev', 'evidence'); f.withOffer = g('op-f-off', 'withOffer'); f.origin = g('op-f-org', 'origin'); f.subcategory = g('op-f-sub', 'subcategory'); f.lab = g('op-f-lab', 'lab'); state.op.limit = 50; render();
+      f.q = opV('op-f-q'); f.type = opV('op-f-type'); f.category = g('op-f-cat', 'category'); f.evidence = g('op-f-ev', 'evidence'); f.withOffer = g('op-f-off', 'withOffer'); f.origin = g('op-f-org', 'origin'); f.subcategory = g('op-f-sub', 'subcategory'); f.lab = g('op-f-lab', 'lab'); f.request = g('op-f-req', 'request'); state.op.limit = 50; render();
     },
+    'op-route'(el) { const f = state.op.f; f.route = f.route === el.dataset.route ? '' : (FP.opportunities.ROUTES[el.dataset.route] ? el.dataset.route : ''); state.op.limit = 50; render(); },
+    /** «Pedir oferta»: arma la lista (marcados o, si no hay marcas, los de «Pedir oferta» visibles sin solicitud abierta) y la muestra antes de pedir. */
+    'rq-ask'() {
+      const op = state.op, rq = state.rq;
+      if (!state.pm.actor) { op.msg = { kind: 'bad', text: 'Escribe tu nombre arriba: la solicitud guarda quién la pidió.' }; render(); return; }
+      const plan = FP.opportunityView.requestPlan(op, state);
+      if (!plan.ok.length) { op.msg = { kind: 'bad', text: plan.empty }; render(); return; }
+      rq.confirm = plan; op.msg = null; render();
+    },
+    'rq-cancel-confirm'() { state.rq.confirm = null; render(); },
+    'rq-confirm'() {
+      const op = state.op, rq = state.rq, plan = rq.confirm; if (!plan) return;
+      const r = FP.requests.create(rq.reg, plan.ok.map((i) => ({ sku: i.sku, productCode: i.productCode, name: i.name, category: i.category, lab: FP.opportunityView.labOf(i, state), reasons: i.types.map((t) => `${t.label}: ${t.reason}`) })), { by: state.pm.actor, to: 'Comercial' });
+      rq.confirm = null;
+      if (!r.ok) { op.msg = { kind: 'bad', text: r.error }; render(); return; }
+      saveRequests();
+      rqDownload(r.batchId, r.created, plan.ok);
+      op.msg = { kind: 'ok', text: `Se pidió la oferta de ${r.created.length} productos a Comercial (${r.batchId}) y se descargó el Excel por laboratorio.${r.skipped.length ? ` ${r.skipped.length} ya tenían una solicitud abierta y no se repitieron.` : ''} Si en ${FP.requests.WAIT_DAYS} días no llega la oferta, aparecen como «Sin respuesta».`, warnings: [] };
+      op.checked = {}; op.checkedG = {}; render();
+    },
+    /** Vuelve a descargar el Excel de un folio (para reenviarlo o insistir). */
+    'rq-redo'(el) {
+      const rq = state.rq, reqs = rq.reg.requests.filter((x) => x.batchId === el.dataset.id && x.state === 'asked'); if (!reqs.length) { state.op.msg = { kind: 'bad', text: 'Ese folio ya no tiene solicitudes pedidas.' }; render(); return; }
+      const items = reqs.map((x) => (state.op.result ? state.op.result.items.find((i) => i.sku === x.sku) : null)).filter(Boolean);
+      rqDownload(el.dataset.id, reqs, items);
+    },
+    'rq-cancel'(el) {
+      const r = FP.requests.cancel(state.rq.reg, el.dataset.id, { by: state.pm.actor });
+      state.op.msg = r.ok ? { kind: 'ok', text: `Se canceló la solicitud ${el.dataset.id}.` } : { kind: 'bad', text: r.error };
+      if (r.ok) saveRequests(); render();
+    },
+    'rq-filter'(el) { const f = state.op.f; f.request = el.dataset.v === f.request ? '' : (FP.requests.VIEW[el.dataset.v] ? el.dataset.v : ''); state.op.limit = 50; state.op.fold = state.op.fold || {}; render(); },
     'op-fold'(el) { const o = state.op, f = o.fold = o.fold || {}; f[el.dataset.fold] = !f[el.dataset.fold]; render(); },
     'op-clear'(el) {
       const f = state.op.f, k = el.dataset.key;
-      if (k === 'all') ['category', 'subcategory', 'lab', 'evidence', 'withOffer', 'origin', 'action'].forEach((x) => { f[x] = ''; delete f.action; }); else if (k === 'action') delete f.action; else f[k] = '';
+      if (k === 'all') ['category', 'subcategory', 'lab', 'evidence', 'withOffer', 'origin', 'action', 'request', 'route'].forEach((x) => { f[x] = ''; delete f.action; }); else if (k === 'action') delete f.action; else f[k] = '';
       state.op.limit = 50; render();
     },
     'op-view'(el) { const op = state.op; op.view = ['sku', 'subcat', 'lab'].includes(el.dataset.v) ? el.dataset.v : 'sku'; op.limit = 50; render(); },
@@ -5554,7 +5602,7 @@
     loadDiagnosticSettings();
     loadRecovery();
     loadPromotions();
-    loadOffers(); loadRemovalLog();
+    loadOffers(); loadRemovalLog(); loadRequests();
     loadActivation(); loadProposals(); loadGoals();
     loadBusinessContext();
     loadCalibration();
@@ -5657,7 +5705,7 @@
   const SIGNOUT_KEEP = ['uxSettings', 'productSettings', 'cohereApiKey', 'storageMigration', 'onboardingDone'];
   const signout = { phase: 'idle', audit: null, busy: false, ack: false, msg: '' };
   const baseOf = (k) => String(k).split(':')[0];
-  const KEY_LABEL = { removalLog: 'Registro de eliminaciones', projectionCalibration: 'Calibración de la proyección', confidenceCalibration: 'Calibración de la confianza', actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
+  const KEY_LABEL = { removalLog: 'Registro de eliminaciones', projectionCalibration: 'Calibración de la proyección', confidenceCalibration: 'Calibración de la confianza', actualData: 'Venta real', historicalData: 'Histórico', planData: 'Plan diario', segmentsData: 'Segmentos', targets: 'Metas', events: 'Eventos', milestones: 'Hitos', versions: 'Versiones de metas', settings: 'Ajustes', aliases: 'Equivalencias', dataset: 'Datos del año', plans: 'Planes', forecasts: 'Pronósticos', reforecasts: 'Repronósticos', scenarios: 'Escenarios', actionPlan: 'Plan de acción', promotions: 'Promociones', offers: 'Ofertas recibidas', activation: 'Activación sugerida', requests: 'Solicitudes de oferta', proposals: 'Propuestas exportadas', goals: 'Metas por campaña', businessContext: 'Contexto del negocio', sheetsLinks: 'Enlaces de Google Sheets' };
   const keyName = (k) => { const b = baseOf(k), y = String(k).split(':')[1]; return `${KEY_LABEL[b] || b}${y && /^\d{4}$/.test(y) ? ' ' + y : ''}`; };
   /** Compara lo local con la nube (solo lectura). Devuelve { ok, unsynced:[texto], checked } o { ok:false, error }. */
   async function signoutAudit() {

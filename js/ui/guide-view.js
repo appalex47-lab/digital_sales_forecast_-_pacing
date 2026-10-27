@@ -10,13 +10,13 @@
   const G = () => FP.guide;
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
-  function ctxOf(state) { return { offers: state.of.reg.offers, promotions: state.pm.reg.promotions, today: todayISO() }; }
+  function ctxOf(state) { return { offers: state.of.reg.offers, promotions: state.pm.reg.promotions, today: todayISO(), noReply: state.rq && state.rq.reg ? FP.requests.summary(state.rq.reg, todayISO()).noReply : 0 }; }
   const money = (n) => Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   function goAttrs(go, esc) {
     if (!go) return '';
-    return `data-tab="${esc(go.tab || '')}"${go.filter && go.filter.state ? ` data-fstate="${esc(go.filter.state)}"` : ''}${go.filter && go.filter.issue ? ` data-fissue="${esc(go.filter.issue)}"` : ''}${go.open ? ` data-open="${esc(go.open)}"` : ''}${go.manual ? ' data-manual="1"' : ''}`;
+    return `data-tab="${esc(go.tab || '')}"${go.filter && go.filter.state ? ` data-fstate="${esc(go.filter.state)}"` : ''}${go.filter && go.filter.issue ? ` data-fissue="${esc(go.filter.issue)}"` : ''}${go.open ? ` data-open="${esc(go.open)}"` : ''}${go.manual ? ' data-manual="1"' : ''}${go.filter && go.filter.request ? ` data-frequest="${esc(go.filter.request)}"` : ''}`;
   }
 
   /** Barra de guía. Se muestra siempre arriba de las pestañas. */
@@ -29,7 +29,7 @@
     const open = !!g.stepsOpen;
     return `<section class="gd-bar${s.done ? ' gd-bar--done' : ''}" aria-labelledby="gd-t">
       <div class="gd-bar__row"><div class="gd-bar__txt">
-        <span class="gd-bar__kicker">${s.done ? 'Al día' : `Ahora haz esto · paso ${s.step} de ${s.total}`}</span>
+        <span class="gd-bar__kicker">${s.done ? 'Al día' : (s.step ? `Ahora haz esto · paso ${s.step} de ${s.total}` : 'Pendiente')}</span>
         <h2 class="gd-bar__title" id="gd-t">${esc(s.title)}</h2><p class="gd-bar__text">${esc(s.text)}</p>
         ${s.note ? `<p class="gd-bar__note">${esc(s.note)}</p>` : ''}</div>
         <div class="btn-row gd-bar__acts">${main}${second}</div></div>
@@ -80,8 +80,8 @@
   /** Aviso del periodo con el que se calcula la prioridad. */
   function periodNote(state) {
     const f = state.op.f || {}, esc = H().esc;
-    const rng = f.from && f.to ? `${esc(f.from)} al ${esc(f.to)} contra el periodo anterior de la misma duración` : 'se calcula al cargar Oportunidades';
-    return `<p class="note gd-period"><strong>Periodo:</strong> ${rng}. Por defecto son los últimos 30 días contra los 30 previos (antes era el mes en curso); cámbialo en Oportunidades.</p>`;
+    const rng = f.from && f.to ? `${esc(f.from)} al ${esc(f.to)} contra el periodo anterior de la misma duración` : 'se calcula al cargar Qué impulsar';
+    return `<p class="note gd-period"><strong>Periodo:</strong> ${rng}. Por defecto son los últimos 30 días contra los 30 previos (antes era el mes en curso); cámbialo en Qué impulsar.</p>`;
   }
 
   /** Resumen de Ofertas recibidas: tarjetas de prioridad, acción de un clic y ofertas por revisar. */
@@ -115,7 +115,7 @@
           <button type="button" class="btn btn--primary" data-action="gd-op-add">Agregar las ${S.aa.length} de prioridad Alta con datos suficientes</button>`
         : `<button type="button" class="btn btn--primary" data-action="gd-op-mark">Marcar las ${S.aa.length} de prioridad Alta con datos suficientes</button>`;
     return `<section class="panel gd-sum" aria-labelledby="gd-osum-t"><div class="panel__head"><div><h2 class="panel__title" id="gd-osum-t">¿Qué hago primero? · ${S.total} SKU con activación sugerida</h2>
-      <p class="panel__desc">Mismo resumen que en Ofertas recibidas. Aquí solo cuentan los productos sin oferta vigente.${S.noRec ? ` ${plural(S.noRec, 'SKU sin sugerencia', 'SKU sin sugerencia')}.` : ''}</p></div></div>
+      <p class="panel__desc">Mismo resumen que en Ofertas y plan. Aquí solo cuentan los productos sin oferta vigente.${S.noRec ? ` ${plural(S.noRec, 'SKU sin sugerencia', 'SKU sin sugerencia')}.` : ''}</p></div></div>
       <div class="panel__body">${periodNote(state)}${cardsHtml(cards, esc, act)}
         ${S.aa.length && !promos.length ? '<p class="field__hint">No hay una promoción en borrador o propuesta: créala en la pestaña Promociones para agregarlas.</p>' : ''}
         ${S.aa.length && bn.slots - bn.used < S.aa.length ? `<p class="field__hint">Hay ${S.aa.length} listas y quedan ${Math.max(0, bn.slots - bn.used)} espacios de banner; el resto va a otros espacios.</p>` : ''}

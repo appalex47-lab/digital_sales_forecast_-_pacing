@@ -30,6 +30,25 @@
     declining: { label: 'En caída', objective: 'Recuperar', warning: 'Sin inventario no se puede descartar un quiebre de stock.' },
     highWeight: { label: 'Peso alto en su categoría', objective: 'Sostener o proteger', warning: 'Descontar aquí solo con acuerdo del laboratorio.' }
   };
+  /**
+   * «Qué hacer» con cada SKU: una sola salida, por reglas escritas (sin puntaje).
+   * Revisar causa: su venta cae. Pedir oferta: demanda no convertida y todavía sin oferta recibida. Sostener: pesa mucho en su categoría.
+   * Exponer: el resto (poca visibilidad, crecimiento, o demanda no convertida que ya tiene oferta recibida).
+   */
+  const ROUTES = {
+    review: { label: 'Revisar causa', hint: 'Su venta cae: entender por qué antes de actuar' },
+    ask: { label: 'Pedir oferta', hint: 'Demanda que no convertimos y sin oferta recibida' },
+    protect: { label: 'Sostener o proteger', hint: 'Pesa mucho en su categoría: descontar solo con acuerdo del laboratorio' },
+    expose: { label: 'Exponer', hint: 'Darle más lugar en el sitio o la app, con o sin descuento' }
+  };
+  const ROUTE_ORDER = ['expose', 'ask', 'protect', 'review'];
+  function routeOf(types, hasOffer) {
+    const ids = new Set((types || []).map((t) => t.id));
+    if (ids.has('declining')) return { id: 'review', why: 'Su venta cae con vistas estables: revisar ficha, precio de la competencia y disponibilidad antes de pedir o exponer.' };
+    if (ids.has('unconverted')) return hasOffer ? { id: 'expose', why: 'Tiene demanda sin convertir y ya hay una oferta recibida: se puede exponer con ella.' } : { id: 'ask', why: 'Tiene demanda sin convertir y no hay oferta recibida: conviene pedir una a Comercial.' };
+    if (ids.has('highWeight')) return { id: 'protect', why: 'Pesa mucho en su categoría: sostenerlo y no descontar sin acuerdo del laboratorio.' };
+    return { id: 'expose', why: ids.has('lowVisibility') ? 'Convierte bien pero pocos lo ven: darle más lugar.' : 'Crece: aprovechar la tendencia dándole lugar.' };
+  }
   const MISSING = ['Precio promocional', 'Mecánica negociable', 'Apoyo del laboratorio', 'Disponibilidad'];
 
   const fin = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -114,14 +133,16 @@
       }
       const offers = (offersBySku.get(x.sku) || []).concat(x.productCode && x.productCode !== x.sku ? (offersBySku.get(x.productCode) || []) : []);
       items.push({ sku: x.sku, productCode: x.productCode, name: x.name, category: x.category, subcategory: x.subcategory, brand: x.brand, types, evidence: { level, notes: misses },
+        route: routeOf(types, offers.length > 0),
         size, sortKey: fin(size) ? size : (x.revenueBase || x.revenue || 0), revenue: x.revenue, revenueBase: x.revenueBase, revenueDeltaPct: x.revenueDeltaPct, units: x.units, views: x.views,
         conversion: x.conv, categoryMedianConversion: ci.medConv, categoryShare: share, offers: offers.map((o) => ({ offerId: o.offerId, discount: o.discount, state: o.state, origin: o.origin || '' })), missing: MISSING.slice() });
     });
     items.sort((a, b) => b.sortKey - a.sortKey);
 
-    const counts = { total: items.length, byType: {}, byEvidence: { high: 0, medium: 0, low: 0 } };
+    const counts = { total: items.length, byType: {}, byEvidence: { high: 0, medium: 0, low: 0 }, byRoute: {}, revenueByRoute: {} };
     Object.keys(TYPES).forEach((k) => { counts.byType[k] = 0; });
-    items.forEach((i) => { i.types.forEach((t) => { counts.byType[t.id] += 1; }); counts.byEvidence[i.evidence.level] += 1; });
+    Object.keys(ROUTES).forEach((k) => { counts.byRoute[k] = 0; counts.revenueByRoute[k] = 0; });
+    items.forEach((i) => { i.types.forEach((t) => { counts.byType[t.id] += 1; }); counts.byEvidence[i.evidence.level] += 1; counts.byRoute[i.route.id] += 1; counts.revenueByRoute[i.route.id] += fin(i.revenue) ? i.revenue : 0; });
     const notes = [];
     const skipped = [...catInfo.entries()].filter(([, v]) => !v.ok && v.skus > 0).map(([k, v]) => `${k} (${v.reliable} de ${v.skus} SKU con vistas suficientes)`);
     if (skipped.length) notes.push(`Sin medianas confiables (se piden ${S.minGroup} SKU con al menos ${S.minViews} vistas): ${skipped.slice(0, 8).join('; ')}${skipped.length > 8 ? '…' : ''}. En esas categorías no se calculan demanda no convertida ni visibilidad baja.`);
@@ -149,5 +170,5 @@
       .sort((a, b) => (b.sortKey - a.sortKey) || a.label.localeCompare(b.label, 'es'));
   }
 
-  FP.opportunities = { SETTINGS, TYPES, MISSING, analyze, median, money, groupItems };
+  FP.opportunities = { SETTINGS, TYPES, ROUTES, ROUTE_ORDER, routeOf, MISSING, analyze, median, money, groupItems };
 })(typeof window !== 'undefined' ? window : globalThis);

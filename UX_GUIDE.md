@@ -735,3 +735,11 @@ Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya oc
 ## Oportunidades: Resultado en una fila
 
 Búsqueda, tipo de oportunidad, «Filtros (N activos)», «Ver por» y «Exportar» van en una sola fila. Los otros seis filtros (categoría, subcategoría, laboratorio, evidencia, oferta recibida y origen) se despliegan con «Filtros» y los puestos se ven como etiquetas con ×. «Exportar» reúne la lista (CSV), el plan de activación (Excel y CSV) y la propuesta en Excel, que pide su nombre ahí mismo. La fila de marcas solo ofrece «Quitar marcas» y agregar a una promoción cuando hay SKU marcados.
+
+## Qué impulsar (antes «Oportunidades») y Ofertas y plan (antes «Ofertas recibidas»)
+
+- **Nombres de las pestañas:** «Qué impulsar» y «Ofertas y plan». El estado de cada oferta sigue llamándose «Recibida», porque describe un hecho.
+- **Cuatro salidas, una por producto:** Exponer, Pedir oferta, Sostener o proteger y Revisar causa. Salen de reglas escritas sobre los tipos de oportunidad que ya existían (ver `routeOf` en `opportunityEngine.js`): venta que cae → revisar causa; demanda sin convertir y sin oferta recibida → pedir oferta; peso alto → sostener; el resto (poca visibilidad, crecimiento, o demanda sin convertir que ya tiene oferta) → exponer. Cada tarjeta muestra cuántos SKU y su venta del periodo, y filtra la lista.
+- **Pedir oferta:** el botón usa los marcados o, sin marcas, los de «Pedir oferta» que se ven. Antes de pedir muestra la lista por laboratorio y qué queda fuera (ya pedidos o con oferta recibida). Pide el nombre de quien la hace. Descarga un Excel para Comercial, agrupado por laboratorio, sin costos ni márgenes; no se manda nada solo.
+- **Seguimiento:** panel «Solicitudes a Comercial» con Pedidas, Sin respuesta (7 días o más) y Recibidas. La solicitud se cierra sola cuando llega una oferta de ese SKU, por archivo o captura a mano, no descartada y posterior a la solicitud. Se puede cancelar y volver a descargar el Excel de un folio. Con todo al día y solicitudes sin respuesta, la barra de arriba avisa «Insiste con Comercial».
+- Los folios son `PED-0001` (el pedido) y `SOL-00001` (cada SKU).

@@ -173,6 +173,38 @@
     return { sheets };
   }
 
+  /* ---------- Solicitud de ofertas a Comercial (Excel por laboratorio) ---------- */
+  const REQ_HEAD = ['Laboratorio', 'SKU', 'Producto', 'Categoría', 'Subcategoría', 'Por qué se pide', 'Evidencia', 'Venta del periodo', 'Vistas de ficha', 'Conversión', 'Qué se pide', 'Folio', 'Pedido por', 'Fecha'];
+  const REQ_WIDTH = [24, 16, 36, 22, 22, 60, 11, 15, 13, 12, 34, 12, 18, 12];
+  /**
+   * rows = [{ item (oportunidad), lab, reqId }]; meta = { folio, to, by, at, period, baseline, waitDays }.
+   * Una hoja «Solicitud» ordenada por laboratorio (con filtro) y una hoja «Por laboratorio» con SKU y venta del periodo.
+   * No lleva precios, descuentos, costos ni márgenes: pide la oferta, no la propone.
+   */
+  function buildRequestBook(rows, meta) {
+    const m = meta || {}, EV = { high: 'Alta', medium: 'Media', low: 'Baja' };
+    const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const list = (rows || []).slice().sort((a, b) => (a.lab === 'Sin laboratorio') - (b.lab === 'Sin laboratorio') || String(a.lab).localeCompare(String(b.lab), 'es') || (n(b.item.revenue) || 0) - (n(a.item.revenue) || 0));
+    const per = m.period && m.period.from ? `${m.period.from} a ${m.period.to}` : '';
+    const base = m.baseline && (m.baseline.label || (m.baseline.from ? `${m.baseline.from} a ${m.baseline.to}` : ''));
+    const labs = FP.requests ? FP.requests.byLab(list.map((r) => ({ lab: r.lab, revenue: r.item.revenue }))) : [];
+    const head = [
+      [{ v: `Solicitud de ofertas · ${m.folio || ''}`.trim(), f: 'title' }],
+      [{ v: `Para ${m.to || 'Comercial'} · pedida por ${m.by || '—'} el ${m.at || fileStamp()} · ${list.length} productos de ${labs.length} ${labs.length === 1 ? 'laboratorio' : 'laboratorios'}`, f: 'note' }],
+      [{ v: `Periodo: ${per}${base ? ` · Referencia: ${base}` : ''}. Si no llega oferta en ${m.waitDays || 7} días, la herramienta la marca «Sin respuesta» para insistir.`, f: 'note' }],
+      [{ v: 'Se pide la oferta de cada producto (descuento, mecánica y vigencia). No incluye costos ni márgenes. Uso interno: la lleva Comercial, no se manda directo a los laboratorios.', f: 'note' }],
+      [],
+      REQ_HEAD.map((h) => ({ v: h, f: 'head' }))
+    ];
+    const body = list.map((r) => { const i = r.item; return [r.lab, i.sku, i.name, i.category, i.subcategory || null, { v: (i.types || []).map((t) => `${t.label}: ${t.reason}`).join(' | '), f: 'wrap' }, EV[i.evidence.level] || '', { v: n(i.revenue), f: 'money' }, { v: n(i.views), f: 'int' }, { v: n(i.conversion), f: 'pct' },
+      'Oferta: % de descuento, mecánica y vigencia', r.reqId || m.folio || null, m.by || null, (m.at || '').slice(0, 10) || null]; });
+    const last = 6 + list.length;
+    const sheets = [{ name: 'Solicitud', cols: REQ_WIDTH, rows: head.concat(body), freeze: { row: 6, col: 2 }, autofilter: `A6:${FP.xlsxWriter ? FP.xlsxWriter.colName(REQ_HEAD.length - 1) : 'N'}${Math.max(last, 6)}` }];
+    sheets.push({ name: 'Por laboratorio', cols: [30, 12, 18], rows: [[{ v: 'Productos pedidos por laboratorio', f: 'title' }], [{ v: `${m.folio || ''} · venta del periodo ${per}`, f: 'note' }], [], ['Laboratorio', 'SKU', 'Venta del periodo'].map((h) => ({ v: h, f: 'head' })),
+      ...labs.map((x) => [x.lab, { v: x.skus, f: 'int' }, { v: x.revenue, f: 'money' }])], freeze: { row: 4, col: 1 } });
+    return { sheets };
+  }
+
   /* ---------- Plan de activación (Excel de una hoja y CSV) ---------- */
   const ACT_HEAD = ['SKU', 'Producto', 'Categoría', 'Laboratorio', 'Origen', 'Oferta', 'Programa', 'Activación sugerida', 'Segunda opción', 'Prioridad', 'Confianza', 'Razón', 'Qué falta para decidir', 'Sugerencia cargada', 'Comentario de la sugerencia cargada', 'Coincidencia', 'Estado', 'Responsable', 'Fecha del estado'];
   const ACT_WIDTH = [14, 34, 22, 22, 16, 30, 22, 28, 26, 11, 11, 60, 44, 24, 30, 24, 13, 18, 18];
@@ -237,5 +269,5 @@
   const slug = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 
   const fileStamp = (d = new Date()) => d.toISOString().slice(0, 10);
-  FP.promotionExport = { COLUMNS, OPP_COLUMNS, buildCsv, buildJson, buildOpportunitiesCsv, buildGroupsCsv, groupsSheet, buildOpportunitiesBook, buildActivationCsv, buildActivationBook, buildSummaryBook, buildOfferTemplateBook, offerInfo, ACT_HEAD, buildHistoryCsv, buildEvaluationCsv, XLS_HEAD, slug, fileStamp, rowsOf };
+  FP.promotionExport = { COLUMNS, OPP_COLUMNS, buildCsv, buildJson, buildOpportunitiesCsv, buildGroupsCsv, groupsSheet, buildOpportunitiesBook, buildRequestBook, REQ_HEAD, buildActivationCsv, buildActivationBook, buildSummaryBook, buildOfferTemplateBook, offerInfo, ACT_HEAD, buildHistoryCsv, buildEvaluationCsv, XLS_HEAD, slug, fileStamp, rowsOf };
 })(typeof window !== 'undefined' ? window : globalThis);

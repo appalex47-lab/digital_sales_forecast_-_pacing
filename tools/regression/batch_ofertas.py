@@ -40,7 +40,7 @@ async def main():
         q, errs = await boot(c)
         await q.evaluate("location.hash='#promociones'"); await q.wait_for_timeout(700)
         tabs = await q.evaluate("[...document.querySelectorAll('[data-action=\"pm-tab\"]')].map(b=>b.textContent.trim())")
-        chk('T1 hay cinco pestañas: Resumen, Oportunidades, Ofertas recibidas, Promociones y Resultados', len(tabs) == 5 and 'Ofertas recibidas' in tabs[2], tabs)
+        chk('T1 hay cinco pestañas: Resumen, Qué impulsar, Ofertas y plan, Promociones y Resultados', len(tabs) == 5 and 'Ofertas y plan' in tabs[2], tabs)
         await click(q, '[data-action="pm-tab"][data-tab="ofertas"]')
         t = await body(q)
         chk('T2 la pestaña abre vacía con explicación', 'Todavía no hay ofertas recibidas' in t and 'Cargar archivo de ofertas' in t, t[:200])

@@ -52,7 +52,7 @@ const bigO = (id, sku, rev) => [offer(id, sku, { discount: 0.3 }), { [sku]: prof
   const pot = item('P1', { types: [t('highWeight')], categoryShare: 0.3 }); const pp = { P1: prof({ typeIds: ['highWeight'], share: 0.3, conv: 0.03, revenue: 51000 }) };
   const prof3 = Object.assign({}, p1, p2, pp);
   r = run([o1, o2], [pot], prof3, { bannerSlots: 2, bannerMode: 'shared' });
-  ok('B1 tope compartido: gana la venta, no el descuento (58 000 y 51 000 entran; 20 000 pasa a Home)', r.get('offer:O1').main === A.SPACE.banner && r.get('sku:P1').main === A.SPACE.banner && r.get('offer:O2').main === A.SPACE.home && /entre Ofertas recibidas y Oportunidades/.test(r.get('offer:O2').why), [r.get('offer:O1').main, r.get('sku:P1').main, r.get('offer:O2').main]);
+  ok('B1 tope compartido: gana la venta, no el descuento (58 000 y 51 000 entran; 20 000 pasa a Home)', r.get('offer:O1').main === A.SPACE.banner && r.get('sku:P1').main === A.SPACE.banner && r.get('offer:O2').main === A.SPACE.home && /entre Ofertas y plan y Qué impulsar/.test(r.get('offer:O2').why), [r.get('offer:O1').main, r.get('sku:P1').main, r.get('offer:O2').main]);
   r = run([o1, o2], [pot], prof3, { bannerSlots: 1, bannerMode: 'shared' });
   ok('B2 con 1 espacio compartido, la oferta de mayor venta se lo lleva y el potencial pasa a Home', r.get('offer:O1').main === A.SPACE.banner && r.get('sku:P1').main === A.SPACE.home);
   r = run([o1, o2], [pot], prof3, { bannerSlots: 1, bannerMode: 'perTab' });
