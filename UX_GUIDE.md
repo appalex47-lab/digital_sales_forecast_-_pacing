@@ -731,3 +731,7 @@ Siempre se rotula «estimado» cuando es proyección y «cumplida» cuando ya oc
 - **En marcha:** una promoción publicada pasa sola a «En medición» al terminar su vigencia (por «Automático»). Cerrar siempre pide conclusión y recomendación.
 - **Regresar un paso:** Aprobada → Borrador, En marcha → Aprobada y En medición → En marcha, estos dos con motivo obligatorio. Cerrada y Cancelada no regresan.
 - **Metas por campaña:** viven en la pestaña Promociones. Al fijar una meta se sugiere un punto de partida con el ritmo de venta de los últimos 56 días de los SKU de la campaña, llevado a los días de la campaña; no incluye el efecto de la promoción.
+
+## Oportunidades: Resultado en una fila
+
+Búsqueda, tipo de oportunidad, «Filtros (N activos)», «Ver por» y «Exportar» van en una sola fila. Los otros seis filtros (categoría, subcategoría, laboratorio, evidencia, oferta recibida y origen) se despliegan con «Filtros» y los puestos se ven como etiquetas con ×. «Exportar» reúne la lista (CSV), el plan de activación (Excel y CSV) y la propuesta en Excel, que pide su nombre ahí mismo. La fila de marcas solo ofrece «Quitar marcas» y agregar a una promoción cuando hay SKU marcados.

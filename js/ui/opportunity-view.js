@@ -64,21 +64,54 @@
       <p class="field__hint">Periodo ${esc(r.period.from)} a ${esc(r.period.to)} contra ${esc(r.baseline.label)} (${esc(r.baseline.from)} a ${esc(r.baseline.to)}). ${r.counts.total} SKU con al menos un tipo de oportunidad. Un SKU puede tener más de un tipo.</p>${notes}`;
   }
 
+  const EV_LABEL = { high: 'Alta', medium: 'Media', low: 'Baja' };
+  /** Filtros puestos (sin la búsqueda de texto ni el tipo, que ya se ven en la primera fila). */
+  function activeFilters(op) {
+    const f = op.f, L = [];
+    if (f.category) L.push(['category', `Categoría: ${f.category}`]);
+    if (f.subcategory) L.push(['subcategory', `Subcategoría: ${f.subcategory === NONE ? 'sin dato' : f.subcategory}`]);
+    if (f.lab) L.push(['lab', `Laboratorio: ${f.lab === NONE ? 'sin dato' : f.lab}`]);
+    if (f.evidence) L.push(['evidence', `Evidencia: ${(EV_LABEL[f.evidence] || f.evidence).toLowerCase()}`]);
+    if (f.withOffer) L.push(['withOffer', f.withOffer === 'yes' ? 'Con oferta recibida' : 'Sin oferta recibida']);
+    if (f.origin) L.push(['origin', `Origen: ${((FP.offers && FP.offers.ORIGINS) || {})[f.origin] || f.origin}`]);
+    if (f.action) L.push(['action', `Acción: ${f.action}`]);
+    return L;
+  }
+  /** Una fila: búsqueda, tipo, «Filtros», «Ver por» y «Exportar». Lo demás se despliega solo si se pide. */
   function filters(op, state) {
     const f = op.f, r = op.result; if (!r) return '';
+    const esc = H().esc, fold = op.fold || {}, act = activeFilters(op);
     const subs = [...new Set(r.items.map((i) => i.subcategory || NONE))].sort((a, b) => (a === NONE) - (b === NONE) || a.localeCompare(b, 'es'));
     const labs = [...new Set(r.items.map((i) => labOf(i, state) || NONE))].sort((a, b) => (a === NONE) - (b === NONE) || a.localeCompare(b, 'es'));
     const T = OP().TYPES;
-    return `<div class="field-grid">
-      ${field('op-f-q', 'Buscar', input('op-f-q', f.q || '', 'search', 'data-action="op-filter" placeholder="SKU, producto, marca…"'))}
-      ${field('op-f-type', 'Tipo de oportunidad', selectHtml('op-f-type', [['', 'Todos los tipos'], ...Object.keys(T).map((k) => [k, T[k].label])], f.type || '', 'data-action="op-filter"'))}
+    const top = `<div class="btn-row gd-ftop"><label class="gd-search"><span class="visually-hidden">Buscar</span>${input('op-f-q', f.q || '', 'search', 'data-action="op-filter" placeholder="Buscar SKU, producto, marca…"')}</label>
+      <label class="gd-ftype"><span class="visually-hidden">Tipo de oportunidad</span>${selectHtml('op-f-type', [['', 'Todos los tipos'], ...Object.keys(T).map((k) => [k, T[k].label])], f.type || '', 'data-action="op-filter"')}</label>
+      <button type="button" class="btn${act.length ? ' btn--primary-soft' : ''}" data-action="op-fold" data-fold="filters" aria-expanded="${!!fold.filters}">Filtros${act.length ? ` · ${act.length} ${act.length === 1 ? 'activo' : 'activos'}` : ''} ${fold.filters ? '▴' : '▾'}</button>
+      ${viewSwitch(op)}
+      <button type="button" class="btn" data-action="op-fold" data-fold="export" aria-expanded="${!!fold.export}">Exportar ${fold.export ? '▴' : '▾'}</button></div>`;
+    const chips = act.length ? `<div class="btn-row gd-chiprow"><span class="field__hint">Filtros puestos:</span>${act.map(([k, t]) => `<button type="button" class="gd-fchip" data-action="op-clear" data-key="${k}" aria-label="Quitar filtro ${esc(t)}">${esc(t)} ×</button>`).join('')}<button type="button" class="btn btn--small btn--ghost" data-action="op-clear" data-key="all">Quitar todos</button></div>` : '';
+    const grid = fold.filters ? `<div class="field-grid">
       ${field('op-f-cat', 'Categoría', selectHtml('op-f-cat', [['', 'Todas las categorías'], ...r.categories.map((c) => [c, c])], f.category || '', 'data-action="op-filter"'))}
       ${field('op-f-sub', 'Subcategoría', selectHtml('op-f-sub', [['', 'Todas las subcategorías'], ...subs.map((c) => [c, c === NONE ? 'Sin subcategoría' : c])], f.subcategory || '', 'data-action="op-filter"'))}
       ${field('op-f-lab', 'Laboratorio', selectHtml('op-f-lab', [['', 'Todos los laboratorios'], ...labs.map((c) => [c, c === NONE ? 'Sin laboratorio' : c])], f.lab || '', 'data-action="op-filter"'))}
       ${field('op-f-ev', 'Evidencia', selectHtml('op-f-ev', [['', 'Cualquiera'], ['high', 'Alta'], ['medium', 'Media'], ['low', 'Baja']], f.evidence || '', 'data-action="op-filter"'))}
       ${field('op-f-off', 'Oferta recibida', selectHtml('op-f-off', [['', 'Con o sin oferta'], ['yes', 'Ya tiene oferta recibida'], ['no', 'Sin oferta recibida']], f.withOffer || '', 'data-action="op-filter"'))}
       ${field('op-f-org', 'Origen de la oferta', selectHtml('op-f-org', [['', 'Cualquiera'], ...Object.keys((FP.offers && FP.offers.ORIGINS) || {}).map((k) => [k, FP.offers.ORIGINS[k]])], f.origin || '', 'data-action="op-filter"'))}
-    </div>`;
+    </div>` : '';
+    return `${top}${chips}${grid}${exportPanel(op, state)}`;
+  }
+
+  /** Menú «Exportar»: lista, propuesta (pide el nombre aquí) y plan de activación. */
+  function exportPanel(op, state) {
+    const fold = op.fold || {}; if (!fold.export) return '';
+    const esc = H().esc, grp = op.view && op.view !== 'sku', sel = selection(op, state), ng = grp ? Object.keys(op.checkedG || {}).filter((k) => op.checkedG[k]).length : 0, ids = markedSkus(op, state);
+    const what = grp ? `${sel.groups.length} ${DIM[op.view].toLowerCase()}s, ${sel.list.length} SKU` : `${sel.list.length} SKU`;
+    return `<div class="note gd-exp" role="group" aria-label="Exportar"><p class="field__hint">${ng || ids.length ? 'Se exportan los marcados.' : `No hay marcados: se exporta todo lo visible (${what}).`}</p>
+      <div class="btn-row"><button type="button" class="btn btn--small" data-action="op-export-csv">${grp ? `Lista por ${DIM[op.view].toLowerCase()} (CSV)` : 'Lista (CSV)'}</button>
+        <button type="button" class="btn btn--small" data-action="ac-export-xlsx" data-tab="potential">Plan de activación (Excel)</button><button type="button" class="btn btn--small" data-action="ac-export-csv" data-tab="potential">Plan de activación (CSV)</button></div>
+      <div class="btn-row"><label class="field__hint" for="op-x-name">Propuesta en Excel · nombre (obligatorio)</label>
+        <input id="op-x-name" type="text" data-action="op-xname" value="${esc(op.xname || '')}" placeholder="Ej. Propuesta otoño 2026" maxlength="80" aria-label="Nombre de la propuesta">
+        <button type="button" class="btn btn--small btn--primary" data-action="op-export-xlsx">Exportar propuesta (Excel)</button></div></div>`;
   }
 
   const gk = (x) => x.key || NONE;
@@ -127,16 +160,12 @@
   }
 
   function bulk(op, state) {
-    const esc = H().esc, ids = markedSkus(op, state), grp = op.view && op.view !== 'sku', ng = grp ? Object.keys(op.checkedG || {}).filter((k) => op.checkedG[k]).length : 0, sel = selection(op, state);
+    const esc = H().esc, ids = markedSkus(op, state), grp = op.view && op.view !== 'sku', ng = grp ? Object.keys(op.checkedG || {}).filter((k) => op.checkedG[k]).length : 0;
     const promos = state.pm.reg.promotions.filter((p) => ['draft', 'proposed'].includes(p.status));
-    return `<div class="btn-row"><span class="field__hint">Marcados: <strong>${grp ? `${ng} ${DIM[op.view].toLowerCase()}${ng === 1 ? '' : 's'} (${ids.length} SKU)` : ids.length}</strong>${ng || ids.length ? '' : ` · se exporta todo lo visible (${grp ? `${sel.groups.length} ${DIM[op.view].toLowerCase()}s, ${sel.list.length} SKU` : sel.list.length})`}</span>
-      <button type="button" class="btn btn--small" data-action="op-check-all">${grp ? 'Marcar los grupos visibles' : 'Marcar los visibles'}</button><button type="button" class="btn btn--small btn--ghost" data-action="op-check-none">Quitar marcas</button>
-      <button type="button" class="btn btn--small" data-action="op-export-csv">${grp ? `Exportar por ${DIM[op.view].toLowerCase()} (CSV)` : 'Exportar lista (CSV)'}</button></div>
-      <div class="btn-row"><label class="field__hint" for="op-x-name">Nombre de la propuesta (obligatorio para el Excel)</label>
-      <input id="op-x-name" type="text" data-action="op-xname" value="${esc(op.xname || '')}" placeholder="Ej. Propuesta otoño 2026" maxlength="80" aria-label="Nombre de la propuesta">
-      <button type="button" class="btn btn--small btn--primary" data-action="op-export-xlsx">Exportar a Excel (${grp ? `${sel.list.length} SKU${ng ? ' de los marcados' : ''} + hoja por ${DIM[op.view].toLowerCase()}` : ids.length ? `${ids.length} marcados` : 'los visibles'})</button></div>
-      <div class="btn-row">${promos.length ? `<select id="op-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
-      <button type="button" class="btn btn--small btn--primary" data-action="op-to-promo"${ids.length ? '' : ' disabled'}>Agregar los ${ids.length} SKU marcados al plan de la promoción</button>` : '<span class="field__hint">Para agregar SKU al plan, crea una promoción en la pestaña Promociones (en borrador o propuesta).</span>'}</div>`;
+    return `<div class="btn-row"><span class="field__hint">Marcados: <strong>${grp ? `${ng} ${DIM[op.view].toLowerCase()}${ng === 1 ? '' : 's'} (${ids.length} SKU)` : ids.length}</strong></span>
+      <button type="button" class="btn btn--small" data-action="op-check-all">${grp ? 'Marcar los grupos visibles' : 'Marcar los visibles'}</button>${ids.length ? '<button type="button" class="btn btn--small btn--ghost" data-action="op-check-none">Quitar marcas</button>' : ''}
+      ${ids.length ? (promos.length ? `<select id="op-b-promo" aria-label="Promoción destino">${promos.map((p) => `<option value="${esc(p.promoId)}">${esc(p.promoId)} · ${esc(p.name)}</option>`).join('')}</select>
+      <button type="button" class="btn btn--small btn--primary" data-action="op-to-promo">Agregar los ${ids.length} marcados a la promoción</button>` : '<span class="field__hint">Para agregarlos a un plan, crea una promoción en borrador.</span>') : ''}</div>`;
   }
 
   /** Laboratorio de un producto: el de su oferta recibida y, si no tiene, el del catálogo de producto (columna Marca / Laboratorio). */
@@ -183,7 +212,7 @@
       <div class="panel__body">${noData ? '<div class="empty"><strong>Todavía no hay datos de producto</strong>Carga la venta (y el funnel) por producto en «Carga de datos» para ver oportunidades.</div>' : controls(op)}
         ${op.msg ? `<div class="note note--${op.msg.kind === 'bad' ? 'warn' : 'ok'}" role="status">${esc(op.msg.text)}${(op.msg.warnings || []).map((w) => `<br>${esc(w)}`).join('')}</div>` : ''}</div></section>
       ${op.result && FP.guideView ? FP.guideView.opportunitySummary(state, map) + FP.guideView.actionsHtml(state, map, 'potential') : ''}
-      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${viewSwitch(op)}${bulk(op, state)}${AV ? AV.toolbar(state, 'potential') : ''}</div>
+      ${op.result ? `<section class="panel" aria-labelledby="op-t-l"><div class="panel__head"><div><h2 class="panel__title" id="op-t-l">Resultado</h2></div></div><div class="panel__body">${summary(op)}${filters(op, state)}${bulk(op, state)}${AV && state.ac.msg ? AV.toolbar(state, 'potential').split('<div class="btn-row">')[0] : ''}</div>
         ${AV ? AV.params(state) : ''}
         <div class="panel__body panel__body--flush">${op.view && op.view !== 'sku' ? groupsTable(op, state) : table(op, list, state, map)}</div></section>` : ''}
       ${AV && state.ac.sel ? AV.detail(state, map, state.ac.sel) : ''}

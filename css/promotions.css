@@ -138,3 +138,4 @@ button.metric-card:focus-visible { outline: 2px solid var(--ds-accent); outline-
 .gd-toast--page { margin: 0 0 var(--ds-s4); }
 .gd-rm { border-top: 5px solid var(--ds-danger); margin-bottom: var(--ds-s4); }
 .gd-act tfoot th { text-align: left; font-weight: 700; }
+.gd-ftype select { min-width: 200px; }

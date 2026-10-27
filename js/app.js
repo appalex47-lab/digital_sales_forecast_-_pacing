@@ -4798,7 +4798,16 @@
     'ac-ext-clear'() { FP.activation.clearExternal(state.ac.reg); saveActivation(); state.ac.msg = { kind: 'ok', text: 'Se quitaron las sugerencias cargadas.' }; render(); },
     'op-field'() { const f = state.op.f; f.from = opV('op-from'); f.to = opV('op-to'); f.comparison = opV('op-cmp') || 'previous'; f.channel = opV('op-ch') || 'total'; state.op.msg = { kind: 'ok', text: 'Cambiaste el periodo o el canal: pulsa «Calcular oportunidades» para actualizar.' }; render(); },
     async 'op-run'() { await opRun(true); },
-    'op-filter'() { const f = state.op.f; f.q = opV('op-f-q'); f.type = opV('op-f-type'); f.category = opV('op-f-cat'); f.evidence = opV('op-f-ev'); f.withOffer = opV('op-f-off'); f.origin = opV('op-f-org'); f.subcategory = opV('op-f-sub'); f.lab = opV('op-f-lab'); state.op.limit = 50; render(); },
+    'op-filter'() {
+      const f = state.op.f, g = (id, key) => (document.getElementById(id) ? opV(id) : (f[key] || ''));   // lo plegado no está en la página: conserva su valor
+      f.q = opV('op-f-q'); f.type = opV('op-f-type'); f.category = g('op-f-cat', 'category'); f.evidence = g('op-f-ev', 'evidence'); f.withOffer = g('op-f-off', 'withOffer'); f.origin = g('op-f-org', 'origin'); f.subcategory = g('op-f-sub', 'subcategory'); f.lab = g('op-f-lab', 'lab'); state.op.limit = 50; render();
+    },
+    'op-fold'(el) { const o = state.op, f = o.fold = o.fold || {}; f[el.dataset.fold] = !f[el.dataset.fold]; render(); },
+    'op-clear'(el) {
+      const f = state.op.f, k = el.dataset.key;
+      if (k === 'all') ['category', 'subcategory', 'lab', 'evidence', 'withOffer', 'origin', 'action'].forEach((x) => { f[x] = ''; delete f.action; }); else if (k === 'action') delete f.action; else f[k] = '';
+      state.op.limit = 50; render();
+    },
     'op-view'(el) { const op = state.op; op.view = ['sku', 'subcat', 'lab'].includes(el.dataset.v) ? el.dataset.v : 'sku'; op.limit = 50; render(); },
     'op-gchk'(el) { if (el.checked) state.op.checkedG[el.dataset.id] = true; else delete state.op.checkedG[el.dataset.id]; render(); },
     'op-gopen'(el) {
