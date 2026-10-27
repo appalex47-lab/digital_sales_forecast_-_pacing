@@ -68,6 +68,13 @@ async def main():
         chk('X14 calcula la medición de los SKU del folio', r is not None and r[0] > 0, r)
         t = await body(q)
         chk('X15 dice que es estimado, que no es promoción y que no demuestra causalidad', 'No demostrado' in t and 'no es una promoción' in t.lower() and 'Venta incremental estimada' in t, t[-600:])
+        await q.click('[data-action="rs-ex-save"]'); await q.wait_for_timeout(300)
+        chk('X17 guarda un corte con quién y cuándo', await q.evaluate("FP.app.state.ex.reg.cuts.length")==1 and 'EXC-0001' in await body(q))
+        await q.click('[data-action="pm-tab"][data-tab="promos"]'); await q.wait_for_timeout(400)
+        t = await body(q)
+        chk('X18 Promociones muestra «Exposición sin oferta» con el folio y su corte', 'Exposición sin oferta (1)' in t and 'EXP-0001' in t and '1 corte guardado' in t, t[:300])
+        await q.click('[data-action="pm-ex-measure"]'); await q.wait_for_timeout(2500)
+        chk('X19 «Medir» abre Resultados con el folio ya medido y sus cortes', 'Cortes guardados de EXP-0001' in await body(q) and await q.evaluate("!!FP.app.state.rs.ex.result"))
         errs2 = [e for e in errs if 'ResizeObserver' not in e]
         chk('X16 sin errores de página', not errs2, errs2)
         await b.close()

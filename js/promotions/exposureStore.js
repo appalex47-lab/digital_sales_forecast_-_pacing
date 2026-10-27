@@ -21,11 +21,12 @@
   const ok = (extra) => Object.assign({ ok: true }, extra || {});
   const fail = (error) => ({ ok: false, error });
 
-  function createRegistry() { return { version: 1, seq: 0, batchSeq: 0, items: [] }; }
+  function createRegistry() { return { version: 1, seq: 0, batchSeq: 0, cutSeq: 0, items: [], cuts: [] }; }
   function hydrate(raw) {
     const reg = createRegistry();
     if (!raw || typeof raw !== 'object') return reg;
-    reg.seq = Number(raw.seq) || 0; reg.batchSeq = Number(raw.batchSeq) || 0;
+    reg.seq = Number(raw.seq) || 0; reg.batchSeq = Number(raw.batchSeq) || 0; reg.cutSeq = Number(raw.cutSeq) || 0;
+    if (Array.isArray(raw.cuts)) reg.cuts = raw.cuts.filter((c) => c && c.id && c.batchId && c.concepts);
     if (Array.isArray(raw.items)) reg.items = raw.items.filter((e) => e && e.expId && e.sku && (e.state === 'active' || e.state === 'removed')).map((e) => Object.assign({ history: [], reasons: [], start: '', end: '' }, e));
     return reg;
   }
@@ -96,11 +97,28 @@
     return { promoId: batch.batchId, name: `Exposición ${batch.batchId}`, channel: 'total', status: 'published', plannedStart: starts[0] || '', plannedEnd: ends[ends.length - 1] || '', skus, baseline: null };
   }
 
+  /**
+   * Guarda un corte de la medición de un folio (como el de una promoción): cifras, método y avisos tal como salieron, con quién y cuándo.
+   * No se edita ni se reemplaza. `ev` es el resultado de FP.promotionEvaluation para el folio.
+   */
+  function addCut(reg, batchId, ev, by, now) {
+    if (!reg.items.some((e) => e.batchId === batchId)) return fail('Ese folio de exposición no existe.');
+    if (!ev || ev.promoId !== batchId || !ev.counts || !ev.counts.evaluable) return fail('No hay nada evaluable que guardar.');
+    if (!clean(by)) return fail('Escribe tu nombre para guardar el corte.');
+    reg.cutSeq += 1;
+    const snap = { id: `EXC-${pad(reg.cutSeq, 4)}`, batchId, at: now || nowISO(), by: clean(by), cutoff: ev.dataMax, method: ev.method, settings: ev.settings, counts: ev.counts, totals: ev.totals, concepts: ev.concepts,
+      warnings: (ev.warnings || []).map((w) => ({ code: w.code, level: w.level, text: w.text })),
+      items: (ev.items || []).map((i) => ({ sku: i.sku, name: i.name || null, status: i.status, reason: i.reason || null, window: i.window || null, actual: i.actual || null, expected: i.expected || null, growth: i.growth || null, incremental: i.incremental || null })) };
+    reg.cuts.push(snap);
+    return ok({ cut: snap });
+  }
+  const cutsOf = (reg, batchId) => (reg.cuts || []).filter((c) => c.batchId === batchId);
+
   function summary(reg, today) {
     const s = { active: 0, upcoming: 0, ended: 0, removed: 0 };
     reg.items.forEach((e) => { s[status(e, today)] += 1; });
     return s;
   }
 
-  FP.exposures = { batches, asPromotion, STATUS, createRegistry, hydrate, add, remove, status, currentFor, lastFor, summary, isISO };
+  FP.exposures = { addCut, cutsOf, batches, asPromotion, STATUS, createRegistry, hydrate, add, remove, status, currentFor, lastFor, summary, isISO };
 })(typeof window !== 'undefined' ? window : globalThis);

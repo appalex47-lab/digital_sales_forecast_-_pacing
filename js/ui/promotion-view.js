@@ -160,6 +160,24 @@
     return `${h.field}: ${h.from === null ? '—' : h.from} → ${h.to === null ? '—' : h.to}`;
   }
 
+  /** Exposición sin oferta: los folios con su último corte guardado y sus cortes. Se miden en Resultados e historial. */
+  function exposuresSection(state) {
+    const esc = H().esc, pill = H().pill, E = FP.exposures; if (!E || !state.ex || !state.ex.reg || !state.ex.reg.items.length) return '';
+    const today = new Date().toISOString().slice(0, 10), pct = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${v > 0 ? '+' : ''}${(v * 100).toFixed(1).replace(/\.0$/, '')} %` : '—');
+    const money = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${v > 0 ? '+' : ''}${v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })}` : '—');
+    const rows = E.batches(state.ex.reg).map((b) => {
+      const st = b.items.map((e) => E.status(e, today)), act = st.filter((s) => s === 'active').length, cuts = E.cutsOf(state.ex.reg, b.batchId), last = cuts[cuts.length - 1];
+      const dates = [...new Set(b.items.map((e) => (e.start || e.end ? `${e.start || '…'} a ${e.end || 'sin fin'}` : 'Sin fechas')))].join(' · ');
+      const inner = cuts.length ? `<details class="disclosure"><summary>${cuts.length} ${cuts.length === 1 ? 'corte guardado' : 'cortes guardados'}</summary>${FP.resultsView ? FP.resultsView.cutsTable(cuts.slice().reverse()) : ''}</details>` : '';
+      return `<tr><td class="num">${esc(b.batchId)}</td><td class="num">${b.items.length}<span class="cell-sub">${act} vigentes</span></td><td>${esc(dates)}<span class="cell-sub">${esc(b.items[0].createdBy)} · ${esc(String(b.items[0].createdAt).slice(0, 10))}</span></td>
+        <td>${last ? `${pct(last.concepts.observedGrowth.revenue)}<span class="cell-sub">incremental ${money(last.concepts.incremental.revenue)} · corte ${esc(last.cutoff || '')}</span>` : '<span class="cell-sub">sin corte guardado</span>'}${inner}</td>
+        <td>${b.measurable.length ? `<button type="button" class="btn btn--small" data-action="pm-ex-measure" data-id="${esc(b.batchId)}">Medir</button>` : pill('na', 'Sin fecha de inicio')}</td></tr>`;
+    }).join('');
+    return `<section class="panel" aria-labelledby="pm-t-x"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-x">Exposición sin oferta (${E.batches(state.ex.reg).length})</h2>
+      <p class="panel__desc">Productos que se exponen sin descuento desde Qué impulsar, con los cortes que guardaste al medirlos. No son promociones: no llevan descuento ni aprobación.</p></div></div>
+      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table"><thead><tr><th>Folio</th><th>SKU</th><th>Fechas</th><th>Último corte</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+  }
+
   function render(state) {
     const pm = state.pm, reg = pm.reg, esc = H().esc;
     const host = $('pm-body'); if (!host) return;
@@ -194,6 +212,7 @@
       ${pm.creating ? createForm(pm) : ''}
       <section class="panel" aria-labelledby="pm-t-l"><div class="panel__head"><div><h2 class="panel__title" id="pm-t-l">Registro (${reg.promotions.length})</h2></div></div>
         <div class="panel__body panel__body--flush">${listHtml(reg, pm.sel)}</div></section>
+      ${exposuresSection(state)}
       ${FP.goalsView ? FP.goalsView.html(state) : ''}
       ${sel ? detail(reg, sel, pm.actor, FP.goals ? FP.goals.campaignsOf(state.of.reg, reg.promotions, state.cg && state.cg.reg) : [], pm.fold) : ''}`;
   }
