@@ -1669,7 +1669,9 @@
     else if (state.view === 'presentacion') { ensureForecast(); FP.reportView.render(state); }
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
     else if (state.view === 'analisis') { clearPe(); FP.trendView.render(state); ensureTrendAnalysis(); }
-    else if (state.view === 'prodevol') { clearOldPages(); const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis(); }
+    else if (state.view === 'prodevol') {
+      clearOldPages(); const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis();
+    }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
     else if (state.view === 'ajustes') {
@@ -5558,6 +5560,8 @@
     if (v === 'negocio') { v = 'ajustes'; state.ajustesSection = 'negocio'; try { root.history.replaceState(null, '', '#ajustes'); } catch (e) { /* file:// */ } }
     // El paquete de análisis (.zip) vive ahora en Datos → Exportar datos: el enlace #paquete abre esa sección
     if (v === 'paquete') { v = 'datos'; state.datosSection = 'paquete'; try { root.history.replaceState(null, '', '#datos'); } catch (e) { /* file:// */ } }
+    // Categoría → Producto y Evolución y patrones viven ahora en «Producto y evolución»: sus rutas siguen funcionando y abren el capítulo equivalente
+    if (v === 'producto' || v === 'analisis') { state.peAnchor = v === 'analisis' ? 'pe-evolucion' : 'pe-quien'; v = 'prodevol'; try { root.history.replaceState(null, '', '#prodevol'); } catch (e) { /* file:// */ } }
     state.view = VIEWS.includes(v) ? v : 'inicio';
   }
 

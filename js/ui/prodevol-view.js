@@ -6,7 +6,7 @@
  *
  *   1 ¿Qué pasó?  2 ¿Contra la meta?  3 ¿Quién lo mueve? (una sola tabla: participación + contribución + tendencia + patrón)
  *   4 ¿Desde cuándo y hacia dónde?  5 ¿Por qué se mueve?  6 Evidencia y detalle
- * Etapa 3 de la fusión: Categoría → Producto y Evolución y patrones siguen disponibles.
+ * Etapas 3 y 4 de la fusión: las rutas #producto y #analisis son alias de esta página.
  */
 (function (root) {
   'use strict';
@@ -226,7 +226,7 @@
       <section class="panel">
         <div class="panel__head"><div data-own-head>
           <h2 class="panel__title" id="t-pe">Producto y evolución</h2>
-          <p class="panel__desc">Versión en construcción (etapa 3 de 4): Categoría → Producto y Evolución y patrones siguen disponibles en este mismo menú.</p>
+          <p class="panel__desc">Aquí viven ahora Categoría → Producto y Evolución y patrones: sus rutas (#producto y #analisis) abren el capítulo equivalente.</p>
         </div></div>
         <div class="panel__body">${controls}
           <div class="pe-jump" role="navigation" aria-label="Secciones de la página">${chips}</div>
@@ -238,6 +238,15 @@
       ${chapter(4, 'evolucion', '¿Desde cuándo y hacia dónde?', take4(state), early ? A.early : `${rangeNote}${evoSel}${A.kpis}${A.table}${A.reading}${A.forecast}`)}
       ${chapter(5, 'porque', '¿Por qué se mueve?', take5(state), `${funnelBlocks(state)}${early ? '' : A.pvm}${res.signals ? `<div class="chap__block">${res.signals}</div>` : ''}`)}
       ${chapter(6, 'evidencia', 'Evidencia y detalle', 'Todo lo anterior se puede rastrear hasta el SKU, el archivo y la fila de origen.', `<div class="chap__block" id="pe-trace">${res.trace}</div>${early ? '' : A.assistant}<div class="chap__tools"><button type="button" class="btn btn--small" data-action="pa-export">Exportar análisis (JSON)</button>${early ? '' : '<button type="button" class="btn btn--small" data-action="an-export-contrib">Descargar CSV de la contribución</button>'}</div><details class="disclosure"><summary>Datos que alimentan esta página</summary><div class="panel__body">${PV.statusHtml(state)}</div></details>`)}`;
+    settle(state);
+  }
+
+  /** Llegada desde #producto o #analisis: se baja al capítulo cuando ya hay resultados (antes el contenido de arriba aún cambia de alto). */
+  function settle(state) {
+    const id = state.peAnchor;
+    if (!id || !state.pa.result || state.pa.loading || state.an.key === null || state.an.loading) return;
+    state.peAnchor = null;
+    root.requestAnimationFrame(() => { const t = $(id); if (t) t.scrollIntoView({ block: 'start' }); });
   }
 
   FP.prodevolView = { render };
