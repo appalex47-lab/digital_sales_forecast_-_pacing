@@ -76,10 +76,12 @@ async def main():
         # exportar
         await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove()); location.hash='#promociones'"); await q.wait_for_timeout(500)
         await q.click('[data-action="pm-tab"][data-tab="ofertas"]'); await q.wait_for_timeout(800)
+        if not await q.query_selector('[data-action="ac-export-csv"][data-tab="offer"]'): await q.click('[data-action="of-fold"][data-fold="export"]'); await q.wait_for_timeout(250)   # Exportar viene plegado
         async with q.expect_download() as d: await q.click('[data-action="ac-export-xlsx"][data-tab="offer"]')
         dl = await d.value; path = os.path.join(tempfile.mkdtemp(), dl.suggested_filename); await dl.save_as(path)
         z = zipfile.ZipFile(path); sheet = z.read('xl/worksheets/sheet1.xml').decode('utf8'); wb = z.read('xl/workbook.xml').decode('utf8')
         chk('A13 el Excel trae una hoja «Plan de activación» con encabezados y filas', 'Plan de activación' in wb and 'Activación sugerida' in sheet and 'Ficha + CRM' in sheet and dl.suggested_filename.startswith('plan_activacion_ofertas_'), dl.suggested_filename)
+        if not await q.query_selector('[data-action="ac-export-csv"][data-tab="offer"]'): await q.click('[data-action="of-fold"][data-fold="export"]'); await q.wait_for_timeout(250)   # Exportar viene plegado
         async with q.expect_download() as d: await q.click('[data-action="ac-export-csv"][data-tab="offer"]')
         dl = await d.value; csvp = os.path.join(tempfile.mkdtemp(), dl.suggested_filename); await dl.save_as(csvp)
         txt = open(csvp, encoding='utf8').read()
