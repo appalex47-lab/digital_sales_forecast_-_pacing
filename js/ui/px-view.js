@@ -499,7 +499,7 @@
     const F2 = FP.pxFicha, c = focus === '__total__' ? totalRow(m) : (m.cats.find((x) => x.key === String(focus)) || rowFor(m, focus));
     const title = focus === '__total__' ? 'Total del análisis' : nameOf(m, focus), lvl = cap1(lw(m.level)[0]);
     if (!dock.querySelector('#pe-drawer')) {
-      dock.innerHTML = P(`<div class="px"><div class="scr" id="pe-scrim" data-pe-close></div><aside class="drw" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Ficha de la ${esc(lvl.toLowerCase())}"><div class="drw__t"><div><span class="eyebrow">Ficha · ${esc(lvl)}</span><h3 id="dn"></h3></div><button class="btn" id="pe-drawer-x" data-pe-close>Cerrar ✕</button></div><div class="drw__b" id="db" style="padding:0"></div></aside></div>`);
+      dock.innerHTML = P(`<div class="px"><div class="scr" id="pe-scrim" data-pe-close></div><aside class="drw" id="pe-drawer" role="dialog" aria-modal="true" aria-label="Ficha de la ${esc(lvl.toLowerCase())}"><div class="drw__t"><div><span class="eyebrow" id="deb">Ficha · ${esc(lvl)}</span><h3 id="dn"></h3></div><button class="btn" id="pe-drawer-x" data-pe-close>Cerrar ✕</button></div><div class="drw__b" id="db" style="padding:0"></div></aside></div>`);
       dock.addEventListener('click', (e) => {
         if (e.target.closest('[data-pe-close]')) { FP.app.actions['pe-drawer-close'](); return; }
         const j = e.target.closest('[data-j]'); if (j) { const t = $('s-' + j.dataset.j); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -510,6 +510,7 @@
       });
     }
     const dn = $('dn'); if (dn.textContent !== title) dn.textContent = title;
+    const eb = $('deb'), ebt = `Ficha · ${focus === '__total__' ? 'Total' : lvl}`; if (eb && eb.textContent !== ebt) eb.textContent = ebt;
     const body = $('db'), html = PP(F2.html(m, c, focus, state));
     if (body._pxHtml !== html) { const top = body.scrollTop; body.innerHTML = html; body._pxHtml = html; body.scrollTop = top; }
     if (!wasOpen) { const x = $('pe-drawer-x'); if (x) x.focus({ preventScroll: true }); }
