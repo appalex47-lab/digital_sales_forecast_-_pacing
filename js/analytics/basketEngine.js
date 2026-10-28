@@ -85,7 +85,8 @@
     const cands = candidatesOf(P, opt);
     /* venta por pedido de cada producto y ticket de la canasta: una pasada por pedido (venta de las líneas, no el total del libro) */
     const revOf = new Map(), cntOf = new Map(), tkSum = new Map(), restSum = new Map();
-    const need = new Set(); cands.slice(0, 200).forEach((c) => { need.add(c.a); need.add(c.b); });
+    const need = new Set(); cands.forEach((c) => { need.add(c.a); need.add(c.b); });
+    const strict = opt.strict || { minPairs: opt.minPairs, minLift: opt.minLift, minConf: opt.minConf };
     let revMulti = 0, totalAll = 0;
     rowsAll.forEach((i) => {
       const per = new Map(); let tot = 0;
@@ -97,7 +98,12 @@
         if (need.has(k)) { revOf.set(k, (revOf.get(k) || 0) + v); cntOf.set(k, (cntOf.get(k) || 0) + 1); }
       });
     });
-    const top = cands.slice(0, 200);
+    /* con umbrales amplios puede haber miles de pares: se conservan los de más lift, más espacio en pesos y más pedidos juntos */
+    cands.forEach((c) => { const br = cntOf.get(c.b) ? revOf.get(c.b) / cntOf.get(c.b) : null; c.bRevPerOrder = br; c.space = br === null ? null : c.aOnly * br; c.weak = !(c.n >= strict.minPairs && c.lift >= strict.minLift && c.conf >= strict.minConf); });
+    const keep = new Set(); const pickTop = (cmp, k) => cands.slice().sort(cmp).slice(0, k).forEach((c) => keep.add(c));
+    pickTop((x, y) => y.lift - x.lift || y.n - x.n, 100); pickTop((x, y) => (y.space || 0) - (x.space || 0), 100); pickTop((x, y) => y.n - x.n, 100);
+    const top = cands.filter((c) => keep.has(c));
+    const counts = { strong: cands.filter((c) => !c.weak).length, weak: cands.filter((c) => c.weak).length };
     /* por canal: confianza del mismo par en cada canal (solo con todos los canales) */
     let byCh = null;
     if (chId < 0 && top.length) {
@@ -107,8 +113,7 @@
       byCh = watch.map((c, k) => L.channels.map((chn, ci) => ({ channel: chn, orders: an[k][ci], conf: an[k][ci] >= opt.minPairs ? pn[k][ci] / an[k][ci] : null })));
     }
     /* espacio por probar en pesos = pedidos con A sin B × venta de B por pedido (no es un pronóstico) */
-    const candidates = top.map((c, k) => { const br = cntOf.get(c.b) ? revOf.get(c.b) / cntOf.get(c.b) : null;
-      return { ...c, bRevPerOrder: br, space: br === null ? null : c.aOnly * br, byChannel: byCh && byCh[k] ? byCh[k] : null }; });
+    const candidates = top.map((c, k) => ({ ...c, byChannel: byCh && byCh[k] ? byCh[k] : null }));
     /* productos ancla: ticket del pedido que lo lleva, ticket del RESTO de la canasta (sin contar al ancla, así el precio propio no cuenta),
        ticket de un pedido sin él, y qué porcentaje de sus pedidos lleva otro producto */
     const best = new Map();
@@ -140,7 +145,7 @@
     }
     return { status: 'ok', level, options: opt, totalOrders, withLines, coverage: totalOrders ? withLines / totalOrders : 0, orders: P.N,
       avgItems: P.N ? P.items / P.N : null, multiShare: P.N ? P.multi / P.N : null, multiRevShare: revAll > 0 ? revMulti / revAll : null,
-      avgTicket: P.N ? totalAll / P.N : null, dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, anchors, cats, prev,
+      avgTicket: P.N ? totalAll / P.N : null, dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, counts, strict, anchors, cats, prev,
       channelsAvailable: L.channels.slice(), minDay: CE.isoOf(minDay), maxDay: CE.isoOf(maxDay) };
   }
 

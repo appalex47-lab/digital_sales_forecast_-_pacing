@@ -5642,7 +5642,8 @@
       }
       if (tt && tt.getAttribute && tt.getAttribute('data-cs')) {
         const k = tt.getAttribute('data-cs');
-        state.cs.opts[k] = tt.value; state.cs.status = 'idle'; render(); return;
+        if (k === 'preset') FP.crosssellView.setPreset(state, tt.value); else { state.cs.opts[k] = tt.value; state.cs.status = 'idle'; }
+        render(); return;
       }
       if (tt && tt.getAttribute && tt.getAttribute('data-cu')) {
         const k = tt.getAttribute('data-cu');

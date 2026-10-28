@@ -23,21 +23,24 @@
   }
 
   function build(r) {
-    const C = FP.config.products.crossSell, cs = r.candidates, S = [], chips = [];
+    const C = FP.config.products.crossSell, T = r.options || C, cs = r.candidates, S = [], chips = [];
+    const nStrong = r.counts ? r.counts.strong : cs.length, nWeak = r.counts ? r.counts.weak : 0, bestC = cs.find((c) => !c.weak) || cs[0];
+    const adj = r.strict && (T.minPairs !== r.strict.minPairs || T.minLift !== r.strict.minLift || T.minConf !== r.strict.minConf);
     const weak = !fin(r.multiShare) || r.multiShare < C.multiMin, many = cs.length;
     const verdict = r.empty ? 'Todavía no hay pedidos con detalle por producto para este análisis.'
-      : many ? `Hay ${many} ${many === 1 ? 'par con señal clara' : 'pares con señal clara'} de cross-sell; el más fuerte: ${pairLabel(cs[0])}.`
+      : nStrong ? `Hay ${nStrong} ${nStrong === 1 ? 'par con señal clara' : 'pares con señal clara'} de cross-sell${nWeak ? ` y ${nWeak} con señal más débil` : ''}; el más fuerte: ${pairLabel(bestC)}.`
+        : many ? `Ningún par tiene señal clara; con los umbrales ajustados aparecen ${nWeak} con señal más débil.`
         : weak ? 'Pocos pedidos llevan más de un producto: todavía no hay señal para cross-sell.' : 'Ningún par se compra junto con la fuerza suficiente para sugerirlo como cross-sell.';
     chips.push([weak ? 'warn' : 'ok', `● ${p0(r.multiShare || 0)} de pedidos con 2 o más productos`, `Con menos de ${p0(C.multiMin)} de canastas con varios productos, las asociaciones se apoyan en pocos pedidos.`]);
     chips.push([r.coverage >= C.coverageMin ? 'ok' : 'warn', `● ${p0(r.coverage)} de pedidos con detalle por producto`, 'Pedidos cuyo archivo trae el detalle por producto. Los demás no entran en este análisis.']);
-    chips.push(['mu', `◐ Mín. ${C.minPairs} pedidos juntos · lift ≥ ${C.minLift}`, `Umbrales provisionales: un par con menos de ${C.minPairs} pedidos, lift menor a ${C.minLift} o menos de ${Math.round(C.minConf * 100)} de cada 100 pedidos con A que llevan B no se sugiere.`]);
+    chips.push([adj ? 'warn' : 'mu', `◐ Mín. ${T.minPairs} pedidos juntos · lift ≥ ${T.minLift}${adj ? ' · ajustado' : ''}`, `Umbrales ${adj ? 'ajustados por ti (más amplios o más estrictos que los de referencia)' : 'provisionales'}: un par con menos de ${T.minPairs} pedidos, lift menor a ${T.minLift} o menos de ${+(T.minConf * 100).toFixed(1)} de cada 100 pedidos con A que llevan B no se sugiere.${adj ? ' Los pares que no cumplen los de referencia se marcan como señal más débil.' : ''}`]);
     chips.push(['mu', '● Asociación, no causa', 'Que dos productos se compren juntos no prueba que ofrecer uno suba la venta del otro; se valida con una prueba.']);
 
     S.push(['Canastas', `${B(p0(r.multiShare || 0))} de pedidos lleva 2 o más productos (${(r.avgItems || 0).toFixed(1)} por pedido).`,
       `${B(p0(r.multiShare || 0))} de los ${n0(r.orders)} pedidos lleva 2 o más productos${fin(r.multiRevShare) ? ` y concentra ${p0(r.multiRevShare)} de la venta` : ''}. El promedio es ${(r.avgItems || 0).toFixed(1)} productos por pedido.`]);
     if (many) {
-      const t = cs[0];
-      S.push(['Mejor candidato', `${B(pairLabel(t))}: de cada 100 pedidos con ${t.a}, ${Math.round(t.conf * 100)} llevan también ${t.b}.`,
+      const t = bestC;
+      S.push(['Mejor candidato', `${B(pairLabel(t))}${t.weak ? ' (señal más débil)' : ''}: de cada 100 pedidos con ${t.a}, ${Math.round(t.conf * 100)} llevan también ${t.b}.`,
         `${B(pairLabel(t))}: ${n0(t.n)} pedidos juntos. De cada 100 pedidos con ${t.a}, ${Math.round(t.conf * 100)} llevan también ${t.b} (lift ${t.lift.toFixed(1)}: es ${t.lift.toFixed(1)} veces más probable que en un pedido cualquiera). Hay ${n0(t.aOnly)} pedidos con ${t.a} sin ${t.b}.`]);
       const a = (r.anchors || []).filter((x) => x.withOtherShare >= 0.2 && x.restTicket > 0 && (!fin(x.ticketWithout) || x.restTicket >= x.ticketWithout * (1 + C.anchorLiftPct))).sort((x, y) => y.restTicket - x.restTicket)[0];
       if (a) S.push(['Productos ancla', `${B(a.item)} es el ancla de más valor: el resto de sus pedidos suma ${M(a.restTicket)}${fin(a.ticketWithout) ? ` contra ${M(a.ticketWithout)} de un pedido sin él` : ''}.`,
@@ -58,6 +61,7 @@
     if (r.coverage < C.coverageMin) { w.push(`Solo ${p0(r.coverage)} de pedidos con detalle por producto`); wl.push(`Solo ${p0(r.coverage)} de los pedidos trae detalle por producto; recargar los archivos antiguos amplía el análisis`); }
     if (weak && !r.empty) { w.push('Pocas canastas con varios productos'); wl.push(`Solo ${p0(r.multiShare || 0)} de los pedidos lleva 2 o más productos: con tan pocas canastas, pocos pares llegan a ${C.minPairs} pedidos juntos y cualquier asociación sería ruido`); }
     if (r.skippedLarge) { w.push(`${n0(r.skippedLarge)} pedidos con demasiados productos no se cruzan`); wl.push(`${n0(r.skippedLarge)} pedidos llevan más de ${C.maxItemsPerOrder} productos distintos y no entran en los pares para no inflarlos`); }
+    if (nWeak && nStrong !== undefined) { w.push(`${nWeak} ${nWeak === 1 ? 'par con señal más débil' : 'pares con señal más débil'}`); wl.push(`Con los umbrales ajustados aparecen ${nWeak} ${nWeak === 1 ? 'par' : 'pares'} que no cumplen los de referencia (${r.strict.minPairs} pedidos, lift ${r.strict.minLift}, ${+(r.strict.minConf * 100).toFixed(1)} de cada 100): tómalos como hipótesis, con más riesgo de ser casualidad`); }
     if (w.length) S.push(['Ojo', `${w.join('. ')}.`, `${wl.join('. ')}.`]);
     const ORD = ['Canastas', 'Mejor candidato', 'Productos ancla', 'Entre categorías', 'Canal', 'Contra hace 90 días', 'Ojo'];
     S.sort((a, b) => ORD.indexOf(a[0]) - ORD.indexOf(b[0]));
@@ -66,9 +70,9 @@
     if (!weak) L.b = `Los pedidos con 2 o más productos son ${B(p0(r.multiShare))}${fin(r.multiRevShare) ? ` y aportan ${B(p0(r.multiRevShare))} de la venta` : ''}.`;
     else L.b = `Solo ${B(p0(r.multiShare || 0))} de los pedidos lleva más de un producto.`;
     if (r._anchor && fin(r._anchor.ticketWithout) && r._anchor.ticketWithout > 0) { const d = r._anchor.restTicket / r._anchor.ticketWithout - 1; if (Math.abs(d) >= C.anchorLiftPct) L.a = `En los pedidos con ${B(r._anchor.item)}, el resto de la canasta vale ${B(`${d >= 0 ? '+' : '−'}${Math.abs(Math.round(d * 100))} %`)} contra un pedido sin él.`; }
-    if (many) L.c = `${B(pairLabel(cs[0]))}: de cada 100 pedidos con ${cs[0].a}, ${Math.round(cs[0].conf * 100)} llevan ${cs[0].b}.`;
+    if (many) L.c = `${B(pairLabel(bestC))}: de cada 100 pedidos con ${bestC.a}, ${Math.round(bestC.conf * 100)} llevan ${bestC.b}.`;
     if (r._gap) L.ch = `${B(r._gap.c.b)} se suma a ${r._gap.c.a} ${p0(r._gap.g.hi.conf)} en ${CH(r._gap.g.hi.channel)} y ${p0(r._gap.g.lo.conf)} en ${CH(r._gap.g.lo.channel)}.`;
-    return { verdict, chips, rows: S, lec: L, weak, many };
+    return { verdict, chips, rows: S, lec: L, weak, many, nStrong, nWeak, best: bestC };
   }
 
   FP.crossResumen = { build, channelGap, pairLabel, n0, M, p0, CH };
