@@ -661,6 +661,26 @@
       chunkRows: 10000,
       /** Umbrales de señales (descriptivas, no causales). */
       signals: { minChangePct: 0.05, stablePct: 0.03, minShare: 0.01, trackingGapPct: 0.15 },
+      /** Resumen general de la ficha: cuándo se nombra cada causa. PROVISIONALES: son criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      summary: {
+        convZ: 1.96,            // conversión de ficha: prueba z de dos proporciones al 95 %
+        stepMinPp: 1,           // un paso del embudo que cae ≥ 1 pp se nombra aunque el CR total no se mueva
+        factorShare: 0.5,       // volumen, precio o mezcla: se destaca si explica ≥ 50 % del movimiento
+        factorMinPct: 0.01,     // y el cambio es ≥ 1 % de la base
+        offsetNetPct: 0.02,     // «se compensan»: neto < 2 % …
+        offsetGrossMult: 3,     // … y movimiento bruto ≥ 3 veces el neto
+        newLostShare: 0.10,     // productos que entran o salen: ≥ 10 % del cambio
+        channelShare: 0.6,      // un canal concentra ≥ 60 % del cambio
+        customersMinPct: 0.10,  // clientes: algún tipo cambia ≥ 10 % …
+        customersMinN: 10,      // … y al menos 10 clientes (meses cerrados)
+        seasonDiffPp: 2,        // época: se compara si difiere ≥ 2 pp del año anterior
+        seasonMinChange: 0.05,  // o el cambio es ≥ 5 % (para decir «normal para la época»)
+        contextDiffPp: 5,       // contra su contexto: «en línea» si la diferencia es < 5 pp
+        histShort: 8,           // historia corta: menos de 8 periodos
+        fewOrders: 300,         // pocos pedidos: menos de 300
+        goalHuge: 2,            // meta: diferencia > 200 % → se pide confirmar su alcance
+        explainMaxShort: 3      // la versión corta muestra las 3 primeras causas que aplican
+      },
       topN: [20, 50, 100, 0]
     },
 

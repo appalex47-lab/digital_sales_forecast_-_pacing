@@ -80,87 +80,8 @@
   }
 
 
-  /* ---------- Resumen general de la selección: una frase por pregunta (corta) o el párrafo completo (larga) ---------- */
-  const GEO_LV = ['region', 'state', 'city', 'branch', 'delivery'];
-  const EPV = { stable: 'estable', growth: 'crecer', decline: 'caer', no_sales: 'sin ventas', short: 'un tramo corto' };
-  const U = { mes: ['mes', 'meses'], semana: ['semana', 'semanas'], 'día': ['día', 'días'], 'año': ['año', 'años'] };
-  const bd = (v, k) => `<b${k ? ` class="${k}"` : ''}>${v}</b>`;
-  function summaryRows(m, c, key, d) {
-    const x = X(), rows = [], ref = esc(x.refName(m.ci)), tot = Boolean(c.total), ev = c.ev, st = ev && ev.story && ev.story.status === 'available' ? ev.story : null, rx = c.x;
-    const net = m.net, M1 = x.M, one = x.lw(m.level), days = m.r.total.current.days || 0;
-    const pct = Math.abs(c.p).toFixed(1), flat = !fin(c.p) || Math.abs(c.p) < 0.05, up = c.d >= 0, vb = flat ? 'se mantiene' : up ? 'sube' : 'baja';
-    const cls = flat ? '' : up ? 'up' : 'dn';
-    const row = (k, s, l) => { if (s || l) rows.push({ k, s, l: l || s }); };
-    /* 1 · Qué pasó */
-    const cn = !tot && fin(c.contrib) && Math.abs(c.contrib) >= 0.05 ? `${c.contrib >= 0 ? 'explica' : 'compensa'} ${Math.round(Math.abs(c.contrib) * 100)} % del cambio neto` : '';
-    const sh = !tot && Math.abs(c.dpp) >= 0.3 ? `${c.dpp > 0 ? 'gana' : 'pierde'} ${Math.abs(c.dpp).toFixed(1)} pp de participación` : '';
-    const b = tot ? m.a.bridge : null, goalTxt = b && fin(b.gap) && (b.status === 'available' || b.status === 'partial') ? (b.gap >= 0 ? `Supera la meta por ${M1(b.gap)}` : `Queda ${M1(-b.gap)} bajo la meta`) : '';
-    row('Qué pasó',
-      `${tot ? 'La venta' : 'Venta'} ${vb}${flat ? '' : ' ' + bd(pct + ' %', cls)} (${M1(c.d, true)}) contra ${ref}${[cn, sh].filter(Boolean).length ? '; ' + [cn, sh].filter(Boolean).join(' y ') : ''}${goalTxt && tot ? '. ' + goalTxt : ''}.`,
-      `${tot ? 'La venta total' : `La venta ${one[2].replace(/^(el|la) /, 'de $1 ')}`} ${vb}${flat ? '' : ' ' + bd(pct + ' %', cls)} contra ${ref} (${bd(M1(c.d, true))})${m.ci.partial && days ? `, comparando los mismos ${days} días` : ''}.${!tot && fin(c.share) ? ` Pesa ${(c.share * 100).toFixed(1)} % de la venta total` : ''}${cn ? (!tot ? '; ' : ' ') + cn : ''}${sh ? ' y ' + sh : ''}${!tot && (cn || sh || fin(c.share)) ? '.' : ''}${goalTxt && tot ? ' ' + goalTxt + '.' : ''}`);
-    /* 2 · Quién (solo el total) */
-    if (tot) {
-      const drag = m.cats.find((q) => q.d * net > 0), comp = m.cats.filter((q) => q.d * net < 0).sort((p1, p2) => Math.abs(p2.d) - Math.abs(p1.d))[0], cov = m.r.compensation && fin(m.r.compensation.coveredPct) ? Math.round(m.r.compensation.coveredPct * 100) : null;
-      if (drag) row('Quién',
-        `${bd(esc(x.nameOf(m, drag.key)))}${fin(drag.contrib) ? ` explica ${Math.round(Math.abs(drag.contrib) * 100)} %` : ''}${comp ? `; ${bd(esc(x.nameOf(m, comp.key)))} compensa${cov !== null ? ' ' + cov + ' %' : ''}` : ''}.`,
-        `${bd(esc(x.nameOf(m, drag.key)))}${fin(drag.contrib) ? ` explica ${Math.round(Math.abs(drag.contrib) * 100)} % del cambio (${M1(drag.d, true)})` : ` ${M1(drag.d, true)}`}${Math.abs(drag.dpp) >= 0.3 ? ` y ${drag.dpp > 0 ? 'gana' : 'pierde'} ${Math.abs(drag.dpp).toFixed(1)} pp de participación` : ''}.${comp ? ` ${bd(esc(x.nameOf(m, comp.key)))} ${comp.d > 0 ? 'sube' : 'baja'} ${M1(comp.d, true)}${cov !== null ? ' y compensa ' + cov + ' %' : ''}.` : ''}`);
-    }
-    /* 3 · Dónde se concentra (señales geográficas de la fila) */
-    if (!tot) {
-      const gs = (m.r.geoSignals || []).filter((g) => String(g.entity) === String(key));
-      if (gs.length) {
-        const short = (g) => { const t = String(g.label).replace(/-/g, '−'), q = t.match(/el ([\d.]+) % de esa variación se concentra en (.+?) \(/), r2 = t.match(/donde más se movió fue (.+?)\.?$/); return q ? `${bd(Math.round(+q[1]) + ' %')} de la variación está en ${esc(q[2])}` : r2 ? `Donde más se movió: ${bd(esc(r2[1]))}` : esc(t); };
-        row('Dónde', short(gs[0]) + '.', gs.slice(0, 2).map((g, i) => { const t = esc(String(g.label).replace(/-/g, '−')).replace(/\.$/, ''); return (i ? x.cap1(t.replace(/^[^;]+;\s*/, '')) : t) + '.'; }).join(' '));
-      }
-    }
-    /* 4 · Desde cuándo */
-    if (st && (st.episodes || []).length) {
-      const eps = st.episodes, last = eps[eps.length - 1], prev = eps.length > 1 ? eps[eps.length - 2] : null, un = U[x.unitOf(ev)] || U.mes;
-      const vn = { stable: 'Estable', growth: 'Crece', decline: 'Cae', no_sales: 'Sin ventas' }[last.type] || 'Sin ventas';
-      const rel = (st.relative || [])[0];
-      const rs = rel && fin(rel.diffPp) ? (Math.abs(rel.diffPp) < 5 ? `en línea con ${esc(rel.label)}` : `${bd(Math.abs(rel.diffPp).toFixed(0) + ' pp ' + (rel.diffPp > 0 ? 'mejor' : 'peor'))} que ${esc(rel.label)}`) : '';
-      const cu = st.current || {}, nowS = ['falling', 'rising'].includes(cu.state) && fin(cu.change) && !((cu.state === 'falling' && last.type === 'decline') || (cu.state === 'rising' && last.type === 'growth')) ? `ahora ${bd((cu.state === 'falling' ? 'cae ' : 'sube ') + Math.abs(cu.change * 100).toFixed(1) + ' %', cu.state === 'falling' ? 'dn' : 'up')}` : '';
-      row('Desde cuándo',
-        `${vn} hace ${bd(last.periods + ' ' + (last.periods === 1 ? un[0] : un[1]))}${prev && fin(prev.changePct) && prev.type !== 'stable' ? `, tras ${EPV[prev.type]} ${pc(prev.changePct, 0)}` : ''}${nowS ? '; ' + nowS : ''}${rs && !nowS ? '; ' + rs : ''}.`,
-        `${esc(st.headline || '')}${rel ? ` Contra ${esc(rel.label)}: ${pc(rel.entityChange)} contra ${pc(rel.contextChange)} (${esc(x.ym(rel.window.from))} → ${esc(x.ym(rel.window.to))}).` : ''}`);
-    }
-    /* 5 · Qué lo explica */
-    const pv = c.pv || (tot && m.a.pvm && m.a.pvm.total && fin(m.a.pvm.total.volume) ? m.a.pvm.total : null), dv = st && st.drivers;
-    let fac = null;
-    if (pv && fin(pv.volume) && fin(pv.price) && fin(pv.mix)) fac = [['mezcla', pv.mix], ['precio', pv.price], ['volumen', pv.volume]];
-    else if (dv && fin(dv.volume) && fin(dv.price)) fac = [['precio', dv.price], ['volumen', dv.volume]];
-    if (fac) fac.sort((p1, p2) => Math.abs(p2[1]) - Math.abs(p1[1]));
-    const hasF = rx && rx.current && rx.current.views, fo = hasF ? x.funnelOf(m, rx) : null, rd = fo && FP.funnelEngine ? FP.funnelEngine.reading(fo.cmp) : null;
-    const pc1 = (v) => `${(v * 100).toFixed(1)} %`;
-    let fl = '', fs = '';
-    if (rd && rd.kind === 'views_up_cr_down' && rd.weak) { const sp = fo.cmp.steps[rd.weak.index], st2 = x.STEP[rd.weak.label] || ['', 'del paso débil']; fs = `Vistas ${x.pcs(rd.views)}, pero ${st2[1]} baja de ${pc1(sp.rateBase)} a ${pc1(sp.rateCur)}`; fl = `${fs} (${x.sgn(rd.weak.deltaPp, 1)} pp): llega más gente y compra menos`; }
-    else if (rd && rd.kind === 'views_down') { fs = `Caen las vistas (${x.pcs(rd.views)})`; fl = fs; }
-    const noF = !fo && (GEO_LV.includes(m.level) || (m.state.pa.geo && Object.values(m.state.pa.geo).some(Boolean))) ? 'Sin embudo en este nivel' : '';
-    if (fac || fs || noF) {
-      const f2 = fac ? fac.slice(0, 2) : [], sf = f2.length ? `${bd(x.cap1(f2[0][0]) + ' ' + M1(f2[0][1], true))}${f2[1] ? ' y ' + f2[1][0] + ' ' + M1(f2[1][1], true) : ''}` : '';
-      const lf = fac ? fac.map((q, i) => (i === 0 ? bd(x.cap1(q[0]) + ' ' + M1(q[1], true)) : `${q[0]} ${M1(q[1], true)}`)).join(', ') : '';
-      row('Qué lo explica', [sf, fs, noF].filter(Boolean).join('. ') + '.', [lf, fl, noF, 'Es una descomposición, no una causa'].filter(Boolean).join('. ') + '.');
-    }
-    /* 6 · Hacia dónde */
-    const fc = x.fcOf(c);
-    if (fc && fc.periods.length && fin(fc.periods[0].value)) {
-      const p0 = fc.periods[0], [cw, cd] = x.confOf(fc.level), dir = Math.abs(fc.change || 0) < 0.03 ? 'sin dirección clara' : `la recta apunta a ${pc(fc.change, 1)}`;
-      row('Hacia dónde',
-        `Cierra ${esc(x.monthOf(p0.period))} cerca de ${bd(x.e1(p0.value))}, ${dir}, ${fc.level === 'low' ? bd('confianza baja') : 'confianza ' + cw}.`,
-        `Cierra ${esc(x.monthOf(p0.period))} cerca de ${bd(x.e1(p0.value))} (rango ${x.e1(p0.low)} – ${x.e1(p0.high)}), ${dir}. ${fc.level === 'low' ? bd('Confianza baja') : 'Confianza ' + cw}${fin(fc.mape) ? `: en ${fc.tested} pruebas hacia atrás la regla se desvió ${(fc.mape * 100).toFixed(1)} %` : ''}.`);
-    }
-    /* 7 · Ojo */
-    const warn = [], warnL = [];
-    if (st && st.reliability && st.reliability.level === 'low') { const t = `Lectura poco confiable: ${(st.reliability.reasons || []).join(', ')}`; warn.push(t); warnL.push(t); }
-    if (!tot && m.level === 'branch') { warn.push('Sin inventario ni horarios: confirma con la tienda'); warnL.push('La app no trae inventario, horarios ni cierres: si hubo un cambio operativo, confirma con la tienda'); }
-    const cv0 = m.tc.trackingCoverage, cov = cv0 && fin(cv0.value) ? cv0.value : null;
-    if (fin(cov) && cov < 1 - FP.config.products.signals.trackingGapPct) { const t = `Tracking de ${Math.round(cov * 100)} %: lee el embudo con cuidado`; warn.push(t); warnL.push(t); }
-    if (m.ci.partial && days) warnL.push(`Periodo en curso (${days} días): se compara contra los mismos días de la referencia`);
-    row(warn.length || warnL.length ? 'Ojo' : null, warn.length ? warn.join('. ') + '.' : '', warnL.length ? warnL.join('. ') + '.' : '');
-    return rows.filter((q) => q.k);
-  }
-  function summaryHtml(m, c, key, d, ux) {
-    const long = ux.sum === 'l', rows = summaryRows(m, c, key, d).filter((q) => (long ? q.l : q.s));
+  function summaryHtml(m, c, key, d, ux, state) {
+    const long = ux.sum === 'l', rows = FP.pxResumen.rows(m, c, key, d, state).filter((q) => (long ? q.l : q.s));
     if (!rows.length) return '';
     return dsec('res', 'Resumen general', `<div class="mini" role="group" aria-label="Versión del resumen" style="justify-self:start"><button data-sum="c" aria-pressed="${!long}">Versión corta</button><button data-sum="l" aria-pressed="${long}">Versión larga</button></div><div class="sum${long ? ' sum--l' : ''}">${rows.map((q) => `<div class="sum__r"><span>${q.k}</span><span>${long ? q.l : q.s}</span></div>`).join('')}<div class="sum__f">Descomposición matemática, no causa. Cada cifra baja a su archivo y fila de origen.</div></div>`);
   }
@@ -176,7 +97,7 @@
     let h = `<div class="dn-nav">${nav.map(([j, t]) => `<a data-j="${j}">${t}</a>`).join('')}</div><div style="padding:14px 16px;display:grid;gap:18px">`;
     h += `<div class="stat"><div><b>${x.m2(rx.revenue.current)}</b><span>Venta</span></div><div><b class="${up ? 'up' : 'dn'}">${up ? '▲ ' : '▼ '}${Math.abs(c.p).toFixed(1)} %</b><span>contra referencia</span></div><div><b>${fin(c.contrib) ? (c.contrib * 100).toFixed(1) + '%' : '—'}</b><span>Contribución</span></div></div>`;
     if (!c.total) h += `<div class="states"><span class="chip ${lg[1]}">${lg[0]}</span><span class="mu" style="font-size:.82rem">Participación ${(c.share * 100).toFixed(1)}% (${c.dpp >= 0 ? '▲' : '▼'}${Math.abs(c.dpp).toFixed(1)} pp)</span></div>`;
-    h += summaryHtml(m, c, key, d, ux);
+    h += summaryHtml(m, c, key, d, ux, state);
     if (st) {
       const cur = st.current || {}, unit = x.unitOf(ev), peak = st.peak, trough = st.trough, rel = (st.relative || [])[0];
       const relTxt = rel ? `<p class="ln"><b>Contra su contexto:</b> ${relWord(rel)}: ${pc(rel.entityChange)} contra ${pc(rel.contextChange)} (${esc(x.ym(rel.window.from))} → ${esc(x.ym(rel.window.to))}).</p>` : '';
