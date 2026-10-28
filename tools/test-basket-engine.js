@@ -25,6 +25,13 @@ assert.strictEqual(JSON.stringify(r.dist.map((v) => Math.round(v * 100))), '[84,
 /* por canal */
 const bc = Object.fromEntries(c.byChannel.map((x) => [x.channel, x]));
 assert.ok(Math.abs(bc.ecommerce.conf - 30 / 40) < 1e-9, 'ecommerce: 30 de 40 pedidos con A'); assert.strictEqual(bc.app.conf, null, 'app: solo 10 pedidos con A, bajo el mínimo');
+/* espacio en pesos y tickets de los productos ancla */
+assert.ok(Math.abs(c.bRevPerOrder - 10) < 1e-9 && Math.abs(c.space - 100) < 1e-9, 'espacio = 10 pedidos con A sin B × $10 de B por pedido');
+const ra = BE.analyze(L, cat, { minAnchorOrders: 5 }), anA = ra.anchors.find((x) => x.item === 'Prod A');
+assert.ok(Math.abs(anA.ticket - 20) < 1e-9 && Math.abs(anA.restTicket - 8) < 1e-9 && Math.abs(anA.ticketWithout - 10) < 1e-9, 'A: ticket 20, resto de la canasta 8, pedido sin A 10');
+assert.strictEqual(ra.anchors[0].item, 'Prod B', 'el ancla de más valor es la que más suma alrededor (B: 500/45 ≈ 11.1; A: 8; C: 0)');
+assert.ok(Math.abs(ra.anchors[0].restTicket - 500 / 45) < 1e-9);
+assert.ok(Math.abs(ra.avgTicket - 3050 / 255) < 1e-9);
 /* canal elegido: no hay desglose por canal y el soporte baja */
 const re = BE.analyze(L, cat, { channel: 'ecommerce' });
 assert.strictEqual(re.candidates.length, 0, 'con ecommerce el par tiene 30 pedidos juntos pero lift 1');

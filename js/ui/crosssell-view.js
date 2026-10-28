@@ -20,8 +20,8 @@
 
   const optsOf = (state) => { const o = state.cs.opts; return { level: o.level, channel: o.channel === 'total' ? null : o.channel }; };
 
-  function sec(id, t, cap, body, lec) {
-    return `<section class="blk" id="${id}"><div class="blk__h"><h3>${t}</h3><span class="cap">${cap}</span></div>${body}${lec ? `<p class="lec">${lec}</p>` : ''}</section>`;
+  function sec(id, t, cap, body, lec, extra) {
+    return `<section class="blk" id="${id}"><div class="blk__h"><h3>${t}</h3><span class="cap">${cap}</span>${extra || ''}</div>${body}${lec ? `<p class="lec">${lec}</p>` : ''}</section>`;
   }
   const kpi = (l, v, s) => `<div class="kpi"><div class="kpi__l">${l}</div><div class="kpi__v num">${v}</div><div class="kpi__d mu" style="font-weight:500">${s}</div></div>`;
 
@@ -30,18 +30,25 @@
     const rows = r.dist.map((v, i) => `<tr><td>${lab[i]}</td><td class="num">${p1(v)}</td><td><div style="height:10px;border-radius:3px;background:var(--accent);width:${Math.max(2, v * 100)}%;opacity:${i ? 1 : 0.45}"></div></td></tr>`).join('');
     return `<div class="tw"><table class="dtab"><thead><tr><th>Productos por pedido</th><th>% de pedidos</th><th style="width:50%"></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
+  const SORT_C = { lift: ['Lift', (a, b) => b.lift - a.lift || b.n - a.n], space: ['Espacio en pesos', (a, b) => (b.space || 0) - (a.space || 0)], n: ['Pedidos juntos', (a, b) => b.n - a.n] };
+  const SORT_A = { rest: ['Resto de la canasta', (a, b) => b.restTicket - a.restTicket || b.orders - a.orders], share: ['% con otro producto', (a, b) => b.withOtherShare - a.withOtherShare || b.orders - a.orders], orders: ['Pedidos', (a, b) => b.orders - a.orders] };
+  const sorter = (kind, ux) => { const T = kind === 'c' ? SORT_C : SORT_A, cur = (kind === 'c' ? ux.candBy : ux.anchorBy) || (kind === 'c' ? 'lift' : 'rest');
+    return `<div class="mini" data-cs-sort="${kind}" role="group" aria-label="Ordenar por" style="margin-left:auto"><span class="mu" style="padding:4px 6px;font-size:.78rem">Ordenar por</span>${Object.keys(T).map((k) => `<button type="button" data-v="${k}" aria-pressed="${cur === k}">${T[k][0]}</button>`).join('')}</div>`; };
+  const candOrder = (r, ux) => r.candidates.slice().sort(SORT_C[ux.candBy || 'lift'][1]);
   function cand(r, ux) {
-    const C = FP.config.products.crossSell, cs = r.candidates.slice(0, C.topPairs);
+    const C = FP.config.products.crossSell, cs = candOrder(r, ux).slice(0, C.topPairs);
     if (!cs.length) return `<p class="cap">Ningún par llega a ${C.minPairs} pedidos juntos con lift de ${C.minLift} o más.</p>`;
     const open = Boolean(ux.fold && ux.fold.c);
-    const body = cs.map((c, i) => `<tr class="${i >= 5 ? 'x' : ''}"><td class="nm">${esc(c.a)}</td><td class="nm">${esc(c.b)}</td><td class="num">${n0(c.n)}</td><td class="num">${Math.round(c.conf * 100)}</td><td class="num">${c.lift.toFixed(1)}</td><td class="num">${n0(c.aOnly)}</td><td class="num">${M0(c.bRevPerOrder)}</td></tr>`).join('');
-    return `<div class="tw${open ? ' open' : ''}"><table class="dtab"><thead><tr><th>Si compra…</th><th>…se le suma</th><th>Pedidos juntos</th><th>De cada 100, también lo llevan</th><th>Lift</th><th>Pedidos con A sin B</th><th>Venta de B por pedido</th></tr></thead><tbody>${body}</tbody></table>${cs.length > 5 ? `<div class="tf"><span class="mu">${open ? 'todos' : '5 pares'}</span><button type="button" class="lk" data-cs-fold="c">${open ? 'Ver solo 5' : 'Ver todos'}</button></div>` : ''}</div>
-      <p class="cap">Ordenados por lift entre los pares con al menos ${C.minPairs} pedidos juntos. «Pedidos con A sin B» es el espacio por probar, no un pronóstico de venta.</p>`;
+    const body = cs.map((c, i) => `<tr class="${i >= 5 ? 'x' : ''}"><td class="nm">${esc(c.a)}</td><td class="nm">${esc(c.b)}</td><td class="num">${n0(c.n)}</td><td class="num">${Math.round(c.conf * 100)}</td><td class="num">${c.lift.toFixed(1)}</td><td class="num">${n0(c.aOnly)}</td><td class="num">${M0(c.bRevPerOrder)}</td><td class="num">${M0(c.space)}</td></tr>`).join('');
+    return `<div class="tw${open ? ' open' : ''}"><table class="dtab"><thead><tr><th>Si compra…</th><th>…se le suma</th><th>Pedidos juntos</th><th>De cada 100, también lo llevan</th><th>Lift</th><th>Pedidos con A sin B</th><th>Venta de B por pedido</th><th>Espacio por probar</th></tr></thead><tbody>${body}</tbody></table>${cs.length > 5 ? `<div class="tf"><span class="mu">${open ? 'todos' : '5 pares'}</span><button type="button" class="lk" data-cs-fold="c">${open ? 'Ver solo 5' : 'Ver todos'}</button></div>` : ''}</div>
+      <p class="cap">Entre los pares con al menos ${C.minPairs} pedidos juntos. «Espacio por probar» = pedidos con A sin B × venta de B por pedido: lo que habría que probar, no un pronóstico de venta.</p>`;
   }
-  function anchors(r) {
-    const a = r.anchors.filter((x) => x.withOtherShare > 0).slice(0, 5);
+  function anchors(r, ux) {
+    const a = r.anchors.filter((x) => x.withOtherShare > 0).sort(SORT_A[ux.anchorBy || 'rest'][1]).slice(0, 5);
     if (!a.length) return '';
-    return `<div class="tw"><table class="dtab"><thead><tr><th>Producto ancla</th><th>Pedidos</th><th>% con otro producto</th><th>Lo que más lo acompaña</th></tr></thead><tbody>${a.map((x) => `<tr><td class="nm">${esc(x.item)}</td><td class="num">${n0(x.orders)}</td><td class="num">${p0(x.withOtherShare)}</td><td class="nm">${x.partner ? esc(x.partner) : '<span class="na">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+    const rows = a.map((x) => `<tr><td class="nm">${esc(x.item)}</td><td class="num">${n0(x.orders)}</td><td class="num">${M0(x.ticket)}</td><td class="num">${M0(x.restTicket)}</td><td class="num">${M0(x.ticketWithout)}</td><td class="num">${p0(x.withOtherShare)}</td><td class="nm">${x.partner ? esc(x.partner) : '<span class="na">—</span>'}</td></tr>`).join('');
+    return `<div class="tw"><table class="dtab"><thead><tr><th>Producto ancla</th><th>Pedidos</th><th>Ticket del pedido</th><th>Resto de la canasta</th><th>Pedido sin él</th><th>% con otro producto</th><th>Lo que más lo acompaña</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="cap">Ticket = venta promedio de los pedidos que lo llevan. «Resto de la canasta» no cuenta al propio producto, así su precio no infla el ancla. «Pedido sin él» es el ticket de un pedido que no lo lleva. Solo productos con al menos ${FP.config.products.crossSell.minAnchorOrders} pedidos. Es venta, no margen.</p>`;
   }
   function cats(r) {
     const C = FP.config.products.crossSell, ct = r.cats;
@@ -59,7 +66,7 @@
     return `<div class="tw"><table class="dtab"><thead><tr><th>Par</th>${chs.map((c) => `<th>${esc(CH(c))}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div><p class="cap">De cada 100 pedidos con el primer producto, cuántos llevan también el segundo, por canal. En azul, el canal donde más funciona si la diferencia es de ${C.channelRatio} veces o más. «—» = menos de ${C.minPairs} pedidos con el primer producto en ese canal.</p>`;
   }
   function actions(r) {
-    return `<div class="act">${r.candidates.slice(0, 3).map((c) => `<div><b>${esc(R().pairLabel(c))}</b><span>${n0(c.aOnly)} pedidos con ${esc(c.a)} sin ${esc(c.b)}</span><a class="lk" href="#promociones" data-nav="promociones">Preparar en Promociones →</a></div>`).join('')}</div>`;
+    return `<div class="act">${r.candidates.slice().sort(SORT_C.space[1]).slice(0, 3).map((c) => `<div><b>${esc(R().pairLabel(c))}</b><span>${n0(c.aOnly)} pedidos con ${esc(c.a)} sin ${esc(c.b)}${fin(c.space) ? ` · espacio ≈ ${M0(c.space)}` : ''}</span><a class="lk" href="#promociones" data-nav="promociones">Preparar en Promociones →</a></div>`).join('')}</div>`;
   }
 
   function render(state) {
@@ -102,11 +109,11 @@
         <div class="sum${long ? ' sum--l' : ''}" data-cs-summary="1">${rowsS.map((q) => `<div class="sum__r"><span>${esc(q[0])}</span><span>${long ? q[2] : q[1]}</span></div>`).join('')}<div class="sum__f">Descriptivo: muestra qué se compra junto, no por qué. Los umbrales son provisionales y se ajustan en la configuración.</div></div></section>
       <div class="more">
       ${sec('s-b', '¿Qué tan grandes son las canastas?', 'Cuántos productos distintos lleva cada pedido.', dist(r), res.lec.b)}
-      ${sec('s-c', 'Candidatos a cross-sell', `Pares de productos que se compran juntos con más frecuencia de la esperada. ${PX().tip('Lift = cuántas veces más probable es que un pedido con A lleve B, comparado con un pedido cualquiera. 1 es azar; 2 es el doble.')}`, cand(r, ux), res.lec.c)}
-      ${t.length ? `${anchors(r) ? sec('s-a', 'Productos ancla', 'Los productos que más arrastran a otros en el mismo pedido.', anchors(r), '') : ''}
+      ${sec('s-c', 'Candidatos a cross-sell', `Pares de productos que se compran juntos con más frecuencia de la esperada. ${PX().tip('Lift = cuántas veces más probable es que un pedido con A lleve B, comparado con un pedido cualquiera. 1 es azar; 2 es el doble.')}`, cand(r, ux), res.lec.c, sorter('c', ux))}
+      ${t.length ? `${anchors(r, ux) ? sec('s-a', 'Productos ancla', `Los productos alrededor de los cuales el pedido vale más. ${PX().tip('Ancla = producto cuyo pedido lleva más venta en el resto de la canasta (sin contarlo). Un producto caro que viaja solo no es ancla.')}`, anchors(r, ux), res.lec.a, sorter('a', ux)) : ''}
       ${r.cats ? sec('s-k', 'Entre categorías', 'Qué categorías se compran juntas. Sirve para pensar cross-sell que no sea del mismo tipo de producto.', cats(r), '') : ''}
       ${byChannel(r) ? sec('s-ch', 'Por canal', 'El mismo par puede funcionar en un canal y no en otro.', byChannel(r), res.lec.ch) : ''}
-      ${sec('s-q', '¿Qué hago con esto?', 'Los tres candidatos con más espacio por probar. Se preparan en Promociones y se miden en Medir y aprender.', actions(r), '')}` : ''}
+      ${sec('s-q', '¿Qué hago con esto?', 'Los tres candidatos con más espacio por probar en pesos. Se preparan en Promociones y se miden en Medir y aprender.', actions(r), '')}` : ''}
       <section class="blk foot"><span class="mu">Venta por producto con id_pedido · ${esc(fmtD(r.minDay))} a ${esc(fmtD(r.maxDay))} · ${n0(r.orders)} pedidos</span></section>
       <details class="meth" id="cs-meth"${ux.meth ? ' open' : ''}><summary>Método y definiciones</summary><div class="meth__b"><section class="dsec"><h4>Definiciones</h4><dl class="defs">
         <div><dt>Pedidos juntos</dt><dd>Pedidos que llevan los dos productos. Un producto repetido en el pedido cuenta una vez.</dd></div>
@@ -139,6 +146,7 @@
       const st = FP.app && FP.app.state, u = st && st.ux.cs; if (!u) return;
       const keep = () => { const y = root.scrollY; render(st); root.scrollTo(0, y); };
       const sm = e.target.closest('#cs-md button'); if (sm) { u.sum = sm.dataset.v; keep(); return; }
+      const so = e.target.closest('[data-cs-sort] button'); if (so) { const k = so.closest('[data-cs-sort]').dataset.csSort; if (k === 'c') u.candBy = so.dataset.v; else u.anchorBy = so.dataset.v; keep(); return; }
       const f = e.target.closest('[data-cs-fold]'); if (f) { u.fold = u.fold || {}; u.fold[f.dataset.csFold] = !u.fold[f.dataset.csFold]; keep(); }
     });
   }

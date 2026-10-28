@@ -83,32 +83,42 @@
     const keysOf = (lv) => (i) => { const s = new Set(); lines[i].forEach((j) => s.add(keyAt(lv, j))); return [...s]; };
     const mainKeys = keysOf(level), P = pass(rowsAll, mainKeys, opt);
     const cands = candidatesOf(P, opt);
-    /* venta de B por pedido (promedio de lo que vende B cuando aparece) */
-    const revOf = new Map(), cntOf = new Map();
+    /* venta por pedido de cada producto y ticket de la canasta: una pasada por pedido (venta de las líneas, no el total del libro) */
+    const revOf = new Map(), cntOf = new Map(), tkSum = new Map(), restSum = new Map();
     const need = new Set(); cands.slice(0, 200).forEach((c) => { need.add(c.a); need.add(c.b); });
-    let revMulti = 0;
+    let revMulti = 0, totalAll = 0;
     rowsAll.forEach((i) => {
-      const per = new Map(); lines[i].forEach((j) => { const k = keyAt(level, j); per.set(k, (per.get(k) || 0) + LN.rev[j]); });
-      if (per.size > 1) revMulti += L.rev[i];
-      per.forEach((v, k) => { if (need.has(k)) { revOf.set(k, (revOf.get(k) || 0) + v); cntOf.set(k, (cntOf.get(k) || 0) + 1); } });
+      const per = new Map(); let tot = 0;
+      lines[i].forEach((j) => { const k = keyAt(level, j); per.set(k, (per.get(k) || 0) + LN.rev[j]); tot += LN.rev[j]; });
+      totalAll += tot;
+      if (per.size > 1) revMulti += tot;
+      per.forEach((v, k) => {
+        tkSum.set(k, (tkSum.get(k) || 0) + tot); restSum.set(k, (restSum.get(k) || 0) + (tot - v));
+        if (need.has(k)) { revOf.set(k, (revOf.get(k) || 0) + v); cntOf.set(k, (cntOf.get(k) || 0) + 1); }
+      });
     });
     const top = cands.slice(0, 200);
     /* por canal: confianza del mismo par en cada canal (solo con todos los canales) */
     let byCh = null;
     if (chId < 0 && top.length) {
-      const watch = top.slice(0, opt.topPairs), pn = watch.map(() => L.channels.map(() => 0)), an = watch.map(() => L.channels.map(() => 0));
+      const watch = top, pn = watch.map(() => L.channels.map(() => 0)), an = watch.map(() => L.channels.map(() => 0));
       const idx = new Map(); watch.forEach((c, k) => { (idx.get(c.a) || idx.set(c.a, []).get(c.a)).push(k); });
       rowsAll.forEach((i) => { const ks = new Set(mainKeys(i)); ks.forEach((a) => { const ws = idx.get(a); if (!ws) return; ws.forEach((k) => { an[k][L.ch[i]]++; if (ks.has(watch[k].b)) pn[k][L.ch[i]]++; }); }); });
       byCh = watch.map((c, k) => L.channels.map((chn, ci) => ({ channel: chn, orders: an[k][ci], conf: an[k][ci] >= opt.minPairs ? pn[k][ci] / an[k][ci] : null })));
     }
-    const candidates = top.map((c, k) => ({ ...c, bRevPerOrder: cntOf.get(c.b) ? revOf.get(c.b) / cntOf.get(c.b) : null, byChannel: byCh && byCh[k] ? byCh[k] : null }));
-    /* productos ancla: los que más pedidos tienen y qué porcentaje lleva otro producto */
+    /* espacio por probar en pesos = pedidos con A sin B × venta de B por pedido (no es un pronóstico) */
+    const candidates = top.map((c, k) => { const br = cntOf.get(c.b) ? revOf.get(c.b) / cntOf.get(c.b) : null;
+      return { ...c, bRevPerOrder: br, space: br === null ? null : c.aOnly * br, byChannel: byCh && byCh[k] ? byCh[k] : null }; });
+    /* productos ancla: ticket del pedido que lo lleva, ticket del RESTO de la canasta (sin contar al ancla, así el precio propio no cuenta),
+       ticket de un pedido sin él, y qué porcentaje de sus pedidos lleva otro producto */
     const best = new Map();
     P.pairN.forEach((m, key) => { const [x, y] = key.split('\u0001'); [[x, y], [y, x]].forEach(([a, b]) => { const cur = best.get(a); if (!cur || m > cur.n) best.set(a, { b, n: m }); }); });
     const withOther = new Map();
     rowsAll.forEach((i) => { const ks = mainKeys(i); if (ks.length > 1) ks.forEach((k) => withOther.set(k, (withOther.get(k) || 0) + 1)); });
-    const anchors = [...P.itemN.entries()].filter(([, c]) => c >= opt.minAnchorOrders).map(([k, c]) => ({ item: k, orders: c, withOtherShare: (withOther.get(k) || 0) / c, partner: best.get(k) && best.get(k).n >= opt.minPairs ? best.get(k).b : null }))
-      .sort((a, b) => b.withOtherShare - a.withOtherShare || b.orders - a.orders).slice(0, 6);
+    const anchors = [...P.itemN.entries()].filter(([, c]) => c >= opt.minAnchorOrders).map(([k, c]) => ({ item: k, orders: c, withOtherShare: (withOther.get(k) || 0) / c,
+      partner: best.get(k) && best.get(k).n >= opt.minPairs ? best.get(k).b : null, ticket: tkSum.get(k) / c, restTicket: restSum.get(k) / c,
+      ticketWithout: P.N > c ? (totalAll - tkSum.get(k)) / (P.N - c) : null }))
+      .sort((a, b) => b.restTicket - a.restTicket || b.orders - a.orders).slice(0, 60);
     /* categorías: lift entre las categorías más vendidas (si el nivel ya es categoría, es el mismo cálculo) */
     let cats = null;
     {
@@ -130,7 +140,7 @@
     }
     return { status: 'ok', level, options: opt, totalOrders, withLines, coverage: totalOrders ? withLines / totalOrders : 0, orders: P.N,
       avgItems: P.N ? P.items / P.N : null, multiShare: P.N ? P.multi / P.N : null, multiRevShare: revAll > 0 ? revMulti / revAll : null,
-      dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, anchors, cats, prev,
+      avgTicket: P.N ? totalAll / P.N : null, dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, anchors, cats, prev,
       channelsAvailable: L.channels.slice(), minDay: CE.isoOf(minDay), maxDay: CE.isoOf(maxDay) };
   }
 

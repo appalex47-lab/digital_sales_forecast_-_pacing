@@ -39,9 +39,10 @@
       const t = cs[0];
       S.push(['Mejor candidato', `${B(pairLabel(t))}: de cada 100 pedidos con ${t.a}, ${Math.round(t.conf * 100)} llevan también ${t.b}.`,
         `${B(pairLabel(t))}: ${n0(t.n)} pedidos juntos. De cada 100 pedidos con ${t.a}, ${Math.round(t.conf * 100)} llevan también ${t.b} (lift ${t.lift.toFixed(1)}: es ${t.lift.toFixed(1)} veces más probable que en un pedido cualquiera). Hay ${n0(t.aOnly)} pedidos con ${t.a} sin ${t.b}.`]);
-      const a = (r.anchors || [])[0];
-      if (a && a.withOtherShare >= 0.2) S.push(['Productos ancla', `${B(a.item)} arrastra más: ${p0(a.withOtherShare)} de sus pedidos lleva otro producto.`,
-        `${B(a.item)} es el producto que más acompaña: ${p0(a.withOtherShare)} de sus ${n0(a.orders)} pedidos lleva otro producto${a.partner ? `, sobre todo ${a.partner}` : ''}.`]);
+      const a = (r.anchors || []).filter((x) => x.withOtherShare >= 0.2 && x.restTicket > 0 && (!fin(x.ticketWithout) || x.restTicket >= x.ticketWithout * (1 + C.anchorLiftPct))).sort((x, y) => y.restTicket - x.restTicket)[0];
+      if (a) S.push(['Productos ancla', `${B(a.item)} es el ancla de más valor: el resto de sus pedidos suma ${M(a.restTicket)}${fin(a.ticketWithout) ? ` contra ${M(a.ticketWithout)} de un pedido sin él` : ''}.`,
+        `${B(a.item)} es el ancla de más valor (${n0(a.orders)} pedidos): sin contarlo, el resto de la canasta suma ${M(a.restTicket)}${fin(a.ticketWithout) ? `, contra ${M(a.ticketWithout)} de un pedido sin él` : ''}. El pedido completo vale ${M(a.ticket)}${a.partner ? ` y lo acompaña sobre todo ${a.partner}` : ''}. Es venta, no margen.`]);
+      r._anchor = a || null;
       const ct = r.cats; let top = null;
       if (ct) ct.lift.forEach((row, i) => row.forEach((v, j) => { if (j > i && fin(v) && v >= C.catLift && (!top || v > top.v)) top = { i, j, v }; }));
       if (top && r.level !== 'category') S.push(['Entre categorías', `${B(`${ct.names[top.i]} y ${ct.names[top.j]}`)} se compran juntas ${top.v.toFixed(1)} veces más de lo esperado.`,
@@ -64,6 +65,7 @@
     const L = { b: '', c: '', a: '', k: '', ch: '' };
     if (!weak) L.b = `Los pedidos con 2 o más productos son ${B(p0(r.multiShare))}${fin(r.multiRevShare) ? ` y aportan ${B(p0(r.multiRevShare))} de la venta` : ''}.`;
     else L.b = `Solo ${B(p0(r.multiShare || 0))} de los pedidos lleva más de un producto.`;
+    if (r._anchor && fin(r._anchor.ticketWithout) && r._anchor.ticketWithout > 0) { const d = r._anchor.restTicket / r._anchor.ticketWithout - 1; if (Math.abs(d) >= C.anchorLiftPct) L.a = `En los pedidos con ${B(r._anchor.item)}, el resto de la canasta vale ${B(`${d >= 0 ? '+' : '−'}${Math.abs(Math.round(d * 100))} %`)} contra un pedido sin él.`; }
     if (many) L.c = `${B(pairLabel(cs[0]))}: de cada 100 pedidos con ${cs[0].a}, ${Math.round(cs[0].conf * 100)} llevan ${cs[0].b}.`;
     if (r._gap) L.ch = `${B(r._gap.c.b)} se suma a ${r._gap.c.a} ${p0(r._gap.g.hi.conf)} en ${CH(r._gap.g.hi.channel)} y ${p0(r._gap.g.lo.conf)} en ${CH(r._gap.g.lo.channel)}.`;
     return { verdict, chips, rows: S, lec: L, weak, many };
