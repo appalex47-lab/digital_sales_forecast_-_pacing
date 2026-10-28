@@ -643,6 +643,15 @@
           idsMinShare: 0.95                  // IDs válidos: se avisa por debajo de 95 %
         },
       },
+      /** Cross-sell (productos que se compran juntos). PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      crossSell: {
+        minPairs: 30, minLift: 2, minConf: 0.05,   // candidato: ≥ 30 pedidos juntos, lift ≥ 2 y ≥ 5 de cada 100 pedidos con A llevan también B
+        minAnchorOrders: 100,                      // producto ancla: al menos 100 pedidos
+        maxItemsPerOrder: 30, topPairs: 20, topCats: 8,
+        prevDays: 90, prevMinOrders: 500,          // comparar contra hace 90 días solo con ≥ 500 pedidos de ese momento
+        multiMin: 0.15, coverageMin: 0.95,         // se avisa si menos de 15 % de pedidos lleva 2+ productos o menos de 95 % trae detalle
+        channelRatio: 1.5, catLift: 2              // canal: se destaca si un canal tiene ≥ 1.5 veces la confianza de otro; categorías: lift ≥ 2
+      },
       /** Métricas por archivo (lista fija; la Fase 8.5 de métricas configurables está en pausa). */
       metrics: ['revenue', 'orders', 'units'],
       funnelMetrics: ['views', 'addToCart', 'beginCheckout', 'purchasesGa4'],

@@ -59,7 +59,15 @@
     if (!analysisCache.has(k)) analysisCache.set(k, FP.customerEngine.analyze(l, options));
     return analysisCache.get(k);
   }
+  /** Productos que se compran juntos (con caché por opciones y catálogo; se invalida al cambiar el libro). */
+  async function basket(options) {
+    const l = await load(); if (!l) return { status: 'no_ledger' };
+    const PS = FP.productStore, bySku = PS && PS.catalog ? PS.catalog.bySku : new Map();
+    const k = 'b:' + JSON.stringify(options || {}) + ':' + bySku.size;
+    if (!analysisCache.has(k)) analysisCache.set(k, FP.basketEngine.analyze(l, bySku, { ...FP.config.products.crossSell, ...(options || {}) }));
+    return analysisCache.get(k);
+  }
   function reset() { gen++; loading = null; cache = null; loaded = false; analysisCache.clear(); }
 
-  FP.customerStore = { commit, removeBatch, clear, info, analyze, load, reset };
+  FP.customerStore = { commit, removeBatch, clear, info, analyze, basket, load, reset };
 })(typeof window !== 'undefined' ? window : globalThis);

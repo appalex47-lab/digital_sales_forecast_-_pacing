@@ -10,7 +10,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SYN = { brecha: ['gap'], gap: ['brecha'], meta: ['plan'], plan: ['meta'], corte: ['cutoff'], cutoff: ['corte'], 'ticket promedio': ['aov'], aov: ['ticket promedio'],
     conversion: ['cr'], cr: ['conversion'], pronostico: ['forecast'], forecast: ['pronostico'], descargar: ['exportar', 'paquete'], exportar: ['descargar', 'paquete'],
-    subir: ['cargar', 'carga'], cargar: ['carga', 'subir', 'datos'], datos: ['carga'], clientes: ['ltv', 'cohorte'], ltv: ['clientes'], calidad: ['validacion'], ayuda: ['glosario'],
+    subir: ['cargar', 'carga'], cargar: ['carga', 'subir', 'datos'], datos: ['carga'], clientes: ['ltv', 'cohorte'], crosssell: ['cross', 'canasta', 'juntos', 'complemento'], cross: ['crosssell'], canasta: ['crosssell'], ltv: ['clientes'], calidad: ['validacion'], ayuda: ['glosario'],
     cumplimiento: ['pacing', 'compliance'], pacing: ['cumplimiento'], recuperar: ['recovery', 'reforecast'], tendencia: ['evolucion', 'patrones'], estacionalidad: ['temporada'] };
   const expand = (tok) => [tok].concat(SYN[tok] || []);
 

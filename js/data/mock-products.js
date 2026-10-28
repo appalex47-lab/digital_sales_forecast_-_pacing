@@ -140,8 +140,13 @@
       const d = FP.calendar.addDays(from, dayOffset);
       const ch = r() < 0.85 ? mainCh : pickCh(), b = br[Math.floor(r() * br.length)], dom = ch === 'ecommerce' || ch === 'app' ? r() < 0.6 : r() < 0.3;
       const id = `P${String(++order).padStart(7, '0')}`, lines = chronic ? 1 + Math.floor(r() * 2) : 1 + Math.floor(r() * 3);
+      let prevIdx = -1;
       for (let l = 0; l < lines; l++) {
-        const c = cat[chronic ? 150 % skus + Math.floor(r() * 12) : Math.floor(r() * skus)] || cat[0];
+        let idx = chronic ? 150 % skus + Math.floor(r() * 12) : Math.floor(r() * skus);
+        /* complemento: tras un producto «ancla» (cada 4.º del catálogo), 7 de cada 10 pedidos suman el siguiente; no consume el generador */
+        if (l > 0 && prevIdx >= 0 && prevIdx % 4 === 0 && order % 10 < 7) idx = prevIdx + 1;
+        prevIdx = idx;
+        const c = cat[idx] || cat[0];
         const units = 1 + Math.floor(r() * 3);
         out.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${b.region},${b.state},${b.city},${b.id},${b.name},${dom ? 'domicilio' : 'recoleccion'},${Math.round(units * c.price * 100) / 100},1,${units},${id},C${String(cust).padStart(6, '0')}`);
       }

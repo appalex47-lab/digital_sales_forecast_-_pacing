@@ -13,8 +13,8 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d)[:380] if d and not ok else ''))
     if not ok: fails.append(n)
-Qs = {'Datos': '¿Con qué datos cuento?', 'Planear': '¿Qué quiero alcanzar?', 'Monitorear': '¿Cómo voy?', 'Diagnosticar': '¿Por qué?', 'Recuperar': '¿Qué hago?', 'Medir y aprender': '¿Funcionó?'}
-VIEWS = {'datosgrp': ['carga', 'calidad', 'datos'], 'planear': ['resumen', 'plan', 'estacionalidad', 'configuracion', 'proyeccion'], 'monitorear': ['pacing', 'cambios'], 'diagnosticar': ['diagnostico', 'prodevol', 'segmentos', 'clientes'], 'recuperar': ['reforecast', 'recovery', 'promociones'], 'medir': ['medir', 'narrativa', 'presentacion']}
+Qs = {'Datos': '¿Con qué datos cuento?', 'Planear': '¿Qué quiero alcanzar?', 'Monitorear': '¿Cómo voy?', 'Diagnosticar': '¿Por qué?', 'Recuperar': '¿Qué hago?', 'Crecer': '¿Qué puedo mover?', 'Medir y aprender': '¿Funcionó?'}
+VIEWS = {'datosgrp': ['carga', 'calidad', 'datos'], 'planear': ['resumen', 'plan', 'estacionalidad', 'configuracion', 'proyeccion'], 'monitorear': ['pacing', 'cambios'], 'diagnosticar': ['diagnostico', 'prodevol', 'segmentos', 'clientes'], 'recuperar': ['reforecast', 'recovery'], 'crecer': ['crosssell', 'promociones'], 'medir': ['medir', 'narrativa', 'presentacion']}
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); errs = []

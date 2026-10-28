@@ -14,7 +14,7 @@ def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
 VIEWS = ['inicio','carga','calidad','datos','resumen','estacionalidad','plan','configuracion','pacing','diagnostico','prodevol','reforecast','recovery','medir','narrativa','presentacion','segmentos','ayuda']
-GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','prodevol':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','medir':'medir','narrativa':'medir','presentacion':'medir'}
+GROUP = {'carga':'datosgrp','calidad':'datosgrp','datos':'datosgrp','resumen':'planear','estacionalidad':'planear','plan':'planear','configuracion':'planear','pacing':'monitorear','diagnostico':'diagnosticar','prodevol':'diagnosticar','segmentos':'diagnosticar','reforecast':'recuperar','recovery':'recuperar','promociones':'crecer','crosssell':'crecer','medir':'medir','narrativa':'medir','presentacion':'medir'}
 async def openref(q):
     """Abre el panel único de fecha/año del encabezado si está cerrado."""
     if not await q.is_visible('#topbar-date'):
@@ -58,10 +58,10 @@ async def main():
         chk('R-4 al cambiar de vista vuelve a estar cerrada', o3 is False, o3)
 
         # ---------- R-5 · menú por secciones: una sola abierta; elegir otra abre su primera página ----------
-        FIRST = {'datosgrp': 'carga', 'planear': 'resumen', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'medir': 'medir'}
+        FIRST = {'datosgrp': 'carga', 'planear': 'resumen', 'monitorear': 'pacing', 'diagnosticar': 'diagnostico', 'recuperar': 'reforecast', 'crecer': 'crosssell', 'medir': 'medir'}
         await q.goto(u + '#inicio'); await q.wait_for_timeout(400)
         n = await q.evaluate(NAV)
-        chk('R-5 6 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Datos', 'Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
+        chk('R-5 7 secciones (nombre actual + su pregunta), cada una un botón con aria-expanded y aria-controls válido', [x['name'].split('\n')[0] for x in n] == ['Datos', 'Planear', 'Monitorear', 'Diagnosticar', 'Recuperar', 'Crecer', 'Medir y aprender'] and all('¿' in x['name'] for x in n) and all(x['ctl'] and x['exp'] in ('true', 'false') for x in n), n)
         chk('R-5 en Inicio todas las secciones están cerradas y su contenido no ocupa espacio', all(x['exp'] == 'false' and x['hidden'] and not x['vis'] for x in n), n)
         ini = await q.evaluate("[...document.querySelectorAll('.app-nav > .snav__group:not(.snav__group--foldable) .snav__item')].map(a=>[a.innerText.trim(),a.getBoundingClientRect().height>0])")
         chk('R-5 «Inicio» queda suelto y visible', ini and ini[0][0] == 'Inicio' and ini[0][1], ini)
@@ -69,7 +69,7 @@ async def main():
         n = await q.evaluate(NAV)
         chk('R-5 en una página solo está abierta la sección de esa página (Monitorear)', [x['g'] for x in n if x['exp'] == 'true'] == ['monitorear'], n)
         bad = []
-        for g in ('diagnosticar', 'datosgrp', 'planear', 'recuperar', 'medir', 'monitorear'):
+        for g in ('diagnosticar', 'datosgrp', 'planear', 'recuperar', 'crecer', 'medir', 'monitorear'):
             await q.click(f'.snav__toggle[data-value="{g}"]'); await q.wait_for_timeout(450)
             hsh = await q.evaluate("location.hash.replace('#','')"); n = await q.evaluate(NAV)
             opened = [x['g'] for x in n if x['exp'] == 'true']; vis = [x['g'] for x in n if x['vis']]
@@ -101,7 +101,7 @@ async def main():
             if v != FIRST[g]: await q.click(f'a[data-nav="{v}"]'); await q.wait_for_timeout(250)
             ok = await q.evaluate(f"!document.getElementById('view-{v}').hidden && document.querySelectorAll('.app-nav [aria-current=\"page\"]').length === 1")
             if not ok: miss.append(v)
-        chk('R-5 las 16 páginas de las secciones se alcanzan desde el menú (elegir sección → clic) con un solo aria-current', not miss and len(GROUP) == 16, (miss, len(GROUP)))
+        chk('R-5 las 18 páginas de las secciones se alcanzan desde el menú (elegir sección → clic) con un solo aria-current', not miss and len(GROUP) == 18, (miss, len(GROUP)))
         m = await b.new_page(viewport={'width': 390, 'height': 800}); await prepare(m, u); await m.goto(u + '#pacing'); await m.wait_for_timeout(400)
         await m.click('[data-action="nav-toggle"]'); await m.wait_for_timeout(300)
         await m.click('.snav__toggle[data-value="planear"]'); await m.wait_for_timeout(500)
