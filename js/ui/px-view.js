@@ -396,7 +396,9 @@
     return `<section class="blk foot"><span class="mu">${(m.r.mappedMetrics && m.r.mappedMetrics.funnel || []).length ? 'Venta y funnel por producto' : 'Venta por producto'}${meta.dateMin && meta.dateMax ? ` · ${f(meta.dateMin)} a ${f(meta.dateMax)}` : ''}${fin(cov) ? ` · cobertura de tracking ${Math.round(cov * 100)} %` : ''}</span><span class="foot__a"><button class="lk" data-method="dt">Trazabilidad</button><button class="lk" data-action="pa-export">Exportar</button></span></section>`;
   }
 
+  let LASTOPTS = {};
   function render(state, opts) {
+    LASTOPTS = opts || {};
     const el = $('pe-body'); if (!el) return;
     const ux = (state.ux.px = state.ux.px || { mode: 'full', quien: false, geo: false, meth: false });
     ux.focus = state.peFocusKey;
@@ -503,6 +505,7 @@
         const j = e.target.closest('[data-j]'); if (j) { const t = $('s-' + j.dataset.j); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
         const f2 = e.target.closest('.px-fold2'); if (f2) { const w = f2.closest('.px-tw'), o = w.classList.toggle('px-open'); f2.textContent = o ? 'Ver solo 6' : `Ver los ${f2.dataset.n}`; w.querySelector('.px-tf .px-mu').textContent = o ? 'todos' : `6 de ${f2.dataset.n}`; state.ux.px.dt = o; return; }
         const mt = e.target.closest('[data-method]'); if (mt) { FP.app.actions['pe-drawer-close'](); openMethod(state, mt.dataset.method); return; }
+        const sm = e.target.closest('[data-sum]'); if (sm) { state.ux.px.sum = sm.dataset.sum; FP.pxView.render(state, LASTOPTS); return; }
         const kk = e.target.closest('[data-pick]'); if (kk) { FP.app.actions['pe-pick']({ dataset: { entity: kk.dataset.pick } }); return; }
       });
     }
@@ -513,5 +516,5 @@
     if (!root.__pxEsc) { root.__pxEsc = true; document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('pe-drawer') && FP.app) FP.app.actions['pe-drawer-close'](); }); }
   }
 
-  FP.pxView = { render, model, totalRow, raw, e1, e2, getMK: () => MK, P, tip, M, m2, ms2, pcs, sgn, ym, ymc, MES, fin, nameOf, fcOf, confOf, confTitle, lw, cap1, num0, refName, refShort, monthOf, unitOf, esc };
+  FP.pxView = { render, model, funnelOf, STEP, relabel: () => LASTOPTS, totalRow, raw, e1, e2, getMK: () => MK, P, tip, M, m2, ms2, pcs, sgn, ym, ymc, MES, fin, nameOf, fcOf, confOf, confTitle, lw, cap1, num0, refName, refShort, monthOf, unitOf, esc };
 })(typeof window !== 'undefined' ? window : globalThis);

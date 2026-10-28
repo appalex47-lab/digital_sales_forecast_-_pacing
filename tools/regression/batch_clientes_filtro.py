@@ -66,6 +66,7 @@ async def main():
         n_co = await q.evaluate(newsum)
         await q.select_option('#an-drill select[data-action="an-cu-scope"]', 'selection'); await q.wait_for_function("FP.app.state.an.drill && FP.app.state.an.drill.data && FP.app.state.an.drill.data.customers && FP.app.state.an.drill.data.customers.scope==='selection' && !FP.app.state.an.drill.pending", timeout=60000)
         await q.evaluate("document.querySelectorAll('#an-drill details.drill-fold').forEach(d=>d.open=true)")
+        await q.wait_for_timeout(400)
         n_se = await q.evaluate(newsum)
         chk(f'F5b «nuevo en esta selección» cuenta distinto que «nuevo en la empresa» ({n_co} → {n_se})', n_co > 0 and n_se > n_co, [n_co, n_se])
         # libro anterior (sin líneas): se avisa qué recargar y no se inventa
