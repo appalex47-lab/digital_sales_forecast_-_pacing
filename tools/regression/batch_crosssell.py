@@ -52,6 +52,16 @@ async def main():
         long_ = await q.evaluate("document.querySelector('[data-cs-summary]').innerText")
         chk('C9 la versión larga da más texto que la corta', len(long_) > len(short) and 'sum--l' in await q.evaluate("document.querySelector('[data-cs-summary]').className"))
         await q.click('#cs-md [data-v=c]'); await q.wait_for_timeout(200)
+        sp = [float(x.replace('$', '').replace(',', '')) for x in await q.evaluate("[...document.querySelectorAll('#s-c tbody tr')].map(r=>r.lastElementChild.innerText)")]
+        await q.click('[data-cs-sort=c] [data-v=space]'); await q.wait_for_timeout(300)
+        sp2 = [float(x.replace('$', '').replace(',', '')) for x in await q.evaluate("[...document.querySelectorAll('#s-c tbody tr')].map(r=>r.lastElementChild.innerText)")]
+        chk('C9b ordenar candidatos por «Espacio en pesos» deja primero el mayor espacio', sp2 == sorted(sp2, reverse=True) and len(sp2) >= 1 and await q.evaluate("document.querySelector('[data-cs-sort=c] [aria-pressed=true]').dataset.v") == 'space', sp2)
+        rest = [float(x.replace('$', '').replace(',', '')) for x in await q.evaluate("[...document.querySelectorAll('#s-a tbody tr')].map(r=>r.children[3].innerText)")]
+        hd = await q.evaluate("document.querySelector('#s-a thead').innerText")
+        chk('C9c los productos ancla se ordenan por el ticket del resto de la canasta (mayor primero) y muestran ticket, resto y pedido sin él', rest == sorted(rest, reverse=True) and len(rest) >= 1 and all(h in hd for h in ('Ticket del pedido', 'Resto de la canasta', 'Pedido sin él')), rest)
+        await q.click('[data-cs-sort=a] [data-v=orders]'); await q.wait_for_timeout(300)
+        od = [int(x.replace(',', '')) for x in await q.evaluate("[...document.querySelectorAll('#s-a tbody tr')].map(r=>r.children[1].innerText)")]
+        chk('C9d ordenar anclas por pedidos deja primero el que más pedidos tiene', od == sorted(od, reverse=True), od)
         if await q.locator('#s-c [data-cs-fold=c]').count():
             await q.click('#s-c [data-cs-fold=c]'); await q.wait_for_timeout(200)
             chk('C10 «Ver todos» muestra todos los pares', await q.locator('#s-c tr.px-x').first.is_visible())

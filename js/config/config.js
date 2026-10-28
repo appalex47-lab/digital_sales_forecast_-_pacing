@@ -647,6 +647,7 @@
       crossSell: {
         minPairs: 30, minLift: 2, minConf: 0.05,   // candidato: ≥ 30 pedidos juntos, lift ≥ 2 y ≥ 5 de cada 100 pedidos con A llevan también B
         minAnchorOrders: 100,                      // producto ancla: al menos 100 pedidos
+        anchorLiftPct: 0.10,                       // ancla: el resto de su canasta vale ≥ 10 % más que un pedido sin él
         maxItemsPerOrder: 30, topPairs: 20, topCats: 8,
         prevDays: 90, prevMinOrders: 500,          // comparar contra hace 90 días solo con ≥ 500 pedidos de ese momento
         multiMin: 0.15, coverageMin: 0.95,         // se avisa si menos de 15 % de pedidos lleva 2+ productos o menos de 95 % trae detalle
