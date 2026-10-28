@@ -628,7 +628,20 @@
        */
       customers: {
         reactivationDays: 180, warmupDays: 180, windows: [30, 60, 90, 180, 365], minCohort: 30,
-        placeholders: ['0', '00', '000', 'null', 'none', 'n/a', 'na', 'nan', 'undefined', 'sin cliente', 'sin_cliente', 'anonimo', 'anónimo', 'invitado', 'guest', 'desconocido', '-', '--']
+        placeholders: ['0', '00', '000', 'null', 'none', 'n/a', 'na', 'nan', 'undefined', 'sin cliente', 'sin_cliente', 'anonimo', 'anónimo', 'invitado', 'guest', 'desconocido', '-', '--'],
+        /** Resumen general de Clientes y LTV: cuándo se nombra cada cosa. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+        summary: {
+          activeDays: 90, riskDays: 180,     // activo: último pedido ≤ 90 días; en riesgo: 91 a 180; perdido: más de 180
+          activeChangePp: 5,                 // la base activa se menciona si cambia ≥ 5 pp contra hace 90 días
+          mixMinPct: 0.10, mixMinN: 10,      // mezcla del mes: un tipo cambia ≥ 10 % y ≥ 10 clientes (meses cerrados)
+          revShiftPp: 5,                     // venta por tipo: un tipo cambia ≥ 5 pp su parte de la venta
+          retDiffPp: 3, retMinCohort: 30,    // retención a 90 días: ≥ 3 pp entre cohortes de ≥ 30 clientes
+          ltvChangePct: 0.10,                // LTV a 180 días: cambia ≥ 10 % entre cohortes maduras
+          channelQualityPct: 0.15, channelMin: 30,  // canal: mejor vs peor LTV ≥ 15 % (canales de ≥ 30 clientes)
+          multiShare: 0.10, migrateShare: 0.20, migrateMinRow: 30,  // entre canales: ≥ 10 % multicanal o ≥ 20 % de una fila de ≥ 30 migrado
+          topShare: 0.50, topChangePp: 3,    // concentración: el 10 % que más compra aporta ≥ 50 %, o cambia ≥ 3 pp en 6 meses
+          idsMinShare: 0.95                  // IDs válidos: se avisa por debajo de 95 %
+        },
       },
       /** Métricas por archivo (lista fija; la Fase 8.5 de métricas configurables está en pausa). */
       metrics: ['revenue', 'orders', 'units'],

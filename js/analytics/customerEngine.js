@@ -70,6 +70,7 @@
     let b = L.batches.findIndex((x) => x.id === batch.id);
     if (b < 0) { L.batches.push({ id: batch.id, fileName: batch.fileName || '', lines: Boolean(draft.hasLines) }); b = L.batches.length - 1; }
     else L.batches[b].lines = Boolean(draft.hasLines);
+    if (draft.stats) { L.batches[b].ln = draft.stats.lines; L.batches[b].nc = draft.stats.withoutCustomer + draft.stats.withoutOrder; }   // para «IDs válidos»: líneas del archivo y las que no entraron
     const rep = { added: 0, replaced: 0, conflicts: 0, customersAdded: 0 };
     const LN = ensureLines(L), replacedRows = new Set(), newLines = [];
     draft.orders.forEach((o, k) => {
@@ -171,6 +172,80 @@
   }
 
   const addMonthsKey = (key, k) => new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1 + k, 1)).toISOString().slice(0, 7);
+
+
+  /** Estado de la base de clientes (activos / en riesgo / perdidos), concentración de la venta y cruce de canales.
+   *  Todo descriptivo y con el libro tal como está cargado. `chId` ≥ 0 limita a los pedidos de ese canal (el cruce de canales no aplica). */
+  function extrasOf(L, P, chId) {
+    const nc = L.customers.length, n = L.key.length, maxDay = P.maxDay, span = maxDay - P.minDay + 1;
+    const lastD = new Int32Array(nc).fill(-1), lastBefore = new Int32Array(nc).fill(-1), firstD = new Int32Array(nc).fill(-1), rev = new Float64Array(nc), revBefore = new Float64Array(nc);
+    const refA = maxDay - 90, refC = maxDay - 182;
+    const chCnt = new Array(nc), firstCh = new Int8Array(nc).fill(-1), lastCh = new Int8Array(nc).fill(-1);
+    for (let p = 0; p < n; p++) {
+      const i = P.order[p], c = L.cust[i];
+      if (chId >= 0 && L.ch[i] !== chId) continue;
+      const d = L.day[i];
+      if (firstD[c] < 0) { firstD[c] = d; firstCh[c] = L.ch[i]; }
+      lastD[c] = d; lastCh[c] = L.ch[i]; rev[c] += L.rev[i];
+      if (d <= refA) lastBefore[c] = d;
+      if (d <= refC) revBefore[c] += L.rev[i];
+      (chCnt[c] || (chCnt[c] = new Map())).set(L.ch[i], (chCnt[c].get(L.ch[i]) || 0) + 1);
+    }
+    /* Recencia: activos ≤ 90 días, en riesgo 91–180, perdidos > 180 (sin 180 días de historia no se separan los perdidos). */
+    let a = 0, r = 0, l = 0, pa = 0, pt = 0, total = 0;
+    for (let c = 0; c < nc; c++) {
+      if (lastD[c] < 0) continue;
+      total++;
+      const age = maxDay - lastD[c];
+      if (age <= 90) a++; else if (age <= 180) r++; else l++;
+      if (firstD[c] <= refA) { pt++; if (refA - lastBefore[c] <= 90) pa++; }
+    }
+    const lostOk = span > 180, prevOk = refA - P.minDay >= 90 && pt >= 30;
+    const recency = { active: a, risk: r, lost: lostOk ? l : null, total, lostOk, prevActiveShare: prevOk ? pa / pt : null, sufficient: lostOk };
+    /* Concentración: venta acumulada por cliente de mayor a menor. */
+    const vals = []; for (let c = 0; c < nc; c++) if (lastD[c] >= 0 && rev[c] > 0) vals.push(rev[c]);
+    vals.sort((x, y) => y - x);
+    const sumAll = vals.reduce((s, v) => s + v, 0), pre = new Float64Array(vals.length + 1);
+    vals.forEach((v, k) => { pre[k + 1] = pre[k] + v; });
+    const share = (pp) => (sumAll > 0 && vals.length ? pre[Math.min(vals.length, Math.max(1, Math.ceil(pp * vals.length)))] / sumAll : null);
+    const vb = []; for (let c = 0; c < nc; c++) if (firstD[c] >= 0 && firstD[c] <= refC && revBefore[c] > 0) vb.push(revBefore[c]);
+    vb.sort((x, y) => y - x);
+    const sb = vb.reduce((s, v) => s + v, 0);
+    const top10Prev = vb.length >= 30 && refC - P.minDay >= 90 && sb > 0 ? vb.slice(0, Math.max(1, Math.ceil(0.1 * vb.length))).reduce((s, v) => s + v, 0) / sb : null;
+    const concentration = vals.length >= 10 ? { customers: vals.length, tops: [0.01, 0.05, 0.1, 0.2].map((pp) => ({ p: pp, share: share(pp) })), top10: share(0.1), top10Prev,
+      curve: Array.from({ length: 51 }, (_, k) => (k === 0 ? 0 : share(k / 50))) } : null;
+    /* Cruce de canales (solo con todos los canales). */
+    let channels = null;
+    if (chId < 0) {
+      const by = new Map(), combos = new Map(); let multi = 0, multiRev = 0, single = 0, singleRev = 0;
+      for (let c = 0; c < nc; c++) {
+        if (!chCnt[c]) continue;
+        const k = chCnt[c].size, ords = [...chCnt[c].values()].reduce((s, v) => s + v, 0);
+        const t = by.get(k) || by.set(k, { n: k, customers: 0, orders: 0, revenue: 0 }).get(k);
+        t.customers++; t.orders += ords; t.revenue += rev[c];
+        if (k > 1) { multi++; multiRev += rev[c]; const key = [...chCnt[c].keys()].sort((x, y) => x - y).map((x) => L.channels[x]).join('|'); combos.set(key, (combos.get(key) || 0) + 1); } else { single++; singleRev += rev[c]; }
+      }
+      const byCount = [...by.values()].sort((x, y) => x.n - y.n).map((t) => ({ n: t.n, customers: t.customers, ordersPerCustomer: t.orders / t.customers, revenuePerCustomer: t.revenue / t.customers }));
+      const totalC = byCount.reduce((s, t) => s + t.customers, 0);
+      const comboList = [...combos.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4).map(([k, v]) => ({ channels: k.split('|'), customers: v }));
+      /* Migración: canal del primer pedido × canal del último pedido, solo clientes que compraron en los últimos 180 días. */
+      let matrix = null;
+      if (lostOk) {
+        const used = new Set(); const cells = new Map(); let act = 0;
+        for (let c = 0; c < nc; c++) {
+          if (lastD[c] < 0 || maxDay - lastD[c] > 180) continue;
+          act++; used.add(firstCh[c]); used.add(lastCh[c]);
+          const k = firstCh[c] + '>' + lastCh[c]; cells.set(k, (cells.get(k) || 0) + 1);
+        }
+        const rowN = (id) => { let t = 0; cells.forEach((v, k) => { if (+k.split('>')[0] === id) t += v; }); return t; };
+        const ids = [...used].sort((x, y) => rowN(y) - rowN(x) || x - y);
+        matrix = { channels: ids.map((x) => L.channels[x]), cells: ids.map((fi) => ids.map((li) => cells.get(fi + '>' + li) || 0)), active: act };
+      }
+      channels = { byCount, totalCustomers: totalC, combos: comboList, multiShare: totalC ? multi / totalC : null, multiCustomers: multi, multiRevenuePerCustomer: multi ? multiRev / multi : null, singleRevenuePerCustomer: single ? singleRev / single : null,
+        multiTimes: multi && single && singleRev > 0 ? (multiRev / multi) / (singleRev / single) : null, matrix };
+    }
+    return { recency, concentration, channels, spanDays: span };
+  }
 
   function analyze(ledger, options) {
     const L = ledger;
@@ -290,7 +365,7 @@
     });
     const pooled = o.windows.map((W, k) => ({ days: W, ...rate(poolW[k]) }));
     const channels = [...byChannel.values()].sort((a, b) => b.size - a.size).map((c) => ({ channel: c.channel, size: c.size, windows: o.windows.map((W, k) => ({ days: W, ...rate(c.byWindow[k]) })) }));
-    return { status: 'ok', options: o, summary, monthly, cohorts: cohortList, pooled, byFirstChannel: channels, channelsAvailable: L.channels.slice(), maxDay: isoOf(P.maxDay), minDay: isoOf(P.minDay) };
+    return { status: 'ok', options: o, summary, monthly, cohorts: cohortList, pooled, byFirstChannel: channels, extras: extrasOf(L, P, chId), channelsAvailable: L.channels.slice(), maxDay: isoOf(P.maxDay), minDay: isoOf(P.minDay) };
   }
 
   FP.customerEngine = { DEFAULTS, SEGMENTS, dayNum, isoOf, monthOf, emptyLedger, draftLedger, mergeInto, removeBatch, prepare, analyze };
