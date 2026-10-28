@@ -20,17 +20,25 @@
    * El orden de canal se precalcula (antes se pedía el canal en cada comparación del ordenamiento).
    */
   let lastFilter = { key: null, list: null };
+  let channelOrderMap = null;
+  function getChannelOrderMap() {
+    if (!channelOrderMap) {
+      channelOrderMap = new Map(C().channels.map((c) => [c.id, FP.dataModel.getChannel(c.id).order]));
+    }
+    return channelOrderMap;
+  }
+
   function filtered(state) {
     const f = state.dataFilters;
     const key = `${FP.dataStore.signature(state.store, f.dataType)}|${f.dataType}|${f.channel}|${f.status}|${f.from}|${f.to}`;
     if (lastFilter.key === key) return lastFilter.list;
-    const order = new Map(C().channels.map((c) => [c.id, FP.dataModel.getChannel(c.id).order]));
+    const order = getChannelOrderMap();
     const list = FP.dataStore.records(state.store, f.dataType).filter((r) =>
       (!f.channel || r.channel === f.channel) &&
       (f.status === 'all' || r.status === f.status) &&
       (!f.from || r.date >= f.from) &&
       (!f.to || r.date <= f.to)
-    ).sort((a, b) => (a.date === b.date ? order.get(a.channel) - order.get(b.channel) : a.date < b.date ? -1 : 1));
+    ).sort((a, b) => (a.date === b.date ? (order.get(a.channel) || 0) - (order.get(b.channel) || 0) : a.date < b.date ? -1 : 1));
     lastFilter = { key, list };
     return list;
   }
