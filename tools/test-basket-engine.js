@@ -32,6 +32,11 @@ assert.ok(Math.abs(anA.ticket - 20) < 1e-9 && Math.abs(anA.restTicket - 8) < 1e-
 assert.strictEqual(ra.anchors[0].item, 'Prod B', 'el ancla de más valor es la que más suma alrededor (B: 500/45 ≈ 11.1; A: 8; C: 0)');
 assert.ok(Math.abs(ra.anchors[0].restTicket - 500 / 45) < 1e-9);
 assert.ok(Math.abs(ra.avgTicket - 3050 / 255) < 1e-9);
+/* sensibilidad: con umbrales amplios el par entra pero se marca «señal más débil» si no cumple los de referencia */
+const rw = BE.analyze(L, cat, { minPairs: 5, minLift: 1, minConf: 0.01, strict: { minPairs: 50, minLift: 2, minConf: 0.05 } });
+assert.strictEqual(rw.candidates[0].weak, true); assert.strictEqual(rw.counts.weak, 1); assert.strictEqual(rw.counts.strong, 0);
+assert.strictEqual(BE.analyze(L, cat, {}).counts.weak, 0); assert.strictEqual(BE.analyze(L, cat, {}).counts.strong, 1);
+assert.strictEqual(BE.analyze(L, cat, { minPairs: 100 }).candidates.length, 0, 'con 100 pedidos juntos como mínimo no hay pares');
 /* canal elegido: no hay desglose por canal y el soporte baja */
 const re = BE.analyze(L, cat, { channel: 'ecommerce' });
 assert.strictEqual(re.candidates.length, 0, 'con ecommerce el par tiene 30 pedidos juntos pero lift 1');

@@ -2356,12 +2356,15 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .px .px-cu-topbar-note { font-size: .78rem; color: var(--muted); }
 @media (max-width: 700px) { .px .px-pareto { grid-template-columns: 1fr; } .px .px-act3 { grid-template-columns: 1fr; } .px .px-intro { padding-inline: 16px; } }
 .px .px-weak { opacity: .8; }
-.px .px-cu .px-tw tbody tr { cursor: default; }
-.px .px-cu .px-tw tbody tr:hover { background: transparent; }
+.px .px-cu .px-tw tbody tr, .px.px-cu .px-tw tbody tr { cursor: default; }
+.px .px-cu .px-tw tbody tr:hover, .px.px-cu .px-tw tbody tr:hover { background: transparent; }
 .px .px-act { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
 .px .px-act > div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
 .px .px-act span { font-size: .78rem; color: var(--muted); }
 .px .px-act .px-lk { text-align: left; text-decoration: none; }
-.px .px-cs .px-tw tbody tr { cursor: default; }
-.px .px-cs .px-tw tbody tr:hover { background: transparent; }
-.px .px-cs .px-tw td.px-nm { text-align: left; }
+.px.px-cs .px-tw tbody tr { cursor: default; }
+.px.px-cs .px-tw tbody tr:hover { background: transparent; }
+.px.px-cs .px-tw td.px-nm { text-align: left; }
+.px.px-cs .px-tw td.px-nm { max-width: 340px; }
+/* Cross-sell y Clientes: el veredicto usa todo el ancho de la caja (los nombres de producto son largos) */
+.px.px-cs .px-verdict h2, .px.px-cu .px-verdict h2 { max-width: none; }

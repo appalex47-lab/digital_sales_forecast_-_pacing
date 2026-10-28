@@ -645,7 +645,13 @@
       },
       /** Cross-sell (productos que se compran juntos). PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
       crossSell: {
-        minPairs: 30, minLift: 2, minConf: 0.05,   // candidato: ≥ 30 pedidos juntos, lift ≥ 2 y ≥ 5 de cada 100 pedidos con A llevan también B
+        presets: {                                 // sensibilidad: cada persona la elige en la página (se guarda en su navegador)
+          strict: { minPairs: 30, minLift: 2, minConf: 0.05 },
+          balanced: { minPairs: 20, minLift: 1.5, minConf: 0.03 },
+          wide: { minPairs: 10, minLift: 1.2, minConf: 0.01 }
+        },
+        limits: { minPairs: [5, 1000], minLift: [1, 20], minConf: [0.001, 0.5] },
+        minPairs: 30, minLift: 2, minConf: 0.05,   // candidato (= preset «strict»): ≥ 30 pedidos juntos, lift ≥ 2 y ≥ 5 de cada 100 pedidos con A llevan también B
         minAnchorOrders: 100,                      // producto ancla: al menos 100 pedidos
         anchorLiftPct: 0.10,                       // ancla: el resto de su canasta vale ≥ 10 % más que un pedido sin él
         maxItemsPerOrder: 30, topPairs: 20, topCats: 8,

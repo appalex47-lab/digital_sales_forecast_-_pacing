@@ -64,7 +64,7 @@
     const l = await load(); if (!l) return { status: 'no_ledger' };
     const PS = FP.productStore, bySku = PS && PS.catalog ? PS.catalog.bySku : new Map();
     const k = 'b:' + JSON.stringify(options || {}) + ':' + bySku.size;
-    if (!analysisCache.has(k)) analysisCache.set(k, FP.basketEngine.analyze(l, bySku, { ...FP.config.products.crossSell, ...(options || {}) }));
+    if (!analysisCache.has(k)) analysisCache.set(k, FP.basketEngine.analyze(l, bySku, { ...FP.config.products.crossSell, strict: { minPairs: FP.config.products.crossSell.minPairs, minLift: FP.config.products.crossSell.minLift, minConf: FP.config.products.crossSell.minConf }, ...(options || {}) }));
     return analysisCache.get(k);
   }
   function reset() { gen++; loading = null; cache = null; loaded = false; analysisCache.clear(); }
