@@ -21,7 +21,7 @@
     dataRouted: () => repo.ready && migrationState && migrationState.status === 'verified' });
   const K = C.storage.keys;
   const yk = (key, year) => `${key}:${year}`;
-  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'promociones'];
+  const VIEWS = ['resumen', 'carga', 'calidad', 'datos', 'estacionalidad', 'plan', 'configuracion', 'pacing', 'reforecast', 'diagnostico', 'prodevol', 'recovery', 'inicio', 'medir', 'narrativa', 'ayuda', 'ajustes', 'presentacion', 'segmentos', 'proyeccion', 'cambios', 'clientes', 'crosssell', 'promociones'];
   const MOCK_ORIGIN = 'mock-fase0';
 
   const state = {
@@ -39,6 +39,7 @@
     of: { reg: null, sel: null, f: {}, limit: 60, checked: {}, pending: null, msg: null, manual: null },
     op: { f: { from: '', to: '', comparison: 'previous', channel: 'total', type: '', category: '', evidence: '', q: '', withOffer: '', origin: '', subcategory: '', lab: '', route: '', request: '' }, view: 'sku', checkedG: {}, result: null, loading: false, msg: null, checked: {}, sel: null, limit: 50, xname: '' },   // «Oportunidades» (pestaña de Promociones)
     rs: { ex: { batchId: '', loading: false, result: null, msg: null }, promoId: '', loading: false, result: null, msg: null, f: { q: '', status: '', objective: '', space: '', mechanic: '', category: '', rec: '', from: '', to: '' } },   // «Resultados e historial»   // «Ofertas recibidas» (pestaña de Promociones)   // «Promociones» (registro compartido del equipo)
+    cs: { status: 'idle', key: null, result: null, opts: { level: 'product', channel: 'total' } },   // «Cross-sell»
     cu: { status: 'idle', key: null, result: null, info: null, opts: { reactivationDays: 180, warmupDays: 180, channel: 'total' } },   // «Clientes y LTV»   // «Qué cambió desde ayer»
     stTab: 'herramienta',   // pestaña activa de Configuración (cuenta, ia, datos, herramienta, negocio)
     qFilters: { section: 'all', rule: 'all', file: 'all', page: 1 },   // filtros y página del consolidado de cuarentena
@@ -1662,6 +1663,7 @@
     }
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }
     else if (state.view === 'clientes') FP.customersView.render(state);
+    else if (state.view === 'crosssell') FP.crosssellView.render(state);
     else if (state.view === 'cambios') { ensureForecast(); FP.changesView.render(state); }
     else if (state.view === 'promociones') FP.promotionView.render(state);
     else if (state.view === 'medir') FP.measureView.render(state);
@@ -1834,7 +1836,7 @@
         onProgress: (d, t) => { item.progress = d / t; progressRender(); } });
       state.staging.items = state.staging.items.filter((i) => i !== item);
       state.staging.activeId = state.staging.items[0] ? state.staging.items[0].staged.id : null;
-      state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle';
+      state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle'; state.cs.status = 'idle';
       await refreshProductQuality();
       render();
       const m = batch.storedMerge;
@@ -3056,7 +3058,7 @@
     'an-channel'(el) { const keep = state.an.drill ? { scope: state.an.drill.scope, entity: state.an.drill.entity } : null; resetAnalysis({ channel: FP.analysisContext.normChannel(el.value || el.dataset.value) }); state.an.reopen = keep && keep.scope === 'entity' ? keep : (keep ? { scope: 'total' } : null); render(); },
     'an-drill'(el) { openDrill({ scope: 'entity', entity: el.dataset.entity, source: el.dataset.source || 'tabla' }); },
     'an-drill-total'(el) { openDrill({ scope: 'total', source: el.dataset.source || 'kpi' }); },
-    'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; render(); },
+    'cu-clear-filter'() { state.cu.opts.filter = {}; state.cu.status = 'idle'; state.cs.status = 'idle'; render(); },
     'an-filter'(el) { const k = el.dataset.fkey; if (!k || !FP.productFilter) return; resetAnalysis({ filter: FP.productFilter.cascade(state.an.filter, k, el.value) }); state.an.reopen = null; render(); },
     'gs-open'() { if (FP.search) FP.search.open(''); },
     'fs-toggle'(el) { const pg = el.dataset.fsPage; if (!pg) return; state.fs = { ...(state.fs || {}), [pg]: !(state.fs && state.fs[pg]) }; render(); },
@@ -3070,7 +3072,7 @@
         const kk = k.slice(3), reset = { stateFilter: 'all', entityQuery: '', pattern: 'all', signal: 'all', anomalyDirection: 'all', minSharePct: 0.5, minImpact: 0 };
         if (kk in reset) { state.an[kk] = reset[kk]; state.an.page = 1; render(); }
       } else if (pg === 'pa' && k.startsWith('geo:')) actions['pa-geo']({ dataset: { key: k.slice(4) }, value: '' });
-      else if (pg === 'cu' && k.startsWith('cu:')) { const f = state.cu.opts.filter = state.cu.opts.filter || {}; const kk = k.slice(3); f[kk] = undefined; if (kk === 'category') { f.subcategory = undefined; f.product = undefined; } else if (kk === 'subcategory') f.product = undefined; else if (kk === 'state') f.branch = undefined; state.cu.status = 'idle'; render(); }
+      else if (pg === 'cu' && k.startsWith('cu:')) { const f = state.cu.opts.filter = state.cu.opts.filter || {}; const kk = k.slice(3); f[kk] = undefined; if (kk === 'category') { f.subcategory = undefined; f.product = undefined; } else if (kk === 'subcategory') f.product = undefined; else if (kk === 'state') f.branch = undefined; state.cu.status = 'idle'; state.cs.status = 'idle'; render(); }
     },
     'fs-clear'(el) {
       const pg = el.dataset.fsPage;
@@ -3637,7 +3639,7 @@
           if (!res || !res.canImport) throw new Error('el archivo de ejemplo no se pudo leer');
           await FP.productStore.commit(res.draft, { fileName: staged.fileName, policy: 'keep' });
         }
-        state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle';
+        state.pa.result = null; state.pa.counts = null; state.pa.from = null; state.pa.to = null; state.cu.status = 'idle'; state.cs.status = 'idle';
         await refreshProductQuality();
         if (FP.agents && FP.agents.runner) FP.agents.runner.clearCache();
         render();
@@ -3815,7 +3817,7 @@
         cloudProg('Aplicando los datos en este navegador', 78);
         await repo.flush();
         const pr = await FP.productSync.restore(repo, d.items, { onProgress: (n, tot) => { if (tot > 0) cloudProg(`Restaurando productos (${Math.min(n + 1, tot)} de ${tot})`, 80 + Math.round(18 * n / tot)); } });
-        state.cu.status = 'idle';
+        state.cu.status = 'idle'; state.cs.status = 'idle';
         if (!pr.ok) { cloudNote(`Se restauraron los datos generales, pero ${pr.error}`, 'bad'); state.cloud.restored = true; return; }
         cloudNote(`Copia restaurada: ${d.items.filter((i) => !FP.productSync.isKey(i.key)).length} bloques de datos.${pr.none ? '' : ` Productos: ${pr.rows.toLocaleString('es-MX')} renglones de venta y ${pr.funnel.toLocaleString('es-MX')} de funnel.`} Recarga para verlos aplicados.`, 'ok');
         state.cloud.restored = true;
@@ -5396,7 +5398,7 @@
       await repo.flush();
       paintRestore(96, 2);
     } catch (e) { return openRestoreError(`Falló el guardado: ${e && e.message || e}`); }
-    state.ux.tourOffered = true; saveUx(); prefSet('authChoice', 'team'); state.cu.status = 'idle';
+    state.ux.tourOffered = true; saveUx(); prefSet('authChoice', 'team'); state.cu.status = 'idle'; state.cs.status = 'idle';
     paintRestore(100, 2);
     const h = document.getElementById('entry-t'); if (h) h.textContent = '✓ Datos cargados';
     setTimeout(() => root.location.reload(), 700);   // se recarga: config.js lee parte de los datos al arrancar. Con datos locales no sale la pregunta de los cuatro escenarios
@@ -5636,11 +5638,15 @@
         const k = tt.getAttribute('data-cu-f'), f = state.cu.opts.filter = state.cu.opts.filter || {};
         f[k] = tt.value || undefined;
         if (k === 'category') { f.subcategory = undefined; f.product = undefined; } else if (k === 'subcategory') f.product = undefined; else if (k === 'state') f.branch = undefined;
-        state.cu.status = 'idle'; render(); return;
+        state.cu.status = 'idle'; state.cs.status = 'idle'; render(); return;
+      }
+      if (tt && tt.getAttribute && tt.getAttribute('data-cs')) {
+        const k = tt.getAttribute('data-cs');
+        state.cs.opts[k] = tt.value; state.cs.status = 'idle'; render(); return;
       }
       if (tt && tt.getAttribute && tt.getAttribute('data-cu')) {
         const k = tt.getAttribute('data-cu');
-        state.cu.opts[k] = k === 'channel' ? tt.value : Number(tt.value); state.cu.status = 'idle'; render(); return;
+        state.cu.opts[k] = k === 'channel' ? tt.value : Number(tt.value); state.cu.status = 'idle'; state.cs.status = 'idle'; render(); return;
       }
       const t = e.target; if (!t || !t.closest || !t.closest('#chg-body')) return;
       const st = t.getAttribute('data-chg-status'), nt = t.getAttribute('data-chg-note');

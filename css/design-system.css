@@ -86,8 +86,7 @@ body { background: var(--ds-bg); color: var(--ds-text); font-family: var(--ds-fo
 a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
   outline: 3px solid var(--ds-accent); outline-offset: 2px; }
 
-/* =========================================================
-   SHELL: header oscuro + sidebar fija
+/* ==================================================   SHELL: header oscuro + sidebar fija
    ========================================================= */
 .app-header { background: var(--ds-nav); color: #fff; border: 0; position: sticky; top: 0; z-index: 30; padding: 0; }
 .app-header__inner { max-width: none; padding: 0 var(--ds-s5); }
@@ -146,8 +145,7 @@ body { padding-left: var(--ds-sidebar-w); }
 .ux-context__inner { padding-top: var(--ds-s5); padding-bottom: 0; }
 .app-footer { max-width: 1160px; }
 
-/* =========================================================
-   COMPONENTES BASE (reutilizables)
+/* ==================================================   COMPONENTES BASE (reutilizables)
    ========================================================= */
 .panel, .ds-card { background: var(--ds-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); box-shadow: var(--ds-shadow); }
 .ds-card { padding: var(--ds-s5); }
@@ -221,8 +219,7 @@ body { padding-left: var(--ds-sidebar-w); }
 .ds-metric__value { font-size: var(--ds-fs-metric); font-weight: 700; letter-spacing: -.02em; }
 .ds-metric__delta { font-size: var(--ds-fs-helper); font-weight: 600; }
 
-/* =========================================================
-   «¿Cómo funciona?» — Centro de aprendizaje
+/* ==================================================   «¿Cómo funciona?» — Centro de aprendizaje
    ========================================================= */
 .learn { display: grid; gap: var(--ds-gap-section); }
 .learn__head { display: flex; gap: var(--ds-s4); align-items: center; margin-bottom: var(--ds-s5); }
@@ -265,8 +262,7 @@ body { padding-left: var(--ds-sidebar-w); }
 .ref-card > span:nth-child(2) { flex: 1; min-width: 0; }
 .ref-detail { margin-top: var(--ds-s4); }
 
-/* =========================================================
-   Responsive
+/* ==================================================   Responsive
    ========================================================= */
 @media (max-width: 1024px) {
   .tour-card { grid-template-columns: 1fr; }
@@ -310,8 +306,7 @@ body[data-view="ayuda"] .status-bar, body[data-view="ayuda"] .ux-context { displ
 .learn .help-dot { display: none; }
 .learn .breadcrumbs { margin-bottom: var(--ds-s2); }
 
-/* =========================================================
-   HOME / Control Center
+/* ==================================================   HOME / Control Center
    ========================================================= */
 .home { display: grid; gap: var(--ds-gap-section); }
 .home__head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--ds-s5); flex-wrap: wrap; }
@@ -368,8 +363,7 @@ body[data-view="inicio"] .ux-context .next-step { display: none; }
 .home__top--ready-first { grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); }
 @media (max-width: 1024px) { .home__top--ready-first { grid-template-columns: minmax(0, 1fr); } }
 
-/* =========================================================
-   ETAPA I-base · Foco, tablas, botones, campos, estados de carga de archivo, origen del dato
+/* ==================================================   ETAPA I-base · Foco, tablas, botones, campos, estados de carga de archivo, origen del dato
    (los selectores legacy .table/.btn/.field comparten reglas con su equivalente ds-*)
    ========================================================= */
 :root { --ds-on-accent: #FFFFFF; --ds-focus-dark: #FFFFFF; --ds-focus-ring: 3px; --ds-control-border: #7D8A9F; /* borde de controles: ≥3:1 (WCAG 1.4.11) */ }
@@ -438,8 +432,7 @@ body[data-view="inicio"] .ux-context .next-step { display: none; }
 #bc-form .steps > li::before { content: none; }
 #bc-form .steps > li > h4 { margin: 0 0 var(--ds-s3); font-size: var(--ds-fs-card); font-weight: 650; color: var(--ds-text); }
 
-/* =========================================================
-   ETAPA H · Módulos analíticos
+/* ==================================================   ETAPA H · Módulos analíticos
    Un solo lenguaje de estados (Plan · Actual · Forecast · Reforecast · Scenario · Observed):
    siempre texto + color + patrón de borde (continuo / punteado / doble). Sin hex: todo sale de tokens.
    ========================================================= */
@@ -558,8 +551,7 @@ dl.metric-card { margin: 0; }
    un borde de 3 px del color del texto, más llamativo que los «✓». Ahora es un contorno de 1 px del token de borde. */
 .chip.chip--soft { border: 1px solid var(--ds-border-strong); }
 
-/* =========================================================
-   REVISIONES DE USO (post-etapa H)
+/* ==================================================   REVISIONES DE USO (post-etapa H)
    ---------------------------------------------------------
    R-7 · Tablas en escritorio: no deben desbordarse a la derecha.
    Palancas: (1) el contenido usa el ancho disponible en pantallas grandes (antes se detenía en 1160 px y sobraba espacio a la derecha),
@@ -599,8 +591,7 @@ dl.metric-card { margin: 0; }
   .table td:not(.num):has(> .cell-sub), .ds-table td:not(.num):has(> .cell-sub) { white-space: normal; overflow-wrap: anywhere; }
 }
 
-/* =========================================================
-   R-6 · Ritmo vertical entre bloques (cabeceras con botones, tarjetas de métricas, tablas, notas y botones)
+/* ==================================================   R-6 · Ritmo vertical entre bloques (cabeceras con botones, tarjetas de métricas, tablas, notas y botones)
    Antes cada bloque dependía del margen de quien lo precedía: al migrar `dl.kpis` a `.metric-grid` esa separación se perdió y
    varias notas y botones quedaban pegados (0–4 px). Regla común: 16 px entre bloques, 8 px entre un bloque y su nota o ayuda.
    ========================================================= */
@@ -623,8 +614,7 @@ dl.metric-card { margin: 0; }
 .settings-grid + :is(.table-wrap, .metric-grid), .closure-bars + h4, .table-wrap + :is(details, .ai-box, .disclosure), .metric-grid + :is(details, .ai-box, .disclosure) { margin-top: var(--ds-s4); }
 td .btn-row + :is(.cell-sub, details) { display: block; margin-top: var(--ds-s2); }
 
-/* =========================================================
-   R-5 · Menú lateral con grupos plegables
+/* ==================================================   R-5 · Menú lateral con grupos plegables
    Cada grupo (Planear, Monitorear, Diagnosticar, Recuperar, Medir y aprender) es un botón con aria-expanded; solo el grupo de la vista actual
    arranca abierto. «Inicio» y «¿Cómo funciona?» quedan sueltos.
    ========================================================= */
@@ -679,8 +669,7 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
 .field--check > label > input[type="checkbox"] { flex: none; margin: 0; }
 
 
-/* =========================================================
-   R-8 · Estado de la herramienta en el encabezado
+/* ==================================================   R-8 · Estado de la herramienta en el encabezado
    Arriba solo van las píldoras (año, estado de datos, estado del motor), entre el buscador y las notificaciones. Cada píldora lleva texto además de color.
    El año es un selector; las otras dos son enlaces al detalle en Configuración de RevNavigator. La ficha completa vive solo allí.
    ========================================================= */
@@ -745,8 +734,7 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
 
 .hstatus__link { min-height: 26px; align-items: center; }   /* objetivo de toque ≥ 24 px (WCAG 2.2, 2.5.8) */
 
-/* =========================================================
-   I-final · Barra de contexto compacta (.ux-context)
+/* ==================================================   I-final · Barra de contexto compacta (.ux-context)
    Misma información y mismos controles; menos altura. Orden de lectura = orden del DOM = orden visual:
      fila 1: migas · acciones (Ayuda, Glosario, Recorrido)
      fila 2: qué veo y qué hago aquí · siguiente paso
@@ -819,8 +807,7 @@ legend + .btn-row, legend + :is(p, .field) { margin-top: var(--ds-s2); }
 @media (max-width: 400px) { .tour-card__steps { grid-template-columns: minmax(0, 1fr); } }
 
 
-/* =========================================================
-   ETAPA J · Accesibilidad y refinamiento
+/* ==================================================   ETAPA J · Accesibilidad y refinamiento
    ========================================================= */
 /* «Saltar al contenido»: primer elemento enfocable; invisible hasta recibir foco con el teclado */
 .skip-link { position: fixed; top: var(--ds-s2); left: var(--ds-s2); z-index: 100; transform: translateY(-200%); padding: var(--ds-s2) var(--ds-s4); border-radius: var(--ds-r-md);
@@ -882,16 +869,14 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 @media (max-width: 340px) { :root { --ds-header-h: 108px; } }
 
 
-/* =========================================================
-   Inicio · Preparación de datos: nota del histórico opcional debajo de su renglón
+/* ==================================================   Inicio · Preparación de datos: nota del histórico opcional debajo de su renglón
    ========================================================= */
 .home .readiness__list li { flex-wrap: wrap; }
 .home .readiness__list .readiness__hint { order: 10; flex: 1 0 100%; margin-left: calc(var(--ds-s4) + 2px); font-size: var(--ds-fs-caption); color: var(--ds-text-2); }   /* la nota ocupa su propio renglón bajo el paso; «Ir» se queda a la derecha del paso */
 .empty__next .ds-badge { margin-left: var(--ds-s1); }
 
 
-/* =========================================================
-   Diagnóstico · árbol de drivers (Nivel 2)
+/* ==================================================   Diagnóstico · árbol de drivers (Nivel 2)
    La tarjeta de cada driver usaba la clase `.tree-node`, que también es la de la cadena trazable (rejilla de 150 px + 1fr con `overflow-wrap: anywhere`):
    el título caía en una columna diminuta y se partía letra por letra («V ol u m en»). Ahora tiene clase propia:
    fila de resumen (título · contribución · variación) arriba y las ramas debajo, a todo el ancho de la tarjeta.
@@ -918,8 +903,7 @@ main.app-main[tabindex="-1"]:focus { outline: none; }
 #segments-view .stack > .field { max-width: 22rem; }   /* el selector de dimensión no ocupa todo el ancho */
 
 
-/* =========================================================
-   Tráfico y conversión · parte 1 de descubrimiento (hallazgos, mapa, oportunidades, rankings)
+/* ==================================================   Tráfico y conversión · parte 1 de descubrimiento (hallazgos, mapa, oportunidades, rankings)
    ========================================================= */
 .sghl { margin: var(--ds-s2) 0 0; padding-left: var(--ds-s5); display: grid; gap: var(--ds-s2); }
 .sghl__item { line-height: 1.45; }
@@ -2374,3 +2358,10 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .px .px-weak { opacity: .8; }
 .px .px-cu .px-tw tbody tr { cursor: default; }
 .px .px-cu .px-tw tbody tr:hover { background: transparent; }
+.px .px-act { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.px .px-act > div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
+.px .px-act span { font-size: .78rem; color: var(--muted); }
+.px .px-act .px-lk { text-align: left; text-decoration: none; }
+.px .px-cs .px-tw tbody tr { cursor: default; }
+.px .px-cs .px-tw tbody tr:hover { background: transparent; }
+.px .px-cs .px-tw td.px-nm { text-align: left; }

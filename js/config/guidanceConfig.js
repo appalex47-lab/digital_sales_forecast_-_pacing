@@ -35,7 +35,9 @@
     { id: 'diagnosticar', question: '¿Por qué?', label: 'Diagnosticar', verb: 'Diagnostica',
       description: 'Qué driver explica la brecha, dónde ocurre, desde cuándo y con qué patrón, y qué hipótesis investigar.', views: ['diagnostico', 'prodevol', 'segmentos', 'clientes'] },
     { id: 'recuperar', question: '¿Qué hago?', label: 'Recuperar', verb: 'Simula y actúa',
-      description: 'Reforecast, escenarios, plan de acción y promociones.', views: ['reforecast', 'recovery', 'promociones'] },
+      description: 'Reforecast, escenarios y plan de acción.', views: ['reforecast', 'recovery'] },
+    { id: 'crecer', question: '¿Qué puedo mover?', label: 'Crecer', verb: 'Prueba y promueve',
+      description: 'Qué productos se compran juntos para hacer cross-sell, y las promociones que registras, apruebas y ejecutas.', views: ['crosssell', 'promociones'] },
     { id: 'medir', question: '¿Funcionó?', label: 'Medir y aprender', verb: 'Mide',
       description: 'Seguimiento, baseline vs escenario vs observado, trazabilidad, aprendizajes, narrativa ejecutiva y presentación en PDF.', views: ['medir', 'narrativa', 'presentacion'] }
   ];
@@ -86,9 +88,13 @@
       action: 'Compara cuánto deberías llevar de {{sale}} contra cuánto llevas realmente, y revisa la proyección de cierre.',
       produces: 'El cumplimiento a la fecha, la brecha contra el plan y un forecast del cierre del periodo.',
       help: ['pacing', 'gap', 'cumplimiento', 'forecast', 'forecastGap', 'performanceIndex'] },
-    promociones: { title: 'Promociones', group: 'recuperar', purpose: 'Registro de las promociones que planeas, apruebas y ejecutas, cada una con un identificador que no cambia.',
+    promociones: { title: 'Promociones', group: 'crecer', purpose: 'Registro de las promociones que planeas, apruebas y ejecutas, cada una con un identificador que no cambia.',
       action: 'Crea la promoción, agrega sus SKU, apruébala, registra lo que realmente se publicó y cierra con una conclusión.',
       produces: 'Un registro con identificador, estado, responsables, fechas reales, activaciones, incidencias e historial que no se borra; exportable a CSV y JSON.',
+      help: [] },
+    crosssell: { title: 'Cross-sell', group: 'crecer', purpose: 'Qué productos se compran juntos en el mismo pedido, para elegir qué ofrecer como complemento.',
+      action: 'Revisa los pares con señal, en qué canal funcionan mejor y cuántos pedidos tienen el primero sin el segundo; elige el nivel (producto, categoría o SKU).',
+      produces: 'Pares candidatos a cross-sell con pedidos juntos, confianza y lift, productos ancla, categorías que se compran juntas y el canal donde más funcionan. Es asociación, no causa.',
       help: [] },
     cambios: { title: 'Qué cambió desde ayer', group: 'monitorear', purpose: 'Lo que se movió desde ayer o desde tu última visita, ordenado de lo más importante a lo menos.',
       action: 'Revisa la venta de ayer contra el plan, qué canal movió el cierre, qué alertas son nuevas y qué cambió en los datos.',
@@ -389,7 +395,7 @@
 
   /** Paso de la metodología que corresponde a cada vista (para "estás aquí"). */
   const VIEW_STEP = { proyeccion: 'meta', resumen: 'meta', plan: 'plan', estacionalidad: 'plan', configuracion: 'plan', carga: 'real', calidad: 'real', datos: 'real',
-    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', prodevol: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing', clientes: 'senales', promociones: 'recovery' };
+    pacing: 'forecast', reforecast: 'recovery', diagnostico: 'diagnostico', producto: 'senales', prodevol: 'senales', recovery: 'escenarios', medir: 'observado', narrativa: 'narrativa', negocio: 'meta', inicio: 'pacing', cambios: 'pacing', clientes: 'senales', promociones: 'recovery', crosssell: 'senales' };
 
   /* Fase 9.1 — Microlearning: una idea por evento real, una sola vez, solo en modo Aprendiz. */
   const LESSONS = [
