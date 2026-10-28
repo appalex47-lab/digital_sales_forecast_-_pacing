@@ -2365,3 +2365,5 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .px .px-cs .px-tw tbody tr { cursor: default; }
 .px .px-cs .px-tw tbody tr:hover { background: transparent; }
 .px .px-cs .px-tw td.px-nm { text-align: left; }
+/* Cross-sell y Clientes: el veredicto usa todo el ancho de la caja (los nombres de producto son largos) */
+.px .px-cs .px-verdict h2, .px .px-cu .px-verdict h2 { max-width: none; }
