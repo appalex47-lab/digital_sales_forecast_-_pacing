@@ -2326,3 +2326,12 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .pe-drawer .trend-detail__head > div:first-child { display: none; }
 #view-prodevol .pvm-kpis { display: none; }   /* sus cifras ya están en el total de la tabla */
 .trend-table .cell-sub { white-space: nowrap; max-width: none; }
+
+/* Producto y evolución · versión B: lo que la maqueta no dibuja (panel de filtros, migas, avisos) conserva el estilo de la app */
+.px .px-topbar { top: var(--pe-top, 0px); }
+.px .fshell, .px .breadcrumbs, .px > .px-app > .field__hint, .px > .px-app > .note { margin-left: 16px; margin-right: 16px; }
+.px .breadcrumbs { padding-top: 8px; }
+.px .fshell__panel .field select, .px .fshell__panel .field input { font: inherit; }
+#pe-drawer-root .px .px-drw { z-index: 61; }
+#pe-drawer-root .px .px-scr { z-index: 60; }
+.px .px-cu select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 4px 8px; max-width: 100%; }

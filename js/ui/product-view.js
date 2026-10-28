@@ -257,6 +257,65 @@
       ${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
   }
 
+
+  /**
+   * Los mismos controles que controlsHtml, repartidos como los pide la versión B de la página: canal, periodo y comparación
+   * en la barra; granularidad, vista, geografía y el resto de filtros en el panel «Filtros»; la ruta (migas) solo si ya se bajó de nivel.
+   */
+  function controlParts(state, extra) {
+    const pa = state.pa;
+    const opts = PS().available() ? PS().geoOptions(pa.geo) : { regions: [], states: [], cities: [], branches: [], deliveries: [], available: {} };
+    const av = opts.available, level = FP.app.paLevel(pa), choices = FP.app.paNextChoices(pa);
+    const roots = [['category', 'Categoría'], ...(av.region ? [['region', 'Región']] : []), ...(av.state ? [['state', 'Estado']] : []),
+      ...(av.city ? [['city', 'Ciudad']] : []), ...(av.branch ? [['branch', locTerm()]] : []), ...(av.delivery ? [['delivery', 'Tipo de entrega']] : [])];
+    const sel = (key, label, list, valueOf = (x) => x, textOf = (x) => x) => (list.length ? `<div class="field"><label for="pa-g-${key}" class="field__hint">${esc(label)}</label>
+      <select id="pa-g-${key}" data-action="pa-geo" data-key="${key}"><option value="">${key === 'delivery' ? 'Ambos' : 'Todos'}</option>
+        ${list.map((x) => `<option value="${esc(valueOf(x))}" ${pa.geo[key] === valueOf(x) ? 'selected' : ''}>${esc(textOf(x))}</option>`).join('')}</select></div>` : '');
+    const GEO = ['region', 'state', 'city', 'branch', 'delivery'];
+    const geoActive = Object.values(pa.geo).some(Boolean);
+    const geoLevel = GEO.includes(level) || geoActive || pa.drill.some((d) => GEO.includes(d.level));
+    const geoKeys = [['region', 'Región'], ['state', 'Estado'], ['city', 'Ciudad'], ['branch', locTerm()], ['delivery', 'Tipo de entrega']];
+    const TE = FP.temporalEngine, meta = PS().meta || {}, gran = FP.app.paGran(pa);
+    let period;
+    if (gran === 'range' || !TE || !meta.dateMin || !meta.dateMax) {
+      period = `<input id="pa-from" type="date" aria-label="Desde" value="${esc(pa.from || '')}" data-action="pa-setting" data-key="from"><input id="pa-to" type="date" aria-label="Hasta" value="${esc(pa.to || '')}" data-action="pa-setting" data-key="to">`;
+    } else {
+      const fopts = TE.options(meta.dateMin, meta.dateMax, gran, gran === 'day' ? 90 : 24), fkey = gran === 'day' ? pa.to : TE.periodKey(pa.from, gran);
+      period = `<select id="pa-focus" aria-label="Periodo" data-action="pa-focus">${fopts.slice().reverse().map((o) => `<option value="${esc(o.key)}" ${o.key === fkey ? 'selected' : ''}>${esc(String(TE.label(gran, o.key, o.range)).replace(/ · hasta .*$/, ''))}</option>`).join('')}</select>`;
+    }
+    const ci = state.an.comparisonInfo || {}, bk = ci.baseline && ci.baseline.key, MESF = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const prevTxt = pa.comparison === 'previous' && /^\d{4}-\d{2}$/.test(bk || '') ? `vs ${MESF[+bk.slice(5) - 1]}${ci.partial ? ' (mismos días)' : ''}` : 'vs periodo anterior';
+    const channel = `<select id="pa-ch" aria-label="Canal" data-action="pa-setting" data-key="channel">${[['total', 'Total digital'], ...C().channels.map((c) => [c.id, c.label])].map(([v, l]) => `<option value="${v}" ${pa.channel === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const compare = `<select id="pa-cmp" aria-label="Comparar contra" data-action="pa-setting" data-key="comparison"><option value="previous" ${pa.comparison === 'previous' ? 'selected' : ''}>${esc(prevTxt)}</option><option value="yoy" ${pa.comparison === 'yoy' ? 'selected' : ''}>vs año anterior</option></select>`;
+    const paChips = geoKeys.filter(([k]) => pa.geo[k]).map(([k, l]) => ({ key: 'geo:' + k, text: `${l}: ${pa.geo[k]}` }));
+    const chips = [...paChips, ...((extra && extra.chips) || [])];
+    let gotoField = '';
+    if (extra && extra.goto && FP.productFilter && FP.productFilter.gotoOptions) {
+      const go = [...FP.productFilter.gotoOptions().keys()];
+      gotoField = `<div class="field pa-goto"><label for="pa-goto" class="field__hint">Ir a…</label><input id="pa-goto" type="search" list="pa-goto-list" autocomplete="off" placeholder="Categoría, producto o SKU" data-action="pa-goto"><datalist id="pa-goto-list">${go.map((o) => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>`;
+    }
+    const open = Boolean(state.fs && state.fs.pa);
+    const shell = FP.filterShell.html({ page: 'pa', open, noToggle: true, chips, primary: '',
+      groups: [
+        { title: 'Periodo y vista', html: `<div class="field"><label for="pa-gran" class="field__hint">Granularidad</label>
+          <select id="pa-gran" data-action="pa-gran">${[['year', 'Año'], ['month', 'Mes'], ['week', 'Semana'], ['day', 'Día'], ['range', 'Rango (desde–hasta)']].map(([v, l]) => `<option value="${v}" ${gran === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+          <div class="field"><label for="pa-viewby" class="field__hint">Empezar por</label>
+          <select id="pa-viewby" data-action="pa-viewby">${roots.map(([v, l]) => `<option value="${v}" ${pa.viewBy === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+          ${choices.length && level ? `<div class="field"><label for="pa-next" class="field__hint">Desglosar por</label><select id="pa-next" data-action="pa-next">${choices.map((c) => `<option value="${c}" ${c === level ? 'selected' : ''}>${esc(levelName(c))}</option>`).join('')}</select></div>` : ''}
+          <div class="field"><label for="pa-top" class="field__hint">Mostrar (solo visual)</label>
+          <select id="pa-top" data-action="pa-setting" data-key="topN">${C().products.topN.map((n) => `<option value="${n}" ${String(pa.topN) === String(n) ? 'selected' : ''}>${n ? `Top ${n}` : 'Todos (paginado)'}</option>`).join('')}</select></div>
+          ${gotoField}<div class="field"><span class="field__hint">&nbsp;</span><button type="button" class="btn btn--small" data-action="pa-from-dx" ${state.dx && state.dx.run ? '' : 'disabled'}>Usar periodo y canal del diagnóstico</button></div>` },
+        { title: 'Geografía y operación (solo análisis de productos)', html: (av.region || av.state || av.city || av.branch || av.delivery) ? `${sel('region', 'Región', opts.regions)}${sel('state', 'Estado', opts.states)}${sel('city', 'Ciudad', opts.cities)}
+        ${sel('branch', locTerm(), opts.branches, (b) => b.code, (b) => (b.name !== b.code ? `${b.name} (${b.code})` : b.code))}
+        ${sel('delivery', 'Tipo de entrega', opts.deliveries)}` : '' }
+      ].concat((extra && extra.groups) || []) });
+    const crumbs = pa.drill.length ? `<nav class="breadcrumbs" aria-label="Ruta del análisis"><button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-index="-1">Negocio${pa.channel !== 'total' ? ` · ${esc(FP.dataModel.getChannel(pa.channel).label)}` : ''}</button>${pa.drill.map((d, i) => ` › ${(i < pa.drill.length - 1 || level
+      ? `<button type="button" class="btn btn--ghost btn--small" data-action="pa-up" data-index="${i}" title="${esc(levelName(d.level))}">${esc(displayKey(d.level, d.key))}</button>`
+      : `<strong>${esc(displayKey(d.level, d.key))}</strong>`)}`).join('')}${level ? ` › <strong>${esc(levelName(level))}</strong>` : ''}</nav>` : '';
+    const notes = `${geoLevel ? `<p class="field__hint">${esc(`Región, estado, ciudad, ${locTerm().toLowerCase()} y tipo de entrega se definen en el checkout, después de la vista de ficha: CR y funnel no están disponibles aquí. Una diferencia entre zonas no demuestra por sí misma una causa.`)}</p>` : ''}${pa.note ? `<p class="note">${esc(pa.note)}</p>` : ''}`;
+    return { channel, period, compare, panel: `${crumbs}${shell}${notes}`, chipCount: chips.length, open };
+  }
+
   /** HTML de los resultados (KPIs, tabla, señales y trazabilidad), para pintarlos aquí o dentro de otra página. */
   function resultParts(state, extra) {
     const out = { kpis: '', table: '', signals: '', trace: '' };
@@ -338,5 +397,5 @@
       <p class="field__hint">Obligatoria: bloquea la carga si no está mapeada. Importante: avisa y baja la calificación. Opcional: solo informa qué análisis no tendrás.</p></details>`;
   }
 
-  FP.productView = { renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, resultParts, statusHtml, metricVal, displayKey, levelName, GROWTH };
+  FP.productView = { renderStaging, storageBlock, LEVEL, columnsTable, controlsHtml, controlParts, resultParts, statusHtml, metricVal, displayKey, levelName, GROWTH };
 })(typeof window !== 'undefined' ? window : globalThis);

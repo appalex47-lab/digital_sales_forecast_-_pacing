@@ -62,10 +62,10 @@ async def main():
         # primero se calculan diagnóstico y productos (como hace el paquete), luego se exporta cada vista
         for v in ('pacing', 'diagnostico', 'prodevol'):
             await q.goto(u + '#' + v); await q.wait_for_timeout(900)
-            if v == 'prodevol': await q.wait_for_selector('#pe-quien table', timeout=90000); await q.wait_for_timeout(400)
+            if v == 'prodevol': await q.wait_for_selector('#b-quien table', timeout=90000); await q.wait_for_timeout(400)
         for v, sel in (('prodevol', 'pa-export'), ('pacing', 'fc-export'), ('reforecast', 'rf-export'), ('diagnostico', 'dx-export'), ('recovery', 'rc-export'), ('narrativa', 'nx-export'), ('plan', 'plan-export')):   # productos primero: Diagnóstico lo incluye cuando existe
             await q.goto(u + '#' + v); await q.wait_for_timeout(900)
-            if v == 'prodevol': await q.wait_for_selector('#pe-quien table', timeout=90000); await q.wait_for_timeout(400)
+            if v == 'prodevol': await q.wait_for_selector('#b-quien table', timeout=90000); await q.wait_for_timeout(400)
             await q.evaluate("document.querySelectorAll('#view-pacing details.pacing-more, #view-reforecast details.pacing-more, #view-recovery details.pacing-more').forEach(d=>d.open=true)")   # los exports de Pacing, Reforecast y Recovery viven en «Ver más»
             n0 = await q.evaluate("window.__dl.length")
             await q.click(f'[data-action="{sel}"]'); await q.wait_for_timeout(600)

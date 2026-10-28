@@ -534,11 +534,9 @@
     }
   }
 
-  /** Arma las partes de Evolución para Producto y evolución. Devuelve {early} si no hay nada que mostrar todavía. */
-  function build(state) {
-    const a = state.an;
-    MK = (a.context && a.context.metric) || a.metric || 'revenue';
-    const filteredRows = (a.rows || []).filter((r) => {
+  /** Las filas de evolución que pasan los filtros de la página (patrón, señal, estado, anomalía, búsqueda, impacto y materialidad). */
+  function filterRows(a) {
+    const out = (a.rows || []).filter((r) => {
       if (a.pattern !== 'all' && r.pattern !== a.pattern) return false;
       if (a.signal !== 'all' && !(r.advanced && r.advanced.signal === a.signal)) return false;
       if ((a.stateFilter || 'all') !== 'all' && !(r.story && r.story.current && r.story.current.state === a.stateFilter)) return false;
@@ -548,6 +546,15 @@
       if (!isMaterial(a, r)) return false;
       return true;
     });
+    a._filteredRows = out;
+    return out;
+  }
+
+  /** Arma las partes de Evolución para Producto y evolución. Devuelve {early} si no hay nada que mostrar todavía. */
+  function build(state) {
+    const a = state.an;
+    MK = (a.context && a.context.metric) || a.metric || 'revenue';
+    const filteredRows = filterRows(a);
     const pageSize = Math.max(1, Number(a.pageSize) || 25);
     const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
     const page = Math.max(1, Math.min(pageCount, Number(a.page) || 1));
@@ -620,5 +627,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { build, filters, isMaterial, extras, contributionKpis, patternLabel: (id) => (PATTERN[id] && PATTERN[id][1]) || id };
+  FP.trendView = { build, filters, filterRows, assistant: analysisAssistant, isMaterial, extras, contributionKpis, patternLabel: (id) => (PATTERN[id] && PATTERN[id][1]) || id };
 })(typeof window !== 'undefined' ? window : globalThis);

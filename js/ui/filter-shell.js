@@ -18,10 +18,10 @@
     const groups = o.groups.filter((g) => g.html && g.html.trim()).map((g) => `<section class="fshell__group"><p class="fshell__title">${esc(g.title)}</p><div class="settings-grid">${g.html}</div></section>`).join('');
     return `<div class="fshell" data-fshell="${esc(o.page)}"${open ? ' data-open="1"' : ''}>
       ${o.primary ? `<div class="fshell__primary settings-grid">${o.primary}</div>` : ''}
-      <div class="fshell__bar">
-        <button type="button" class="btn btn--small fshell__toggle" data-action="fs-toggle" data-fs-page="${esc(o.page)}" aria-expanded="${open}" aria-controls="${id}">⚙ Filtros${n ? ` · ${n}` : ''}</button>
+      ${o.noToggle && !n ? '' : `<div class="fshell__bar">
+        ${o.noToggle ? '' : `<button type="button" class="btn btn--small fshell__toggle" data-action="fs-toggle" data-fs-page="${esc(o.page)}" aria-expanded="${open}" aria-controls="${id}">⚙ Filtros${n ? ` · ${n}` : ''}</button>`}
         ${chips}${n ? `<button type="button" class="btn btn--ghost btn--small" data-action="fs-clear" data-fs-page="${esc(o.page)}">Quitar todo</button>` : ''}
-      </div>
+      </div>`}
       <button type="button" class="fshell__backdrop" data-action="fs-toggle" data-fs-page="${esc(o.page)}" aria-label="Cerrar filtros" tabindex="-1"></button>
       <div class="fshell__panel" id="${id}" ${open ? '' : 'hidden'}>
         <div class="fshell__head"><b>Filtros</b><button type="button" class="btn btn--ghost btn--small" data-action="fs-toggle" data-fs-page="${esc(o.page)}">Cerrar</button></div>

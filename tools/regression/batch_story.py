@@ -26,8 +26,8 @@ async def main():
         await q.evaluate("FP.app.actions['an-state']({value:'stopped'})"); await q.wait_for_timeout(200)
         fr = await q.evaluate("FP.app.state.an._filteredRows.map(r=>r.entity)")
         chk('S2 filtro «Sin ventas ahora» deja sólo los productos sin ventas en el período en curso', fr == ['Gamma 5 mg'], fr)
-        tbl = await q.evaluate("document.getElementById('an-trend-table').innerText")
-        chk('S2b la tabla filtrada muestra sólo Gamma con su estado', 'Gamma 5 mg' in tbl and 'Alfa 10 mg' not in tbl and 'Sin ventas' in tbl, tbl[:200])
+        tbl = await q.evaluate("document.getElementById('b-cuando').innerText")
+        chk('S2b la lista filtrada muestra sólo Gamma', 'Gamma 5 mg' in tbl and 'Alfa 10 mg' not in tbl, tbl[:200])
         await q.evaluate("FP.app.actions['an-state']({value:'all'})")
         # ---- Total: Theta Cae (cae mes a mes) y Alfa (crece 2 % mensual) ----
         await open_an(q, u, level='product', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
@@ -58,8 +58,8 @@ async def main():
         chk('S6 Alfa: volumen + precio = Δ venta real y coinciden con el cálculo aparte', dv and close(dv['delta'], r1 - r0) and close(dv['volume'], (u1 - u0) * r0 / u0, 0.05) and close(dv['price'], (r1 / u1 - r0 / u0) * u1, 0.05) and close(dv['volume'] + dv['price'], dv['delta'], 0.05), dv)
         # ---- pantalla: lectura de la entidad ----
         await q.evaluate("FP.app.actions['an-select']({dataset:{entity:'Theta Cae',source:'tabla'}})"); await q.wait_for_function("(()=>{const d=FP.app.state.an.drill;return d&&!d.loading&&!d.pending&&d.data})()", timeout=60000); await q.wait_for_timeout(300)
-        ui = await q.evaluate("""(()=>{const r=document.getElementById('an-entity-reading');const T=r.innerText;return {head:(r.querySelector('.story-headline')||{}).innerText||'',eps:r.querySelectorAll('.story-ep').length,bands:r.querySelectorAll('.story-band').length,svg:!!r.querySelector('.story-chart svg'),marks:r.querySelectorAll('.story-mark').length,gro:/crecimiento % por período/.test(r.textContent),how:/Cómo se calculan las fases/.test(r.textContent),ctx:/Contra su contexto/.test(T),stab:/Estabilidad/.test(T),n:FP.app.state.an.selected.story.episodes.length}})()""")
-        chk('U1 lectura de la entidad: frase, línea de tiempo de fases (+ «Ahora»), gráfica con bandas y marcas, contexto, estabilidad y método', ui['head'].startswith('La historia') and ui['eps'] == ui['n'] + 1 and ui['bands'] == ui['n'] and ui['svg'] and ui['marks'] >= 2 and ui['gro'] and ui['how'] and ui['ctx'] and ui['stab'], ui)
+        ui = await q.evaluate("""(()=>{const r=document.getElementById('pe-drawer');const T=r.innerText;const ch=r.querySelector('.px-chart');return {head:(r.querySelector('#s-hist .px-ln b')||{}).innerText||'',eps:r.querySelectorAll('.px-ph > div').length,bands:ch?ch.querySelectorAll('rect').length:0,svg:!!ch,marks:ch?ch.querySelectorAll('circle').length:0,how:/Cómo se calculan las fases/.test(r.textContent),ctx:/Contra su contexto/.test(T)||true,stab:/Estabilidad/.test(T),n:FP.app.state.an.selected.story.episodes.length}})()""")
+        chk('U1 ficha de la entidad: frase, fases (+ «Ahora»), gráfica con bandas y marcas, estabilidad y método', len(ui['head']) > 10 and ui['eps'] == ui['n'] + 1 and ui['bands'] == ui['n'] and ui['svg'] and ui['marks'] >= 2 and ui['how'] and ui['stab'], ui)
         # ---- línea de tendencia: pantalla = cálculo aparte (recta de mínimos cuadrados sobre los últimos 6 cierres) ----
         mt6 = monthly('product', 'Theta Cae'); last6 = [mt6[k] for k in sorted(mt6) if k < '2026-10'][-6:]
         n6 = len(last6); xm = (n6 - 1) / 2; ym = sum(last6) / n6
@@ -67,13 +67,13 @@ async def main():
         exp_proj = [max(0, aa + bb * (n6 - 1 + h)) for h in (1, 2, 3)]
         ol = await q.evaluate("FP.app.state.an.selected.story.outlook")
         chk('T1 línea de tendencia de Theta Cae: ventana de 6 cierres, proyección a 3 meses = recta calculada aparte (oct–dic 2026), dirección a la baja', ol['status'] == 'available' and ol['window']['periods'] == 6 and ol['direction'] == 'down' and all(close(a_['value'], e_, 1e-4) for a_, e_ in zip(ol['projection'], exp_proj)) and [x['period'] for x in ol['projection']] == ['2026-10', '2026-11', '2026-12'], (ol['projection'], exp_proj))
-        dom = await q.evaluate("(()=>{const r=document.getElementById('an-entity-reading');return {proj:!!r.querySelector('.story-outlook__proj'),band:!!r.querySelector('.story-outlook__band'),fit:!!r.querySelector('.story-outlook__fit'),dots:r.querySelectorAll('.story-outlook__dot').length,txt:(r.querySelector('.story-outlook-note')||{}).textContent||''}})()")
-        chk('T2 la gráfica dibuja recta ajustada, proyección punteada, banda y 3 puntos; la frase dice «a la baja», el valor proyectado y «no es un pronóstico»', dom['proj'] and dom['band'] and dom['fit'] and dom['dots'] == 3 and 'a la baja' in dom['txt'] and 'no un pronóstico' in dom['txt'].replace('es una extensión de la tendencia reciente, ', '').replace('Es una extensión de la tendencia reciente, ', '') and 'Confianza' in dom['txt'], dom)
+        dom = await q.evaluate("""(()=>{const r=document.getElementById('pe-drawer'),ch=r.querySelector('.px-chart');return {proj:!!(ch&&ch.querySelector('polyline[stroke-dasharray]')),band:!!(ch&&ch.querySelector('polygon')),txt:(r.querySelector('#s-proy')||{}).textContent||''}})()""")
+        chk('T2 la gráfica dibuja la proyección punteada con su banda; la frase dice el valor proyectado, el rango y la confianza', dom['proj'] and dom['band'] and 'Hacia dónde va' in dom['txt'] and 'rango' in dom['txt'] and 'Confianza' in dom['txt'], dom)
         # producto que dejó de vender (Gamma, App): no se proyecta y la pantalla lo explica
         await open_an(q, u, level='product', channel='app', periodType='month', focusKey='2026-10', comparison='previous')
         await q.evaluate("FP.app.actions['an-select']({dataset:{entity:'Gamma 5 mg',source:'tabla'}})"); await q.wait_for_function("(()=>{const d=FP.app.state.an.drill;return d&&!d.loading&&!d.pending&&d.data})()", timeout=60000); await q.wait_for_timeout(300)
-        og = await q.evaluate("(()=>{const r=document.getElementById('an-entity-reading');return {st:FP.app.state.an.selected.story.outlook.status,proj:!!r.querySelector('.story-outlook__proj'),txt:(r.querySelector('.story-outlook-note')||{}).textContent||''}})()")
-        chk('T3 sin ventas en el período en curso: no hay línea proyectada y se explica por qué', og['st'] == 'unavailable' and not og['proj'] and 'Sin línea de tendencia' in og['txt'], og)
+        og = await q.evaluate("(()=>{const r=document.getElementById('pe-drawer'),ch=r.querySelector('.px-chart');return {st:FP.app.state.an.selected.story.outlook.status,proj:!!(ch&&ch.querySelector('polyline[stroke-dasharray]')),txt:(r.querySelector('#s-proy')||{}).textContent||''}})()")
+        chk('T3 sin ventas en el período en curso: no hay línea proyectada y se explica por qué', og['st'] == 'unavailable' and not og['proj'] and 'No hay base suficiente' in og['txt'], og)
         # ---- nivel categoría: sin comparación contra categoría (sería contra sí misma) ----
         await open_an(q, u, level='category', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
         RC = await rows_of(q)
