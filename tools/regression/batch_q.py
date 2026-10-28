@@ -34,7 +34,7 @@ async def main():
         for k in (1, 2):
             await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=90000); await q.click('[data-action="commit-staged"]')
             await q.wait_for_function(f"document.querySelectorAll('#view-carga .staging__head').length === {2 - k}", timeout=180000)
-        await q.goto(u + '#prodevol'); await q.wait_for_selector('#pe-quien table', timeout=90000); await q.wait_for_timeout(500)
+        await q.goto(u + '#prodevol'); await q.wait_for_selector('#b-quien table', timeout=90000); await q.wait_for_timeout(500)
         pa0 = await q.evaluate("[FP.app.state.pa.from, FP.app.state.pa.to, FP.app.state.pa.channel, FP.app.state.pa.comparison]")
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(600)
         await q.wait_for_function("FP.app.state.dx.products && FP.app.state.dx.products.result && !FP.app.state.dx.products.loading", timeout=90000); await q.wait_for_timeout(400)

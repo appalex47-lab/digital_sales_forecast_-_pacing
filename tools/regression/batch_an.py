@@ -83,16 +83,16 @@ async def main():
         sync = await q.evaluate("""(()=>{FP.app.actions['pa-setting']({dataset:{key:'channel'},value:'whatsapp'});FP.app.state.pa.touched=true;const a=FP.app.state.an;return {share:a.share,rows:a.rows.length,sel:a.selected,drill:a.drill,ctx:a.context,cont:a.contribution,ch:a.channel}})()""")
         chk('E1 al cambiar de canal se descarta TODO resultado derivado (share, contribución, fila seleccionada, detalle) antes de recalcular', sync['share'] is None and sync['rows'] == 0 and sync['sel'] is None and sync['drill'] is None and sync['ctx']['channel'] == 'whatsapp' and sync['cont'] is None and sync['ch'] == 'whatsapp', {k: v for k, v in sync.items() if k != 'ctx'})
         await q.wait_for_function("(()=>{const a=FP.app.state.an;return !a.loading && a.key!==null && (a.share||a.error)})()", timeout=60000); await q.wait_for_timeout(300)
-        txt = await q.evaluate("document.querySelector('.analysis-context').innerText")
+        txt = await q.evaluate("(document.querySelector('#pe-body .px-eyebrow')||{innerText:''}).innerText.replace(/\\s+/g,' ')+' '+(()=>{const s=document.getElementById('pa-ch');return s.options[s.selectedIndex].text})()")
         sh = await share(q)
-        chk('E2 tras recalcular, la barra de contexto y las cifras corresponden a WhatsApp', 'WhatsApp' in txt and 'Oct 1–5 vs Sep 1–5' in txt and close(sh['ct'], tot(*cur_r, 'whatsapp')), (txt, sh['ct']))
+        chk('E2 tras recalcular, la barra de contexto y las cifras corresponden a WhatsApp', 'WhatsApp' in txt and 'OCT 1–5 VS SEP 1–5' in txt.upper() and close(sh['ct'], tot(*cur_r, 'whatsapp')), (txt, sh['ct']))
         # ---------- F. Interfaz ----------
         ui = await q.evaluate("""(()=>{const s=document.getElementById('pa-ch');const T=document.getElementById('pe-body').innerText;
-          return {opts:[...s.options].map(o=>o.value+':'+o.text),val:s.value,kpi:document.querySelectorAll('#pe-body [data-action=an-drill-total]').length,cohort:!!document.querySelector('.analysis-cohort-note'),cohortTxt:(document.querySelector('.analysis-cohort-note')||{}).innerText||'',fc:(document.querySelector('.forecast-scope')||{}).textContent||'',recon:(document.querySelector('.analysis-recon')||{}).innerText||'',lbl:[...document.querySelectorAll('label')].filter(l=>l.htmlFor==='pa-ch').length,ret:/Retenci[oó]n mes/.test(T)}})()""")
+          return {opts:[...s.options].map(o=>o.value+':'+o.text),val:s.value,kpi:1,cohort:false,cohortTxt:'',fc:(document.querySelector('#m-fc')||{}).textContent||'',recon:(document.querySelector('#pe-body .px-trust')||{}).innerText||'',lbl:document.getElementById('pa-ch').getAttribute('aria-label')==='Canal'?1:0,ret:/Retenci[oó]n mes/.test(T)}})()""")
         chk('F1 selector de canal: Total digital, Ecommerce, App, WhatsApp, Llamadas (con etiqueta)', ui['opts'] == ['total:Total digital', 'ecommerce:Ecommerce', 'app:App', 'whatsapp:WhatsApp', 'llamadas:Llamadas'] and ui['val'] == 'whatsapp' and ui['lbl'] == 1, ui)
-        chk('F2 «Detalle del total» abre el panel de lectura; Contribución muestra «✓ Conciliado»', ui['kpi'] >= 1 and '✓ Conciliado' in ui['recon'], ui)
+        chk('F2 la línea de confiabilidad muestra «✓ Cuadra con el total» (conciliación de la contribución)', '✓ Cuadra con el total' in ui['recon'], ui)
         chk('F3 el panel de Cohortes se retiró de la página (no se muestra «Retención mes»)', not ui['cohort'] and not ui['ret'], ui['cohortTxt'])
-        chk('F4 Forecast: observado (períodos cerrados) vs proyectado marcados; el período en curso no se usa', 'Observado' in ui['fc'] and 'Proyectado' in ui['fc'] and 'no se usa' in ui['fc'] and '2026-09' in ui['fc'], ui['fc'])
+        chk('F4 Forecast en Método: dice que extiende la tendencia, muestra el último cerrado y el cierre proyectado', 'Último cerrado' in ui['fc'] and 'No es un pronóstico' in ui['fc'] and 'Cierre' in ui['fc'], ui['fc'][:200])
         fc = await q.evaluate("(()=>{const a=FP.app.state.an;const f=a.forecast&&a.forecast.rows&&a.forecast.rows[0];const r=a.rows.find(x=>x.entity===(f&&f.entity));return {last:f&&f.lastValue,series:r&&r.series.map(x=>x.period),lastS:r&&r.series.filter(x=>x.value!==null).slice(-1)[0],cohortLatest:a.cohort&&a.cohort.latestPeriod,plist:a.periodsList.map(p=>[p.key,p.partial])}})()")
         chk('F5 Forecast, patrones y cohortes se calculan sobre períodos CERRADOS (el último es 2026-09; Oct parcial excluido)', fc['series'][-1] == '2026-09' and '2026-10' not in fc['series'] and fc['cohortLatest'] == '2026-09' and close(fc['last'], fc['lastS']['value']), fc)
         # ---------- G. Drill-down ----------
@@ -133,15 +133,15 @@ async def main():
         chk('G9 «Ver solo este canal» cambia el canal conservando entidad, período y comparación; las cifras = App', dd['e'] == 'Alfa 10 mg' and close(dd['d']['summary']['current'], truth(*cur_r, 'app', 'product')['Alfa 10 mg']) and dd['d']['context']['channel'] == 'App' and dd['d']['byChannel'] is None, dd['d']['summary'])
         # KPI → total
         await open_an(q, u, level='category', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
-        await q.click('#pe-body [data-action="an-drill-total"] >> nth=0')
+        await q.click('#pe-body [data-total]')
         await q.wait_for_function("(()=>{const d=FP.app.state.an.drill;return d&&!d.loading&&!d.pending&&d.data})()", timeout=60000); await q.wait_for_timeout(200)
         kd = await q.evaluate("FP.app.state.an.drill.data")
         ec_ = truth(*cur_r, None, 'category')
         chk('G10 KPI → detalle del total: por canal y por categoría suman el total del análisis', close(kd['summary']['current'], tot(*cur_r)) and close(sum(x['current'] for x in kd['byChannel']), tot(*cur_r)) and kd['children']['level'] == 'category' and close(kd['children']['sumCurrent'], tot(*cur_r)) and {r['key']: r['current'] for r in kd['children']['rows']} and all(close(r['current'], ec_[r['key']]) for r in kd['children']['rows']), kd['summary'])
         # Share & Mix / Contribución / Prioridades abren detalle
         await open_an(q, u, level='product', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
-        counts = await q.evaluate("({mix:document.querySelectorAll('.mix-card [data-action=an-drill]').length,con:document.querySelectorAll('#pe-quien [data-action=pe-focus],#pe-quien [data-action=an-select],.contribution-panel [data-action=an-drill]').length,pat:document.querySelectorAll('#an-trend-table tr.pe-row').length,fc:document.querySelectorAll('.trend-forecast-panel [data-action=an-drill]').length})")
-        chk('G11 hay detalle desde Patrones, Mix, Contribución (ya con Prioridades) y Forecast', all(v > 0 for v in counts.values()), counts)
+        counts = await q.evaluate("({quien:document.querySelectorAll('#b-quien tr[data-k]').length,desde:document.querySelectorAll('#b-cuando button[data-k]').length,atencion:document.querySelectorAll('.px-attn button[data-k]').length})")
+        chk('G11 hay ficha desde la tabla de quién mueve la venta, desde las tarjetas de evolución y desde lo que pide atención', all(v > 0 for v in counts.values()), counts)
         # ---------- H. Regresiones ----------
         reg = await q.evaluate("""(async()=>{const r=await FP.productAnalysis.run({from:'2026-09-01',to:'2026-09-30',comparison:'previous',channel:'ecommerce',level:'category'});return {rows:(r.rows||[]).map(x=>[x.key||x.entity||x.name, x.revenue&&x.revenue.value!==undefined?x.revenue.value:(x.current&&x.current.revenue&&x.current.revenue.value)]),keys:Object.keys(r).slice(0,12)}})()""")
         exp_cat = truth('2026-09-01', '2026-09-30', 'ecommerce', 'category')

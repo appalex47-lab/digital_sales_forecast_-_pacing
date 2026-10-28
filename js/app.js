@@ -2985,6 +2985,7 @@
     'an-forecast-page'(el) { const rows = state.an.forecast && Array.isArray(state.an.forecast.rows) ? state.an.forecast.rows : []; const pages = Math.max(1, Math.ceil(rows.length/6)); state.an.forecastPage = Math.max(1, Math.min(pages, Number(el.dataset.value)||1)); render(); },
     'an-assistant-toggle'() {
       state.an.assistant = { ...state.an.assistant, open: !state.an.assistant.open };
+      if (state.an.assistant.open) { state.ux.px = { ...(state.ux.px || {}), meth: true }; state.peAnchor = 'm-ai'; }   // el asistente vive al final de «Método y definiciones»: se abre y se baja hasta él
       repaintAn();
     },
     'an-assistant-question'(el) {
@@ -3113,10 +3114,10 @@
       FP.exporter.download(`contribucion_${(ctx.focus && ctx.focus.key) || 'periodo'}_${a.channel || 'total'}.csv`, csv, 'text/csv');
     },
     'an-export-reading'() {
-      const el = document.getElementById('an-entity-reading');
+      const el = document.getElementById('an-entity-reading') || document.getElementById('db');
       const r = state.an.selected;
       if (!el || !r) { FP.ui.toast('Elige una entidad para descargar su lectura.'); return; }
-      const txt = el.innerText.replace(/\n{3,}/g, '\n\n').trim();
+      const txt = (el.id === 'db' ? `${r.entity}\n\n` : '') + el.innerText.replace(/\n{3,}/g, '\n\n').trim();
       const name = String(r.entity).replace(/[^\w\-]+/g, '_').slice(0, 50);
       FP.exporter.download(`lectura_${name}.txt`, txt, 'text/plain');
     },

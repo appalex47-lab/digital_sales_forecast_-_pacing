@@ -21,7 +21,7 @@ async def run(b, w, h, tag):
     await q.evaluate("FP.app.actions['pe-evolevel']({value:'product'})")
     await q.wait_for_function("!FP.app.state.an.loading && FP.app.state.an.rows.length>0", timeout=90000)
     await q.wait_for_timeout(400)
-    lv = await q.evaluate("[FP.app.state.an.level, FP.app.state.an.rows.length, !!document.querySelector('#an-trend-table'), !document.getElementById('an-loader')]")
+    lv = await q.evaluate("[FP.app.state.an.level, FP.app.state.an.rows.length, !!document.querySelector('#b-cuando .px-sm'), !document.getElementById('an-loader')]")
     chk(f'{tag}2 al terminar aparece la tabla del último nivel elegido, sin quedarse vacía', lv[0] == 'product' and lv[1] > 0 and lv[2] and lv[3], lv)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}3 sin desborde horizontal ({ov}px)', ov <= 1, ov)
 async def main():

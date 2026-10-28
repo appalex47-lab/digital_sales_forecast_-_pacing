@@ -11,9 +11,9 @@ async def run(b, w, h, tag):
     await load_products(q, u)
     await open_an(q, u, level='product', channel='total', periodType='month', focusKey='2026-10', comparison='previous')
     vis = lambda sel: q.evaluate("(s)=>{const e=document.querySelector(s);return !!e&&e.getBoundingClientRect().width>0&&e.offsetParent!==null||(!!e&&getComputedStyle(e).position==='fixed')}", sel)
-    chk(f'{tag}1 lo básico está a la vista (canal, granularidad, periodo, comparación)', await vis('#pa-ch') and await vis('#pa-gran') and await vis('#pa-focus') and await vis('#pa-cmp'), None)
+    chk(f'{tag}1 lo básico está a la vista (canal, periodo, comparación); la granularidad está en Filtros', await vis('#pa-ch') and await vis('#pa-focus') and await vis('#pa-cmp') and not await vis('#pa-gran'), None)
     chk(f'{tag}2 la geografía está en el panel cerrado', not await vis('#pa-g-region') , None)
-    await q.click('.fshell[data-fshell=pa] .fshell__toggle'); await q.wait_for_timeout(300)
+    await q.click('.px-topbar [data-action="fs-toggle"]'); await q.wait_for_timeout(300)
     pan = await q.evaluate("(()=>{const p=document.querySelector('.fshell__panel');return !!p&&getComputedStyle(p).display!=='none'&&p.getBoundingClientRect().height>0})()")
     chk(f'{tag}3 «Filtros» abre el panel', pan, None)
     if mobile:
@@ -21,14 +21,14 @@ async def run(b, w, h, tag):
         chk(f'{tag}3b en móvil el panel es una hoja inferior fija ({pos})', pos == 'fixed', pos)
         chk(f'{tag}3c hay botón «Ver resultados»', await vis('.fshell__foot .btn--primary'), None)
         await q.click('.fshell__foot .btn--primary')
-    else: await q.click('.fshell[data-fshell=pa] .fshell__toggle')
+    else: await q.click('.px-topbar [data-action="fs-toggle"]')
     await q.wait_for_timeout(300)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}7 sin desborde horizontal ({ov}px)', ov <= 1, ov)
     # Productos
     await q.evaluate("location.hash='#prodevol'"); await q.wait_for_timeout(1200)
     ok = await q.evaluate("!!document.querySelector('#pe-body .fshell')")
     chk(f'{tag}8 Productos usa el mismo contenedor', ok, None)
-    chk(f'{tag}8b Canal, granularidad, periodo y comparación a la vista (Desde/Hasta solo en modo Rango) y geografía en el panel', await vis('#pa-ch') and await vis('#pa-gran') and await vis('#pa-focus') and await vis('#pa-cmp') and not await vis('#pa-from'), None)
+    chk(f'{tag}8b Canal, periodo y comparación a la vista (granularidad en el panel) (Desde/Hasta solo en modo Rango) y geografía en el panel', await vis('#pa-ch') and await vis('#pa-focus') and await vis('#pa-cmp') and not await vis('#pa-from'), None)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}9 Productos sin desborde ({ov}px)', ov <= 1, ov)
 async def main():
     async with async_playwright() as p:

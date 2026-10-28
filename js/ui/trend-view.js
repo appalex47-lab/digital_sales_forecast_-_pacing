@@ -442,7 +442,7 @@
     const granularNote = ['sku', 'product'].includes(p.level) ? '' : `<p class="field__hint pvm-level-note"><strong>Nivel ${esc(lvl.toLowerCase())}:</strong> el precio por unidad de una ${esc(lvl.toLowerCase())} mezcla productos de precios distintos, así que su «Precio» incluye cambios internos de mezcla. Para precio puro, analiza por Producto o SKU.</p>`;
     return `<section class="panel panel--inner pvm-panel" id="an-pvm">${head('Responde <strong>cuánto del cambio de venta viene de vender más o menos unidades, de cobrar distinto por unidad o de cambiar qué se vende</strong>. Mismo canal, período y comparación equivalente que el resto del módulo.')}<div class="panel__body">
       ${p.status === 'partial' ? `<p class="note note--warning"><strong>Descomposición parcial.</strong> ${esc(p.message)}</p>` : ''}
-      <div class="metric-grid"><div class="metric"><span>Variación de venta</span><strong>${smny(t.delta)}</strong></div><div class="metric"><span>Volumen</span><strong>${smny(t.volume)}</strong><small>Δ unidades ${F().integer(Math.round(t.units1 - t.units0))}</small></div><div class="metric"><span>Precio</span><strong>${smny(t.price)}</strong><small>cobro por unidad</small></div><div class="metric"><span>Mezcla</span><strong>${smny(t.mix)}</strong><small>qué se vende</small></div><div class="metric"><span>Nuevos / perdidos</span><strong>${smny(nl)}</strong><small>${t.newCount} nuevo(s) · ${t.lostCount} sin ventas ahora</small></div>${Math.abs(t.noUnits) > 0.5 || t.noUnitsCount ? `<div class="metric"><span>Sin unidades</span><strong>${smny(t.noUnits)}</strong><small>${t.noUnitsCount} sin unidades válidas</small></div>` : ''}</div>
+      <div class="metric-grid pvm-kpis"><div class="metric"><span>Variación de venta</span><strong>${smny(t.delta)}</strong></div><div class="metric"><span>Volumen</span><strong>${smny(t.volume)}</strong><small>Δ unidades ${F().integer(Math.round(t.units1 - t.units0))}</small></div><div class="metric"><span>Precio</span><strong>${smny(t.price)}</strong><small>cobro por unidad</small></div><div class="metric"><span>Mezcla</span><strong>${smny(t.mix)}</strong><small>qué se vende</small></div><div class="metric"><span>Nuevos / perdidos</span><strong>${smny(nl)}</strong><small>${t.newCount} nuevo(s) · ${t.lostCount} sin ventas ahora</small></div>${Math.abs(t.noUnits) > 0.5 || t.noUnitsCount ? `<div class="metric"><span>Sin unidades</span><strong>${smny(t.noUnits)}</strong><small>${t.noUnitsCount} sin unidades válidas</small></div>` : ''}</div>
       <p class="note"><strong>Lectura:</strong> ${reading}</p>
       <p class="note analysis-recon ${rec.ok ? 'analysis-recon--ok' : 'note--warning'}"><strong>${rec.ok ? '✓ Conciliado' : '⚠ No concilia'}:</strong> Volumen + Precio + Mezcla + Nuevos/Perdidos${t.noUnitsCount ? ' + Sin unidades' : ''} ${mny(rec.sum)} ${rec.ok ? '=' : '≠'} variación total ${mny(rec.delta)}.</p>
       ${granularNote}
@@ -534,11 +534,9 @@
     }
   }
 
-  /** Arma las partes de Evolución para Producto y evolución. Devuelve {early} si no hay nada que mostrar todavía. */
-  function build(state) {
-    const a = state.an;
-    MK = (a.context && a.context.metric) || a.metric || 'revenue';
-    const filteredRows = (a.rows || []).filter((r) => {
+  /** Las filas de evolución que pasan los filtros de la página (patrón, señal, estado, anomalía, búsqueda, impacto y materialidad). */
+  function filterRows(a) {
+    const out = (a.rows || []).filter((r) => {
       if (a.pattern !== 'all' && r.pattern !== a.pattern) return false;
       if (a.signal !== 'all' && !(r.advanced && r.advanced.signal === a.signal)) return false;
       if ((a.stateFilter || 'all') !== 'all' && !(r.story && r.story.current && r.story.current.state === a.stateFilter)) return false;
@@ -548,6 +546,15 @@
       if (!isMaterial(a, r)) return false;
       return true;
     });
+    a._filteredRows = out;
+    return out;
+  }
+
+  /** Arma las partes de Evolución para Producto y evolución. Devuelve {early} si no hay nada que mostrar todavía. */
+  function build(state) {
+    const a = state.an;
+    MK = (a.context && a.context.metric) || a.metric || 'revenue';
+    const filteredRows = filterRows(a);
     const pageSize = Math.max(1, Number(a.pageSize) || 25);
     const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
     const page = Math.max(1, Math.min(pageCount, Number(a.page) || 1));
@@ -567,7 +574,8 @@
     const closeCell = (r) => { const f = fcMap.get(r.entity), p0 = f && Array.isArray(f.periods) ? f.periods[0] : null;
       if (!p0 || !Number.isFinite(p0.value)) return '<td class="num" data-label="Cierre proyectado"><span class="cell-sub">Sin proyección</span></td>';
       const band = Number.isFinite(p0.low) && Number.isFinite(p0.high) ? ` title="Rango razonable: ${esc(money(p0.low))} a ${esc(money(p0.high))}"` : '';
-      return `<td class="num" data-label="Cierre proyectado"${band}>${money(p0.value)}<span class="cell-sub">${esc(String(p0.period))} · proyección · confianza ${esc(f.confidence || '—')}</span></td>`; };
+      const CONF = { high: 'alta', medium: 'media', low: 'baja' };
+      return `<td class="num" data-label="Cierre proyectado"${band}>${money(p0.value)}<span class="cell-sub">${esc(String(p0.period))} · conf. ${esc(CONF[f.confidence] || f.confidence || '—')}</span></td>`; };
     const anomalyCount=filteredRows.filter(r=>r.anomaly).length;
     a._filteredRows = filteredRows;
     const hiddenMat = (a.rows || []).filter((r) => !isMaterial(a, r)).length;
@@ -580,7 +588,7 @@
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver de dónde viene el cambio en pesos"><span>Cambio${D()}</span><strong>${money(delta)}</strong></button>
         <button type="button" class="metric metric--drill" data-action="an-drill-total" data-source="kpi" aria-label="Ver de dónde viene el cambio porcentual"><span>Cambio %</span><strong>${signedPct(deltaPct)}</strong></button>
       </div>`,
-      table: `${total ? `<p class="field__hint trend-count">${F().integer(total)} de ${F().integer(allTotal)} entidades · ${growth} crecen · ${decline} caen${anomalyCount ? ` · ${anomalyCount} con anomalía` : ''}${hiddenMat ? ` · ${F().integer(hiddenMat)} ocultas por materialidad (menos de ${a.minSharePct} % del total)` : ''}</p><div class="table-wrap trend-table-wrap" id="an-trend-table"><table class="table ds-table trend-table" data-pe-fold="evo"><thead><tr><th>Entidad</th><th>Tendencia</th><th>Patrón</th><th>Desde</th><th>Ahora</th><th class="num">Persistencia</th><th class="num" data-help="cierreProyectado">Cierre proyectado</th></tr></thead><tbody>${rows.map((r) => { const pr = prioMap.get(r.entity); return `<tr data-pe-key="${esc(EN(r.entity))}" data-pe-act="an-select"><th scope="row"><div class="entity-cell"><strong title="${esc(EN(r.entity))}">${esc(EN(r.entity))}</strong></div></th><td>${spark(r.series || [])}</td><td>${pill(r.pattern)}</td><td class="num">${esc(r.startPeriod || F().DASH)}</td><td>${statePill(r)}</td><td class="num">${pr && pr.consecutivePeriods ? `${pr.consecutivePeriods} per.` : F().DASH}</td>${closeCell(r)}</tr>`; }).join('')}</tbody></table></div><div class="pager trend-pager" aria-label="Paginación de evolución y patrones"><span>${F().integer((page - 1) * pageSize + 1)}–${F().integer(Math.min(page * pageSize, filteredRows.length))} de ${F().integer(filteredRows.length)} entidades</span><div class="btn-row"><button type="button" class="btn btn--small" data-action="an-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><span class="num" aria-current="page">Página ${page} de ${pageCount}</span><button type="button" class="btn btn--small" data-action="an-page" data-value="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>Siguiente</button></div></div>` : `<div class="empty"><strong>No hay suficiente historia</strong>Se necesitan al menos ${FP.trendEngine.DEFAULTS.minPeriods} períodos con datos para clasificar una entidad.</div>`}`,
+      table: `${total ? `<p class="field__hint trend-count">${F().integer(total)} de ${F().integer(allTotal)} entidades · ${growth} crecen · ${decline} caen${anomalyCount ? ` · ${anomalyCount} con anomalía` : ''}${hiddenMat ? ` · ${F().integer(hiddenMat)} ocultas por materialidad (menos de ${a.minSharePct} % del total)` : ''}</p><div class="table-wrap trend-table-wrap" id="an-trend-table"><table class="table ds-table trend-table" data-pe-fold="evo"><thead><tr><th>Entidad</th><th>Tendencia</th><th>Patrón</th><th>Desde</th><th>Ahora</th><th class="num">Persistencia</th><th class="num" data-help="cierreProyectado">Cierre proyectado</th></tr></thead><tbody>${rows.map((r) => { const pr = prioMap.get(r.entity); return `<tr data-pe-key="${esc(EN(r.entity))}" data-pe-act="an-select"><th scope="row"><div class="entity-cell"><strong title="${esc(EN(r.entity))}">${esc(EN(r.entity))}</strong></div></th><td>${spark(r.series || [])}</td><td>${pill(r.pattern)}</td><td class="num">${esc(r.startPeriod || F().DASH)}</td><td>${statePill(r)}</td><td class="num">${pr && pr.consecutivePeriods ? `${pr.consecutivePeriods} per.` : F().DASH}</td>${closeCell(r)}</tr>`; }).join('')}</tbody></table></div>${pageCount > 1 ? `<div class="pager trend-pager" aria-label="Paginación de evolución y patrones"><span>${F().integer((page - 1) * pageSize + 1)}–${F().integer(Math.min(page * pageSize, filteredRows.length))} de ${F().integer(filteredRows.length)} entidades</span><div class="btn-row"><button type="button" class="btn btn--small" data-action="an-page" data-value="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><span class="num" aria-current="page">Página ${page} de ${pageCount}</span><button type="button" class="btn btn--small" data-action="an-page" data-value="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>Siguiente</button></div></div>` : ''}` : `<div class="empty"><strong>No hay suficiente historia</strong>Se necesitan al menos ${FP.trendEngine.DEFAULTS.minPeriods} períodos con datos para clasificar una entidad.</div>`}`,
       reading: `<section class="panel panel--inner entity-reading-panel" id="an-entity-reading"><div class="panel__head"><div><h3 class="panel__title">Lectura de la entidad</h3></div><div class="panel__actions"><button type="button" class="btn btn--small btn--ghost" data-action="an-diagnose">Diagnosticar esto</button>${a.selected && a.level !== 'channel' ? `<button type="button" class="btn btn--small btn--ghost" data-action="an-to-product" data-entity="${esc(a.selected.entity)}" title="Abre Categoría → Producto con esta selección, canal y periodo: embudo, CR y patrones">Ver embudo y señales</button>` : ''}${a.selected ? '<button type="button" class="btn btn--small btn--ghost" data-action="an-export-reading">Descargar lectura</button><button type="button" class="btn btn--small btn--ghost" data-action="an-clear-selection">Cerrar lectura</button>' : ''}</div></div><div class="panel__body">${a.drill && a.drill.scope === 'total' ? '' : selectedCard(a)}${safe('Detalle y trazabilidad', () => drillPanel(a))}</div></section>`,
       contribution: safe('Contribución y origen', () => contributionPanel(a)),
       pvm: safe('Volumen, precio y mezcla', () => pvmPanel(a)),
@@ -619,5 +627,5 @@
     if (!(tot > 0)) return true;
     return Math.max(Math.abs(r.currentValue || 0), Math.abs(r.previousValue || 0)) >= (pct / 100) * tot;
   }
-  FP.trendView = { build, filters, isMaterial, extras, contributionKpis, patternLabel: (id) => (PATTERN[id] && PATTERN[id][1]) || id };
+  FP.trendView = { build, filters, filterRows, assistant: analysisAssistant, isMaterial, extras, contributionKpis, patternLabel: (id) => (PATTERN[id] && PATTERN[id][1]) || id };
 })(typeof window !== 'undefined' ? window : globalThis);

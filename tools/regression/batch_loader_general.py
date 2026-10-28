@@ -21,6 +21,7 @@ async def run(b, w, h, tag):
     await q.wait_for_function("FP.app.state.an.drill && !FP.app.state.an.drill.loading", timeout=60000)
     pend = await q.evaluate("(()=>{const d=FP.app.state.an.drill;return d.pending})()")
     await q.wait_for_function("FP.app.state.an.drill && !FP.app.state.an.drill.loading && !FP.app.state.an.drill.pending", timeout=90000)
+    await q.wait_for_timeout(300)
     chk(f'{tag}2 al terminar el detalle ya no queda loader', await q.evaluate("!document.querySelector('#an-drill .ldr')"), pend)
     ov = await q.evaluate("document.documentElement.scrollWidth - innerWidth"); chk(f'{tag}3 sin desborde horizontal ({ov}px)', ov <= 1, ov)
     # mensaje de error entendible
