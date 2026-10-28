@@ -28,6 +28,32 @@
     return se > 0 ? (a - b) / se : 0;
   }
 
+
+  /** De dónde viene el cambio de tráfico (fuente, dispositivo, campaña o landing, con el archivo de Segmentos): solo para el total y por canal. */
+  function trafficSource(m, state) {
+    const cfg = CFG(), pa = state.pa, DS = FP.dataStore;
+    if (!DS || !FP.segmentsView || !FP.trafficConversionEngine || pa.comparison !== 'previous' || !state.store) return null;
+    let recs; try { recs = DS.segmentIndex(state.store); } catch (e) { return null; }
+    if (!recs || !recs.list || !recs.list.length || !recs.byDim) return null;
+    const from = m.r.period.from, to = m.r.period.to, ch = pa.channel || 'total', memo = (k, fn) => DS.cached(state.store, k, ['segments'], fn);
+    let best = null;
+    [['source', 'fuente'], ['device', 'dispositivo'], ['campaign', 'campaña'], ['landing', 'landing']].forEach(([dim, lab]) => {
+      if (!recs.byDim.has(dim)) return;
+      const key = `${from}|${to}|${pa.periodType}|${ch}|${dim}`;
+      const res = memo(`segsum|${key}`, () => FP.segmentsView.summarize(recs, { from, to, channel: ch, dimension: dim, periodType: pa.periodType }));
+      if (!res || !res.rows.length) return;
+      const dec = memo(`segdec|${key}|auto`, () => FP.trafficConversionEngine.analyze(res, {}));
+      if (!dec || dec.status !== 'ok' || !dec.total.traffic || Math.abs(dec.total.traffic) < 0.01 * Math.abs(dec.total.base || 0)) return;
+      dec.allItems.filter((q) => q.grouped === 0 && fin(q.trafficDeltaPct)).forEach((q) => {
+        const sh = q.traffic / dec.total.traffic;
+        if (q.traffic * dec.total.traffic > 0 && sh >= cfg.sourceShare && Math.abs(q.trafficDeltaPct) >= cfg.sourceMinPct && (!best || sh > best.sh)) best = { sh, q, lab };
+      });
+    });
+    if (!best) return null;
+    const { q, sh, lab } = best;
+    return { s: `Tráfico de ${esc(q.label)} ${pc(q.trafficDeltaPct, 0)} (por ${lab})`, l: `Por ${lab}, el tráfico de ${bd(esc(q.label))} (${pc(q.trafficDeltaPct, 0)}) explica ${Math.round(sh * 100)} % del efecto del tráfico en la venta` };
+  }
+
   function rows(m, c, key, d, state) {
     const x = X(), out = [], cfg = CFG(), ref = esc(x.refName(m.ci)), tot = Boolean(c.total), ev = c.ev, rx = c.x;
     const st = ev && ev.story && ev.story.status === 'available' ? ev.story : null;
@@ -140,6 +166,8 @@
       const nt = bc.reduce((t, q) => t + q.delta, 0), tp = bc.slice().sort((p, q) => q.delta * Math.sign(nt) - p.delta * Math.sign(nt))[0];
       if (nt !== 0 && tp.delta * nt > 0 && tp.delta / nt >= cfg.channelShare) ex.push({ s: `${esc(tp.label)} explica ${bd(Math.round(tp.delta / nt * 100) + ' %')} del cambio`, l: `${bd(esc(tp.label))} explica ${Math.round(tp.delta / nt * 100)} % del cambio entre canales` });
     }
+    /* de dónde viene el tráfico (solo el total) */
+    if (tot) { const ts = trafficSource(m, state); if (ts) ex.push(ts); }
     /* nivel sin embudo */
     if (!fo && (GEO_LV.includes(m.level) || (m.state.pa.geo && Object.values(m.state.pa.geo).some(Boolean)))) ex.push({ s: 'Sin embudo en este nivel', l: 'No hay embudo en este nivel: el estado, la ciudad y la sucursal se definen en el checkout, después de la ficha' });
     if (ex.length) add('Qué lo explica', ex.slice(0, cfg.explainMaxShort).map((q) => q.s).join('. ') + '.', ex.map((q) => q.l).join('. ') + '. Es una descomposición, no una causa.');

@@ -673,6 +673,8 @@
         channelShare: 0.6,      // un canal concentra ≥ 60 % del cambio
         customersMinPct: 0.10,  // clientes: algún tipo cambia ≥ 10 % …
         customersMinN: 10,      // … y al menos 10 clientes (meses cerrados)
+        sourceShare: 0.5,       // de dónde viene el tráfico: un segmento explica ≥ 50 % del efecto del tráfico …
+        sourceMinPct: 0.10,     // … y su tráfico cambia ≥ 10 %
         seasonDiffPp: 2,        // época: se compara si difiere ≥ 2 pp del año anterior
         seasonMinChange: 0.05,  // o el cambio es ≥ 5 % (para decir «normal para la época»)
         contextDiffPp: 5,       // contra su contexto: «en línea» si la diferencia es < 5 pp
