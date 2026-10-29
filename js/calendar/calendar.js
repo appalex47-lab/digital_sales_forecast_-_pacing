@@ -37,8 +37,10 @@
   function toISODate(date) {
     const d = parseDate(date);
     if (!d) return null;
-    const p = (n) => String(n).padStart(2, '0');
-    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    return `${y}-${m < 10 ? '0' + m : m}-${day < 10 ? '0' + day : day}`;
   }
 
   function addDays(date, n) {
@@ -157,12 +159,23 @@
     };
   }
 
-  /** Lista de fechas ISO entre start y end (inclusive). */
+  /** Lista de fechas ISO entre start y end (inclusive).
+   * Optimización: iterar usando un único objeto Date mutable y formatear 'YYYY-MM-DD'
+   * directamente sin asignaciones intermedias de Date ni llamadas a parseDate por día.
+   */
   function eachDay(start, end) {
     const s = parseDate(start), e = parseDate(end);
     if (!s || !e || s > e) return [];
     const out = [];
-    for (let t = s.getTime(); t <= e.getTime(); t += DAY_MS) out.push(toISODate(new Date(t)));
+    const cur = new Date(s.getTime());
+    const endMs = e.getTime();
+    while (cur.getTime() <= endMs) {
+      const y = cur.getUTCFullYear();
+      const m = cur.getUTCMonth() + 1;
+      const day = cur.getUTCDate();
+      out.push(`${y}-${m < 10 ? '0' + m : m}-${day < 10 ? '0' + day : day}`);
+      cur.setUTCDate(day + 1);
+    }
     return out;
   }
 
