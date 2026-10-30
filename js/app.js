@@ -1160,55 +1160,68 @@
    * y el paquete usan estos mismos constructores, así que un archivo del paquete es idéntico al que se descarga desde su vista.
    */
   const EXPORT_BUILDERS = {
-    forecast({ strict = true } = {}) {
+    forecast({ strict = true, previewOnly = false } = {}) {
       const run = ensureForecast();
       if (!run || (strict && run.plan.source === 'none')) return { reason: 'No hay plan para comparar ni forecast que proyectar.', missing: ['Meta y plan distribuido (o plan importado)'] };
+      const file = `forecast_export_${run.referenceDate}.json`;
+      if (previewOnly) return { file, ok: true };
       const change = FP.forecastVersioning.forecastChange(state.fc.registry, run);
-      return { file: `forecast_export_${run.referenceDate}.json`, obj: FP.forecastExport.buildForecastExport(run, { targets: state.targets, registry: state.fc.registry, change }) };
+      return { file, obj: FP.forecastExport.buildForecastExport(run, { targets: state.targets, registry: state.fc.registry, change }) };
     },
-    reforecast() {
+    reforecast({ previewOnly = false } = {}) {
       const base = ensureForecast();
       if (!base || base.plan.source === 'none') return { reason: 'Sin plan no hay requerimiento que calcular.', missing: ['Meta y plan distribuido (o plan importado)'] };
       const rf = ensureReforecast();
       if (!rf) return { reason: 'No se pudo calcular el reforecast.', missing: ['Venta real del año'] };
-      return { file: `reforecast_export_${rf.referenceDate}.json`, obj: FP.reforecastExport.buildReforecastExport(rf, { registry: state.rf.registry,
+      const file = `reforecast_export_${rf.referenceDate}.json`;
+      if (previewOnly) return { file, ok: true };
+      return { file, obj: FP.reforecastExport.buildReforecastExport(rf, { registry: state.rf.registry,
         change: FP.reforecastVersioning.reforecastChange(state.rf.registry, rf) }) };
     },
-    analysis() {
+    analysis({ previewOnly = false } = {}) {
       const d = ensureDiagnostic();
       if (!d) return { reason: 'No hay brecha que diagnosticar.', missing: ['Plan', 'Venta real del año'] };
+      const file = `analysis_export_${d.period.key}_${d.channel.id}.json`;
+      if (previewOnly) return { file, ok: true };
       const cp = state.pa.result && (state.pa.channel === (d.channel && d.channel.id)) ? state.pa.result : null;
-      return { file: `analysis_export_${d.period.key}_${d.channel.id}.json`, obj: FP.analysisExport.buildAnalysisExport(d, { run: state.fc.run, rf: state.rf.run, ai: state.dx.ai.result, categoryProduct: cp }) };
+      return { file, obj: FP.analysisExport.buildAnalysisExport(d, { run: state.fc.run, rf: state.rf.run, ai: state.dx.ai.result, categoryProduct: cp }) };
     },
-    async categoryProduct() {
+    async categoryProduct({ previewOnly = false } = {}) {
       if (!state.pa.result && FP.productStore.available() && (FP.productStore.meta || {}).batches) await ensureProductAnalysis();
       const r = state.pa.result;
       if (!r) return { reason: 'No hay datos de productos cargados.', missing: ['Archivo de venta por producto (y, si quieres CR y embudo, el de funnel de GA4)'] };
+      const file = `category_product_analysis_export_${r.period.from}_${r.period.to}.json`;
+      if (previewOnly) return { file, ok: true };
       const obj = FP.categoryProductExport.buildCategoryProductExport(r, { batches: await FP.productStore.listBatches(), diagnosis: state.dx.run, cutoff: state.fc.run ? state.fc.run.cutoff : null });
-      return { file: `category_product_analysis_export_${r.period.from}_${r.period.to}.json`, obj };
+      return { file, obj };
     },
-    actionPlan() {
+    actionPlan({ previewOnly = false } = {}) {
       const base = ensureForecast();
       if (!base || base.plan.source === 'none') return { reason: 'Sin plan no hay brecha que recuperar.', missing: ['Meta y plan distribuido (o plan importado)', 'Venta real del año'] };
       const a = ensureRecovery();
       if (!a) return { reason: 'No se pudo preparar el Recovery Center.', missing: ['Venta real del año'] };
-      return { file: `action_plan_export_${(state.rc.ctx.period.key || state.rc.ctx.period.start || 'periodo')}.json`,
-        obj: FP.actionPlanExport.buildActionPlanExport(a, { scenarioStore: state.rc.scenarioStore, actionPlan: state.rc.plan, constraints: state.rc.constraints, diagnosis: state.rc.diagnosis }) };
+      const file = `action_plan_export_${(state.rc.ctx.period.key || state.rc.ctx.period.start || 'periodo')}.json`;
+      if (previewOnly) return { file, ok: true };
+      return { file, obj: FP.actionPlanExport.buildActionPlanExport(a, { scenarioStore: state.rc.scenarioStore, actionPlan: state.rc.plan, constraints: state.rc.constraints, diagnosis: state.rc.diagnosis }) };
     },
-    narrative() {
+    narrative({ previewOnly = false } = {}) {
       const base = ensureForecast();
       if (!base || base.plan.source === 'none') return { reason: 'No hay nada calculado que narrar.', missing: ['Meta y plan distribuido (o plan importado)', 'Venta real del año'] };
       const n = ensureNarrative();
       if (!n) return { reason: 'No hay narrativa calculada.', missing: ['Venta real del año'] };
-      return { file: `narrative_export_${(n.period && n.period.key) || 'periodo'}_${n.channel.id}.json`, obj: FP.narrativeExport.buildNarrativeExport(n, { ai: state.nx.ai }) };
+      const file = `narrative_export_${(n.period && n.period.key) || 'periodo'}_${n.channel.id}.json`;
+      if (previewOnly) return { file, ok: true };
+      return { file, obj: FP.narrativeExport.buildNarrativeExport(n, { ai: state.nx.ai }) };
     },
-    planning() {
+    planning({ previewOnly = false } = {}) {
       const ps = state.planning;
       if (!ps.current) resolveCurrentPlan();   // si no se ha abierto la vista Plan en esta sesión
       const plan = ps.current;
       if (!plan) return { reason: 'No hay plan distribuido.', missing: ['Meta anual por canal', 'Plan distribuido (vista Plan)'] };
       const version = plan.versionId ? ps.registry.versions.find((v) => v.id === plan.versionId) : null;
-      return { file: `planning_export_${state.year}${version ? '_' + version.id : '_preview'}.json`, obj: FP.planningExport.buildPlanningExport(plan, { version }) };
+      const file = `planning_export_${state.year}${version ? '_' + version.id : '_preview'}.json`;
+      if (previewOnly) return { file, ok: true };
+      return { file, obj: FP.planningExport.buildPlanningExport(plan, { version }) };
     }
   };
 
@@ -1221,7 +1234,7 @@
         out[def.key] = state.pa.result ? { ok: true, file: 'category_product_analysis_export_….json' } : has ? { ok: true, note: 'Se calcula al generar el paquete (último mes con datos)' } : { ok: false, reason: 'No hay datos de productos cargados.', missing: ['Archivo de venta por producto'] };
         continue;
       }
-      try { const e = EXPORT_BUILDERS[def.key](); out[def.key] = e.obj ? { ok: true, file: e.file } : { ok: false, reason: e.reason, missing: e.missing }; }
+      try { const e = EXPORT_BUILDERS[def.key]({ previewOnly: true }); out[def.key] = (e.ok || e.obj) ? { ok: true, file: e.file } : { ok: false, reason: e.reason, missing: e.missing }; }
       catch (err) { out[def.key] = { ok: false, reason: 'No se pudo preparar.', missing: [] }; }
     }
     return out;
