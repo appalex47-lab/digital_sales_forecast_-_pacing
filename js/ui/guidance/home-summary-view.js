@@ -217,10 +217,10 @@
   }
 
   const BLOCKS = [
-    ['why', whyBlock, 'Por qué va así y por qué cambió la venta, con cascada', 'Contra el plan y contra el periodo anterior: tráfico → conversión → ticket, comparación y cuadre'],
-    ['where', whereBlock, 'Dónde mirar: segmentos y avisos de calidad', 'Un segmento por dimensión de GA4, con «Diagnosticar»'],
-    ['channels', channelsBlock, 'Cómo va cada canal', 'Venta acumulada, cumplimiento, forecast vs meta y estado de pacing'],
-    ['trust', trustBlock, 'Confianza de los datos', 'Hasta dónde llega la venta real, días comparados, calidad y archivos cargados']
+    ['why', whyBlock, '¿Por qué va así?', 'Contra el plan y contra el periodo anterior: tráfico → conversión → ticket, comparación y cuadre'],
+    ['where', whereBlock, '¿Dónde mirar?', 'Un segmento por dimensión de GA4, con «Diagnosticar»'],
+    ['channels', channelsBlock, '¿Cómo va cada canal?', 'Venta acumulada, cumplimiento, forecast vs meta y estado de pacing'],
+    ['trust', trustBlock, '¿Qué tan confiable es?', 'Hasta dónde llega la venta real, días comparados, calidad y archivos cargados']
   ];
 
   /** Calcula una vez y devuelve las piezas: { key, blocks:[{id,title,hint,html}] } (html = bloque completo, igual que antes). */
@@ -234,7 +234,7 @@
     if (att) next = att.next;
     let key = '';
     try { key = f ? keyBlock(S, f, next) : ''; } catch (e) { key = `<section class="ds-card home-key" data-block="error"><p class="field__hint">No se pudo mostrar lo esencial: ${H().esc(String((e && e.message) || e))}</p></section>`; }
-    return { key, attention: att ? att.html : '', nextStep: att ? att.nextHtml : '', banner: att ? att.banner : '', next: att ? att.next : null, route: att ? att.att : null, blocks: BLOCKS.map(([id, fn, title, hint]) => ({ id, title, hint, html: safe(fn) })) };
+    return { S, key, attention: att ? att.html : '', nextStep: att ? att.nextHtml : '', banner: att ? att.banner : '', next: att ? att.next : null, route: att ? att.att : null, blocks: BLOCKS.map(([id, fn, title, hint]) => ({ id, title, hint, html: safe(fn) })) };
   }
 
   /** HTML de los 4 bloques sin plegar (para pruebas y para quien los quiera sueltos). */

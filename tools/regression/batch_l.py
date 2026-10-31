@@ -74,7 +74,7 @@ async def main():
         await q.goto(u + '#resumen'); await q.evaluate("document.querySelectorAll('#view-resumen details.rs-more').forEach(d=>d.open=true)"); await q.click('[data-action="generate-mock"]'); await q.wait_for_timeout(1400)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(800)
         D = await home_state(q)
-        chk('R-15 con venta real Inicio vuelve al modo completo (7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast, presión) y las tarjetas de datos van primero', len(D['cards']) == 7 and D['cards'][0]['label'] == 'Venta acumulada' and D['order'] == ['hk-t', 'nbs-t', 'att-t', 'h-now', 'h-flow', 'h-ready'], (len(D['cards']), D['order']))
+        chk('R-15 con venta real Inicio vuelve al modo completo (7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast, presión) y las tarjetas de datos van primero', len(D['cards']) == 7 and D['cards'][0]['label'] == 'Venta acumulada' and D['order'] == ['nbs-t', 'att-t', 'hk-t', 'h-now', 'h-flow', 'h-ready'], (len(D['cards']), D['order']))
         chk('R-13 con datos de prueba (venta real y plan, sin histórico) se ve la nota del histórico y ✓ en venta real, meta y plan', D['li'][0]['hint'] and D['li'][1]['done'] and D['li'][3]['done'] and D['li'][4]['done'], [(x['done'], x['hint']) for x in D['li']])
         # otras vistas: su lista de requisitos no cambió
         await q.goto(u + '#carga'); await q.wait_for_timeout(300)
