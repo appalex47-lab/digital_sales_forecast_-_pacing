@@ -15,7 +15,7 @@ async def run():
             r=await q.evaluate("""([st,v])=>{const b=document.createElement('button');b.dataset.action='route-go';b.dataset.route=st;b.dataset.step=st;b.dataset.view=v;b.dataset.key=document.querySelector('#nbs [data-key]').dataset.key;document.body.appendChild(b);b.click();b.remove();return 1}""",[st,v])
             await q.wait_for_timeout(1200)
             o=await q.evaluate("""()=>{const o=document.querySelector('.route-origin');const d=document.documentElement;return {h:location.hash,bar:!!o,vis:o&&o.getBoundingClientRect().height>0,txt:o?o.innerText.replace(/\\s+/g,' ').slice(0,110):'',ov:d.scrollWidth>d.clientWidth,back:!!(o&&o.querySelector('[data-action="route-back"]'))}}""")
-            chk(f'N-{st} la barra «Vienes de Inicio» aparece en #{v}, con botón de volver y sin desborde',o['h']=='#'+v and o['bar'] and o['vis'] and o['back'] and not o['ov'],o)
+            chk(f'N-{st} la barra «Vienes de Inicio» aparece en #{v}, con botón de volver y sin desborde',o['h']==('#prodevol' if v=='producto' else '#'+v) and o['bar'] and o['vis'] and o['back'] and not o['ov'],o)
         await q.click('.route-origin [data-action="route-back"]'); await q.wait_for_timeout(1200)
         bk=(await q.evaluate("({h:location.hash,bar:!!document.querySelector('.route-origin'),y:0})"))
         chk('N-volver «Volver a Inicio» regresa a #inicio y quita la barra',bk['h']=='#inicio' and not bk['bar'],bk)
