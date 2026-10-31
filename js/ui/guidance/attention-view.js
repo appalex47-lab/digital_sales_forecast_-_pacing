@@ -275,11 +275,13 @@
     return `<div class="ux-wrap"><div class="route-origin route-origin--notes" data-notes="1"><p class="route-origin__t"><strong>Lo que anotaste al revisar</strong> <span class="chip">${esc(o.ctxLabel)}</span><span class="chip">${esc(o.periodLabel)}</span></p>
       <ul class="route-origin__notes">${rows.join('')}</ul><p class="field__hint">Son tus hipótesis por validar, no resultados. Se guardan solo en este navegador (no se comparten con tu equipo).</p></div></div>`;
   }
+  /** «producto» y «analisis» son nombres retirados de Producto y evolución: la app los redirige a «prodevol», y la barra de origen debe reconocerlos. */
+  const canonView = (v) => (v === 'producto' || v === 'analisis' ? 'prodevol' : v);
   function originHtml(state, status) {
     loadOrigin(state);
     const o = state.ux.origin;
-    if (o && o.view !== state.view && (state.view === 'recovery' || state.view === 'medir')) return notesHtml(o, state);
-    if (!o || o.view !== state.view) return '';
+    if (o && canonView(o.view) !== state.view && (state.view === 'recovery' || state.view === 'medir')) return notesHtml(o, state);
+    if (!o || canonView(o.view) !== state.view) return '';
     const { esc } = H();
     const STEPS = FP.attentionEngine.STEPS;
     const idx = Math.max(0, o.chain.findIndex((c) => c.id === o.step));
