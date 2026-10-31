@@ -37,6 +37,19 @@ const rw = BE.analyze(L, cat, { minPairs: 5, minLift: 1, minConf: 0.01, strict: 
 assert.strictEqual(rw.candidates[0].weak, true); assert.strictEqual(rw.counts.weak, 1); assert.strictEqual(rw.counts.strong, 0);
 assert.strictEqual(BE.analyze(L, cat, {}).counts.weak, 0); assert.strictEqual(BE.analyze(L, cat, {}).counts.strong, 1);
 assert.strictEqual(BE.analyze(L, cat, { minPairs: 100 }).candidates.length, 0, 'con 100 pedidos juntos como mínimo no hay pares');
+/* principio activo: variantes de escritura son la misma sustancia; los pares de la misma sustancia se descartan y se cuentan */
+const cat2 = new Map([['A', { sku: 'A', product: 'Prod A', category: 'Cat1', activeIngredient: 'Metformina' }], ['B', { sku: 'B', product: 'Prod B', category: 'Cat1', activeIngredient: ' METFORMINA ' }], ['C', { sku: 'C', product: 'Prod C', category: 'Cat2', activeIngredient: 'Ibuprofeno + Cafeína' }]]);
+assert.strictEqual(BE.normIng('Cafeína + Ibuprofeno'), BE.normIng('ibuprofeno/cafeina'), 'el orden y los acentos no cambian la combinación');
+const ri = BE.analyze(L, cat2, {});
+assert.strictEqual(ri.candidates.length, 0); assert.strictEqual(ri.excludedSame, 1, 'A y B comparten principio activo');
+assert.ok(Math.abs(ri.ingredientCoverage - 1) < 1e-9);
+assert.strictEqual(BE.analyze(L, cat2, { excludeSameIngredient: false }).candidates.length, 1);
+const rl = BE.analyze(L, cat2, { level: 'ingredient' });
+assert.strictEqual(rl.level, 'ingredient'); assert.strictEqual(rl.orders, 255); assert.strictEqual(rl.candidates.length, 0, 'A y B son una sola sustancia: no hay par');
+const cat3 = new Map([['A', { sku: 'A', product: 'Prod A', activeIngredient: 'Metformina' }], ['B', { sku: 'B', product: 'Prod B', activeIngredient: 'Glibenclamida' }]]);
+const rg = BE.analyze(L, cat3, { level: 'ingredient', minLift: 0.5 });
+assert.strictEqual(rg.orders, 55, 'solo cuentan pedidos con algún producto con principio activo (A o B)'); assert.strictEqual(rg.candidates[0].a, 'Metformina');
+const rp = BE.analyze(L, cat3, {}); assert.strictEqual(rp.candidates[0].aIng, 'Metformina'); assert.ok(Math.abs(rp.ingredientCoverage - 2 / 3) < 1e-9);
 /* canal elegido: no hay desglose por canal y el soporte baja */
 const re = BE.analyze(L, cat, { channel: 'ecommerce' });
 assert.strictEqual(re.candidates.length, 0, 'con ecommerce el par tiene 30 pedidos juntos pero lift 1');

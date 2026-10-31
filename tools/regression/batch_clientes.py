@@ -26,7 +26,7 @@ async def main():
         t0 = await q.evaluate("document.getElementById('cus-body').innerText")
         chk('K1 sin libro explica qué cargar y ofrece datos de ejemplo', 'Todavía no hay clientes cargados' in t0 and 'id_pedido' in t0 and 'Probar con datos de ejemplo' in t0, t0[:200])
         tpl = await q.evaluate("FP.config.products.dataType.template")
-        chk('K2 la plantilla de Productos · venta incluye id_pedido e id_cliente al final', tpl[-2:] == ['id_pedido', 'id_cliente'] and len(tpl) == 20, tpl)
+        chk('K2 la plantilla de Productos · venta incluye id_pedido e id_cliente al final', tpl[-2:] == ['id_pedido', 'id_cliente'] and len(tpl) == 21, tpl)
         await q.evaluate("FP.app.actions['p-mock-clientes']()"); ok = await wait_ready(q)
         chk('K3 el archivo con IDs se procesa y mapea solo', ok)
         sm = await q.evaluate("FP.app.state.staging.items[0].result.summary.customers")

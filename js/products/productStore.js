@@ -337,13 +337,13 @@
       if (reject) { d.summary.rejected++; return; }
       if (kind === 'sales') {
         const attrs = {};
-        ['product', 'productCode', 'category', 'subcategory', 'brand', 'presentation'].forEach((k) => { attrs[k] = get(cells, k) || null; });
+        ['product', 'productCode', 'category', 'subcategory', 'brand', 'presentation', 'activeIngredient'].forEach((k) => { attrs[k] = get(cells, k) || null; });
         if (idx.product !== undefined && !attrs.product) { warn = true; d.issues.add('MISSING_PRODUCT', 'warning', line, 'producto', '', 'SKU sin nombre de producto.'); }
         if (idx.category !== undefined && !attrs.category) { warn = true; d.issues.add('MISSING_CATEGORY', 'warning', line, 'categoria', '', 'Producto sin categoría.'); }
         if (idx.subcategory !== undefined && !attrs.subcategory) { warn = true; d.issues.add('MISSING_SUBCATEGORY', 'warning', line, 'subcategoria', '', 'Producto sin subcategoría.'); }
         const prev = d.catalog.get(sku);
         if (!prev) d.catalog.set(sku, { sku, ...attrs, firstLine: line });
-        else ['product', 'category', 'subcategory', 'brand'].forEach((k) => {
+        else ['product', 'category', 'subcategory', 'brand', 'activeIngredient'].forEach((k) => {
           if (attrs[k] && prev[k] && attrs[k] !== prev[k]) { warn = true; d.issues.add('SKU_ATTRIBUTE_MISMATCH', 'warning', line, k, attrs[k], `El SKU ${sku} aparece con ${label(k).toLowerCase()} "${attrs[k]}" y antes con "${prev[k]}". Se conserva el primero.`); }
           if (attrs[k] && !prev[k]) prev[k] = attrs[k];
         });
@@ -444,11 +444,11 @@
     let c = catalog.bySku.get(entry.sku);
     if (!c) {
       c = { sku: entry.sku, idx: catalog.list.length, product: entry.product || null, productCode: entry.productCode || null, category: entry.category || null,
-        subcategory: entry.subcategory || null, brand: entry.brand || null, presentation: entry.presentation || null };
+        subcategory: entry.subcategory || null, brand: entry.brand || null, presentation: entry.presentation || null, activeIngredient: entry.activeIngredient || null };
       catalog.list.push(c); catalog.bySku.set(c.sku, c);
       c._dirty = true;
     } else {
-      ['product', 'productCode', 'category', 'subcategory', 'brand', 'presentation'].forEach((k) => { if (!c[k] && entry[k]) { c[k] = entry[k]; c._dirty = true; } });
+      ['product', 'productCode', 'category', 'subcategory', 'brand', 'presentation', 'activeIngredient'].forEach((k) => { if (!c[k] && entry[k]) { c[k] = entry[k]; c._dirty = true; } });
     }
     return c.idx;
   }

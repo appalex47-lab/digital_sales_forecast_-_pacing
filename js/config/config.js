@@ -561,7 +561,7 @@
         /** Fase 8.4: estado, sucursal y entrega dejan de ser obligatorios (un producto sin geografía se conserva como "No disponible"). */
         required: ['date', 'channel', 'sku', 'product', 'orderId', 'customerId', 'units', 'revenue'],
         recommended: ['category', 'brand', 'state'],
-        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades', 'id_pedido', 'id_cliente']
+        template: ['fecha', 'canal', 'sku', 'codigo_producto', 'producto', 'marca', 'categoria', 'subcategoria', 'presentacion', 'principio_activo', 'region', 'estado', 'ciudad', 'sucursal', 'nombre_sucursal', 'tipo_entrega', 'venta', 'pedidos', 'unidades', 'id_pedido', 'id_cliente']
       },
       funnelType: {
         id: 'productFunnel', label: 'Productos · funnel (GA4)',
@@ -579,6 +579,7 @@
         { key: 'category', label: 'Categoría', kind: 'text', synonyms: ['categoria', 'category', 'departamento', 'item_category'] },
         { key: 'subcategory', label: 'Subcategoría', kind: 'text', synonyms: ['subcategoria', 'subcategory', 'sub_categoria', 'familia', 'item_category2'] },
         { key: 'presentation', label: 'Presentación', kind: 'text', synonyms: ['presentacion', 'presentation', 'contenido'] },
+        { key: 'activeIngredient', label: 'Principio activo', kind: 'text', synonyms: ['principio_activo', 'principio', 'sustancia_activa', 'sustancia', 'ingrediente_activo', 'componente_activo', 'active_ingredient', 'ingredient', 'dci', 'denominacion_generica', 'molecula'] },
         { key: 'region', label: 'Región', kind: 'text', synonyms: ['region', 'zona', 'region_comercial'] },
         { key: 'state', label: 'Estado', kind: 'state', synonyms: ['estado', 'entidad', 'estado_entrega', 'state', 'region_estado', 'estado_nombre'] },
         { key: 'city', label: 'Ciudad', kind: 'text', synonyms: ['ciudad', 'city', 'municipio', 'ciudad_entrega'] },
@@ -600,14 +601,14 @@
       columnTiers: {
         required: ['date', 'channel', 'sku', 'product', 'orderId', 'customerId', 'units', 'revenue'],
         important: ['category', 'brand', 'state'],
-        optional: ['productCode', 'subcategory', 'presentation', 'region', 'city', 'branch', 'branchName', 'delivery', 'orders'],
+        optional: ['productCode', 'subcategory', 'presentation', 'activeIngredient', 'region', 'city', 'branch', 'branchName', 'delivery', 'orders'],
         weights: { required: 3, important: 2, optional: 1 },
         impact: {
           date: 'sin fecha no hay serie diaria ni periodo', channel: 'sin canal no se puede separar Ecommerce, App, WhatsApp y Llamadas', sku: 'sin SKU no se identifica el producto',
           product: 'sin nombre del producto las tablas muestran solo el código', orderId: 'sin ID de pedido no se cuentan pedidos reales ni se arma Clientes',
           customerId: 'sin ID de cliente no hay clientes nuevos, recurrentes ni valor de vida', units: 'sin unidades no hay unidades por pedido ni precio por unidad', revenue: 'sin venta no hay nada que analizar',
           category: 'sin categoría no hay análisis Categoría → Producto', brand: 'sin marca no se puede ver el peso de cada marca o laboratorio', state: 'sin estado no hay análisis geográfico',
-          productCode: 'sin código de producto no se cruza con catálogos externos', subcategory: 'sin subcategoría el análisis queda a nivel categoría', presentation: 'sin presentación no se separan formatos del mismo producto',
+          productCode: 'sin código de producto no se cruza con catálogos externos', subcategory: 'sin subcategoría el análisis queda a nivel categoría', presentation: 'sin presentación no se separan formatos del mismo producto', activeIngredient: 'sin principio activo Cross-sell no puede agrupar por sustancia ni descartar pares del mismo activo',
           region: 'sin región no se agrupan estados por zona comercial', city: 'sin ciudad no hay análisis por ciudad', branch: 'sin sucursal no hay análisis de recolección', branchName: 'sin nombre de sucursal se muestra solo el código',
           delivery: 'sin tipo de entrega no se separa domicilio de recolección', orders: 'sin la columna de pedidos se cuentan por ID de pedido'
         }
