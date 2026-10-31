@@ -2480,3 +2480,19 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 .chg-strip ul { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; font-size: .9rem; }
 .snav__item { position: relative; }
 .snav__badge { margin-left: auto; background: var(--ds-danger); color: var(--ds-on-danger); border-radius: 999px; font-size: .68rem; font-weight: 700; padding: 0 6px; font-style: normal; min-width: 18px; text-align: center; }
+
+/* ===== Inicio · versión B: veredicto, chips, cifras, resumen general y «¿Qué hago hoy?» ===== */
+#home-b { margin-bottom: var(--ds-s4); }
+#home-b .px-app { border: 1px solid var(--ds-border); border-radius: var(--ds-radius, 14px); overflow: hidden; background: var(--ds-surface); }
+#home-b .px-verdict h2 { max-width: none; }
+#home-b .px-kpi__v { font-size: 1.25rem; }
+#home-b .px-sum__f { padding: 7px 12px; font-size: .76rem; color: var(--muted); background: var(--soft); }
+.home-hoy { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ds-s3); margin-bottom: var(--ds-s4); }
+.home-hoy > * { min-width: 0; }
+.home-hoy__h h3 { margin: 0 0 2px; font-size: 1.1rem; }
+.home-hoy__h p { margin: 0; }
+@media (max-width: 700px) { #home-b .px-intro { padding-inline: 16px; } }
+#home-b, #home-b .px-app, #home-b .px-verdict, #home-b .px-intro { min-width: 0; max-width: 100%; }
+#home-b .px-kpi__v { overflow-wrap: anywhere; }
+#home-b .px-tchip { white-space: normal; }
+#home-b .px-sum__r > span { min-width: 0; overflow-wrap: anywhere; }

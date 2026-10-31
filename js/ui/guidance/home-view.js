@@ -80,6 +80,20 @@
     return raw.map(([l, v, done, d]) => { const ok = prev && done; prev = ok; return [l, v, ok, d]; });
   }
 
+  /** Cabecera de la versión B de Inicio: veredicto, chips de confiabilidad, 4 cifras y resumen general (corta/larga). */
+  function homeHead(state, f, sum, ready) {
+    if (!FP.homeResumen || !FP.pxView) return '';
+    const esc = H().esc, u = (state.ux.home = state.ux.home || { sum: 'c' });
+    const R = FP.homeResumen.build({ S: sum.S, f, att: sum.route, next: sum.next, state, ready });
+    const long = u.sum === 'l', rows = R.rows.filter((r) => (long ? r[2] : r[1]));
+    const html = `<div class="px" id="home-b"><div class="app" id="home-frame"><section class="verdict" data-home-verdict="1"><p class="eyebrow">Inicio · ${esc(FP.navigation.contextLabel({ channel: f.ch }))} · ${esc(f.label)}</p><h2>${R.verdict}</h2>
+      <div class="trust" aria-label="Confiabilidad y contexto">${R.chips.map((c) => `<span class="tchip ${c[0]}" tabindex="0" data-tip="${esc(c[2])}">${c[1]}</span>`).join('')}</div>
+      <div class="kpis">${R.kpis.map((k) => `<div class="kpi"><div class="kpi__l">${esc(k[0])}</div><div class="kpi__v num">${esc(k[1])}</div><div class="kpi__d mu">${k[2]}</div></div>`).join('')}</div></section>
+      <section class="intro"><div class="intro__h"><h3>Resumen general</h3><div class="mini" id="home-md" role="group" aria-label="Versión del resumen"><button type="button" data-v="c" aria-pressed="${!long}">Versión corta</button><button type="button" data-v="l" aria-pressed="${long}">Versión larga</button></div></div>
+        <div class="sum${long ? ' sum--l' : ''}" data-home-summary="1">${rows.map((r) => `<div class="sum__r"><span>${esc(r[0])}</span><span>${long ? r[2] : r[1]}</span></div>`).join('')}<div class="sum__f">Descriptivo: repite lo que ya calcularon Pacing, Forecast y el Diagnóstico; no dice causas.</div></div></section></div></div>`;
+    return FP.pxView.P(html);
+  }
+
   function render(state, status) {
     const esc = H().esc;
     const h = state.ux.home;
@@ -178,12 +192,17 @@ ${cards}
     let body;
     if (f && !planOnly && FP.homeSummaryView) {
       const sum = FP.homeSummaryView.build(state, h, f, next, { status, ready }), more = FP.homeSummaryView.more;
-      body = `${sum.banner || ''}${sum.key}
+      // Versión B: veredicto, chips, 4 cifras y resumen general arriba; «Lo esencial» completo pasa a «Ver más» y las tarjetas de siguiente paso, atención y «Desde ayer» se juntan en «¿Qué hago hoy?»
+      let headB = '';
+      try { headB = homeHead(state, f, sum, ready); } catch (e) { headB = ''; }
+      body = `${sum.banner || ''}${headB}
+      <section class="home-hoy" id="h-hoy" aria-labelledby="h-hoy-t"><div class="home-hoy__h"><h3 id="h-hoy-t">¿Qué hago hoy?</h3><p class="ds-card__sub">Tu siguiente paso, lo que necesita atención y lo que cambió desde ayer, en un solo lugar.</p></div>
       ${sum.nextStep || ''}${sum.attention || ''}
       ${FP.changesView && FP.changesView.stripHtml ? FP.changesView.stripHtml(state) : ''}
-      ${promoLine(state)}
+      ${promoLine(state)}</section>
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
-      ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
+      ${sum.key ? more('key', '¿Cómo voy en detalle?', 'Resultado comercial (A), motores de la venta (B) y resumen ejecutivo', sum.key) : ''}
+      ${more('now', '¿Cuáles son todas las cifras?', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
       ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}
       <p class="home-layer"><strong>Metodología y ayuda</strong> · cómo se calcula y qué falta</p>
       ${more('flow', 'Recorrido del sistema y preparación de datos', '6 etapas y % de preparación', `${flowBlock}\n\n${setupBlock(readyCard + (sum.nextStep ? '' : '\n' + nextCard), ' home__top--ready-first')}`)}`;
@@ -212,6 +231,8 @@ ${body}
         <div class="ds-accordion__body"><dl class="conventions">${Object.keys(FP.guidanceConfig.STATES).map((k) => `<div><dt>${FP.help.stateTag(k)}</dt><dd>${esc(FP.guidanceConfig.STATES[k].short)}</dd></div>`).join('')}</dl></div>
       </details></div>`;
     if (!f) FP.help.enhanceEmpty($('home'), FP.contextEngine.requirements('inicio', status));
+    const hm = $('home');
+    if (hm && !hm._homeBound) { hm._homeBound = true; hm.addEventListener('click', (e) => { const b = e.target.closest('#home-md button'); if (!b) return; (state.ux.home = state.ux.home || { sum: 'c' }).sum = b.dataset.v; const y = root.scrollY; if (FP.app) FP.app.render(); root.scrollTo(0, y); }); }
     if (FP.agentLauncher && FP.agentLauncher.paintLine) FP.agentLauncher.paintLine();   // Fase 3: la línea del Analista bajo el encabezado
   }
 

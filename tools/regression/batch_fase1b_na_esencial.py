@@ -68,13 +68,13 @@ async def main():
             c, q, errs = await setup(b, 'conplan', vp); await q.goto(U + '#inicio'); await q.wait_for_timeout(900); await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
             r = await q.evaluate("""(()=>{const k=document.querySelector('.home-key'),n=document.getElementById('nbs'),a=document.getElementById('att');const t=e=>e?Math.round(e.getBoundingClientRect().top+scrollY):null;const g=s=>k.querySelector(s);
               return {real:g('[data-key-real]')&&g('[data-key-real]').textContent,plan:g('[data-key-plan]')&&g('[data-key-plan]').textContent,gap:g('[data-key-gap]')&&g('[data-key-gap]').textContent,big:g('.home-key__big')&&g('.home-key__big').textContent,
-              motors:[...k.querySelectorAll('[data-key=why] [data-cmp]')].map(e=>e.dataset.cmp),summary:!!g('[data-key=summary]'),sumTxt:g('[data-key=summary]')?g('[data-key=summary]').innerText:'',todo:!!g('[data-key=todo]'),
+              motors:[...k.querySelectorAll('[data-key=why] [data-cmp]')].map(e=>e.dataset.cmp),summary:!!g('[data-key=summary]'),sumTxt:g('[data-key=summary]')?g('[data-key=summary]').textContent:'',todo:!!g('[data-key=todo]'),
               order:[t(k),t(n),t(a)],ovf:document.documentElement.scrollWidth>document.documentElement.clientWidth}})()""")
             chk(f'I-1 [{tag}] «Lo esencial» conserva venta acumulada, meta acumulada, brecha $ y %, y cumplimiento', all(r[x] and r[x] != '—' for x in ('real', 'plan', 'gap', 'big')), r)
             chk(f'I-2 [{tag}] los tres motores (volumen, CR, ticket) con su Plan → Real', sorted(r['motors']) == ['aov', 'conversionRate', 'trafficVolume'], r['motors'])
             chk(f'I-3 [{tag}] hay resumen ejecutivo dinámico y no atribuye causas (dice que es un cálculo/lo confirma en Diagnóstico)', r['summary'] and 'meta acumulada' in r['sumTxt'] and ('no una causa' in r['sumTxt'] or 'no se puede determinar' in r['sumTxt']), r['sumTxt'])
             chk(f'I-4 [{tag}] ya no se repite «¿Qué hago hoy?» dentro de Lo esencial', r['todo'] is False)
-            chk(f'I-5 [{tag}] orden: Lo esencial → Tu siguiente mejor paso → Qué necesita atención', r['order'][0] < r['order'][1] < r['order'][2], r['order'])
+            chk(f'I-5 [{tag}] orden: Tu siguiente mejor paso → Qué necesita atención → detalle de Lo esencial (en «Ver más»)', r['order'][1] < r['order'][2] < r['order'][0], r['order'])
             d = await q.evaluate("""(()=>{const nb=document.querySelector('#nbs [data-action=route-go].btn--primary');const step=document.getElementById('nbs').dataset.step;const same=[...document.querySelectorAll('#att [data-action=route-go]')].filter(b=>b.dataset.step===step).length;const dupNote=document.querySelectorAll('#att [data-is-next-step]').length;return {step,nbBtn:!!nb,sameBtnsInAtt:same,dupNote}})()""")
             chk(f'I-6 [{tag}] el hallazgo que ya es el siguiente paso no repite su botón (solo remite al paso)', d['sameBtnsInAtt'] == 0, d)
             chk(f'I-7 [{tag}] sin scroll horizontal de página en Inicio', not r['ovf'])

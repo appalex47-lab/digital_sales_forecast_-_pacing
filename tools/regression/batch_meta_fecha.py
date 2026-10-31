@@ -26,7 +26,7 @@ async def run(width):
         for k, g in [('historical', 'gen-hist-2025'), ('historical', 'gen-hist-2026'), ('plan', 'gen-plan-2026'), ('actual', 'gen-actual-sep')]: await load(k, g)
         await q.goto(u + '#inicio'); await q.reload(); await q.wait_for_timeout(2000)
         await q.select_option('#home-per', 'year'); await q.wait_for_timeout(900)   # Inicio abre en el mes de la fecha; la meta del año se lee con «Año»
-        home = await q.evaluate("(()=>{const e=document.querySelector('.home-key__goal');return e?{t:e.innerText,d:e.dataset.goalDate,s:e.dataset.goal}:null})()")
+        home = await q.evaluate("(()=>{const e=document.querySelector('.home-key__goal');return e?{t:e.textContent,d:e.dataset.goalDate,s:e.dataset.goal}:null})()")
         # fecha calculada de forma independiente: primer día en que el acumulado del forecast diario llega a la meta anual
         ind = await q.evaluate("""()=>{const run=FP.app.state.fc.run;const se=run.total;let c=0;const goal=se.annual.plan.revenue;
           for(const d of se.days){c+=d.forecast.revenue;if(c+0.005>=goal)return {date:d.date,goal,cum:c}} return {date:null,goal,cum:c}}""")

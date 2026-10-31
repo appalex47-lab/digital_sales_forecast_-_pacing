@@ -434,6 +434,12 @@
       attributionMethod: 'sequential',
       attributionMethods: { sequential: 'Secuencial (volumen → CR → AOV)', shapley: 'Shapley (simétrico)' },
       attributionOrder: ['trafficVolume', 'conversionRate', 'aov'],
+      /** Resumen general de Inicio. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      homeSummary: {
+        planBand: 0.02,       // «en plan»: el cumplimiento acumulado está dentro de ±2 % de la meta
+        flatPct: 0.01,        // «en línea»: el forecast de cierre queda a menos de 1 % de la meta
+        driverMinPct: 0.01    // se nombra el motor que más pesa si la brecha es ≥ 1 % de la meta acumulada
+      },
       /** Resumen general de Tráfico y conversión (todas las dimensiones). PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
       trafficSummary: {
         mixMinPp: 0.03,       // la mezcla del CR se nombra si dentro + mezcla suman ≥ 0.03 pp

@@ -20,7 +20,7 @@ async def setup(b, vp, mob):
     await q.goto(U + '#inicio'); await q.wait_for_timeout(900); await q.evaluate("document.querySelectorAll('dialog').forEach(d=>d.remove())")
     return c, q, errs
 GEO = """(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {t:Math.round(b.top),b:Math.round(b.bottom),l:Math.round(b.left),r:Math.round(b.right),txt:e.textContent.trim()}};
- return {title:r('.ux-head__title'),chip:r('.ux-head__ctxchip'),state:r('.ux-head__state'),more:r('.ux-head__morebtn'),banner:r('.att__banner--compact'),key:r('.home-key'),keyA:r('[data-key="how"]'),h:innerHeight,sw:document.documentElement.scrollWidth-innerWidth}})()"""
+ return {title:r('.ux-head__title'),chip:r('.ux-head__ctxchip'),state:r('.ux-head__state'),more:r('.ux-head__morebtn'),banner:r('.att__banner--compact'),key:r('#home-b .px-verdict'),keyA:r('#home-b .px-kpis'),h:innerHeight,sw:document.documentElement.scrollWidth-innerWidth}})()"""
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--no-sandbox']); allerr = []
@@ -33,7 +33,7 @@ async def main():
             await q.evaluate("document.querySelector('.ux-head__morebtn').click()")
             chk(f'I-5 [{w}] ya no hay franja de aviso de calidad sobre las cifras (Fase 3.1)', not g['banner'], g['banner'])
             if w == 375:
-                chk('I-7 [375] «Lo esencial» empieza dentro de la primera pantalla y la tarjeta A asoma', g['key']['t'] <= 420 and g['keyA']['t'] < g['h'] - 100, (g['key'], g['keyA']))
+                chk('I-7 [375] el veredicto empieza dentro de la primera pantalla y las cifras asoman', g['key']['t'] <= 420 and g['keyA']['t'] < g['h'] - 100, (g['key'], g['keyA']))
             chk(f'I-8 [{w}] sin scroll horizontal de página', g['sw'] <= 0, g['sw'])
             allerr += errs; await c.close()
         c, q, errs = await setup(b, {'width': 1280, 'height': 800}, False); g = await q.evaluate(GEO)
