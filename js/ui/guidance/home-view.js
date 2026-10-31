@@ -180,6 +180,7 @@ ${cards}
       const sum = FP.homeSummaryView.build(state, h, f, next, { status, ready }), more = FP.homeSummaryView.more;
       body = `${sum.banner || ''}${sum.key}
       ${sum.nextStep || ''}${sum.attention || ''}
+      ${FP.changesView && FP.changesView.stripHtml ? FP.changesView.stripHtml(state) : ''}
       ${promoLine(state)}
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
       ${more('now', 'Todas las cifras del periodo', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}

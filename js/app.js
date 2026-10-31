@@ -4248,6 +4248,16 @@
       root.location.hash = '#carga';
     },
     'chg-mode'(el) { state.cx.mode = el.dataset.mode; render(); },
+    /** Qué cambió desde ayer → Diagnóstico del canal elegido en el periodo del último día completo. No guarda nada. */
+    'chg-to-dx'(el) {
+      const ch = el.dataset.channel || 'total', day = state.fc.lastActualDate || (state.cx.sync && state.cx.sync.snap && state.cx.sync.snap.dataDay) || null, m = day ? day.slice(0, 7) : null;
+      Object.assign(state.dx.settings, { channel: ch, comparison: 'actual_vs_plan', ...(m ? { periodType: 'month', periodKey: m } : {}) });
+      state.dx.run = null; saveDiagnosticSettings();
+      state.ux.routeCtx = { channel: ch, comparison: 'actual_vs_plan', ...(m ? { periodType: 'month', periodKey: m } : {}) };
+      actions.go({ dataset: { view: 'diagnostico' } });
+    },
+    'chg-to-load'() { actions.go({ dataset: { view: 'carga' } }); },
+    'chg-to-pacing'() { actions.go({ dataset: { view: 'pacing' } }); },
     async 'chg-owner'(el) {
       const mail = state.cx.sync && state.cx.sync.userEmail; if (el.dataset.own === '1' && !mail) return;
       const r = await FP.changeStore.update(el.dataset.key, { owner_email: el.dataset.own === '1' ? mail : null });
