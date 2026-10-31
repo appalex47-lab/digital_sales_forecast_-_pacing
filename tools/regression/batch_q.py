@@ -17,7 +17,7 @@ fails = []
 def chk(n, ok, d=''):
     print(('✔ ' if ok else '✘ ') + n + (' — ' + str(d) if d and not ok else ''))
     if not ok: fails.append(n)
-SEC = """()=>{document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true);const p=document.getElementById('dx-products-panel');const el=document.getElementById('dx-products');
+SEC = """()=>{document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true);const p=document.getElementById('dx-products-panel');const el=document.getElementById('dx-products');el.classList.add('dx-pt-all');
  const tbl=[...el.querySelectorAll('table')].map(t=>({title:(t.closest('.table-wrap').previousElementSibling||{innerText:''}).innerText,head:[...t.tHead.rows[0].cells].map(c=>c.innerText.trim()),rows:[...t.tBodies[0].rows].map(r=>[...r.cells].map(c=>c.innerText.replace(/\\s+/g,' ').trim()))}));
  const notd=(document.getElementById('dx-tree').innerText.match(/No disponible en los datos actuales:([^.]*)/)||['',''])[1];
  return {hidden:p.hidden,text:el.innerText.replace(/\\s+/g,' '),tbl,notd}}"""
@@ -53,7 +53,7 @@ async def main():
         chk('Q-4 no cambia la selección de la vista Producto', pa0 == pa1, (pa0, pa1))
         tree = await q.evaluate("document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true); [...document.querySelectorAll('#dx-tree details.driver-node summary strong')].map(s=>s.innerText)")
         chk('Q-4 el árbol volumen × CR × AOV sigue igual (Volumen, CR, AOV)', tree == ['Volumen', 'CR', 'AOV'], tree)
-        await q.select_option('#dx-ch', 'app'); await q.wait_for_timeout(500)
+        await q.evaluate("document.getElementById('dx-filters').open=true"); await q.select_option('#dx-ch', 'app'); await q.wait_for_timeout(500)
         await q.wait_for_function("FP.app.state.dx.products && FP.app.state.dx.products.result && FP.app.state.dx.products.result.channel==='app' && !FP.app.state.dx.products.loading", timeout=90000)
         chk('Q-4 al cambiar el canal en Diagnóstico (App), la sección se recalcula para ese canal', await q.evaluate("FP.app.state.dx.products.result.channel") == 'app')
         for w in (390, 768):

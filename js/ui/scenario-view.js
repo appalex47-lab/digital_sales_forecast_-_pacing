@@ -151,8 +151,9 @@
       const sim = a.simulated;
       const need = sim ? `<small>${Number.isFinite(sim.trafficVolume) && Math.abs(sim.trafficVolume) >= 0.5 ? `${esc(signedInt(sim.trafficVolume))} ${esc(unit)} · ` : ''}${Number.isFinite(sim.orders) ? `${esc(signedInt(sim.orders))} pedidos` : ''}</small>` : '';
       const status = !a.feasible ? H().pill('error', 'No posible') + `<small>${esc(a.errors[0] || '')}</small>` : a.exceedsConstraints.length ? H().pill('warning', 'Excede restricción') + `<small>${esc(a.exceedsConstraints.join(' '))}</small>` : H().pill('ok', 'Dentro de restricciones');
-      return `<div class="rcr${best && best.id === a.id ? ' rcr--best' : ''}${a.feasible ? '' : ' rcr--off'}">
-        <span class="field__hint">${esc(a.label)}${best && best.id === a.id ? ' · <strong>Menor cambio relativo</strong>' : ''}</span>${parts.join('')}${need}
+      const fromDx = rc.fromDx && rc.fromDx.alt === a.id;
+      return `<div class="rcr${best && best.id === a.id ? ' rcr--best' : ''}${fromDx ? ' rcr--dx' : ''}${a.feasible ? '' : ' rcr--off'}">
+        <span class="field__hint">${esc(a.label)}${best && best.id === a.id ? ' · <strong>Menor cambio relativo</strong>' : ''}${fromDx ? ' · <strong>Ruta de tu hipótesis</strong>' : ''}</span>${parts.join('')}${need}
         ${sim ? `<div class="rcr__bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, (sim.recoveryPercent || 0) * 100))}%"></i></div><b>${esc(signedMoney(sim.incremental))}</b> · ${esc(pct(sim.recoveryPercent))}` : ''}
         <div>${status}</div>
         <div class="btn-row"><button type="button" class="btn btn--small btn--primary" data-action="rc-alt-save" data-id="${a.id}" ${a.feasible ? '' : 'disabled'}>Guardar como escenario</button>
