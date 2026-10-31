@@ -3823,6 +3823,25 @@
       state.ux.routeCtx = { channel: ch, periodType: 'year', periodKey: String(state.year), comparison: 'forecast_vs_plan' };
       actions.go({ dataset: { view: 'recovery' } });
     },
+    /** Reforecast → Recuperar con el mismo horizonte y canal (forecast contra la meta). Nada se guarda: la persona revisa y guarda. */
+    'rf-to-recovery'() {
+      const rc = state.rc, ch = state.rf.channel || 'total', h = state.rf.run && state.rf.run.total.horizon;
+      const pt = h && h.type === 'month' ? 'month' : 'year', pk = h ? h.key : String(state.year);
+      if (rc.imported) { rc.imported = null; rc.draft = emptyDraft(); }
+      Object.assign(rc.settings, { channel: ch, periodType: pt, periodKey: pk, comparison: 'forecast_vs_plan' });
+      rc.altHyp = ''; rc.draft = { ...(rc.draft || emptyDraft()), hypothesisId: '' };
+      rc.fromDx = { source: 'reforecast', hypId: '', hyp: '', alt: '', period: pk, channel: FP.analysisContext.channelLabel(ch), to: 'inverse' };
+      saveRecoverySettings();
+      state.ux.routeCtx = { channel: ch, periodType: pt, periodKey: pk, comparison: 'forecast_vs_plan' };
+      actions.go({ dataset: { view: 'recovery' } });
+    },
+    /** Reforecast → Pacing y Forecast con el mismo canal. */
+    'rf-to-pacing'() { const ch = state.rf.channel || 'total'; state.ux.routeCtx = { channel: ch }; actions.go({ dataset: { view: 'pacing' } }); },
+    /** Reforecast → «Versiones y exportar» con el botón de guardar a la vista (no guarda nada). */
+    'rf-to-versions'() {
+      const d = document.getElementById('rf-vp'); if (!d) return; d.open = true;
+      root.setTimeout(() => { const b = document.querySelector('#rf-versions [data-action="rf-snapshot"]'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); try { b.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } } }, 60);
+    },
     /** → «Versiones y parámetros» con el botón de guardar a la vista (no guarda nada). */
     'pc-to-versions'() {
       const d = document.getElementById('pc-vp'); if (!d) return;
@@ -4307,6 +4326,7 @@
       Object.assign(state.dx.settings, { comparison: 'reforecast_vs_forecast', periodType: h && h.type === 'month' ? 'month' : 'year',
         periodKey: h ? h.key : String(state.year), channel: state.rf.channel || 'total' });
       state.dx.run = null; saveDiagnosticSettings();
+      state.ux.routeCtx = { channel: state.rf.channel || 'total', periodType: h && h.type === 'month' ? 'month' : 'year', periodKey: h ? h.key : String(state.year), comparison: 'reforecast_vs_forecast' };
       root.location.hash = '#diagnostico';
     },
 

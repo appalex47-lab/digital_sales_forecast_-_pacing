@@ -30,15 +30,20 @@
     const esc = H().esc;
     const r = state.rf;
     const cfg = FP.reforecastEngine.effectiveConfig(r.settings);
-    const rf = r.run;
+    const rf = r.run, open = Boolean(state.fs && state.fs.rf);
     $('rf-controls').innerHTML = `
       ${r.simDate ? `<div class="banner banner--warning" role="status"><p class="banner__title">Simulación al ${esc(r.simDate)}</p>
         <p class="banner__text">Escenario temporal: se ignora el real posterior a esa fecha. No modifica datos, plan ni forecast guardados.
         <button type="button" class="btn btn--small" data-action="rf-sim-exit">Salir de la simulación</button></p></div>` : ''}
-      <div class="filters">
+      <div class="rf-row">
         <div class="field"><label for="rf-horizon" class="field__hint">Horizonte del pendiente</label>
           <select id="rf-horizon" data-action="rf-setting" data-key="horizon">${Object.entries(cfg.horizons).map(([id, l]) =>
             `<option value="${id}" ${id === cfg.horizon ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><span class="field__hint">Métrica</span>
+          ${H().segmented('rf-metric', C().metricKeys.map((k) => [k, C().metrics[k].label]), r.metric)}</div>
+        <button type="button" class="px-btn" data-action="fs-toggle" data-fs-page="rf" aria-expanded="${open}" aria-controls="fs-rf">⚙ Ajustes</button>
+      </div>
+      ${open ? `<div class="rf-fs" id="fs-rf">
         <div class="field"><label for="rf-assump" class="field__hint">AOV y CR para pedidos y volumen</label>
           <select id="rf-assump" data-action="rf-setting" data-key="assumptionSource">${Object.entries(cfg.assumptionSources).map(([id, l]) =>
             `<option value="${id}" ${id === cfg.assumptionSource ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
@@ -47,13 +52,11 @@
             <button type="button" class="btn btn--small" data-action="rf-sim">Simular</button></div></div>
         <div class="field"><label for="rf-floor" class="field__hint">Mínimo en días con peso 0</label>
           <input id="rf-floor" type="number" min="0" step="0.1" value="${esc(cfg.zeroWeightFloor)}" data-action="rf-setting" data-key="zeroWeightFloor">
-          <span class="field__hint">0 = sin requerimiento. 0.5 = mitad del peso promedio.</span></div>
-        <div class="field"><span class="field__hint">Métrica</span>
-          ${H().segmented('rf-metric', C().metricKeys.map((k) => [k, C().metrics[k].label]), r.metric)}</div>
-      </div>
-      ${rf ? `<p class="field__hint fc-context">Referencia <strong>${esc(rf.referenceDate)}</strong>${r.simDate ? ' (simulada)' : ' (de Pacing &amp; Forecast)'}, corte de real <strong>${esc(rf.cutoff || '—')}</strong>.
+          <span class="field__hint">0 = sin requerimiento. 0.5 = mitad del peso promedio.</span></div></div>` : ''}`;
+    const ctx = $('rf-ctx');
+    if (ctx) ctx.innerHTML = rf ? `Referencia <strong>${esc(rf.referenceDate)}</strong>${r.simDate ? ' (simulada)' : ' (de Pacing &amp; Forecast)'}, corte de real <strong>${esc(rf.cutoff || '—')}</strong>.
         Plan: <strong>${esc(rf.plan.label)}</strong>. Forecast: método <strong>${esc(rf.forecast.method.id)} · ${esc(rf.forecast.method.label)}</strong>.
-        Método del reforecast: <strong>reparto por pesos futuros</strong> del plan original.</p>` : ''}`;
+        Método del reforecast: <strong>reparto por pesos futuros</strong> del plan original.` : '';
   }
 
   /* ---------- Tres líneas y tarjetas ---------- */
@@ -71,15 +74,7 @@
       <span class="closure-bar__value num">${esc(F().currency(v, 0))}</span><span class="closure-bar__note">${esc(note)}</span></div>`;
     const fgap = Number.isFinite(fc) && Number.isFinite(target) ? fc - target : null;
     const press = hs && hs.pressure ? hs.pressure.revenue.pressure : null;
-    $('rf-summary').innerHTML = `
-      <div class="subhead"><h3 class="panel__title">Total digital · cierre del ${esc(horizonName(h))}</h3>
-        <span class="btn-row">Confianza del cálculo: ${confPill(t.confidence.level)}
-          <button type="button" class="btn btn--small" data-action="dx-from-reforecast">Diagnosticar recuperación</button></span></div>
-      <div class="closure-bars">
-        ${bar('Plan original (meta)', target, 'closure-bar__fill--plan', 'Lo que debíamos vender')}
-        ${bar('Forecast actual', fc, 'closure-bar__fill--forecast', 'Lo que estimamos que ocurrirá')}
-        ${bar('Reforecast requerido', refc, 'closure-bar__fill--reforecast', 'Lo que tendría que ocurrir para conservar la meta')}
-      </div>
+    const kp = $('rf-kpis'); if (kp) kp.innerHTML = `
       <div class="metric-grid metric-grid--4">
         ${PV().card('Meta', esc(F().currency(target, 0)), 'Plan original, no cambia', 'plan')}
         ${PV().card('Actual', esc(F().currency(h.actualToDate, 0)), `${h.countedDays} días con real`, 'actual')}
@@ -88,6 +83,15 @@
         ${PV().card('Reforecast', esc(F().currency(refc, 0)), 'Actual + requerido', 'reforecast')}
         ${PV().card('Recuperación requerida', esc(F().currency(h.requiredTotal, 0)), `Pendiente en ${h.futureDays} días futuros ${FP.explain ? FP.explain.whyButton('reforecast', { channel: 'total' }) : ''}`, 'reforecast')}
         ${PV().card('Presión de recuperación', esc(spct(press)), 'Requerido vs plan de esos días')}
+      </div>
+    `;
+    $('rf-summary').innerHTML = `
+      <div class="subhead"><h3 class="panel__title">Total digital · cierre del ${esc(horizonName(h))}</h3>
+        <span class="btn-row">Confianza del cálculo: ${confPill(t.confidence.level)}</span></div>
+      <div class="closure-bars">
+        ${bar('Plan original (meta)', target, 'closure-bar__fill--plan', 'Lo que debíamos vender')}
+        ${bar('Forecast actual', fc, 'closure-bar__fill--forecast', 'Lo que estimamos que ocurrirá')}
+        ${bar('Reforecast requerido', refc, 'closure-bar__fill--reforecast', 'Lo que tendría que ocurrir para conservar la meta')}
       </div>
       ${h.surplus ? `<div class="note note--ok" data-role="rf-surplus-explain">
         <strong>¿Por qué la recuperación requerida (${esc(F().currency(h.requiredTotal, 0))}) es mayor que la brecha neta (${esc(F().currency(Math.max(0, h.target - h.actualToDate), 0))})?</strong>
@@ -273,7 +277,7 @@
     const rf = state.rf.run;
     const ch = state.rf.channel;
     const d = S(rf, ch).drivers;
-    if (!d) { $('rf-drivers').innerHTML = '<p class="note">No hay días futuros en el horizonte: no hay requerimiento que descomponer.</p>'; return; }
+    if (!d) { $('rf-drivers').innerHTML = '<p class="note">No hay días futuros en el horizonte: no hay requerimiento que descomponer.</p>'; renderReal(state, null, null, ''); return; }
     const c = d.chain;
     const src = rf.settings.assumptionSources[d.assumptionSource];
     const sc = Object.entries(d.scenarios).map(([id, x]) => `<tr><td><strong>${id} · ${esc(x.label)}</strong><span class="cell-sub">Se mantiene: ${esc(x.holds)}</span></td>
@@ -310,11 +314,8 @@
       <h4>Escenarios de driver (matemáticos)</h4>
       <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Escenario</th><th class="num">Requerido</th><th class="num" data-state="forecast">Base (forecast)</th><th class="num">Delta</th></tr></thead>
         <tbody>${sc}</tbody></table></div>
-      <h4>Control de realismo</h4>
-      <div class="table-wrap"><table class="table ds-table"><thead><tr><th>Métrica</th><th class="num">Requerido</th><th class="num">Histórico mismo periodo</th>
-        <th class="num">Delta vs histórico</th><th class="num" data-state="forecast">Forecast</th><th class="num" data-state="plan">Plan</th></tr></thead><tbody>${real}</tbody></table></div>
-      <p class="field__hint">${hist ? `Histórico: mismos días del calendario en ${esc(hist.years.join(', '))} (${F().percent(hist.coverage, 0)} de cobertura); volumen = promedio por año.` : 'Sin histórico de los mismos días para comparar.'}
-        Cada escenario mueve un solo driver y deja los otros dos en lo esperado. No se elige ni se recomienda ninguno y no son probabilidades.</p>`;
+      <p class="field__hint">Cada escenario mueve un solo driver y deja los otros dos en lo esperado. No se elige ni se recomienda ninguno y no son probabilidades.</p>`;
+    renderReal(state, d, hist, real);
   }
 
   /* ---------- Confianza, validación y versiones ---------- */
@@ -362,33 +363,109 @@
       <p class="field__hint">Muestra cómo cambió el requerimiento entre versiones; no interpreta la causa.</p>`;
   }
 
-  /** «Ver más» solo existe si hay algo que detallar: sin datos no se muestran desplegables vacíos. */
-  function syncMore() {
-    const root = document.getElementById('view-reforecast'); if (!root) return;
-    let any = false;
-    root.querySelectorAll('details.rf-more').forEach((d) => {
-      const has = [...d.querySelectorAll('.panel__body')].some((b) => b.textContent.trim());
-      d.hidden = !has; if (has) any = true;
+
+  /* ---------- ¿Es realista? / ¿Y si no llego? / acciones ---------- */
+
+  function renderReal(state, d, hist, realRows) {
+    const esc = H().esc, R = FP.rfResumen.realism(state.rf.run, state.rf.channel);
+    if (!d) { $('rf-real').innerHTML = '<p class="note">No hay requerimiento: no hay nada que contrastar con el histórico.</p>'; return; }
+    if (!R) { $('rf-real').innerHTML = '<p class="note">Sin histórico de los mismos días del calendario no se puede contrastar lo requerido. Carga más años de venta real para ver este control.</p>'; return; }
+    $('rf-real').innerHTML = `<div class="table-wrap"><table class="table ds-table" aria-label="Control de realismo"><thead><tr><th>Métrica</th><th class="num">Requerido</th><th class="num">Histórico mismo periodo</th>
+      <th class="num">Delta vs histórico</th><th class="num" data-state="forecast">Forecast</th><th class="num" data-state="plan">Plan</th></tr></thead><tbody>${realRows}</tbody></table></div>
+      <p class="field__hint">${hist ? `Histórico: mismos días del calendario en ${esc(hist.years.join(', '))} (${F().percent(hist.coverage, 0)} de cobertura); volumen = promedio por año.` : ''} Compara cada palanca por separado: lo que cuesta mover una sola métrica hasta el valor requerido.</p>`;
+  }
+
+  function renderNoGo(state, res) {
+    const esc = H().esc, rf = state.rf.run, t = rf.total, h = t.horizon, hs = t.horizonSummary;
+    const sec = $('rf-sg'); if (!sec) return;
+    sec.hidden = !(res.ok && res.flags.noGo);
+    if (sec.hidden) { $('rf-nogo').innerHTML = ''; return; }
+    const fc = hs.forecast.revenue, gap = fc - h.target, d = t.drivers, ch = d && d.chain;
+    const worst = FP.config.channelIds.map((id) => { const s = rf.channels[id], x = s.horizonSummary; return { id, gap: x && x.forecast ? x.forecast.revenue - s.horizon.target : null }; }).filter((c) => Number.isFinite(c.gap) && c.gap < 0).sort((a, b) => a.gap - b.gap)[0];
+    const orders = ch && Number.isFinite(ch.aov) && ch.aov > 0 ? -gap / ch.aov : null, visits = orders !== null && Number.isFinite(ch.conversionRate) && ch.conversionRate > 0 ? orders / ch.conversionRate : null;
+    $('rf-nogo').innerHTML = `<div class="metric-grid metric-grid--4">
+        ${PV().card('Meta', esc(F().currency(h.target, 0)), 'Plan original, no cambia', 'plan')}
+        ${PV().card('Cierre esperado', esc(F().currency(fc, 0)), 'Forecast', 'forecast')}
+        ${PV().card('Distancia a la meta', esc(signed('revenue', gap)), 'Forecast − meta', 'forecast')}
+        ${PV().card('Parte de la meta', esc(F().percent(fc / h.target, 1)), 'Lo que se alcanzaría sin cambios')}</div>
+      <p class="field__hint">Si no se hace nada distinto, el cierre esperado es ${esc(F().currency(fc, 0))}.${orders !== null ? ` Cerrar la distancia equivale a <strong>+${esc(F().integer(orders))} pedidos</strong> con AOV constante${visits !== null ? ` o <strong>+${esc(F().integer(visits))} visitas</strong> con CR y AOV constantes` : ''}.` : ''}${worst ? ` Se queda corto sobre todo <strong>${esc(chLabel(worst.id))}</strong> (${esc(signed('revenue', worst.gap))}).` : ''}</p>
+      <p class="btn-row"><button type="button" class="px-lk" data-action="rf-to-recovery">Simular cómo cerrar la distancia en Recuperar →</button></p>`;
+  }
+
+  function renderActions(state, res) {
+    const esc = H().esc, sec = $('rf-sq'); if (!sec) return;
+    sec.hidden = !res.ok; if (!res.ok) return;
+    const go = { dx: 'dx-from-reforecast', rec: 'rf-to-recovery', pac: 'rf-to-pacing', ver: 'rf-to-versions' };
+    $('rf-actions').innerHTML = `<div class="px-act">${res.actions.map((a) => `<div><b>${esc(a.title)}</b><span>${esc(a.desc)}</span>${a.why ? `<span class="px-cap"><b>No disponible.</b> ${esc(a.why)}</span>` : `<button type="button" class="px-lk" data-action="${go[a.id]}">${a.id === 'ver' ? 'Ir a versiones →' : 'Abrir →'}</button>`}</div>`).join('')}</div>
+      <p class="px-cap">Llegas con el contexto puesto. Nada se guarda ni se ejecuta desde aquí.</p>`;
+  }
+
+  /* ---------- Encabezado: veredicto, chips, resumen, líneas de lectura ---------- */
+
+  const uxs = (state) => (state.ux.rf = state.ux.rf || { mode: 'full', sum: 'c' });
+
+  function renderTop(state) {
+    const esc = H().esc, u = uxs(state), frame = $('rf-frame');
+    if (!frame) return null;
+    frame.dataset.mode = u.mode;
+    $('rf-m-res').setAttribute('aria-pressed', String(u.mode === 'res')); $('rf-m-full').setAttribute('aria-pressed', String(u.mode !== 'res'));
+    const rf = state.rf.run, ok = Boolean(rf && rf.plan.source !== 'none'), V = $('rf-vtop'), S = $('rf-sumry');
+    ['rf-foot', 'rf-meth'].forEach((id) => { const el = $(id); if (el) el.hidden = !ok; });
+    ['rf-lec-1', 'rf-lec-2', 'rf-lec-g', 'rf-lec-r'].forEach((id) => { const el = $(id); if (el) { el.hidden = true; el.innerHTML = ''; } });
+    if (!ok) { V.hidden = true; V.innerHTML = ''; S.hidden = true; S.innerHTML = ''; ['rf-s1', 'rf-s2', 'rf-sg', 'rf-s3', 'rf-sr', 'rf-s4', 'rf-s5', 'rf-sq'].forEach((id) => { const el = $(id); if (el) el.hidden = true; }); return { ok: false }; }
+    ['rf-s1', 'rf-s2', 'rf-s3', 'rf-sr', 'rf-s4', 'rf-s5'].forEach((id) => { const el = $(id); if (el) el.hidden = false; });
+    const res = FP.rfResumen.build(state), h = rf.total.horizon, long = u.sum === 'l';
+    V.hidden = false; S.hidden = false;
+    V.innerHTML = `<p class="px-eyebrow">Recuperar · Recovery &amp; Reforecast · cierre del ${esc(h.type === 'year' ? `año ${h.key}` : h.key)} · referencia ${esc(rf.referenceDate)}</p><h2>${esc(res.verdict)}</h2>
+      <div class="px-trust" aria-label="Confiabilidad y contexto">${res.chips.map((c) => `<span class="px-tchip px-${c[0]}" tabindex="0" data-tip="${esc(c[2])}">${c[1]}</span>`).join('')}</div>
+      <div class="rf-kpis" id="rf-kpis"></div>`;
+    const rowsS = res.rows.filter((r) => (long ? r[2] : r[1]));
+    S.innerHTML = `<div class="px-intro__h"><h3>Resumen general</h3><div class="px-mini" id="rf-md" role="group" aria-label="Versión del resumen"><button type="button" data-v="c" aria-pressed="${!long}">Versión corta</button><button type="button" data-v="l" aria-pressed="${long}">Versión larga</button></div></div>
+      <div class="px-sum${long ? ' px-sum--l' : ''}" data-rf-summary="1">${rowsS.map((r) => `<div class="px-sum__r"><span>${esc(r[0])}</span><span>${long ? r[2] : r[1]}</span></div>`).join('')}<div class="px-sum__f">Descriptivo: repite lo que ya calculó el reforecast; no dice causas. El reforecast es un requerimiento, no un pronóstico.</div></div>`;
+    Object.entries({ '1': res.lec.s1, '2': res.lec.s2, g: res.lec.sg, r: res.lec.sr }).forEach(([k, t]) => { const el = $(`rf-lec-${k}`); if (el && t) { el.innerHTML = t; el.hidden = false; } });
+    $('rf-foot').innerHTML = `<span class="px-mu">${esc(rf.plan.label)} (congelado, solo lectura) · forecast método ${esc(rf.forecast.method.id)} · referencia ${esc(rf.referenceDate)} · corte de real ${esc(rf.cutoff || '—')}</span>`;
+    const c = FP.config.reforecast.summary;
+    $('rf-thr').innerHTML = `<div><dt>«En línea» con la meta</dt><dd>Forecast a menos de ${(c.flatPct * 100).toFixed(0)} % de la meta</dd></div><div><dt>Poca historia</dt><dd>Menos de ${c.minDays} días con real</dd></div><div><dt>Realismo</dt><dd>Alcanzable hasta +${(c.realOk * 100).toFixed(0)} %, exigente hasta +${(c.realHard * 100).toFixed(0)} % sobre el histórico</dd></div>`;
+    return res;
+  }
+
+  function bindTop() {
+    const r2 = $('view-reforecast'); if (!r2 || r2._rfBound) return;
+    r2._rfBound = true;
+    r2.addEventListener('click', (e) => {
+      const st = FP.app && FP.app.state, u = st && uxs(st); if (!u) return;
+      const m = e.target.closest('#rf-m-res,#rf-m-full'); if (m) { u.mode = m.id === 'rf-m-res' ? 'res' : 'full'; $('rf-frame').dataset.mode = u.mode; $('rf-m-res').setAttribute('aria-pressed', String(u.mode === 'res')); $('rf-m-full').setAttribute('aria-pressed', String(u.mode !== 'res')); return; }
+      const sm = e.target.closest('#rf-md button'); if (sm) { u.sum = sm.dataset.v; const y = root.scrollY; FP.reforecastView.render(st); root.scrollTo(0, y); }
     });
-    const layer = root.querySelector('.rf-layer'); if (layer) layer.hidden = !any;
+  }
+
+  /** «Versiones y exportar» solo existe si hay algo que detallar: sin datos no se muestra el desplegable vacío. */
+  function syncMore() {
+    const root2 = document.getElementById('view-reforecast'); if (!root2) return;
+    root2.querySelectorAll('details.rf-more').forEach((d) => { d.hidden = ![...d.querySelectorAll('.rf-body')].some((b) => b.textContent.trim()); });
   }
 
   function renderEmpty(reason) {
-    ['rf-summary', 'rf-recovery', 'rf-channels', 'rf-chart', 'rf-periods', 'rf-drivers', 'rf-audit', 'rf-versions'].forEach((id) => { $(id).innerHTML = ''; });
+    ['rf-kpis', 'rf-summary', 'rf-recovery', 'rf-channels', 'rf-chart', 'rf-periods', 'rf-drivers', 'rf-real', 'rf-nogo', 'rf-actions', 'rf-audit', 'rf-versions'].forEach((id) => { const el = $(id); if (el) el.innerHTML = ''; });
     $('rf-summary').innerHTML = `<div class="empty"><strong>No hay reforecast todavía</strong>${H().esc(reason)}</div>`;
+    $('rf-s1').hidden = false;
     syncMore();
   }
 
   function render(state) {
+    bindTop();
     renderControls(state);
     const rf = state.rf.run;
-    if (!rf || rf.plan.source === 'none') { renderEmpty('Se necesita un plan del año: guarda el plan distribuido en Plan o importa un Plan / Meta en Carga de datos.'); return; }
+    if (!rf || rf.plan.source === 'none') { renderTop(state); renderEmpty('Se necesita un plan del año: guarda el plan distribuido en Plan o importa un Plan / Meta en Carga de datos.'); return; }
+    const res = renderTop(state);
     renderSummary(state);
     renderChannels(state);
     renderChart(state);
     renderPeriods(state);
     renderDrivers(state);
     renderAudit(state);
+    renderNoGo(state, res);
+    renderActions(state, res);
     syncMore();
   }
 

@@ -2438,3 +2438,21 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 #view-segmentos .px-sg .metric-card__value { font-size: clamp(1.35rem, 2.2vw, 1.8rem); overflow-wrap: anywhere; }
 #sg-topbar .sg-ctx { flex: 1 1 100%; }
 #sg-topbar .sg-modeseg { margin-left: auto; }
+
+/* ===== Recovery & Reforecast · versión B ===== */
+#rf-topbar { position: static; }
+#rf-topbar .px-topbar__row { align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; }
+#rf-topbar .rf-controls { flex: 1 1 520px; min-width: 0; }
+#rf-topbar .rf-modeseg { margin-left: auto; }
+#rf-topbar .rf-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+#rf-topbar .rf-fs { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 10px; align-items: flex-end; }
+#view-reforecast .px-verdict h2 { max-width: none; }
+#view-reforecast .rf-kpis { margin-top: 12px; }
+#view-reforecast .rf-body { padding: 0 24px 4px; display: grid; gap: 12px; }
+#view-reforecast .rf-h4 { margin: 8px 0 0; font-size: .9rem; }
+#view-reforecast .px-lec[hidden] { display: none; }
+#view-reforecast .table-wrap { overflow-x: auto; }
+#view-reforecast .px-app, #view-reforecast .px-blk, #view-reforecast .px-verdict, #view-reforecast .px-meth__b { min-width: 0; max-width: 100%; }
+#view-reforecast .rf-kpis .metric-card__value { font-size: clamp(1.1rem, 2vw, 1.5rem); overflow-wrap: anywhere; }
+@media (max-width: 700px) { #rf-topbar .rf-controls { flex-basis: 100%; } #view-reforecast .rf-body { padding-inline: 16px; } }
+#view-reforecast .rf-body, #view-reforecast .rf-body > * { min-width: 0; max-width: 100%; } #view-reforecast .rf-body .table-wrap { max-width: 100%; }

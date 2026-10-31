@@ -70,7 +70,7 @@ async def main():
             chk('H-pacing ningún método se declara «mejor/recomendado/óptimo»', not any(w in txt.lower() for w in ['mejor método', 'recomendado', 'método óptimo', 'best']), '')
         if 'reforecast' in VIEWS:
             await q.goto(url + '#reforecast'); await q.wait_for_timeout(800)
-            cards = await q.evaluate("[...document.querySelectorAll('#rf-summary .metric-card')].map(c=>({tag:(c.querySelector('.state-tag')||{}).innerText||'',label:(c.querySelector('dt')||{}).innerText||'',valColor:getComputedStyle(c.querySelector('.metric-card__value')).color}))")
+            cards = await q.evaluate("[...document.querySelectorAll('#rf-kpis .metric-card')].map(c=>({tag:(c.querySelector('.state-tag')||{}).innerText||'',label:(c.querySelector('dt')||{}).innerText||'',valColor:getComputedStyle(c.querySelector('.metric-card__value')).color}))")
             chk('H-reforecast 7 métricas como .metric-card', len(cards) == 7, len(cards))
             tags = [c['tag'].strip() for c in cards]
             chk('H-reforecast etiquetas de estado con texto: Plan, Actual, Forecast y Reforecast', all(t in tags for t in ['Plan', 'Actual', 'Forecast', 'Reforecast']), tags)
@@ -90,6 +90,7 @@ async def main():
             band = await q.evaluate("""()=>{const o={};document.querySelectorAll('#rf-channels th[data-state]').forEach(e=>{const c=getComputedStyle(e);o[e.dataset.state]=[c.borderTopStyle,c.borderTopColor]});return o}""")
             chk('H-reforecast bandas con patrón distinto: Forecast punteada, Reforecast doble, Plan/Actual continuas', band.get('forecast', ['',''])[0] == 'dashed' and band.get('reforecast', ['',''])[0] == 'double' and band.get('plan', ['',''])[0] == 'solid', band)
             txt = await q.evaluate("(document.getElementById('view-reforecast').textContent+' '+document.getElementById('ux-context').textContent).toLowerCase()")
+            await q.evaluate("(()=>{const d=document.getElementById('rf-meth');if(d)d.open=true})()"); await q.wait_for_timeout(200)
             rt = await q.evaluate("""()=>{const v=document.getElementById('view-reforecast');const e=v.querySelector('.explainer summary');const t=v.querySelector('.state-tag--reforecast');const c=t?getComputedStyle(t):null;
               const r=getComputedStyle(document.documentElement).getPropertyValue('--ds-reforecast').trim();const i=document.createElement('i');i.style.color=r;document.body.appendChild(i);
               return {title:e?e.innerText.trim():'',badge:t?t.innerText.trim():'',same:c?c.color===getComputedStyle(i).color:false}}""")
