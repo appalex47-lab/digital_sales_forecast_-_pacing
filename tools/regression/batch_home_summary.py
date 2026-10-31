@@ -94,7 +94,7 @@ async def main():
         chk('H8 «Diagnosticar» abre Segmentos en la dimensión elegida', h == '#segmentos' and d == 'landing', (h, d))
         ch_ = await ev("FP.app.state.dx.settings.channel + '|' + FP.app.state.dx.settings.periodKey"); chk('H8b con el mismo canal y periodo de Inicio', ch_ == 'ecommerce|2026-09', ch_)
         pickrow = [x for x in pk if x[0] == 'landing'][0][1]; seg = pickrow.split('·')[1].split(' Tráfico')[0].split(' Conversión')[0].split(' Ticket')[0].strip()
-        tbl = await ev("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tbody tr')].map(r=>r.innerText.replace(/\\s+/g,' '))")
+        tbl = await ev("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tbody tr')].map(r=>r.textContent.replace(/\\s+/g,' '))")
         chk('H8c el segmento sugerido está en la tabla de Segmentos', any(seg in r for r in tbl), (seg, tbl[:3]))
         # 8 · las tarjetas de «¿Qué está pasando?» no cambian de estructura
         await q.goto(u + '#inicio'); await q.wait_for_selector('#h-now', state='attached'); await q.wait_for_timeout(600)

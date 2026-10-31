@@ -59,7 +59,7 @@ async def main():
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'periodType'},value:'month'})"); await q.wait_for_timeout(200)
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'periodKey'},value:'2026-09'})"); await q.wait_for_timeout(200)
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'channel'},value:'total'})"); await q.wait_for_timeout(600)
-        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText)")
+        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText).slice(1)")
         chk('S-3 la vista lista las 6 dimensiones (fuente/medio separada en Fuente y Medio) más el cruce Dispositivo × Fuente/medio', dims == ['Dispositivo', 'Fuente', 'Medio', 'Campaña', 'Landing', 'Tipo de cliente', 'Dispositivo × Fuente/medio'], dims)
         # la tabla principal (no la de oportunidad); la columna «Cuadrante» se omite para leer las cifras por posición
         TAB = "[...document.querySelectorAll('#view-segmentos table[aria-label*=\"tráfico y conversión\"] tbody tr')].map(r=>[...r.cells].filter((c,i)=>!(i===1&&r.closest('table').tHead.rows[0].cells[1].innerText.trim()==='Cuadrante')).map(c=>c.innerText.trim()))"

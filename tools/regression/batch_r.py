@@ -52,7 +52,7 @@ async def main():
         await q.goto(u + '#segmentos'); await q.wait_for_timeout(700)
         await q.click('#view-segmentos [data-action="dx-period-type"][data-value="month"]'); await q.wait_for_timeout(400)
         await q.select_option('#sg-key', '2026-09'); await q.wait_for_timeout(400); await q.select_option('#sg-ch', 'total'); await q.wait_for_timeout(500)
-        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText)")
+        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText).slice(1)")
         chk('R-2 lista las 6 dimensiones (Dispositivo, Fuente, Medio, Campaña, Landing, Tipo de cliente)', dims == ['Dispositivo', 'Fuente', 'Medio', 'Campaña', 'Landing', 'Tipo de cliente'], dims)
         # la tabla principal (no la de oportunidad); la columna «Cuadrante» se omite para leer las cifras por posición
         TBL = "[...document.querySelectorAll('#view-segmentos table[aria-label*=\"tráfico y conversión\"] tbody tr')].map(r=>[...r.cells].filter((c,i)=>!(i===1&&r.closest('table').tHead.rows[0].cells[1].innerText.trim()==='Cuadrante')).map(c=>c.innerText.trim()))"
@@ -67,7 +67,7 @@ async def main():
                 if abs(got['traffic'] - ex['traffic']) > 0.5 or abs(got['orders'] - ex['orders']) > 0.5 or abs(got['revenue'] - ex['revenue']) > 1 or abs(got['cr'] - ex['cr']) > 0.00006 or abs(got['aov'] - ex['aov']) > 1:
                     bad.append((dim, r[0], got, ex))
         chk('R-2 septiembre: tráfico, pedidos, venta, CR y AOV por segmento coinciden con las sumas del archivo (Dispositivo, Fuente, Tipo de cliente)', not bad, bad[:2])
-        hint = await q.evaluate("[...document.querySelectorAll('#view-segmentos .panel__body.stack > .field__hint')].find(e=>/contra/.test(e.innerText)).innerText")
+        hint = await q.evaluate("[...document.querySelectorAll('#view-segmentos .sg-base')].find(e=>/contra/.test(e.innerText)).innerText")
         chk('R-2 compara contra el mes anterior de calendario (2026-08-01 a 2026-08-31) y lo dice', '2026-09-01 a 2026-09-30 contra 2026-08-01 a 2026-08-31 (mes anterior' in hint, hint)
         await q.select_option('#sg-dim', 'device'); await q.select_option('#sg-ch', 'app'); await q.wait_for_timeout(500)
         r0 = (await q.evaluate(TBL))[0]; ex = expect('dispositivo', r0[0], 'App')

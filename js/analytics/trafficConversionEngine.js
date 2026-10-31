@@ -198,7 +198,9 @@
    * @param {{minByDim?:object, maxRows?:number}} opts
    */
   function analyzeAll(dims, { minByDim = {}, maxRows = 12 } = {}) {
-    const regular = (dims || []).filter((d) => !COMBO.includes(d.dim)), combo = (dims || []).find((d) => COMBO.includes(d.dim));
+    const regular0 = (dims || []).filter((d) => !COMBO.includes(d.dim)), combo0 = (dims || []).find((d) => COMBO.includes(d.dim));
+    // Si la combinación es lo único que trae el archivo, se lee como una dimensión más (no hay otra con qué cruzarla)
+    const regular = regular0.length ? regular0 : (dims || []), combo = regular0.length ? combo0 : null;
     const parts = regular.map((d) => ({ dim: d.dim, label: d.label, ins: d.ins || null, dec: analyze(d.res, { minSessions: minByDim[d.dim] || null, maxRows }) }));
     const ok = parts.filter((p) => p.dec.status === 'ok');
     if (!ok.length) return { status: parts.some((p) => p.dec.status === 'no_baseline') ? 'no_baseline' : 'no_data', dims: parts.map((p) => ({ dim: p.dim, label: p.label, status: p.dec.status })) };
@@ -225,7 +227,7 @@
     const seen = new Set(); out.quality = [];
     ok.forEach((p) => (p.dec.quality || []).forEach((f) => { const k = `${p.dim}\u0000${f.key}`; if (!seen.has(k)) { seen.add(k); out.quality.push({ ...f, dim: p.dim, dimLabel: p.label }); } }));
     out.quality.sort((a, b) => b.added - a.added);
-    const oth = ok.map((p) => ({ dimLabel: p.label, o: p.dec.others })).filter((x) => x.o);
+    const oth = ok.map((p) => ({ dimLabel: p.label, o: p.dec.others, minSessions: p.dec.minSessions })).filter((x) => x.o);
     out.others = oth;
     // Oportunidades y tickets bajos: de cada dimensión, con su etiqueta; no se suman entre dimensiones
     out.opportunities = []; out.lowAov = [];

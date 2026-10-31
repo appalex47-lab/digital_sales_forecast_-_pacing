@@ -93,10 +93,10 @@
     const maxX = maxOf(pts.map((r) => r.trafficShare)) * 1.1, maxY = maxOf(pts.map((r) => r.current.cr), ins.totals.cr) * 1.15;
     const sx = (v) => L + (v / maxX) * (W - L - R), sy = (v) => T + (1 - v / maxY) * (Hh - T - B);
     const maxRev = maxOf(pts.map((r) => r.current.revenue || 0)) || 1;
-    const avg = 1 / pts.length;
+    const avg = ins.avgShare || 1 / pts.length;
     const circles = pts.map((r) => {
       const rad = 6 + 18 * Math.sqrt((r.current.revenue || 0) / maxRev);
-      const name = r.label.length > 18 ? r.label.slice(0, 17) + '…' : r.label;
+      const name = r.label.length > 26 ? r.label.slice(0, 25) + '…' : r.label;
       return `<g class="sgmap__pt sgmap__pt--${r.quadrant}"><circle cx="${sx(r.trafficShare).toFixed(1)}" cy="${sy(r.current.cr).toFixed(1)}" r="${rad.toFixed(1)}"><title>${esc(r.label)}: ${(r.trafficShare * 100).toFixed(1)} % del tráfico, CR ${(r.current.cr * 100).toFixed(2)} %</title></circle>
         <text x="${(sx(r.trafficShare) + rad + 3).toFixed(1)}" y="${(sy(r.current.cr) + 4).toFixed(1)}">${esc(name)}</text></g>`;
     }).join('');
@@ -141,39 +141,78 @@
       </div>`;
   }
 
-  function discovery(ins, { esc, money, pct, F, split, trend, decHtml, dimsHtml }) {
+  /** Insights de varias dimensiones en una sola lista (cada segmento con el nombre de su dimensión). Los cuadrantes y la participación son dentro de su dimensión. */
+  function combineIns(list, ref) {
+    if (list.length === 1) { const i = list[0].ins, relN = i.rows.filter((r) => r.relevant && fin(r.current.cr)).length; return { ...i, avgShare: relN ? 1 / relN : 1, multi: false }; }
+    const F = FP.format, money = (v) => F.currency(v, 0), pct = (v, d = 1) => `${(v * 100).toFixed(d)} %`;
+    const rows = [], opps = [], low = [];
+    const lab = (d, r) => ({ ...r, key: `${d.dim}|${r.key}`, label: `${d.label}: ${r.label}`, dimLabel: d.label, dim: d.dim });
+    list.forEach((d) => { d.ins.rows.forEach((r) => rows.push(lab(d, r))); (d.ins.opportunities || []).forEach((r) => opps.push(lab(d, r))); (d.ins.lowAov || []).forEach((r) => low.push(lab(d, r))); });
+    const T = ref.ins.totals, crT = T.cr, aovT = T.aov;
+    const top = (arr, f, n = 5, asc = false) => [...arr].filter((r) => fin(f(r))).sort((a, b) => (asc ? f(a) - f(b) : f(b) - f(a))).slice(0, n);
+    const rel = rows.filter((r) => r.relevant && fin(r.current.cr));
+    const rankings = { revenue: top(rows.filter((r) => r.current && r.current.has.revenue), (r) => r.current.revenue), bestCr: top(rel, (r) => r.current.cr),
+      worstCr: top(rel.filter((r) => r.current.cr < crT), (r) => r.current.cr, 5, true), worstAov: top(rel.filter((r) => fin(r.current.aov) && fin(aovT) && r.current.aov < aovT), (r) => r.current.aov, 5, true) };
+    const opportunities = top(opps, (r) => r.opportunity, 8);
+    const H = [];
+    if (opportunities.length) { const o = opportunities[0]; H.push({ kind: 'conversion', text: `Mayor oportunidad de conversión: «${o.label}» trae ${pct(o.trafficShare)} del tráfico de su dimensión y convierte ${pct(o.current.cr, 2)} contra ${pct(crT, 2)} del total. Al CR del total serían ${money(o.opportunity)} más (escenario matemático, no promesa).` }); }
+    const scale = rows.filter((r) => r.quadrant === 'scale' && r.conclusive).sort((a, b) => (b.revenuePerSession || 0) - (a.revenuePerSession || 0))[0];
+    if (scale) H.push({ kind: 'scale', text: `Oportunidad de escalar: «${scale.label}» convierte ${pct(scale.current.cr, 2)} (el total, ${pct(crT, 2)}) con solo ${pct(scale.trafficShare)} del tráfico de su dimensión.` });
+    const wb = rows.filter((r) => r.baseline && r.baseline.has.revenue && (r.relevant || r.baseline.traffic >= ref.ins.threshold));
+    const drop = [...wb].sort((a, b) => a.revenueDelta - b.revenueDelta)[0], rise = [...wb].sort((a, b) => b.revenueDelta - a.revenueDelta)[0];
+    if (drop && drop.revenueDelta < 0) H.push({ kind: 'drop', text: `Mayor caída contra el periodo anterior: «${drop.label}», −${money(Math.abs(drop.revenueDelta))} en venta.` });
+    if (rise && rise.revenueDelta > 0) H.push({ kind: 'rise', text: `Mayor alza contra el periodo anterior: «${rise.label}», +${money(rise.revenueDelta)} en venta.` });
+    list.forEach((d) => { if (d.ins.quality && d.ins.quality.alert) H.unshift({ kind: 'quality', text: `Calidad de la medición en ${d.label}: ${pct(d.ins.quality.unclassifiedShare)} del tráfico no tiene dato («Sin dato (not set)»). Puede ser un problema de etiquetado en GA4, no de negocio.` }); });
+    const lowN = rows.filter((r) => r.quadrant === 'low').length;
+    if (lowN) H.push({ kind: 'low', text: `${lowN} segmento${lowN === 1 ? '' : 's'} con menos de ${F.integer(ref.ins.threshold)} sesiones: se muestran como «poco volumen» y no entran a rankings ni oportunidades.` });
+    const avgShare = rel.length ? rel.reduce((a, r) => a + (r.trafficShare || 0), 0) / rel.length : 1;
+    return { totals: T, threshold: ref.ins.threshold, rows, highlights: H, opportunities, rankings, lowAov: top(low, (r) => r.aovUplift, 8), quality: ref.ins.quality, avgShare, multi: true };
+  }
+
+  const gather = (ins, esc, money, pct, F) => {
     const list = (rows, val) => rows.length ? `<ol class="sgrank__list">${rows.map((r) => `<li><span>${esc(r.label)}</span><strong>${val(r)}</strong></li>`).join('')}</ol>` : '<p class="field__hint">Sin segmentos con volumen suficiente.</p>';
-    const nav = [...(decHtml ? [['sg-dec', 'Qué explica el cambio']] : []), ...(dimsHtml ? [['sg-dims', 'Todas las dimensiones']] : []), ['sg-h', 'Lo que destaca'], ['sg-m', 'Mapa'], ['sg-opp', 'Oportunidad'], ...(trend ? [['sg-chg', 'CR semanal']] : []), ['sg-oth', 'Ticket y clientes']];   // una entrada por tarjeta
-    const cap = (t) => t;
-    return {
-      nav,
-      html: [
-        decHtml ? card('sg-dec', 'Qué explica el cambio de la venta', 'Tráfico, conversión y ticket: cuánto aportó cada uno y cada segmento al cambio contra el periodo anterior.', decHtml) : '',
-        dimsHtml ? card('sg-dims', 'Todas las dimensiones', 'El mismo cambio de venta visto desde cada dimensión del archivo.', dimsHtml) : '',
-        card('sg-h', 'Lo que destaca', 'Lo más relevante del periodo, calculado de los datos (sin IA).', `
-          <ul class="sghl">${ins.highlights.map((h) => { const t = HL_TAG[h.kind] || ['na', 'Dato']; return `<li class="sghl__item sghl__item--${h.kind}"><span class="sghl__tag">${H().pill(t[0], t[1])}</span><span class="sghl__text">${esc(h.text).replace(/«([^»]+)»/g, '«<strong>$1</strong>»')}</span></li>`; }).join('')}</ul>
-          <p class="field__hint">Diferencias matemáticas entre segmentos, no causas: cualquier explicación es una hipótesis por validar.</p>`),
-        card('sg-m', 'Mapa de tráfico y conversión', 'Cada círculo es un segmento con volumen suficiente; su tamaño es la venta.', `${quadrantMap(ins, esc) || '<p class="field__hint">Hacen falta al menos 2 segmentos con volumen suficiente.</p>'}`),
-        card('sg-opp', 'Dónde está la oportunidad', 'Qué segmentos convierten por debajo del total y cuáles lideran.', `<section aria-labelledby="sg-o"><h3 class="panel__title" id="sg-o">Oportunidad estimada</h3>
-          <p class="field__hint">Si el segmento convirtiera al CR del total, con su mismo tráfico y su AOV. Solo segmentos con volumen suficiente y una diferencia de CR concluyente. Escenario matemático, no promesa.</p>
-          ${ins.opportunities.length ? `<div class="table-wrap"><table class="table ds-table" aria-label="Oportunidad estimada por segmento">
-            <thead><tr><th scope="col">Segmento</th><th scope="col" class="num">Tráfico</th><th scope="col" class="num">CR</th><th scope="col" class="num">CR del total</th><th scope="col" class="num">AOV</th><th scope="col" class="num">Oportunidad estimada</th><th scope="col">Recovery Center</th></tr></thead>
-            <tbody>${ins.opportunities.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td class="num">${F.integer(r.current.traffic)}</td><td class="num">${pct(r.current.cr, 2)}</td><td class="num">${pct(ins.totals.cr, 2)}</td><td class="num">${money(r.current.aov)}</td><td class="num">+${money(r.opportunity)}</td><td><button type="button" class="btn btn--small" data-action="seg-simulate" data-label="${esc(r.label)}" data-rel="${((r.current.traffic * (ins.totals.cr - r.current.cr)) / ins.totals.orders * 100).toFixed(4)}">Simular</button></td></tr>`).join('')}</tbody></table></div>`
-            : '<p>Ningún segmento con volumen suficiente convierte claramente por debajo del total.</p>'}</section>
-        <section aria-labelledby="sg-r"><h3 class="panel__title" id="sg-r">Rankings</h3>
-          <p class="field__hint">Solo segmentos con al menos ${F.integer(ins.threshold)} sesiones (el mayor entre 500 y el 1 % del tráfico), salvo «Más venta».</p>
-          <div class="sgrank">
-            <div><h4>Más venta</h4>${list(ins.rankings.revenue, (r) => money(r.current.revenue))}</div>
-            <div><h4>Mejor CR</h4>${list(ins.rankings.bestCr, (r) => pct(r.current.cr, 2))}</div>
-            <div><h4>Menor CR (bajo el total)</h4>${list(ins.rankings.worstCr, (r) => pct(r.current.cr, 2))}</div>
-            <div><h4>Menor AOV (bajo el total)</h4>${list(ins.rankings.worstAov, (r) => money(r.current.aov))}</div>
-          </div></section>`),
-        trend ? card('sg-chg', 'CR semanal', 'Cómo viene el CR semana a semana en los segmentos con más tráfico.', trendBlock(trend, { esc, pct })) : '',
-        card('sg-oth', 'Ticket y clientes', 'Segmentos con ticket bajo y la diferencia entre clientes nuevos y recurrentes.', `
-          ${lowAovBlock(ins, { esc, money, pct, F })}
-          ${split ? splitBlock(split, { esc, money, pct }) : ''}`)
-      ].join('\n')
-    };
+    return { list };
+  };
+
+  /** Mapa, lo que destaca y rankings (¿Dónde convierto peor o mejor?). */
+  function whereBody(ins, { esc, money, pct, F }) {
+    const { list } = gather(ins, esc, money, pct, F);
+    return `<div id="sg-h"><h3 class="panel__title">Lo que destaca</h3><ul class="sghl">${ins.highlights.map((h) => { const t = HL_TAG[h.kind] || ['na', 'Dato']; return `<li class="sghl__item sghl__item--${h.kind}"><span class="sghl__tag">${H().pill(t[0], t[1])}</span><span class="sghl__text">${esc(h.text).replace(/«([^»]+)»/g, '«<strong>$1</strong>»')}</span></li>`; }).join('')}</ul>
+        <p class="field__hint">Diferencias matemáticas entre segmentos, no causas: cualquier explicación es una hipótesis por validar.</p></div>
+      <div id="sg-map"><h3 class="panel__title">Mapa de tráfico y conversión</h3>${quadrantMap(ins, esc) || '<p class="field__hint">Hacen falta al menos 2 segmentos con volumen suficiente.</p>'}</div>
+      <section aria-labelledby="sg-r"><h3 class="panel__title" id="sg-r">Rankings</h3>
+        <p class="field__hint">Solo segmentos con al menos ${F.integer(ins.threshold)} sesiones (el mayor entre 500 y el 1 % del tráfico), salvo «Más venta».${ins.multi ? ' Cada segmento va con el nombre de su dimensión; un mismo visitante cuenta en cada una.' : ''}</p>
+        <div class="sgrank"><div><h4>Más venta</h4>${list(ins.rankings.revenue, (r) => money(r.current.revenue))}</div><div><h4>Mejor CR</h4>${list(ins.rankings.bestCr, (r) => pct(r.current.cr, 2))}</div>
+          <div><h4>Menor CR (bajo el total)</h4>${list(ins.rankings.worstCr, (r) => pct(r.current.cr, 2))}</div><div><h4>Menor AOV (bajo el total)</h4>${list(ins.rankings.worstAov, (r) => money(r.current.aov))}</div></div></section>`;
+  }
+
+  /** Oportunidad estimada (con «Simular») y tickets bajos (¿Cuánto vale mejorar?). */
+  function worthBody(ins, ctx) {
+    const { esc, money, pct, F } = ctx;
+    const opp = ins.opportunities.length ? `<div class="table-wrap"><table class="table ds-table" aria-label="Oportunidad estimada por segmento">
+        <thead><tr><th scope="col">Segmento</th><th scope="col" class="num">Tráfico</th><th scope="col" class="num">CR</th><th scope="col" class="num">CR del total</th><th scope="col" class="num">AOV</th><th scope="col" class="num">Oportunidad estimada</th><th scope="col">Recovery Center</th></tr></thead>
+        <tbody>${ins.opportunities.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td class="num">${F.integer(r.current.traffic)}</td><td class="num">${pct(r.current.cr, 2)}</td><td class="num">${pct(ins.totals.cr, 2)}</td><td class="num">${money(r.current.aov)}</td><td class="num">+${money(r.opportunity)}</td><td><button type="button" class="btn btn--small" data-action="seg-simulate" data-label="${esc(r.label)}" data-rel="${((r.current.traffic * (ins.totals.cr - r.current.cr)) / ins.totals.orders * 100).toFixed(4)}">Simular</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<p>Ningún segmento con volumen suficiente convierte claramente por debajo del total.</p>';
+    return `<h3 class="panel__title" id="sg-o">Oportunidad estimada</h3>
+      <p class="field__hint">Si el segmento convirtiera al CR del total, con su mismo tráfico y su AOV. Solo segmentos con volumen suficiente y una diferencia de CR concluyente. Escenario matemático, no promesa.${ins.multi ? ' Las oportunidades de distintas dimensiones pueden ser el mismo tráfico: no se suman.' : ''}</p>${opp}
+      ${lowAovBlock(ins, ctx)}`;
+  }
+
+  /** Tabla de detalle de los segmentos del alcance (una o todas las dimensiones). */
+  function detailBody(infos, ins, ctx) {
+    const { esc, money, pct, F, signedPp, signedMoney, num, Q, emptyMsg } = ctx, multi = infos.length > 1;
+    const byKey = new Map();
+    infos.forEach((d) => d.ins.rows.forEach((r) => byKey.set(`${d.dim}|${r.key}`, r)));
+    const rows = [];
+    infos.forEach((d) => d.res.rows.forEach((r) => rows.push({ d, r })));
+    rows.sort((a, b) => ((b.r.current && b.r.current.traffic) || 0) - ((a.r.current && a.r.current.traffic) || 0));
+    const th = multi ? '<th scope="col">Dimensión</th><th scope="col">Segmento</th>' : `<th scope="col">${esc(infos[0].label)}</th>`;
+    const body = rows.length ? rows.map(({ d, r }) => { const c = r.current, x = byKey.get(`${d.dim}|${r.key}`) || {}, q = x.quadrant ? Q[x.quadrant] : null;
+      return `<tr>${multi ? `<td><span class="sgd-dimtag">${esc(d.label)}</span></td>` : ''}<th scope="row">${esc(r.label)}</th><td>${q ? `<span class="sgq sgq--${x.quadrant}">${esc(q.short)}</span>${x.conclusive === false ? '<span class="cell-sub">diferencia de CR no concluyente</span>' : ''}` : '—'}</td><td class="num">${num(c, 'traffic')}</td><td class="num">${pct(r.trafficShare)}</td><td class="num">${r.trafficDeltaPct === null ? '—' : signedPct(r.trafficDeltaPct)}</td>
+        <td class="num">${num(c, 'orders')}</td><td class="num">${c ? pct(c.cr, 2) : '—'}</td><td class="num">${signedPp(r.crDeltaPp)}</td><td class="num">${c && fin(c.aov) ? money(c.aov) : '—'}</td><td class="num">${c && c.has.revenue ? money(c.revenue) : '—'}</td><td class="num">${signedMoney(r.revenueDelta)}</td></tr>`; }).join('')
+      : `<tr><td colspan="${multi ? 12 : 11}">${esc(emptyMsg)}</td></tr>`;
+    return `<div class="table-wrap"><table class="table ds-table" aria-label="${multi ? 'Detalle de todas las dimensiones' : `${esc(infos[0].label)}: tráfico y conversión por segmento`}"><thead><tr>${th}<th scope="col">Cuadrante</th><th scope="col" class="num">Tráfico</th><th scope="col" class="num">% del tráfico</th><th scope="col" class="num">Δ tráfico</th><th scope="col" class="num">Pedidos</th><th scope="col" class="num">CR</th><th scope="col" class="num">Δ CR</th><th scope="col" class="num">AOV</th><th scope="col" class="num">Venta</th><th scope="col" class="num">Δ venta</th></tr></thead><tbody>${body}</tbody></table></div>
+      <p class="field__hint">Δ CR en puntos porcentuales (pp). ${multi ? 'Un mismo visitante cuenta en cada dimensión: las filas de distintas dimensiones no se suman. ' : ''}WhatsApp y Llamadas no tienen datos por segmento (GA4 solo mide el sitio y la app): sus totales siguen en venta real y en las demás vistas. Los mismos datos alimentan el <a href="#diagnostico" data-nav="diagnostico">Nivel 2 del Diagnóstico</a>.</p>`;
   }
 
   /**
@@ -238,14 +277,17 @@
           <tbody>${row(sp.nuevo)}${row(sp.recurrente)}</tbody></table></div></section>`;
   }
 
+  const infosAllDims = (dims) => dims;
+  const signedPct = (v) => (fin(v) ? `${Math.abs(v * 100) < 0.05 ? '' : v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} %` : '—');
+
   function render(state) {
-    const esc = H().esc, F = FP.format, C = FP.config;
-    const recs = FP.dataStore.segmentIndex(state.store);          // vigentes + índice dimensión → fecha (en caché por firma de la colección)
+    const esc = H().esc, F = FP.format, C = FP.config, PXH = () => FP.pxView;
+    const recs = FP.dataStore.segmentIndex(state.store);
     const dimsCfg = C.diagnostics.dimensions;
     const present = [...recs.byDim.keys()].filter(Boolean);
-    // resultados recordados por (datos, parámetros): cambiar de dimensión o volver a una vista ya calculada no recorre nada
     const memo = (key, fn) => FP.dataStore.cached(state.store, key, ['segments'], fn);
     const dims = [...PREFERRED.filter((d) => present.includes(d)), ...present.filter((d) => !PREFERRED.includes(d))];
+    const lbl = (d) => (dimsCfg[d] && dimsCfg[d].label) || d;
     const head = `<section class="panel" aria-labelledby="t-seg"><div class="panel__head"><div data-own-head>
         <h2 class="panel__title" id="t-seg">Tráfico y conversión por segmento</h2>
         <p class="panel__desc">Tráfico, pedidos, venta, CR y AOV por dispositivo, fuente y medio, campaña, landing o tipo de cliente, con el archivo de Segmentos. CR y AOV salen de sumas, nunca de promedios.</p>
@@ -259,63 +301,107 @@
       </div></div></section>`;
       return;
     }
-    const sg = state.seg || (state.seg = { dimension: null });
-    if (!dims.includes(sg.dimension)) sg.dimension = dims[0];
+    const sg = state.seg || (state.seg = {});
+    sg.dimension = sg.dimension || 'all'; sg.eff = sg.eff || 'all'; sg.sign = sg.sign || 'all'; sg.sum = sg.sum || 'c'; sg.mode = sg.mode || 'full'; sg.xp = sg.xp || 'a';
+    if (!sg.n) sg.n = C.diagnostics.trafficSummary.topN;
     const s = state.dx.settings;
     const range = FP.app.periodRange(s.periodType, s.periodKey) || { from: `${state.year}-01-01`, to: `${state.year}-12-31` };
-    const res = memo(`segsum|${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: sg.dimension, periodType: s.periodType }));
-    const lbl = (d) => (dimsCfg[d] && dimsCfg[d].label) || d;
-    const ins = FP.segmentInsights.analyze(res);
-    const byKey = new Map(ins.rows.map((r) => [r.key, r]));
-    const Q = FP.segmentInsights.QUADRANT;
-    const pct = (v, d = 1) => (fin(v) ? `${(v * 100).toFixed(d)} %` : '—');
-    // un cambio de cero se muestra sin signo («0.0 %»), no como «+0.0 %»
-    const signedPct = (v) => (fin(v) ? `${Math.abs(v * 100) < 0.05 ? '' : v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)} %` : '—');
+    const minV = fin(sg.min) && sg.min > 0 ? sg.min : null;
+    const dkey = `${range.from}|${range.to}|${s.periodType}|${s.channel}`;
+    const sumOf = (d) => memo(`segsum|${dkey}|${d}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: d, periodType: s.periodType }));
+    const COMBO = ['device_source'];
+    const infosAll = dims.map((d) => { const res = sumOf(d); return { dim: d, label: lbl(d), res, ins: FP.segmentInsights.analyze(res) }; });
+    let infos = infosAll.filter((d) => !COMBO.includes(d.dim) && d.res.rows.length);
+    let comboInfo = infosAll.find((d) => COMBO.includes(d.dim) && d.res.rows.length);
+    if (!infos.length && comboInfo) { infos = [comboInfo]; comboInfo = undefined; }   // solo trae la combinación: se lee como una dimensión más
+    const F2 = FP.format, pct = (v, d = 1) => (fin(v) ? `${(v * 100).toFixed(d)} %` : '—');
     const signedPp = (v) => (fin(v) ? `${Math.abs(v) < 0.005 ? '' : v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)} pp` : '—');
-    const money = (v) => F.currency(v || 0, 0);
-    const signedMoney = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F.currency(Math.abs(v || 0), 0);
-    const num = (a, k) => (a && a.has[k === 'traffic' ? 'traffic' : k] ? F.integer(a[k]) : '—');
-    const dimSelect = `<div class="field"><label for="sg-dim" class="field__hint">Dimensión</label>
-          <select id="sg-dim" data-action="seg-dim">${dims.map((d) => `<option value="${esc(d)}" ${d === sg.dimension ? 'selected' : ''}>${esc(lbl(d))}</option>`).join('')}</select></div>`;
-    const dctx = { esc, money, pct, F, signedPp };
-    // Mínimo de sesiones para mostrar un segmento por separado: automático (el mayor entre 500 y el 1 % del tráfico) o el que elija la persona, recordado por dimensión.
-    const minOf = (d) => { const v = sg.minByDim && sg.minByDim[d]; return fin(v) && v > 0 ? v : null; };
-    const decOf = (r, key, d) => memo(`segdec|${key}|${minOf(d) || 'auto'}`, () => FP.trafficConversionEngine.analyze(r, minOf(d) ? { minSessions: minOf(d) } : {}));
-    const dec = res.rows.length ? decOf(res, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${sg.dimension}`, sg.dimension) : null;
-    const MIN_OPTS = [25, 50, 100, 250, 500, 1000, 2500, 5000];
-    const minSelect = dec ? `<div class="field"><label for="sg-min" class="field__hint">Mínimo de sesiones por segmento</label>
-          <select id="sg-min" data-action="seg-min"><option value="" ${minOf(sg.dimension) ? '' : 'selected'}>Automático (${esc(F.integer(dec.minSessions))})</option>${MIN_OPTS.map((v) => `<option value="${v}" ${minOf(sg.dimension) === v ? 'selected' : ''}>${esc(F.integer(v))}</option>`).join('')}</select></div>` : '';
-    const decHtml = dec ? FP.segmentsDecompView.card(dec, dctx) : '';
-    const dimsHtml = res.rows.length && dims.length > 1 ? FP.segmentsDecompView.dimsCard(dims.map((d) => {
-      const r2 = d === sg.dimension ? res : memo(`segsum|${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`, () => summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: d, periodType: s.periodType }));
-      return { dim: d, label: lbl(d), active: d === sg.dimension, dec: r2.rows.length ? decOf(r2, `${range.from}|${range.to}|${s.periodType}|${s.channel}|${d}`, d) : null };
-    }), dctx) : '';
-    const disc = res.rows.length ? discovery(ins, { esc, money, pct, F, decHtml, dimsHtml, trend: (() => { const tk = ins.rows.filter((r) => r.relevant).sort((a, b) => b.current.traffic - a.current.traffic).slice(0, 5).map((r) => r.key); return memo(`segtrend|${range.to}|${s.channel}|${sg.dimension}|${tk.join('~')}`, () => weeklyTrend(recs, { to: range.to, channel: s.channel, dimension: sg.dimension, keys: tk })); })(), split: present.includes('customer_type') ? memo(`segsplit|${range.from}|${range.to}|${s.channel}`, () => FP.segmentInsights.customerSplit(summarize(recs, { from: range.from, to: range.to, channel: s.channel, dimension: 'customer_type' }))) : null }) : { nav: [], html: '' };
-    const navAll = [...disc.nav, ['sg-table', 'Detalle por segmento']].filter((x, i, arr) => arr.findIndex((y) => y[0] === x[0]) === i);
-    const navHtml = res.rows.length ? `<nav class="sgnav" aria-label="Ir a una sección"><span class="sgnav__lbl">Ir a</span>${navAll.map(([id, l]) => `<a class="btn btn--small" href="#${id}" data-sgjump="${id}">${esc(l)}</a>`).join('')}</nav>` : '';
-    $('segments-view').innerHTML = `${head}
-      <div class="panel__body stack">
-        ${FP.narrativeView.contextControls(state, 'sg', 'dx-setting', 'dx-period-type', dimSelect + minSelect)}
-        <p class="field__hint">Periodo ${esc(res.period.from)} a ${esc(res.period.to)} contra ${esc(res.baseline.from)} a ${esc(res.baseline.to)} (${esc(res.baseline.label || 'periodo anterior')}: los segmentos no tienen plan). Periodo y canal son la misma selección de Diagnóstico.</p>
-        ${res.rows.length ? kpiCards(ins, { money, pct, F }) : ''}
-        ${navHtml}
-      </div></section>
-      ${disc.html}
-      <section class="panel sgcard" id="sg-table" aria-labelledby="sg-tt"><div class="panel__head"><div>
-        <h2 class="panel__title" id="sg-tt">Detalle por segmento</h2>
-        <p class="panel__desc">Todos los segmentos de la dimensión elegida, con su cuadrante y su cambio contra el periodo anterior.</p></div></div>
-      <div class="panel__body panel__body--flush"><div class="table-wrap"><table class="table ds-table" aria-label="${esc(lbl(sg.dimension))}: tráfico y conversión por segmento">
-        <thead><tr><th scope="col">${esc(lbl(sg.dimension))}</th><th scope="col">Cuadrante</th><th scope="col" class="num">Tráfico</th><th scope="col" class="num">% del tráfico</th><th scope="col" class="num">Δ tráfico</th>
-          <th scope="col" class="num">Pedidos</th><th scope="col" class="num">CR</th><th scope="col" class="num">Δ CR</th><th scope="col" class="num">AOV</th><th scope="col" class="num">Venta</th><th scope="col" class="num">Δ venta</th></tr></thead>
-        <tbody>${res.rows.length ? res.rows.map((r) => { const c = r.current;
-          const x = byKey.get(r.key) || {}; const q = x.quadrant ? Q[x.quadrant] : null;
-          return `<tr><th scope="row">${esc(r.label)}</th><td>${q ? `<span class="sgq sgq--${x.quadrant}">${esc(q.short)}</span>${x.conclusive === false ? '<span class="cell-sub">diferencia de CR no concluyente</span>' : ''}` : '—'}</td><td class="num">${num(c, 'traffic')}</td><td class="num">${pct(r.trafficShare)}</td><td class="num">${signedPct(r.trafficDeltaPct)}</td>
-            <td class="num">${num(c, 'orders')}</td><td class="num">${c ? pct(c.cr, 2) : '—'}</td><td class="num">${signedPp(r.crDeltaPp)}</td>
-            <td class="num">${c && fin(c.aov) ? money(c.aov) : '—'}</td><td class="num">${c && c.has.revenue ? money(c.revenue) : '—'}</td><td class="num">${signedMoney(r.revenueDelta)}</td></tr>`; }).join('')
-          : `<tr><td colspan="11">${esc(emptyReason(recs, sg.dimension, res.period, s.channel, lbl(sg.dimension)))}</td></tr>`}</tbody>
-      </table></div></div>
-      <div class="panel__body"><p class="field__hint">Δ CR en puntos porcentuales (pp). WhatsApp y Llamadas no tienen datos por segmento (GA4 solo mide el sitio y la app): sus totales siguen en venta real y en las demás vistas. Los mismos datos alimentan el <a href="#diagnostico" data-nav="diagnostico">Nivel 2 del Diagnóstico</a>. También acepta el CSV exportado de GA4 tal cual: se convierte solo al cargarlo.</p></div>
-    </section>`;
+    const money = (v) => F2.currency(v || 0, 0);
+    const signedMoney = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + F2.currency(Math.abs(v || 0), 0);
+    const num = (a, k) => (a && a.has[k === 'traffic' ? 'traffic' : k] ? F2.integer(a[k]) : '—');
+    const dctx = { esc, money, pct, F: F2, signedPp, signedMoney, num, Q: FP.segmentInsights.QUADRANT };
+    const dimSelect = `<div class="field"><label for="sg-dim" class="field__hint">Dimensión</label><select id="sg-dim" data-action="seg-dim"><option value="all" ${(sg.dimension || 'all') === 'all' ? 'selected' : ''}>Todas las dimensiones</option>${infosAllDims(dims).map((d) => `<option value="${esc(d)}" ${d === sg.dimension ? 'selected' : ''}>${esc(lbl(d))}</option>`).join('')}</select></div>`;
+    const ctrl = FP.narrativeView.contextControls(state, 'sg', 'dx-setting', 'dx-period-type', dimSelect);
+    const baseNote = (r) => `Periodo ${esc(r.period.from)} a ${esc(r.period.to)} contra ${esc(r.baseline.from)} a ${esc(r.baseline.to)} (${esc(r.baseline.label || 'periodo anterior')}: los segmentos no tienen plan). Periodo y canal son la misma selección de Diagnóstico.`;
+    if (!infos.length) {
+      const first = infosAll[0] || { dim: dims[0], label: lbl(dims[0]), res: sumOf(dims[0]) };
+      $('segments-view').innerHTML = `${head}<div class="panel__body stack">${ctrl}<p class="field__hint">${baseNote(first.res)}</p>
+        <div class="note note--warn" role="status">${esc(emptyReason(recs, first.dim, first.res.period, s.channel, first.label))}</div></div></section>`;
+      return;
+    }
+    const minByDim = {}; if (minV) infos.forEach((d) => { minByDim[d.dim] = minV; });
+    const all = memo(`segall|${dkey}|${minV || 'auto'}|${infos.map((d) => d.dim).join('~')}${comboInfo ? '|x' : ''}`, () => FP.trafficConversionEngine.analyzeAll(
+      infos.map((d) => ({ dim: d.dim, label: d.label, res: d.res, ins: d.ins })).concat(comboInfo ? [{ dim: comboInfo.dim, label: comboInfo.label, res: comboInfo.res }] : []), { minByDim }));
+    const ref = infos.slice().sort((a, b) => b.ins.totals.traffic - a.ins.totals.traffic)[0];
+    const scopable = infos.concat(comboInfo ? [comboInfo] : []);
+    if (sg.dimension !== 'all' && !scopable.some((d) => d.dim === sg.dimension)) sg.dimension = 'all';
+    const scopeInfos = sg.dimension === 'all' ? infos : scopable.filter((d) => d.dim === sg.dimension);
+    const isCombo = scopeInfos.length === 1 && COMBO.includes(scopeInfos[0].dim) && Boolean(comboInfo);
+    const sIns = combineIns(scopeInfos, ref);
+    // tendencia semanal del CR de los 5 segmentos con más tráfico de cada dimensión (las de todas, para el resumen)
+    const trends = infos.map((d) => { const tk = d.ins.rows.filter((r) => r.relevant).sort((a, b) => b.current.traffic - a.current.traffic).slice(0, 5).map((r) => r.key);
+      const t = memo(`segtrend|${range.to}|${s.channel}|${d.dim}|${tk.join('~')}`, () => weeklyTrend(recs, { to: range.to, channel: s.channel, dimension: d.dim, keys: tk }));
+      return { dim: d.dim, dimLabel: d.label, t, series: t ? t.series : [] }; });
+    const ctTrends = sg.dimension === 'all' ? trends : trends.filter((t) => t.dim === sg.dimension);
+    const trendMerged = ctTrends.some((t) => t.t) ? { blocks: ctTrends.find((t) => t.t).t.blocks, series: ctTrends.flatMap((t) => (t.t ? t.t.series : []).map((x) => ({ ...x, label: sg.dimension === 'all' ? `${t.dimLabel}: ${x.label}` : x.label }))) } : null;
+    const ctInfo = infos.find((d) => d.dim === 'customer_type');
+    const split = ctInfo ? FP.segmentInsights.customerSplit(ctInfo.res) : null;
+    const R = FP.trResumen.build({ all, dimsInfo: infos, ref, trends, split, channel: s.channel, baseline: ref.res.baseline });
+    const sumRows = R.rows.filter((r) => (sg.sum === 'l' ? r[2] : r[1]));
+    const P = (h) => PXH().P(h);
+    const blk = (id, t, cap, body, lec) => P(`<section class="blk" id="${id}"><div class="blk__h"><h3>${t}</h3><span class="cap">${cap}</span></div>@@B@@${lec ? `<p class="lec">${lec}</p>` : ''}</section>`).replace('@@B@@', () => `<div class="sgbody stack">${body}</div>`);
+    const kpis = kpiCards(ref.ins, { money, pct, F: F2 });
+    const chips = R.chips.map((c) => `<span class="px-tchip ${c[0]}" tabindex="0" data-tip="${esc(c[2])}">${esc(c[1])}</span>`).join('');
+    const nF = minV ? 1 : 0;
+    const topbar = `<div class="px-topbar" id="sg-topbar"><div class="px-topbar__row"><div class="sg-ctx">${ctrl}</div>
+        <button type="button" class="px-btn" data-action="fs-toggle" data-fs-page="sg" aria-expanded="${Boolean(state.fs && state.fs.sg)}" aria-controls="fs-sg">⚙ Filtros${nF ? ` · ${nF}` : ''}</button>
+        <div class="px-seg sg-modeseg" role="group" aria-label="Nivel de detalle"><button type="button" id="sg-m-res" aria-pressed="${sg.mode === 'res'}">Resumen</button><button type="button" id="sg-m-full" aria-pressed="${sg.mode !== 'res'}">Completo</button></div></div>
+      ${state.fs && state.fs.sg ? `<div class="px-fs" id="fs-sg"><div class="field"><label for="sg-min" class="field__hint">Mínimo de sesiones por segmento</label>
+        <select id="sg-min" data-action="seg-min"><option value="" ${minV ? '' : 'selected'}>Automático (${esc(F2.integer(ref.ins.threshold))})</option>${[25, 50, 100, 250, 500, 1000, 2500, 5000].map((v) => `<option value="${v}" ${minV === v ? 'selected' : ''}>${esc(F2.integer(v))}</option>`).join('')}</select></div>
+        <p class="field__hint">Un segmento con menos sesiones se agrupa en «Otros» en la descomposición. Aplica a todas las dimensiones.</p></div>` : ''}</div>`;
+    const verdict = `<section class="px-verdict"><p class="px-eyebrow">Tráfico y conversión · ${esc(ref.res.period.from)} a ${esc(ref.res.period.to)}${ref.res.baseline ? ` contra ${esc(ref.res.baseline.from)} a ${esc(ref.res.baseline.to)}` : ''}</p><h2>${esc(R.verdict)}</h2>
+        <div class="px-trust" aria-label="Confiabilidad y contexto">${chips}</div><div class="sgkpi-slot">${kpis}</div></section>`;
+    const intro = `<section class="px-intro"><div class="px-intro__h"><h3>Resumen general</h3><div class="px-mini" id="sg-md" role="group" aria-label="Versión del resumen"><button type="button" data-v="c" aria-pressed="${sg.sum !== 'l'}">Versión corta</button><button type="button" data-v="l" aria-pressed="${sg.sum === 'l'}">Versión larga</button></div></div>
+        <div class="px-sum${sg.sum === 'l' ? ' px-sum--l' : ''}" data-sg-summary="1">${sumRows.map((r) => `<div class="px-sum__r"><span>${esc(r[0])}</span><span>${sg.sum === 'l' ? r[2] : r[1]}</span></div>`).join('')}</div></section>`;
+    const scopeName = sg.dimension === 'all' ? 'todas las dimensiones' : scopeInfos[0].label.toLowerCase();
+    const scopeBar = `<div class="px-scope sg-scope" id="sg-scope">Desde aquí, las secciones muestran <b>${esc(scopeName)}</b>. <span class="px-cap">Cámbialo en la lista de «Qué mirar primero» o en «¿Se ve igual desde otra dimensión?».</span></div>`;
+    const navItems = [['sg-dec', '¿Qué explica el cambio?'], ...(infos.length > 1 ? [['sg-dims', 'Otras dimensiones'], ['sg-x', 'Cruce']] : []), ['sg-m', 'Dónde convierto'], ['sg-opp', 'Cuánto vale mejorar'], ...(trendMerged ? [['sg-chg', 'CR semanal']] : []), ...(split ? [['sg-oth', 'Nuevos y recurrentes']] : []), ['sg-table', 'Detalle por segmento']];
+    const navHtml = `<nav class="sgnav" aria-label="Ir a una sección"><span class="sgnav__lbl">Ir a</span>${navItems.map(([id, l]) => `<a class="btn btn--small" href="#${id}" data-sgjump="${id}">${esc(l)}</a>`).join('')}</nav>`;
+    const secs = [];
+    if (R.hasBase) {
+      const legacy = (info) => { const dec = memo(`segdec|${dkey}|${info.dim}|${minV || 'auto'}`, () => FP.trafficConversionEngine.analyze(info.res, minV ? { minSessions: minV } : {})); return FP.segmentsDecompView.card(dec, dctx); };
+      const one = scopeInfos.length === 1 && sg.dimension !== 'all' ? scopeInfos[0] : null;
+      const body1 = isCombo ? legacy(one)
+        : FP.segmentsDecompView.allCard(all, sg, dctx) + (one ? `<details class="sg-legacy" id="sg-dec-dim"${sg.decOpen ? ' open' : ''}><summary>Descomposición completa de ${esc(one.label)} (cómo reparte esa dimensión el cambio)</summary>${legacy(one)}</details>` : '');
+      secs.push(blk('sg-dec', '¿Qué explica el cambio de la venta?', isCombo ? 'El mismo cambio visto desde el cruce Dispositivo × Fuente/medio.' : 'La cascada del total no depende de la dimensión; la lista junta los segmentos de todas.', body1, R.lec.s1));
+      if (infos.length > 1) secs.push(blk('sg-dims', '¿Se ve igual desde otra dimensión?', 'Lo que atribuye cada dimensión al cambio de venta. Pulsa una para filtrar la lista y el detalle.', FP.segmentsDecompView.dimsCard(all.dims.filter((d) => d.status === 'ok').map((d) => ({ dim: d.dim, label: d.label, active: sg.dimension === d.dim, dec: d.dec })), dctx) || '<p class="field__hint">Hacen falta al menos 2 dimensiones con periodo anterior.</p>', ''));
+      if (infos.length > 1) secs.push(blk('sg-x', '¿Qué pasa en el cruce?', 'Dimensión principal y secundaria: cada combinación en una sola celda.', FP.segmentsDecompView.crossCard(all.cross, sg, dctx), ''));
+    } else secs.push(blk('sg-dec', '¿Qué explica el cambio de la venta?', 'Tráfico, conversión y ticket.', '<p class="field__hint">No hay datos de segmentos del periodo anterior para comparar: sin referencia no se puede partir el cambio en tráfico, conversión y ticket. Más abajo sí se ve el periodo actual por segmento.</p>', ''));
+    secs.push(scopeBar);
+    secs.push(blk('sg-m', '¿Dónde convierto peor o mejor?', 'Cada círculo es un segmento con volumen suficiente; su tamaño es la venta.', whereBody(sIns, dctx), R.lec.s3));
+    secs.push(blk('sg-opp', '¿Cuánto vale mejorar?', 'Oportunidad estimada y tickets bajos con volumen.', worthBody(sIns, dctx), R.lec.s4));
+    if (trendMerged) secs.push(blk('sg-chg', '¿Cómo viene el CR?', 'Semana a semana en los segmentos con más tráfico.', trendBlock(trendMerged, { esc, pct }), R.lec.s5));
+    if (split) secs.push(blk('sg-oth', '¿Nuevos o recurrentes?', 'Cómo convierten y cuánto pesan los clientes nuevos y los recurrentes.', splitBlock(split, { esc, money, pct }), ''));
+    secs.push(blk('sg-table', 'Detalle por segmento', 'Todos los segmentos del alcance elegido, con su cuadrante y su cambio contra el periodo anterior.', detailBody(scopeInfos, sIns, { ...dctx, emptyMsg: emptyReason(recs, scopeInfos[0].dim, ref.res.period, s.channel, scopeInfos[0].label) }), ''));
+    const actCard = (a) => `<div><b>${esc(a.title)}</b><span>${esc(a.desc)}</span>${a.why ? `<span class="px-cap"><b>No disponible.</b> ${esc(a.why)}</span>` : `<button type="button" class="px-lk" data-action="${{ sim: 'seg-simulate', dx: 'tr-to-dx', cross: 'tr-to-cross', cli: 'tr-to-clients' }[a.id]}"${a.id === 'sim' ? ` data-label="${esc(a.label)}" data-rel="${(a.rel || 0).toFixed(4)}"` : ''}>Abrir →</button>`}</div>`;
+    secs.push(P(`<section class="blk" id="sg-q"><div class="blk__h"><h3>¿Qué hago con esto?</h3><span class="cap">De la lectura a la acción: lo que sigue en el flujo, con el mismo periodo y canal.</span></div><div class="act">${R.actions.map(actCard).join('')}</div><p class="cap">Llegas con el contexto puesto. Nada se guarda ni se ejecuta desde aquí.</p></section>`).replace(/<div class="px-act">/, '<div class="px-act">'));
+    const defs = [['CR', 'Pedidos entre sesiones. Sale de sumas, nunca de promedios.'], ['AOV', 'Venta entre pedidos.'], ['Efectos', 'Cada uno mueve un factor a la vez (tráfico → conversión → ticket) y los tres suman exactamente el cambio de la venta.'], ['Mezcla del CR', 'Parte del cambio del CR del total por cómo convierte cada segmento y parte por cómo cambió el peso de cada uno.'],
+      ['Distinguible del azar', 'Prueba de dos proporciones al 95 %; «no concluyente» si no pasa.'], ['Tendencia', '2 últimas semanas contra las 6 anteriores, con el intervalo de Wilson al 95 %.'], ['Otros', 'Segmentos con menos del mínimo de sesiones se agrupan; si pesan 25 % o más, se avisa.'], ['Dimensiones', 'Cada dimensión parte la misma venta de otra manera: sus efectos no se suman entre sí. El cruce (Dispositivo × Fuente/medio) sí es una partición.']];
+    const cs = C.diagnostics.trafficSummary;
+    const meth = `<details class="px-meth" id="sg-meth"${sg.meth ? ' open' : ''}><summary>Método y definiciones</summary><div class="px-meth__b"><section class="px-dsec"><h4>Definiciones</h4><dl class="px-defs">${defs.map((d) => `<div><dt>${esc(d[0])}</dt><dd>${esc(d[1])}</dd></div>`).join('')}</dl></section>
+      <section class="px-dsec"><h4>Umbrales (provisionales)</h4><dl class="px-fi"><div><dt>Mínimo de sesiones</dt><dd>El mayor entre 500 y el 1 % del tráfico (ajustable en ⚙ Filtros)</dd></div><div><dt>Oportunidad</dt><dd>CR bajo el total, diferencia concluyente y ≥ ${(cs.oppMinShare * 100).toFixed(1)} % de la venta para proponer simularla</dd></div><div><dt>Ticket bajo</dt><dd>≥ 30 pedidos y más de 15 % bajo el total</dd></div><div><dt>Mezcla del CR en el resumen</dt><dd>Se nombra desde ${cs.mixMinPp} pp</dd></div></dl>
+      <p class="px-cap">Los segmentos no tienen plan: la referencia es el periodo anterior. WhatsApp y Llamadas no tienen datos por segmento.</p></section></div></details>`;
+    const foot = `<section class="px-blk px-foot"><span class="px-mu">Segmentos de GA4 · ${esc(ref.res.period.from)} a ${esc(ref.res.period.to)} · ${infos.length === 1 ? '1 dimensión' : infos.length + ' dimensiones'}</span></section>`;
+    $('segments-view').innerHTML = `${head}<div class="px px-sg"><div class="px-app" id="sg-frame" data-mode="${sg.mode}">${topbar}${verdict}${intro}
+      <div class="px-more"><p class="px-cap sg-base">${baseNote(ref.res)}</p>${navHtml}${secs.join('\n')}</div>${foot}${meth}</div></div></section>`;
+    const app = $('segments-view').querySelector('.px-app');
+    const setMode = (m) => { sg.mode = m; app.dataset.mode = m; $('sg-m-res').setAttribute('aria-pressed', String(m === 'res')); $('sg-m-full').setAttribute('aria-pressed', String(m !== 'res')); };
+    $('sg-m-res').onclick = () => setMode('res'); $('sg-m-full').onclick = () => setMode('full');
+    const dd = $('sg-dec-dim'); if (dd) dd.addEventListener('toggle', () => { sg.decOpen = dd.open; });
+    const md = $('sg-meth'); if (md) md.addEventListener('toggle', () => { sg.meth = md.open; });
+    const el = $('segments-view');
+    if (!el._sgBound) { el._sgBound = true;
+      el.addEventListener('click', (e) => { const b = e.target.closest('#sg-md button'); if (!b) return; const st = FP.app && FP.app.state; if (!st || !st.seg) return; st.seg.sum = b.dataset.v; const y = root.scrollY; render(st); root.scrollTo(0, y); }); }
   }
 
   FP.segmentsView = { render, summarize, emptyReason };
