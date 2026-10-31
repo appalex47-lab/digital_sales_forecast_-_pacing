@@ -4552,8 +4552,18 @@
       loadYearScoped(ty); refresh(); resetPeriod(); location.hash = '#resumen'; render();
     },
 
-    'seg-min'(el) { const sg = state.seg || (state.seg = {}); const d = sg.dimension; sg.minByDim = { ...(sg.minByDim || {}), [d]: el.value === '' || el.value === undefined ? null : Math.max(1, Number(el.value) || 0) || null }; render(); },
-    'seg-dim'(el) { (state.seg || (state.seg = {})).dimension = el.value || el.dataset.value; render(); },
+    'seg-min'(el) { const sg = state.seg || (state.seg = {}); sg.min = el.value === '' || el.value === undefined ? null : Math.max(1, Number(el.value) || 0) || null; render(); },
+    'seg-dim'(el) { const sg = state.seg || (state.seg = {}); sg.dimension = el.value || el.dataset.value || 'all'; sg.n = FP.config.diagnostics.trafficSummary.topN; render(); },
+    /** Filtros de «Qué mirar primero»: efecto y sentido (la dimensión es seg-dim). */
+    'seg-flt'(el) { const sg = state.seg || (state.seg = {}); const k = el.dataset.k; if (k === 'eff' || k === 'sign') { sg[k] = el.dataset.v || 'all'; sg.n = FP.config.diagnostics.trafficSummary.topN; render(); } },
+    'seg-more'() { (state.seg || (state.seg = {})).n = 9999; const y = root.scrollY; render(); root.scrollTo(0, y); },
+    'seg-xp'(el) { (state.seg || (state.seg = {})).xp = el.dataset.v === 'b' ? 'b' : 'a'; const y = root.scrollY; render(); root.scrollTo(0, y); },
+    /** Tráfico y conversión → Diagnóstico (Nivel 2) con la misma selección de periodo y canal. No guarda nada. */
+    'tr-to-dx'() { state.dx.run = null; root.location.hash = '#diagnostico'; },
+    /** Tráfico y conversión → Cross-sell. */
+    'tr-to-cross'() { actions.go({ dataset: { view: 'crosssell' } }); },
+    /** Tráfico y conversión → Clientes y LTV con el mismo canal. */
+    'tr-to-clients'() { state.cu.opts.channel = state.dx.settings.channel || 'total'; state.cu.status = 'idle'; actions.go({ dataset: { view: 'clientes' } }); },
     /**
      * Tráfico y conversión · parte 3: lleva una oportunidad de segmento a Recovery Center. Los escenarios trabajan con el canal completo,
      * así que el segmento se traduce a su equivalente en el canal: los pedidos extra de llevarlo al CR del total, como % del CR de los

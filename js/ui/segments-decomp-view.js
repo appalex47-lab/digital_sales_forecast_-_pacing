@@ -124,5 +124,77 @@
       <p class="field__hint">Cada dimensión parte la misma venta en sus propios segmentos, así que los efectos pueden diferir un poco entre filas: es normal (una dimensión agrupa el tráfico de otra manera). Si todas apuntan al mismo efecto, el problema no depende de cómo se corte.</p></div>`;
   }
 
-  FP.segmentsDecompView = { card, dimsCard, waterfall, qualityBlock };
+
+  /* ====================== Todas las dimensiones a la vez (resultado de FP.trafficConversionEngine.analyzeAll) ====================== */
+  const FLT_EFF = [['all', 'El mayor de cada uno'], ['traffic', 'Tráfico'], ['cr', 'Conversión'], ['aov', 'Ticket']];
+  const FLT_SIGN = [['all', 'Todo'], ['neg', 'Lo que resta'], ['pos', 'Lo que suma']];
+
+  /** Filtros de la lista: dimensión, efecto y sentido. Cada botón es una acción (seg-dim / seg-flt). */
+  function filters(st, dims, { esc }) {
+    const grp = (label, buttons) => `<div class="sgd-fgp"><span class="sgd-fgp__l">${label}</span><div class="segmented" role="group" aria-label="${label}">${buttons}</div></div>`;
+    const dimB = [['all', 'Todas'], ...dims.map((d) => [d.dim, d.label])].map(([v, l]) => `<button type="button" data-action="seg-dim" data-value="${esc(v)}" aria-pressed="${(st.dimension || 'all') === v}">${esc(l)}</button>`).join('');
+    const mk = (k, arr, cur) => arr.map(([v, l]) => `<button type="button" data-action="seg-flt" data-k="${k}" data-v="${v}" aria-pressed="${cur === v}">${esc(l)}</button>`).join('');
+    return `<div class="sgd-flt">${grp('Dimensión', dimB)}${grp('Efecto', mk('eff', FLT_EFF, st.eff || 'all'))}${grp('Sentido', mk('sign', FLT_SIGN, st.sign || 'all'))}</div>`;
+  }
+
+  /** Lista unificada: un segmento por fila, de todas las dimensiones, con sus tres efectos. */
+  function listTable(all, st, ctx) {
+    const { esc, money, pct, F } = ctx, fin2 = (v) => sign(money, v), TE = FP.trafficConversionEngine;
+    const r = TE.pick(all, { dim: !st.dimension || st.dimension === 'all' ? null : st.dimension, effect: !st.eff || st.eff === 'all' ? null : st.eff, sign: !st.sign || st.sign === 'all' ? null : st.sign });
+    const rows = r.rows.slice(0, st.n || 8);
+    const maxAbs = Math.max(1, ...rows.flatMap((x) => [x.traffic, x.cr, x.aov].map(Math.abs)));
+    const cell = (x, k) => {
+      const v = x[k], extra = k === 'cr' && v !== 0 && x.crTest.significant === false ? '<span class="cell-sub">no concluyente</span>' : (k === 'cr' && x.crTest.significant === true ? '<span class="cell-sub">distinguible del azar</span>' : '');
+      return `<td class="num ${x.effect === k ? 'sgd-dom' : ''}"><span class="${cls(v)}">${esc(fin2(v))}</span>${bar(v, maxAbs)}${extra}</td>`;
+    };
+    if (!rows.length) return '<p class="field__hint">Ningún segmento cumple ese filtro.</p>';
+    const body = rows.map((x) => {
+      const sub = x.base && x.cur ? `${F.integer(x.base.t)} → ${F.integer(x.cur.t)} sesiones · CR ${pct(x.base.o / x.base.t, 2)} → ${pct(x.cur.o / x.cur.t, 2)}` : (x.cur ? `${F.integer(x.cur.t)} sesiones · nuevo en este periodo` : 'ya no aparece');
+      return `<tr><th scope="row"><span class="sgd-dimtag">${esc(x.dimLabel)}</span> ${esc(x.label)}<span class="cell-sub">${esc(sub)}</span></th><td class="num ${cls(x.delta)}"><strong>${esc(fin2(x.delta))}</strong></td>${cell(x, 'traffic')}${cell(x, 'cr')}${cell(x, 'aov')}</tr>`;
+    }).join('');
+    const more = r.total > rows.length ? `Se muestran ${rows.length} de ${r.total} segmentos. <button type="button" class="link-btn" data-action="seg-more">Ver todos</button> · ` : '';
+    return `<div class="table-wrap"><table class="table ds-table sgd-table" aria-label="Efectos por segmento de todas las dimensiones">
+      <thead><tr><th scope="col">Segmento</th><th scope="col" class="num">Δ venta</th><th scope="col" class="num">Efecto tráfico</th><th scope="col" class="num">Efecto conversión</th><th scope="col" class="num">Efecto ticket</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+      <p class="field__hint">${more}Ordenado por el tamaño del efecto elegido (el dominante de cada fila va en negritas). Un mismo visitante cuenta en cada dimensión: las filas de distintas dimensiones no se suman. Segmentos con menos del mínimo de sesiones se agrupan en «Otros» y no entran a esta lista.</p>`;
+  }
+
+  /** «¿Qué explica el cambio de la venta?» con todas las dimensiones: cascada del total, qué mirar primero, mezcla, avisos y lista. */
+  function allCard(all, st, ctx) {
+    const { esc, money, pct, F, signedPp } = ctx, fin2 = (v) => sign(money, v), t = all.total;
+    const dirWord = t.delta < 0 ? 'bajó' : t.delta > 0 ? 'subió' : 'no cambió';
+    const finds = FP.trafficConversionEngine.findingsAll(all, { money: fin2, pct: (v, d = 1) => `${(v * 100).toFixed(d)} %` });
+    const sentence = `Cascada del total: tráfico ${fin2(t.traffic)}, conversión ${fin2(t.cr)}, ticket ${fin2(t.aov)}. Cada efecto mueve un factor a la vez y los tres suman exactamente el cambio${t.reconciles ? '' : ' (¡no cuadra: revisa los datos!)'}. El total no depende de la dimensión.`;
+    const qual = all.quality.length ? qualityBlock({ quality: all.quality.map((q) => ({ ...q, label: `${q.dimLabel}: ${q.label}` })) }, ctx) : '';
+    const oth = all.others.map((o) => othersBlock({ others: o.o, minSessions: o.minSessions }, ctx).replace('«Otros» reúne', `En ${esc(o.dimLabel)}, «Otros» reúne`)).join('');
+    return `<div class="sgd" data-all="1"><div class="sgd-head">
+        <p class="sgd-head__lead">La venta ${dirWord} <strong class="${cls(t.delta)}">${esc(fin2(t.delta))}</strong>${fin(t.deltaPct) ? ` (${t.deltaPct >= 0 ? '+' : '−'}${Math.abs(t.deltaPct * 100).toFixed(1)} %)` : ''}: ${esc(money(t.base))} → ${esc(money(t.current))}.</p>
+        <p class="field__hint">${esc(sentence)}</p></div>
+      <div class="sgd-grid"><div>${waterfall({ total: t }, ctx)}</div>
+        <div class="sgd-finds"><h3 class="panel__title">Qué mirar primero</h3>${finds.length ? `<ul class="sgd-finds__list">${finds.map((f) => `<li class="sgd-find"><span class="sgd-find__tag sgd-find__tag--${f.tone}">${esc(f.tag)}</span><span><strong>${esc(f.title)}</strong> ${esc(f.body)}</span></li>`).join('')}</ul>` : '<p class="field__hint">Sin movimientos relevantes por segmento.</p>'}
+          ${mixBlock({ mix: all.mix }, ctx)}</div></div>
+      ${qual}${oth}
+      <h3 class="panel__title" id="sgd-tt">Todos los segmentos, de todas las dimensiones</h3>
+      ${filters(st, all.dims.filter((d) => d.status === 'ok'), ctx)}
+      ${listTable(all, st, ctx)}</div>`;
+  }
+
+  /** Cruce de dos dimensiones (Dispositivo × Fuente/medio): cada celda es una combinación; las celdas sí se pueden sumar. */
+  function crossCard(cross, st, ctx) {
+    const { esc, money, pct } = ctx, fin2 = (v) => sign(money, v);
+    if (!cross) return `<p class="field__hint"><strong>Disponible cuando el archivo trae el cruce.</strong> Para ver «Móvil dentro de Google · pago» hace falta la dimensión combinada (Dispositivo × Fuente/medio): con cortes separados no se puede saber qué parte de Móvil vino de cada fuente. Cárgala en Segmentos (el export de GA4 con dispositivo y fuente/medio la trae) y esta sección se activa sola.</p>`;
+    const pa = (st.xp || 'a') === 'a', P = pa ? cross.rowsA : cross.colsB, Sx = pa ? cross.colsB : cross.rowsA;
+    const get = (p, q) => cross.cells.find((x) => (pa ? x.a === p && x.b === q : x.a === q && x.b === p));
+    const mx = Math.max(1, ...cross.cells.map((x) => Math.abs(x.delta)));
+    const sel = `<div class="sgd-flt"><div class="sgd-fgp"><span class="sgd-fgp__l">Dimensión principal</span><div class="segmented" role="group" aria-label="Dimensión principal"><button type="button" data-action="seg-xp" data-v="a" aria-pressed="${pa}">Dispositivo</button><button type="button" data-action="seg-xp" data-v="b" aria-pressed="${!pa}">Fuente / medio</button></div></div></div>`;
+    const head = `<th scope="col">${pa ? 'Dispositivo ↓ · Fuente / medio →' : 'Fuente / medio ↓ · Dispositivo →'}</th>${Sx.map((q) => `<th scope="col" class="num">${esc(q)}</th>`).join('')}<th scope="col" class="num">Total</th>`;
+    const body = P.map((p) => { let tot = 0;
+      const cells = Sx.map((q) => { const x = get(p, q); if (!x) return '<td class="num">—</td>'; tot += x.delta; const a = Math.min(0.55, Math.abs(x.delta) / mx * 0.55);
+        return `<td class="num" style="background:${x.delta < 0 ? `rgba(180,35,24,${a.toFixed(2)})` : `rgba(31,95,224,${a.toFixed(2)})`}"><strong>${esc(fin2(x.delta))}</strong><span class="cell-sub">${x.cr0 !== null && x.cr1 !== null ? `CR ${pct(x.cr0, 2)} → ${pct(x.cr1, 2)}` : 'sin CR'}</span></td>`; }).join('');
+      return `<tr><th scope="row">${esc(p)}</th>${cells}<td class="num"><strong>${esc(fin2(tot))}</strong></td></tr>`; }).join('');
+    return `${sel}<div class="table-wrap"><table class="table ds-table sgd-table" aria-label="Cruce de dimensiones"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+      <p class="field__hint">Δ venta de cada combinación contra el periodo anterior, con su CR. Estas celdas sí se pueden sumar: cada visitante cae en una sola. Cambia la dimensión principal para leer el cruce desde el otro lado.</p>`;
+  }
+
+  FP.segmentsDecompView = { card, dimsCard, waterfall, qualityBlock, mixBlock, othersBlock, allCard, crossCard, listTable, filters };
 })(typeof window !== 'undefined' ? window : globalThis);

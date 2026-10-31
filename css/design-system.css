@@ -2414,3 +2414,27 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 #view-pacing .px-app, #view-pacing .px-more, #view-pacing .px-blk, #view-pacing .px-verdict, #view-pacing .px-meth__b, #view-pacing .px-dsec { min-width: 0; max-width: 100%; }
 #view-pacing .table-wrap { overflow-x: auto; max-width: 100%; }
 #view-pacing .px-blk > div[id], #view-pacing .px-dsec > div[id] { min-width: 0; max-width: 100%; }
+
+/* ===== Tráfico y conversión · versión B (todas las dimensiones a la vez) ===== */
+#sg-topbar { position: static; }
+#sg-topbar .px-topbar__row { align-items: flex-end; gap: 8px 12px; flex-wrap: wrap; }
+#sg-topbar .sg-ctx { flex: 1 1 520px; min-width: 0; }
+#sg-topbar .sg-ctx .filters { margin: 0; }
+#view-segmentos .px .tg { display: inline-block; font-size: .68rem; font-weight: 700; border-radius: 999px; padding: 1px 8px; background: var(--soft); color: var(--ink2); vertical-align: 1px; }
+#view-segmentos .px-sg .px-app h2 { max-width: none; }
+#view-segmentos .px-sg .sgkpi-slot { margin-top: 12px; }
+#view-segmentos .px-sg .sgbody > .sgd { margin: 0; }
+#view-segmentos .px-sg .sg-base { padding: 6px 24px 0; margin: 0; }
+#view-segmentos .px-sg .sgnav { padding: 8px 24px 0; }
+#view-segmentos .px-sg .sg-scope { padding: 8px 24px; background: var(--soft); border-block: 1px solid var(--line); font-size: .84rem; }
+#view-segmentos .px-sg .sgbody { padding: 0 24px 4px; gap: 12px; }
+#view-segmentos .sgd-flt { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 2px 0 10px; }
+#view-segmentos .sgd-fgp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#view-segmentos .sgd-fgp__l { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+#view-segmentos .sgd-dimtag { font-size: .7rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--soft); color: var(--ink2); white-space: nowrap; }
+#view-segmentos .px-sg .table-wrap { overflow-x: auto; }
+#view-segmentos .px-sg .px-app, #view-segmentos .px-sg .px-blk, #view-segmentos .px-sg .px-verdict, #view-segmentos .px-sg .px-meth__b { min-width: 0; max-width: 100%; }
+@media (max-width: 700px) { #sg-topbar .sg-ctx { flex-basis: 100%; } #view-segmentos .px-sg .sgbody, #view-segmentos .px-sg .sg-base, #view-segmentos .px-sg .sgnav, #view-segmentos .px-sg .sg-scope { padding-inline: 16px; } }
+#view-segmentos .px-sg .metric-card__value { font-size: clamp(1.35rem, 2.2vw, 1.8rem); overflow-wrap: anywhere; }
+#sg-topbar .sg-ctx { flex: 1 1 100%; }
+#sg-topbar .sg-modeseg { margin-left: auto; }

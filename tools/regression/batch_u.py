@@ -44,9 +44,9 @@ async def main():
         await q.goto(u + '#segmentos'); await q.wait_for_timeout(500)
         for k, v in (('periodType', 'month'), ('periodKey', '2026-09'), ('channel', 'total')):
             await q.evaluate(f"FP.app.actions['dx-setting']({{dataset:{{key:'{k}'}},value:'{v}'}})"); await q.wait_for_timeout(250)
-        await q.select_option('#sg-dim', 'device'); await q.wait_for_timeout(500)
+        await q.select_option('#sg-dim', 'device'); await q.evaluate("(()=>{const d=document.getElementById('sg-dec-dim');if(d)d.open=true})()"); await q.wait_for_timeout(150); await q.wait_for_timeout(500)
         TB = "(lbl)=>[...document.querySelectorAll(`table[aria-label=\\\"${lbl}\\\"] tbody tr`)].map(r=>[...r.cells].map(c=>c.innerText.trim()))"
-        intro = await q.evaluate("(document.querySelector('#sg-dec').closest('.sgcard').querySelector('.sgd-head__lead')||{innerText:''}).innerText")
+        intro = await q.evaluate("(document.querySelector('#sg-dec-dim .sgd-head__lead')||{innerText:''}).innerText")
         fx = await q.evaluate(TB, 'Efectos por segmento')
         row = lambda n: next((r for r in fx if r[0].startswith(n)), None)
         chk('U-1 cambio total contra agosto = +$40,000 (calculado aparte)', '+$40,000' in intro, intro[:160])
@@ -63,7 +63,7 @@ async def main():
         chk(f'U-4 nuevos y recurrentes (desde «tipo de cliente», aunque la dimensión elegida sea Dispositivo): Nuevo {n9*100:.1f} % del tráfico, +{(n9-n8)*100:.1f} pp; los recurrentes convierten 4.0 veces', bool(sp) and sp[0][0] == 'Nuevo' and sp[0][1] == f'{n9*100:.1f} %' and sp[0][2] == f'+{(n9-n8)*100:.1f} pp' and 'convierten 4.0 veces' in spi, (sp, spi))
         hl0 = await q.evaluate("[...document.querySelectorAll('.sghl__text')].map(x=>x.innerText)")
         chk('U-3 sin alerta de calidad en Dispositivo (no hay «not set»)', not any('Calidad de la medición' in x for x in hl0), hl0[:2])
-        await q.select_option('#sg-dim', 'campaign'); await q.wait_for_timeout(500)
+        await q.select_option('#sg-dim', 'campaign'); await q.evaluate("(()=>{const d=document.getElementById('sg-dec-dim');if(d)d.open=true})()"); await q.wait_for_timeout(150); await q.wait_for_timeout(500)
         hl = await q.evaluate("[...document.querySelectorAll('.sghl__text')].map(x=>x.innerText)")
         share = 8000 / (50000 + 1500 + 47700 + 8000)
         chk(f'U-3 en Campaña la primera frase alerta: {share*100:.1f} % del tráfico sin dato («Sin dato (not set)»), posible problema de etiquetado', bool(hl) and hl[0].startswith('Calidad de la medición') and f'{share*100:.1f} %' in hl[0], hl[:1])

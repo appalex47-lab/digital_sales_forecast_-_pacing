@@ -88,7 +88,7 @@ async def main():
         chk('V-2 la instrucción a Cohere prohíbe calcular diferencias, complementos, sumas o porcentajes nuevos', 'No calcules diferencias, complementos' in rules, rules[-300:])
         # ---------- V-3 cruce dispositivo × fuente/medio (GA4) ----------
         await load_csv(q, u, CSVG); await setctx(q, u)
-        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText)")
+        dims = await q.evaluate("[...document.querySelectorAll('#sg-dim option')].map(o=>o.innerText).slice(1)")
         chk('V-3 el CSV de GA4 trae ahora la dimensión cruzada «Dispositivo × Fuente/medio» (al final de la lista)', dims[-1] == 'Dispositivo × Fuente/medio' and len(dims) == 7, dims)
         await q.select_option('#sg-dim', 'device_source'); await q.wait_for_timeout(500)
         TAB = """[...document.querySelectorAll('#view-segmentos table[aria-label*="tráfico y conversión"] tbody tr')].map(r=>[...r.cells].filter((c,i)=>i!==1).map(c=>c.innerText.trim()))"""

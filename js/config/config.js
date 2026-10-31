@@ -427,6 +427,13 @@
       attributionMethod: 'sequential',
       attributionMethods: { sequential: 'Secuencial (volumen → CR → AOV)', shapley: 'Shapley (simétrico)' },
       attributionOrder: ['trafficVolume', 'conversionRate', 'aov'],
+      /** Resumen general de Tráfico y conversión (todas las dimensiones). PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      trafficSummary: {
+        mixMinPp: 0.03,       // la mezcla del CR se nombra si dentro + mezcla suman ≥ 0.03 pp
+        counterShare: 0.15,   // «contrapeso»: otro efecto que pesa ≥ 15 % del efecto mayor
+        oppMinShare: 0.005,   // «oportunidad»: ≥ 0.5 % de la venta del periodo para proponer simularla
+        topN: 8               // filas visibles de «Qué mirar primero» antes de «Ver todos»
+      },
       /** Resumen general del Diagnóstico: cuándo se nombra cada cosa. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
       summary: {
         flatPct: 0.01,        // «en línea»: la brecha es menor a 1 %

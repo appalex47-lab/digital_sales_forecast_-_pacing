@@ -47,7 +47,7 @@ async def main():
         try: await q.click('.app-nav [data-action="ux-mode"][data-value="analyst"]', timeout=1200)
         except Exception: pass
         await q.goto(u + '#pacing'); await q.wait_for_timeout(400)
-        await q.click('details.explainer > summary'); await q.wait_for_timeout(200)
+        await q.evaluate("(()=>{const d=document.getElementById('pc-meth');if(d)d.open=true})()"); await q.click('details.explainer > summary'); await q.wait_for_timeout(200)
         o1 = await q.evaluate("document.querySelector('details.explainer').open")
         await q.click('#view-pacing [data-action="fc-metric"]:not([aria-pressed="true"])') if await q.query_selector('#view-pacing [data-action="fc-metric"]:not([aria-pressed="true"])') else None
         await q.wait_for_timeout(300)
