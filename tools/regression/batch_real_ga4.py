@@ -67,7 +67,7 @@ async def main():
         for ch in ('ecommerce', 'app'):
             await q.evaluate(f"FP.app.actions['dx-setting']({{dataset:{{key:'channel'}},value:'{ch}'}})"); await q.wait_for_timeout(1200)
             for dim in dims:
-                await q.select_option('#sg-dim', dim); await q.wait_for_timeout(1500)
+                await q.select_option('#sg-dim', dim); await q.wait_for_timeout(1500); await q.evaluate("(()=>{const d=document.getElementById('sg-dec-dim');if(d)d.open=true})()"); await q.wait_for_timeout(150)
                 foot = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tfoot td')].map(c=>c.innerText.trim())")
                 S = {}
                 for k, v in seg.items():
@@ -78,11 +78,12 @@ async def main():
                 want = ['Total', money(dl), money(te[0]), money(te[1]), money(te[2])]
                 chk(f'R-4 {ch} · {dim}: totales de efectos de la pantalla = cálculo aparte {want[2:]}', foot == want, (foot, want))
                 if ch == 'ecommerce' and dim == 'landing':
-                    note = await q.evaluate("(document.querySelector('.sgd-others')||{innerText:''}).innerText")
+                    note = await q.evaluate("(document.querySelector('#sg-dec-dim .sgd-others')||{innerText:''}).innerText")
                     chk('R-5 Landing en Ecommerce: avisa que «Otros» reúne la mayor parte del tráfico', 'Otros» reúne el' in note, note)
         # Selector de mínimo de sesiones con datos reales: Ecommerce · Landing con mínimo 250 (el automático es 3,727)
         await q.evaluate("FP.app.actions['dx-setting']({dataset:{key:'channel'},value:'ecommerce'})"); await q.wait_for_timeout(1200)
-        await q.select_option('#sg-dim', 'landing'); await q.wait_for_timeout(1500)
+        await q.select_option('#sg-dim', 'landing'); await q.wait_for_timeout(1500); await q.evaluate("(()=>{const d=document.getElementById('sg-dec-dim');if(d)d.open=true})()"); await q.wait_for_timeout(150)
+        await q.evaluate("(()=>{const a=FP.app.state; if(!(a.fs&&a.fs.sg)) FP.app.actions['fs-toggle']({dataset:{fsPage:'sg'}})})()"); await q.wait_for_timeout(400)
         await q.select_option('#sg-min', '250'); await q.wait_for_timeout(2500)
         foot = await q.evaluate("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tfoot td')].map(c=>c.innerText.trim())")
         S = {}
@@ -91,10 +92,10 @@ async def main():
             if c == 'ecommerce' and d == 'landing': S.setdefault(sg_, [None, None])[0 if mo == '2026-08' else 1] = tuple(v)
         te, ns, mn = total_eff({k: tuple(v) for k, v in S.items()}, 250)
         chk(f'R-6 Ecommerce · Landing con mínimo 250: totales de efectos = cálculo aparte {[money(x) for x in te]}', foot[2:] == [money(x) for x in te], (foot, te))
-        note = await q.evaluate("(document.querySelector('.sgd-others')||{innerText:''}).innerText")
+        note = await q.evaluate("(document.querySelector('#sg-dec-dim .sgd-others')||{innerText:''}).innerText")
         chk('R-7 con mínimo 250, «Otros» reúne menos tráfico que con el automático (el aviso baja de 64 % a menos)', ('Otros» reúne el' not in note) or ('64 %' not in note), note)
         # Inicio · «Dónde mirar hoy» con el export real: sugiere segmentos y marca las fichas sin pedidos
-        await q.goto(f'http://127.0.0.1:{port}/index.html#inicio'); await q.wait_for_selector('#h-now', state='attached', timeout=60000)
+        await q.goto(f'http://127.0.0.1:{port}/index.html#inicio'); await q.wait_for_selector('#hs-channels', state='attached', timeout=60000)
         await q.select_option('#home-ch', 'ecommerce'); await q.select_option('#home-per', '2026-09'); await q.wait_for_selector('#hs-where', state='attached', timeout=60000); await q.wait_for_timeout(2500)
         hw = await q.evaluate("(()=>{const w=document.querySelector('#hs-where'); return {picks:[...w.querySelectorAll('[data-pick]')].map(e=>e.dataset.pick), q:(w.querySelector('.sgd-quality')||{textContent:''}).textContent.replace(/\\s+/g,' ')}})()")
         chk('R-8 Inicio · Dónde mirar hoy: sugiere segmentos del export real (máx. 3, sin la combinación dispositivo × fuente)', 1 <= len(hw['picks']) <= 3 and 'device_source' not in hw['picks'], hw)
