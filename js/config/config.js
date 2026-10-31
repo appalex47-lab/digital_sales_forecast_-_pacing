@@ -396,6 +396,13 @@
     /* ----- Fase 4: reforecast y recuperación ----- */
     reforecast: {
       algorithmVersion: 'reforecast-v1',
+      /** Resumen general de Recovery & Reforecast: cuándo se nombra cada cosa. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      summary: {
+        flatPct: 0.01,        // «en línea»: el forecast queda a menos de 1 % de la meta
+        minDays: 90,          // «poca historia»: menos de 90 días con real
+        realOk: 0.05,         // realismo: la palanca más barata pide ≤ 5 % sobre su histórico = alcanzable
+        realHard: 0.15        // … ≤ 15 % = exigente pero posible; más = poco realista con una sola palanca
+      },
       /** Único método en esta fase: el pendiente se reparte con los pesos futuros del plan (Fase 2). */
       method: 'future_weighted_distribution',
       /**

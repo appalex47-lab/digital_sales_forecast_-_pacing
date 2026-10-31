@@ -32,7 +32,7 @@ async def main():
         await pg.goto(url+'#pacing'); await pg.wait_for_timeout(800); await pg.evaluate(CAP)
         ex={}
         for view,act in [('pacing','fc-export'),('reforecast','rf-export'),('diagnostico','dx-export'),('plan','plan-export'),('narrativa','nx-export'),('prodevol','pa-export')]:
-            await pg.goto(url+'#'+view); await pg.wait_for_timeout(700); await pg.evaluate(CAP)
+            await pg.goto(url+'#'+view); await pg.wait_for_timeout(700); await pg.evaluate(CAP); await pg.evaluate(f"document.querySelectorAll('#view-{view} details').forEach(d=>d.open=true)"); await pg.wait_for_timeout(150)
             try:
                 await pg.click(f'[data-action="{act}"]', timeout=1500); await pg.wait_for_timeout(500)
                 d = await pg.evaluate("window.__dl.map(x=>x[0].replace(/[0-9T:-]{10,}/g,'')+'|'+x[1].length)")

@@ -43,16 +43,16 @@ async def main():
         await prepare(q, u)
         top = lambda sel: q.evaluate(f"(()=>{{const e=document.querySelector('{sel}'); return e? e.getBoundingClientRect().top + window.scrollY : null}})()")
         # ---------- Reforecast ----------
-        await q.goto(u + '#reforecast'); await q.wait_for_selector('#rf-summary .metric-card', timeout=60000); await q.wait_for_timeout(700)
-        o = {k: await top(s) for k, s in [('summary', '#rf-summary'), ('channels', '#rf-channels'), ('recovery', '#rf-recovery'), ('controls', '#rf-controls'), ('chart', '#rf-chart'), ('more', '#view-reforecast .pacing-more')]}
-        chk('X1 Reforecast: resultado → por canal → escenario de recuperación → ajustes → gráfico → «Ver más»', all(v is not None for v in o.values()) and o['summary'] < o['channels'] < o['recovery'] < o['controls'] < o['chart'] < o['more'], o)
+        await q.goto(u + '#reforecast'); await q.wait_for_selector('#rf-kpis .metric-card', timeout=60000); await q.wait_for_timeout(700)
+        o = {k: await top(s) for k, s in [('controls', '#rf-controls'), ('kpis', '#rf-kpis'), ('summary', '#rf-summary'), ('channels', '#rf-channels'), ('recovery', '#rf-recovery'), ('drivers', '#rf-drivers'), ('chart', '#rf-chart'), ('more', '#view-reforecast .pacing-more')]}
+        chk('X1 Reforecast: ajustes y cifras arriba → cuánto falta → por canal → escenario de recuperación → drivers → gráfico → «Versiones y exportar»', all(v is not None for v in o.values()) and o['controls'] < o['kpis'] < o['summary'] < o['channels'] < o['recovery'] < o['drivers'] < o['chart'] < o['more'], o)
         r = await vis('reforecast')
-        chk('X2 Reforecast: 4 «Ver más» (periodos, drivers, auditoría, versiones) cerrados', r['n'] == 4 and r['shown'] == 4 and r['open'] == 0 and r['layer'], r)
+        chk('X2 Reforecast: «Versiones y exportar» viene cerrado (los demás bloques son secciones visibles)', r['n'] == 1 and r['shown'] == 1 and r['open'] == 0, r)
         v = await q.evaluate("(()=>({sum:document.querySelector('#rf-summary').checkVisibility(), ctl:document.querySelector('#rf-horizon').checkVisibility(), met:document.querySelectorAll('#view-reforecast [data-action=rf-metric]').length, per:document.querySelector('#rf-periods').checkVisibility()}))()")
-        chk('X3 Reforecast: resultado y ajustes se ven sin abrir nada (5 métricas); el detalle no', v['sum'] and v['ctl'] and v['met'] == 5 and not v['per'], v)
+        chk('X3 Reforecast: resultado, ajustes y periodos se ven sin abrir nada (5 métricas)', v['sum'] and v['ctl'] and v['met'] == 5 and v['per'], v)
         n = await q.evaluate("(()=>{document.querySelectorAll('#view-reforecast details.pacing-more').forEach(d=>d.open=true); return {per:document.querySelectorAll('#rf-periods tbody tr').length, drv:document.querySelector('#rf-drivers').textContent.trim().length, aud:document.querySelector('#rf-audit').textContent.trim().length, ver:!!document.querySelector('[data-action=rf-export]') && document.querySelector('#rf-versions').textContent.trim().length}})()")
         chk('X4 Reforecast abierto: tabla de periodos (13 filas), drivers, auditoría y versiones con «Exportar reforecast_export.json»', n['per'] == 13 and n['drv'] > 20 and n['aud'] > 20 and n['ver'], n)
-        gap_rf = await q.evaluate("(()=>{const c=[...document.querySelectorAll('#rf-summary .metric-card')].find(x=>/Gap forecast/.test(x.querySelector('dt').innerText)); return c? c.querySelector('.metric-card__value').innerText.trim():null})()")
+        gap_rf = await q.evaluate("(()=>{const c=[...document.querySelectorAll('#rf-kpis .metric-card')].find(x=>/Gap forecast/.test(x.querySelector('dt').innerText)); return c? c.querySelector('.metric-card__value').innerText.trim():null})()")
         await q.goto(u + '#pacing'); await q.wait_for_selector('#fc-kpis .metric-card', timeout=60000); await q.wait_for_timeout(600)
         gap_pc = await q.evaluate("(()=>{const c=[...document.querySelectorAll('#fc-kpis .metric-card')].find(x=>/Gap forecast/.test(x.querySelector('dt').innerText)); return c? c.querySelector('.metric-card__value').innerText.trim():null})()")
         chk('X5 el «Gap forecast» de Reforecast = el de Pacing (dos cálculos de la app que deben coincidir)', gap_rf is not None and gap_rf == gap_pc, (gap_rf, gap_pc))

@@ -15,7 +15,7 @@ async def main():
         # hashes de exports (se quitan campos de fecha/hora)
         ex={}
         for view,act in [('pacing','fc-export'),('reforecast','rf-export'),('diagnostico','dx-export'),('narrativa','nx-export')]:
-            await pg.goto(url+'#'+view); await pg.wait_for_timeout(700); await pg.evaluate(CAP)
+            await pg.goto(url+'#'+view); await pg.wait_for_timeout(700); await pg.evaluate(CAP); await pg.evaluate(f"document.querySelectorAll('#view-{view} details').forEach(d=>d.open=true)"); await pg.wait_for_timeout(150)
             await pg.click(f'[data-action="{act}"]',timeout=2000); await pg.wait_for_timeout(500)
             h=await pg.evaluate("window.__dl.map(x=>x[1])")
             ex[view]=[hashlib.md5(re.sub(r'"[A-Za-z_]*(At|Date|Time|time|stamp|Id|id)":"[^"]*"','',x).encode()).hexdigest() for x in h]
