@@ -37,15 +37,15 @@ async def main():
         u = f'http://127.0.0.1:{port}/index.html'; await prepare(q, u)
         await q.goto(u + '#pacing'); await q.wait_for_selector('#fc-kpis .metric-card', timeout=60000); await q.wait_for_timeout(600)
         top = lambda sel: q.evaluate(f"(()=>{{const e=document.querySelector('{sel}'); return e? e.getBoundingClientRect().top + window.scrollY : null}})()")
-        order = {k: await top(s) for k, s in [('kpis', '#fc-kpis'), ('channels', '#fc-channels'), ('alerts', '#fc-alerts'), ('controls', '#fc-controls'), ('chart', '#fc-chart'), ('more', '#view-pacing .pacing-more')]}
-        chk('P1 orden: respuesta (cifras y canales) → alertas → ajustes → gráfico → «Ver más»', all(order[a] is not None for a in order) and order['kpis'] < order['channels'] < order['alerts'] < order['controls'] < order['chart'] < order['more'], order)
-        st = await q.evaluate("(()=>{const d=[...document.querySelectorAll('#view-pacing details.pacing-more')]; return {n:d.length, open:d.filter(x=>x.open).length, ids:d.map(x=>x.dataset.pacingMore), layer:!document.querySelector('#view-pacing .home-layer').hidden}})()")
-        chk('P2 seis «Ver más» cerrados (periodos, índices, métodos, eventos, versiones, parámetros)', st['n'] == 6 and st['open'] == 0 and st['ids'] == ['periods', 'indices', 'methods', 'events', 'versions', 'params'] and st['layer'], st)
-        vis = await q.evaluate("(()=>({kpi:document.querySelector('#fc-kpis').checkVisibility(), ch:document.querySelector('#fc-channels').checkVisibility(), ctl:document.querySelector('#fc-ref').checkVisibility(), met:document.querySelectorAll('#view-pacing [data-action=fc-metric]').length, per:document.querySelector('#fc-periods').checkVisibility()}))()")
-        chk('P3 la respuesta y los ajustes se ven sin abrir nada; el detalle no', vis['kpi'] and vis['ch'] and vis['ctl'] and vis['met'] == 5 and not vis['per'], vis)
-        # el dato sigue viviendo en el detalle: al abrir, hay tablas con filas
-        n = await q.evaluate("(()=>{document.querySelectorAll('#view-pacing details.pacing-more').forEach(d=>d.open=true); return {per:document.querySelectorAll('#fc-periods tbody tr').length, idx:document.querySelectorAll('#fc-indices tbody tr').length, met:document.querySelectorAll('#fc-methods tbody tr').length, ver:document.querySelector('#fc-versions').textContent.trim().length, par:document.querySelectorAll('#fc-params input,#fc-params select').length}})()")
-        chk('P4 abierto, el detalle tiene sus tablas y controles (periodos 13 filas, 4 métodos, parámetros)', n['per'] == 13 and n['met'] == 4 and n['idx'] > 0 and n['ver'] > 0 and n['par'] > 3, n)
+        order = {k: await top(s) for k, s in [('verdict', '#pc-vtop'), ('kpis', '#fc-kpis'), ('chart', '#fc-chart'), ('channels', '#fc-channels'), ('methods', '#fc-methods'), ('alerts', '#fc-alerts'), ('periods', '#fc-periods'), ('versions', '#pc-vp')]}
+        chk('P1 orden: veredicto → cifras → gráfico → canales → métodos → alertas → periodos → versiones', all(order[a] is not None for a in order) and order['verdict'] < order['kpis'] < order['chart'] < order['channels'] < order['methods'] < order['alerts'] < order['periods'] < order['versions'], order)
+        st = await q.evaluate("(()=>({vp:document.getElementById('pc-vp').open, meth:document.getElementById('pc-meth').open, ref:document.getElementById('fc-refbox').hidden, more:document.querySelectorAll('#view-pacing details.pacing-more').length}))()")
+        chk('P2 «Versiones y parámetros», el método y la fecha de referencia vienen cerrados; ya no hay «Ver más» por tema', st['vp'] is False and st['meth'] is False and st['ref'] is True and st['more'] == 0, st)
+        vis = await q.evaluate("(()=>({kpi:document.querySelector('#fc-kpis').checkVisibility(), ch:document.querySelector('#fc-channels').checkVisibility(), met:document.querySelectorAll('#view-pacing [data-action=fc-metric]').length, per:document.querySelector('#fc-periods').checkVisibility(), meth:document.querySelector('#fc-method').checkVisibility()}))()")
+        chk('P3 la respuesta, el método, la métrica y las tablas se ven sin abrir nada', vis['kpi'] and vis['ch'] and vis['meth'] and vis['met'] == 5 and vis['per'], vis)
+        # el dato sigue viviendo en su bloque: hay tablas con filas
+        n = await q.evaluate("(()=>{document.getElementById('pc-vp').open=true; return {per:document.querySelectorAll('#fc-periods tbody tr').length, idx:document.querySelectorAll('#fc-indices tbody tr').length, met:document.querySelectorAll('#fc-methods tbody tr').length, ver:document.querySelector('#fc-versions').textContent.trim().length, par:document.querySelectorAll('#fc-params input,#fc-params select').length}})()")
+        chk('P4 cada bloque tiene su contenido (periodos 13 filas, 4 métodos, índices, versiones, parámetros)', n['per'] == 13 and n['met'] == 4 and n['idx'] > 0 and n['ver'] > 0 and n['par'] > 3, n)
         # la cifra de la respuesta = cálculo aparte (venta real acumulada del año, canal Ecommerce)
         yt = await q.evaluate("(()=>{const r=[...document.querySelectorAll('#fc-channels tbody tr')].map(t=>[t.cells[0].innerText.trim(), t.cells[3].innerText.trim()]); return r})()")
         num = lambda t: int(t.replace('$', '').replace(',', '').split('.')[0])
@@ -53,9 +53,8 @@ async def main():
         # cambiar la métrica sigue funcionando y la tabla de periodos (dentro de «Ver más») cambia
         h0 = await q.evaluate("document.querySelector('#fc-periods thead').innerText.replace(/\\s+/g,' ')"); k0 = await q.evaluate("document.querySelector('#fc-kpis h3').innerText")
         await q.click('#view-pacing [data-action="fc-metric"]:not([aria-pressed="true"])'); await q.wait_for_timeout(500)
-        k1 = await q.evaluate("document.querySelector('#fc-kpis h3').innerText"); op = await q.evaluate("document.querySelectorAll('#view-pacing details.pacing-more[open]').length")
-        chk('P5 cambiar la métrica actualiza la respuesta y lo abierto en «Ver más» sigue abierto', k0 != k1 and op == 6, (k0, k1, op))
-        await q.evaluate("document.querySelectorAll('#view-pacing details.pacing-more').forEach(d=>d.open=false)")
+        k1 = await q.evaluate("document.querySelector('#fc-kpis h3').innerText"); op = await q.evaluate("document.getElementById('pc-vp').open")
+        chk('P5 cambiar la métrica actualiza la respuesta y lo abierto (versiones) sigue abierto', k0 != k1 and op is True, (k0, k1, op))
         chk('Sin errores de página', not errs, errs[:3])
         await b.close()
 asyncio.run(main())

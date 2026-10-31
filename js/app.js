@@ -3796,6 +3796,23 @@
       actions.go({ dataset: { view: 'recovery' } });
     },
     'rc-dx-dismiss'() { state.rc.fromDx = null; render(); },
+    /** Pacing & Forecast → Recuperar con el mismo gap (forecast contra plan, año y canal del gráfico); sin hipótesis ligada. Nada se guarda. */
+    'pc-to-recovery'() {
+      const rc = state.rc, ch = state.fc.channel || 'total';
+      if (rc.imported) { rc.imported = null; rc.draft = emptyDraft(); }
+      Object.assign(rc.settings, { channel: ch, periodType: 'year', periodKey: String(state.year), comparison: 'forecast_vs_plan' });
+      rc.altHyp = ''; rc.draft = { ...(rc.draft || emptyDraft()), hypothesisId: '' };
+      rc.fromDx = { source: 'pacing', hypId: '', hyp: '', alt: '', period: String(state.year), channel: FP.analysisContext.channelLabel(ch), to: 'inverse' };
+      saveRecoverySettings();
+      state.ux.routeCtx = { channel: ch, periodType: 'year', periodKey: String(state.year), comparison: 'forecast_vs_plan' };
+      actions.go({ dataset: { view: 'recovery' } });
+    },
+    /** → «Versiones y parámetros» con el botón de guardar a la vista (no guarda nada). */
+    'pc-to-versions'() {
+      const d = document.getElementById('pc-vp'); if (!d) return;
+      d.open = true;
+      root.setTimeout(() => { const b = document.querySelector('#fc-versions [data-action="fc-snapshot"]'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); try { b.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } } }, 60);
+    },
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
       if (!x) return;

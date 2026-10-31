@@ -355,6 +355,12 @@
       referenceDate: null,
       /** Día de referencia: 'completed' (su venta real es final) o 'in_progress' (carga parcial). */
       todayStatus: 'completed',
+      /** Resumen general de Pacing & Forecast: cuándo se nombra cada cosa. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      summary: {
+        channelShare: 0.25,    // un canal se nombra si explica ≥ 25 % del gap a la fecha de los canales por debajo del plan
+        methodsSpread: 0.02,   // los métodos «coinciden» si sus cierres se separan ≤ 2 % del plan
+        recentDiff: 0.03       // se compara la ventana de 28 días con el acumulado si difieren ≥ 3 pp
+      },
       /** Método mostrado por defecto. 'A' es el baseline neutral; la app no elige "mejor" método. */
       method: 'A',
       methods: {
