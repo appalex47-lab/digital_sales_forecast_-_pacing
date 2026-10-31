@@ -2456,3 +2456,27 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 #view-reforecast .rf-kpis .metric-card__value { font-size: clamp(1.1rem, 2vw, 1.5rem); overflow-wrap: anywhere; }
 @media (max-width: 700px) { #rf-topbar .rf-controls { flex-basis: 100%; } #view-reforecast .rf-body { padding-inline: 16px; } }
 #view-reforecast .rf-body, #view-reforecast .rf-body > * { min-width: 0; max-width: 100%; } #view-reforecast .rf-body .table-wrap { max-width: 100%; }
+
+/* ===== Qué cambió desde ayer · versión B, franja de Inicio y marca del menú ===== */
+#chg-topbar { position: static; }
+#chg-topbar .px-topbar__row { gap: 8px 12px; flex-wrap: wrap; }
+#chg-topbar .chg-modeseg { margin-left: auto; }
+#view-cambios .chgbody { padding: 0 24px 4px; gap: 12px; }
+#view-cambios .px-chg .chg-base { padding: 6px 24px 0; margin: 0; }
+#view-cambios .px-verdict h2 { max-width: none; }
+#view-cambios .chgkpi-slot { margin-top: 12px; }
+#view-cambios .px-chg .chg-kpis { margin: 0; }
+#view-cambios .px-chg .table-wrap { overflow-x: auto; }
+#view-cambios .px-chg .px-app, #view-cambios .px-chg .px-blk, #view-cambios .px-chg .px-verdict { min-width: 0; max-width: 100%; }
+#view-cambios .chg-group { border: 1px solid var(--ds-border); border-radius: var(--ds-radius, 10px); }
+#view-cambios .chg-group > summary { cursor: pointer; padding: 8px 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#view-cambios .chg-group > ul { padding: 0 12px 10px; }
+#view-cambios .chg-group-li { list-style: none; }
+@media (max-width: 700px) { #view-cambios .chgbody, #view-cambios .px-chg .chg-base { padding-inline: 16px; } }
+.chg-strip { border: 1px solid var(--ds-border); background: var(--ds-surface-2, var(--ds-surface)); border-radius: var(--ds-radius, 12px); padding: var(--ds-s3) var(--ds-s4); display: grid; gap: var(--ds-s2); }
+.chg-strip__h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.chg-strip__h h3 { margin: 0; font-size: 1rem; }
+.chg-strip__n { font-size: .74rem; font-weight: 700; color: var(--ds-danger); margin-left: 6px; }
+.chg-strip ul { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; font-size: .9rem; }
+.snav__item { position: relative; }
+.snav__badge { margin-left: auto; background: var(--ds-danger); color: var(--ds-on-danger); border-radius: 999px; font-size: .68rem; font-weight: 700; padding: 0 6px; font-style: normal; min-width: 18px; text-align: center; }

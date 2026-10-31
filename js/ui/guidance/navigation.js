@@ -246,7 +246,9 @@
     const esc = H().esc;
     const cur = state.view;
     const groups = G().GROUPS;
-    const item = (v, label) => `<a href="#${v}" data-nav="${v}" class="snav__item" ${v === cur ? 'aria-current="page"' : ''}>${ICONS[v] || ''}<span>${esc(label)}</span></a>`;
+    // «Qué cambió desde ayer»: marca con las alertas nuevas (solo esas; los días con datos parciales ya salen en la franja de Inicio y en la propia página)
+    const nChg = (v0) => (v0 === 'cambios' && FP.changesView && FP.changesView.newCount ? FP.changesView.newCount(state) : 0);
+    const item = (v, label) => `<a href="#${v}" data-nav="${v}" class="snav__item" ${v === cur ? 'aria-current="page"' : ''}>${ICONS[v] || ''}<span>${esc(label)}</span>${nChg(v) ? `<i class="snav__badge" aria-label="${nChg(v)} alerta${nChg(v) === 1 ? '' : 's'} nueva${nChg(v) === 1 ? '' : 's'}">${nChg(v)}</i>` : ''}</a>`;
     const learner = state.ux.mode === 'learner';
     // el grupo de la vista actual se abre al entrar a ella; el resto conserva lo que el usuario dejó
     const curGroup = groupOf(cur);
