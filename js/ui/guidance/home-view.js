@@ -200,10 +200,10 @@ ${cards}
       ${sum.nextStep || ''}${sum.attention || ''}
       ${FP.changesView && FP.changesView.stripHtml ? FP.changesView.stripHtml(state) : ''}
       ${promoLine(state)}</section>
+      ${(sum.blocks.find((b) => b.id === 'channels') || {}).html || ''}
       <p class="home-layer"><strong>Ver más</strong> · los mismos datos, un clic abajo</p>
-      ${sum.key ? more('key', '¿Cómo voy en detalle?', 'Resultado comercial (A), motores de la venta (B) y resumen ejecutivo', sum.key) : ''}
-      ${more('now', '¿Cuáles son todas las cifras?', '7 tarjetas: venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación', nowBlock)}
-      ${sum.blocks.map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}
+      ${sum.key ? more('key', '¿Cómo voy en detalle?', 'Resultado comercial (A), motores de la venta (B) y resumen ejecutivo', `${sum.key}<p class="field__hint">Las 7 cifras del periodo (venta acumulada, meta acumulada, gap, cumplimiento, forecast, gap forecast y presión de recuperación) están en <a href="#pacing" data-nav="pacing">Pacing &amp; Forecast →</a></p>`) : ''}
+      ${sum.blocks.filter((b) => b.id !== 'channels').map((b) => more(b.id, b.title, b.hint, b.html)).join('\n')}
       <p class="home-layer"><strong>Metodología y ayuda</strong> · cómo se calcula y qué falta</p>
       ${more('flow', 'Recorrido del sistema y preparación de datos', '6 etapas y % de preparación', `${flowBlock}\n\n${setupBlock(readyCard + (sum.nextStep ? '' : '\n' + nextCard), ' home__top--ready-first')}`)}`;
     } else body = f && !planOnly
@@ -225,11 +225,7 @@ ${cards}
 ${rangeNotice}
 ${body}
 
-      <details class="ds-accordion">
-        <summary><span class="ds-accordion__n" aria-hidden="true">?</span>
-          <span><h3 class="ds-accordion__t">Convenciones</h3><p class="ds-accordion__d">Estos conceptos no son equivalentes. Para más detalle, ve a <a href="#ayuda">¿Cómo funciona?</a></p></span>${'<svg class="ds-accordion__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'}</summary>
-        <div class="ds-accordion__body"><dl class="conventions">${Object.keys(FP.guidanceConfig.STATES).map((k) => `<div><dt>${FP.help.stateTag(k)}</dt><dd>${esc(FP.guidanceConfig.STATES[k].short)}</dd></div>`).join('')}</dl></div>
-      </details></div>`;
+      <p class="home-conv ds-card__sub"><strong>Convenciones</strong> · plan, actual, forecast, reforecast, escenario y observado no son equivalentes. <a href="#ayuda" data-nav="ayuda">Ver qué significa cada uno en ¿Cómo funciona? →</a></p></div>`;
     if (!f) FP.help.enhanceEmpty($('home'), FP.contextEngine.requirements('inicio', status));
     const hm = $('home');
     if (hm && !hm._homeBound) { hm._homeBound = true; hm.addEventListener('click', (e) => { const b = e.target.closest('#home-md button'); if (!b) return; (state.ux.home = state.ux.home || { sum: 'c' }).sum = b.dataset.v; const y = root.scrollY; if (FP.app) FP.app.render(); root.scrollTo(0, y); }); }

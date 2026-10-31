@@ -115,7 +115,7 @@
         <td class="num ${fin(fg) ? (fg < 0 ? 'is-neg' : fg > 0 ? 'is-pos' : '') : ''}">${r.state !== 'no_plan' && fin(fg) ? esc(F().signedPercent(fg, 1)) : '—'}</td><td>${state}</td></tr>`;
     }).join('');
     const body = `<div class="table-wrap"><table class="table ds-table" aria-label="Resumen por canal"><thead><tr><th scope="col">Canal</th><th scope="col" class="num">Venta acumulada</th><th scope="col" class="num">Cumplimiento</th><th scope="col" class="num">Forecast vs meta</th><th scope="col">Estado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-    return block('channels', 'Cómo va cada canal', 'Pacing · Forecast', `${esc(S.period.type === 'month' ? periodWord(S.period).cur : `Año ${S.period.key}`)} · mismas definiciones que las tarjetas de arriba.`, body, logic);
+    return block('channels', '¿Cómo va cada canal?', 'Pacing · Forecast', `${esc(S.period.type === 'month' ? periodWord(S.period).cur : `Año ${S.period.key}`)} · mismas definiciones que Pacing y Forecast.`, body, logic);
   }
 
   function trustBlock(S, ctx) {
