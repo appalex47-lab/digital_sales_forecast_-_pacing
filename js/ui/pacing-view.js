@@ -77,36 +77,44 @@
 
   /* ---------- Controles ---------- */
 
+  const ux = (state) => (state.ux.pc = state.ux.pc || { mode: 'full', sum: 'c', refOpen: false });
+
   function renderControls(state) {
     const esc = H().esc;
     const fc = state.fc;
     const cfg = FP.forecastEngine.effectiveConfig(fc.settings);
     const run = fc.run;
     const ref = run ? run.referenceDate : cfg.referenceDate;
+    const u = ux(state), open = Boolean(u.refOpen);
     $('fc-controls').innerHTML = `
-      <div class="filters">
-        <div class="field"><label for="fc-ref" class="field__hint">Fecha de referencia</label>
-          <input id="fc-ref" type="date" value="${esc(fc.settings.referenceDate || '')}" data-action="fc-setting" data-key="referenceDate">
-          <span class="field__hint">${fc.settings.referenceDate ? 'Fija: reproduce el análisis de ese día.' : `Vacía = hoy del dispositivo (${esc(ref || '')}).`}</span></div>
-        <div class="field"><span class="field__hint">Atajos</span>
-          <div class="btn-row">
-            <button type="button" class="btn btn--small" data-action="fc-ref-last" ${fc.lastActualDate ? '' : 'disabled'}>Último día con real${fc.lastActualDate ? ` (${esc(fc.lastActualDate)})` : ''}</button>
-            <button type="button" class="btn btn--small btn--ghost" data-action="fc-ref-today">Hoy</button>
-          </div></div>
-        <div class="field"><label for="fc-today" class="field__hint">Día de referencia</label>
-          <select id="fc-today" data-action="fc-setting" data-key="todayStatus">
-            <option value="completed" ${cfg.todayStatus === 'completed' ? 'selected' : ''}>Completo (su real es final)</option>
-            <option value="in_progress" ${cfg.todayStatus === 'in_progress' ? 'selected' : ''}>En curso (carga parcial)</option>
-          </select></div>
+      <div class="pc-row">
+        <div class="field"><span class="field__hint">Métrica</span>
+          ${H().segmented('fc-metric', METRICS(), fc.metric)}</div>
         <div class="field"><label for="fc-method" class="field__hint">Método de forecast</label>
           <select id="fc-method" data-action="fc-setting" data-key="method">
             ${Object.entries(cfg.methods).map(([id, m]) => `<option value="${id}" ${id === cfg.method ? 'selected' : ''}>${id} · ${esc(m.label)}</option>`).join('')}
           </select></div>
-        <div class="field"><span class="field__hint">Métrica</span>
-          ${H().segmented('fc-metric', METRICS(), fc.metric)}</div>
+        <button type="button" class="px-btn" id="pc-ref-toggle" aria-expanded="${open}" aria-controls="fc-refbox">⚙ Fecha de referencia${run ? ` · corte ${esc(run.cutoff || '—')}` : ''}</button>
       </div>
-      ${run ? `<p class="field__hint fc-context">Plan: <strong>${esc(run.plan.label)}</strong>${run.plan.source === 'original_distributed_plan' ? ' (congelado, solo lectura)' : ''}.
-        Corte de real: <strong>${esc(run.cutoff || '—')}</strong>. Año ${run.year}. Método en uso: <strong>${esc(run.method.id)} · ${esc(run.method.label)}</strong>.</p>` : ''}`;
+      <div class="pc-ref" id="fc-refbox" ${open ? '' : 'hidden'}>
+        <div class="filters">
+          <div class="field"><label for="fc-ref" class="field__hint">Fecha de referencia</label>
+            <input id="fc-ref" type="date" value="${esc(fc.settings.referenceDate || '')}" data-action="fc-setting" data-key="referenceDate">
+            <span class="field__hint">${fc.settings.referenceDate ? 'Fija: reproduce el análisis de ese día.' : `Vacía = hoy del dispositivo (${esc(ref || '')}).`}</span></div>
+          <div class="field"><span class="field__hint">Atajos</span>
+            <div class="btn-row">
+              <button type="button" class="btn btn--small" data-action="fc-ref-last" ${fc.lastActualDate ? '' : 'disabled'}>Último día con real${fc.lastActualDate ? ` (${esc(fc.lastActualDate)})` : ''}</button>
+              <button type="button" class="btn btn--small btn--ghost" data-action="fc-ref-today">Hoy</button>
+            </div></div>
+          <div class="field"><label for="fc-today" class="field__hint">Día de referencia</label>
+            <select id="fc-today" data-action="fc-setting" data-key="todayStatus">
+              <option value="completed" ${cfg.todayStatus === 'completed' ? 'selected' : ''}>Completo (su real es final)</option>
+              <option value="in_progress" ${cfg.todayStatus === 'in_progress' ? 'selected' : ''}>En curso (carga parcial)</option>
+            </select></div>
+        </div>
+        ${run ? `<p class="field__hint fc-context">Plan: <strong>${esc(run.plan.label)}</strong>${run.plan.source === 'original_distributed_plan' ? ' (congelado, solo lectura)' : ''}.
+          Corte de real: <strong>${esc(run.cutoff || '—')}</strong>. Año ${run.year}. Método en uso: <strong>${esc(run.method.id)} · ${esc(run.method.label)}</strong>.</p>` : ''}
+      </div>`;
   }
 
   /* ---------- Tablero ejecutivo ---------- */
@@ -377,22 +385,71 @@
     $('fc-kpis').innerHTML = `<div class="empty"><strong>No hay forecast todavía</strong>${H().esc(reason)}</div>`;
   }
 
+  /* ---------- Veredicto, resumen general y «¿Qué hago con esto?» (reglas invisibles en FP.pcResumen) ---------- */
+
+  function actionCards(a, state) {
+    const esc = H().esc, ch = PV_ch(state);
+    const off = (why) => `<span class="px-cap"><b>No disponible.</b> ${esc(why)}</span>`;
+    const diag = a.diag.why ? `<div><b>Diagnosticar el gap</b><span>Abre el Diagnóstico con la comparación Forecast vs Plan, el año y el canal del gráfico.</span>${off(a.diag.why)}</div>`
+      : `<div><b>Diagnosticar el gap</b><span>Abre el Diagnóstico con la comparación <b>Forecast vs Plan</b>, el año y el canal del gráfico (${esc(ch)}). Llegas con el veredicto de por qué cierra así.</span><button type="button" class="px-lk" data-action="dx-from-forecast">Abrir →</button></div>`;
+    const rec = a.recovery.why ? `<div><b>Simular la recuperación</b><span>Abre Recuperar con este mismo gap (forecast contra plan) y las rutas de recuperación. Sin hipótesis ligada: exploración. Tú revisas y guardas.</span>${off(a.recovery.why)}</div>`
+      : `<div><b>Simular la recuperación</b><span>Abre Recuperar con este mismo gap (forecast contra plan, año ${esc(String(state.year))}, ${esc(ch)}) y las rutas de recuperación. Sin hipótesis ligada: exploración. Tú revisas y guardas; no se guarda sola.</span><button type="button" class="px-lk" data-action="pc-to-recovery">Abrir en Recuperar →</button></div>`;
+    const ver = `<div><b>Guardar esta versión del forecast</b><span>Te lleva a «Versiones y parámetros» con el botón «Guardar forecast como v${a.version.next}». No se guarda sola.</span><button type="button" class="px-lk" data-action="pc-to-versions">Ir a versiones ↓</button></div>`;
+    return `<div class="px-act">${diag}${rec}${ver}</div><p class="px-cap">Nada se guarda ni se ejecuta desde aquí. Las acciones se planean en Recuperar y se miden en Medir y aprender.</p>`;
+  }
+  const PV_ch = (state) => chLabel(state.fc.channel || 'total');
+
+  function renderTop(state) {
+    const esc = H().esc, u = ux(state), frame = $('pc-frame');
+    if (!frame) return;
+    frame.dataset.mode = u.mode;
+    const mres = $('pc-m-res'), mfull = $('pc-m-full');
+    if (mres) { mres.setAttribute('aria-pressed', String(u.mode === 'res')); mfull.setAttribute('aria-pressed', String(u.mode !== 'res')); }
+    const run = state.fc.run, hasRun = Boolean(run && run.plan.source !== 'none');
+    ['s-g', 's-c', 's-f', 's-a', 's-p', 'pc-vp', 'pc-foot', 'pc-meth'].forEach((id) => { const el = $(id); if (el) el.hidden = !hasRun; });
+    ['pc-lec-g', 'pc-lec-c', 'pc-lec-f', 'pc-lec-a'].forEach((id) => { const el = $(id); if (el) { el.hidden = true; el.innerHTML = ''; } });
+    const V = $('pc-vtop'), S = $('pc-summary'), Q = $('s-q');
+    if (!hasRun) { V.innerHTML = ''; S.innerHTML = ''; S.hidden = true; if (Q) Q.hidden = true; return; }
+    S.hidden = false;
+    const res = FP.pcResumen.build(state), long = u.sum === 'l', k = state.fc.metric;
+    V.innerHTML = `<p class="px-eyebrow">Monitorear · Pacing y Forecast · Total digital · ${esc(C().metrics[k].label)} · corte ${esc(run.cutoff || '—')}</p><h2>${esc(res.verdict)}</h2>
+      <div class="px-trust" aria-label="Confiabilidad y contexto">${res.chips.map((c) => `<span class="px-tchip px-${c[0]}" tabindex="0" data-tip="${esc(c[2])}">${esc(c[1])}</span>`).join('')}</div>`;
+    const rowsS = res.rows.filter((r) => (long ? r[2] : r[1]));
+    S.innerHTML = `<div class="px-intro__h"><h3>Resumen general</h3><div class="px-mini" id="pc-md" role="group" aria-label="Versión del resumen"><button type="button" data-v="c" aria-pressed="${!long}">Versión corta</button><button type="button" data-v="l" aria-pressed="${long}">Versión larga</button></div></div>
+      <div class="px-sum${long ? ' px-sum--l' : ''}" data-pc-summary="1">${rowsS.map((r) => `<div class="px-sum__r"><span>${esc(r[0])}</span><span>${long ? r[2] : r[1]}</span></div>`).join('')}<div class="px-sum__f">Descriptivo: muestra dónde y cuánto, no causas. Cada frase baja a su tabla abajo.</div></div>`;
+    Object.entries({ g: res.lec.g, c: res.lec.c, f: res.lec.f, a: res.lec.a }).forEach(([key, t]) => { const el = $(`pc-lec-${key}`); if (el && t) { el.innerHTML = t; el.hidden = false; } });
+    if (Q) { Q.hidden = false; $('pc-actions').innerHTML = actionCards(res.actions, state); }
+    $('pc-foot').innerHTML = `<span class="px-mu">${esc(run.plan.label)}${run.plan.source === 'original_distributed_plan' ? ' (congelado, solo lectura)' : ''} · corte de real ${esc(run.cutoff || '—')} · año ${run.year} · método ${esc(run.method.id)} · ${esc(run.method.label)}</span>`;
+  }
+
+  function bindTop() {
+    const root2 = $('view-pacing'); if (!root2 || root2._pcBound) return;
+    root2._pcBound = true;
+    root2.addEventListener('click', (e) => {
+      const st = FP.app && FP.app.state, u = st && ux(st); if (!u) return;
+      const m = e.target.closest('#pc-m-res,#pc-m-full'); if (m) { u.mode = m.id === 'pc-m-res' ? 'res' : 'full'; $('pc-frame').dataset.mode = u.mode; $('pc-m-res').setAttribute('aria-pressed', String(u.mode === 'res')); $('pc-m-full').setAttribute('aria-pressed', String(u.mode !== 'res')); return; }
+      const sm = e.target.closest('#pc-md button'); if (sm) { u.sum = sm.dataset.v; renderTop(st); return; }
+      const rt = e.target.closest('#pc-ref-toggle'); if (rt) { u.refOpen = !u.refOpen; const box = $('fc-refbox'); if (box) box.hidden = !u.refOpen; rt.setAttribute('aria-expanded', String(u.refOpen)); }
+    });
+  }
+
   function render(state) {
+    bindTop();
     renderControls(state);
     const run = state.fc.run;
     const hasRun = Boolean(run && run.plan.source !== 'none');
-    // «Ver más» (detalle) solo existe cuando hay una corrida que detallar: sin plan, la vista muestra únicamente el aviso
-    document.querySelectorAll('#view-pacing .pacing-more, #view-pacing .home-layer').forEach((e) => { e.hidden = !hasRun; });
     if (!run || run.plan.source === 'none') {
       renderEmpty(state, 'Se necesita un plan del año: guarda el plan distribuido en Plan o importa un Plan / Meta en Carga de datos.');
+      renderTop(state);
       return false;
     }
     renderExecutive(state);
     renderChart(state);
     renderPeriods(state);
     renderEvents(state);
-    return true;
+    renderTop(state);
+    return hasRun;
   }
 
-  FP.pacingView = { render, signed, paceLabel, pacePill, seriesOf, chLabel, chCell, card, na, cellVal, cellSigned };
+  FP.pacingView = { render, renderTop, signed, paceLabel, pacePill, seriesOf, chLabel, chCell, card, na, cellVal, cellSigned };
 })(typeof window !== 'undefined' ? window : globalThis);

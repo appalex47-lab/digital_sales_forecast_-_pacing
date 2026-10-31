@@ -2397,3 +2397,20 @@ tr.is-total th, tr.is-total td { font-weight: 600; }
 /* Categoría | Producto | Región: una tabla a la vez (todas existen en el DOM) */
 #dx-products[data-pt="0"] .dx-pt:not([data-pt="0"]), #dx-products[data-pt="1"] .dx-pt:not([data-pt="1"]), #dx-products[data-pt="2"] .dx-pt:not([data-pt="2"]) { display: none; }
 #dx-products.dx-pt-all .dx-pt { display: block !important; }
+
+/* Pacing & Forecast (versión B): el cuerpo reutiliza los bloques de siempre (ids fc-*) dentro del marco px */
+#pc-topbar { position: static; }
+#pc-topbar .px-topbar__row { align-items: flex-start; gap: 8px 12px; }
+.pc-controls { flex: 1 1 100%; min-width: 0; }
+.pc-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+.pc-ref { padding-top: 10px; }
+.pc-h4 { margin: 14px 0 6px; font-size: .95rem; }
+#pc-more .px-blk > div[id] + div[id], #pc-more .px-blk > div[id] + h4 { margin-top: 12px; }
+#view-pacing .px-lec[hidden] { display: none; }
+#view-pacing #fc-kpis { margin-top: 6px; }
+#view-pacing .subhead h3.panel__title { font-size: .98rem; margin: 0; }
+#pc-vp > summary, #pc-meth > summary { cursor: pointer; }
+@media (max-width: 700px) { #pc-vtop h2 { font-size: 1.25rem; } #pc-topbar .px-btn { font-size: .8rem; padding: 5px 10px; } }
+#view-pacing .px-app, #view-pacing .px-more, #view-pacing .px-blk, #view-pacing .px-verdict, #view-pacing .px-meth__b, #view-pacing .px-dsec { min-width: 0; max-width: 100%; }
+#view-pacing .table-wrap { overflow-x: auto; max-width: 100%; }
+#view-pacing .px-blk > div[id], #view-pacing .px-dsec > div[id] { min-width: 0; max-width: 100%; }

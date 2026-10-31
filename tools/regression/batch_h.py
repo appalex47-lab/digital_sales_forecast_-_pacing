@@ -120,7 +120,7 @@ async def main():
             chk('H-dx todas las tablas usan ds-table', tb == 0, tb)
         # H-X (transversal): «Aprender más» de cada vista es el acordeón plano del design system (con chevron y aria nativo de <details>)
         await q.goto(url + '#pacing'); await q.wait_for_timeout(600)
-        acc = await q.evaluate("""()=>{const ex=document.querySelector('.explainer');if(ex)ex.open=true;const d=document.querySelector('.explainer details');if(!d)return null;return {cls:d.className,chev:!!d.querySelector('summary .ds-accordion__chev'),body:!!d.querySelector('.ds-accordion__body'),
+        acc = await q.evaluate("""()=>{const pm=document.getElementById('pc-meth');if(pm)pm.open=true;const ex=document.querySelector('.explainer');if(ex)ex.open=true;const d=document.querySelector('.explainer details');if(!d)return null;return {cls:d.className,chev:!!d.querySelector('summary .ds-accordion__chev'),body:!!d.querySelector('.ds-accordion__body'),
           summary:d.querySelector('summary').innerText.trim(),rows:d.querySelectorAll('.help-entry__row').length}}""")
         chk('H-X «Aprender más» usa ds-accordion + ds-accordion--plain con chevron y cuerpo', bool(acc) and 'ds-accordion--plain' in acc['cls'] and 'ds-accordion ' in acc['cls'] + ' ' and acc['chev'] and acc['body'] and acc['summary'].startswith('Aprender más') and acc['rows'] >= 3, acc)
         # H-X móvil: a 768 y 390 px el título del acordeón usa casi todo el ancho (antes una regla móvil lo dejaba en 36 px: una palabra por línea)
