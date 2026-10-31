@@ -195,7 +195,14 @@
     if (mg) L.x = `${B(`${Math.round(mg.pp * 100)} %`)} de quienes entraron por ${mg.from} hoy compra por ${mg.to}.`;
     if (cc && fin(cc.top10)) { if (cc.top10 >= c.topShare) L.p = 'Hay alta dependencia: perder a unos pocos clientes grandes movería mucho la venta.'; else if (cdiff !== null && Math.abs(cdiff) >= c.topChangePp) L.p = `La concentración ${cdiff > 0 ? 'sube' : 'baja'} ${B(`${Math.abs(cdiff).toFixed(0)} pp`)} en 6 meses.`; }
 
-    return { verdict, chips, rows: S, lec: L, insuf, warm, nm, ids, mig: mg, open: isOpen(r) };
+    /* ---- ¿Qué hago con esto? Solo aparecen las acciones que la regla respalda; ninguna guarda ni ejecuta nada ---- */
+    const A = [];
+    if (mx && big.length) A.push({ id: 'dx', title: 'Diagnosticar la venta del mes', month: mx.m1, desc: `La mezcla de clientes cambió en ${labF(mx.m1)} contra ${labF(mx.m0)}. Abre Diagnóstico con ese mes, el mismo canal y la comparación contra el mes anterior, para ver si los clientes explican el cambio de la venta.` });
+    const repOk = fin(s.repeatRate) && s.repeatRate >= c.actRepeatMin && rec && rec.active >= c.actActiveMin;
+    if (!insuf && rec) A.push({ id: 'cross', title: 'Crecer con quienes ya compran', why: repOk ? '' : `Hace falta al menos ${c.actActiveMin} clientes activos y ${Math.round(c.actRepeatMin * 100)} % que compre más de una vez.`, desc: 'Abre Cross-sell para ver qué productos suelen comprarse juntos y proponerlos a los clientes que repiten. Son las mismas canastas, no una lista de clientes.' });
+    const hiConc = cc && fin(cc.top10) && cc.top10 >= c.topShare, ltvMove = ltvCh !== null && Math.abs(ltvCh) >= c.ltvChangePct;
+    if (hiConc || ltvMove) A.push({ id: 'prod', title: 'Ver qué compran los clientes que más valen', desc: `${hiConc ? 'La venta depende de pocos clientes' : 'El valor por cliente cambió entre cohortes'}. Abre Producto y evolución con el mismo canal y el último mes cerrado, para ver qué productos sostienen esa venta.`, month: two ? two[0].key : (mx ? mx.m1 : '') });
+    return { verdict, chips, rows: S, lec: L, insuf, warm, nm, ids, mig: mg, open: isOpen(r), actions: A, channel: ctx && ctx.channel };
   }
 
   FP.cusResumen = { build, mixChanges, lastTwoClosed, migration, idsShare, lab, labF, n0, M, K1, p1, pc, CH };
