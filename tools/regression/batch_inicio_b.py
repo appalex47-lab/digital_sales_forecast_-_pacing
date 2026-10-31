@@ -33,8 +33,9 @@ async def main():
         hoy = await q.evaluate("(()=>{const h=document.getElementById('h-hoy');return h?{nbs:!!h.querySelector('#nbs'),att:!!h.querySelector('[data-block=attention]'),strip:!!h.querySelector('[data-chg-strip]')}:null})()")
         chk('B7 «¿Qué hago hoy?» junta el siguiente paso, la atención y «Desde ayer»', bool(hoy) and hoy['nbs'] and hoy['att'] and hoy['strip'], hoy)
         titles = await q.evaluate("[...document.querySelectorAll('#home details.home-more > summary .ds-accordion__t')].map(x=>x.innerText.trim())")
-        chk('B8 «Ver más» con títulos en forma de pregunta', titles[:6] == ['¿Cómo voy en detalle?', '¿Cuáles son todas las cifras?', '¿Por qué va así?', '¿Dónde mirar?', '¿Cómo va cada canal?', '¿Qué tan confiable es?'], titles)
+        chk('B8 «Ver más» con títulos en forma de pregunta', titles[:4] == ['¿Cómo voy en detalle?', '¿Por qué va así?', '¿Dónde mirar?', '¿Qué tan confiable es?'], titles)
         chk('B9 «Ver más» viene cerrado y conserva lo esencial completo (A, B y resumen ejecutivo)', await q.evaluate("[...document.querySelectorAll('#home details.home-more')].every(d=>!d.open)") and await q.locator('[data-home-more=key] [data-key=how]').count() == 1 and await q.locator('[data-home-more=key] [data-key=summary]').count() == 1)
+        chk('B9b los canales van a la vista (tabla), sin tarjetas repetidas ni «Convenciones» desplegable', await q.locator('#hs-channels').is_visible() and await q.locator('#h-now').count() == 0 and await q.locator('.home-conv a[data-nav=ayuda]').count() == 1 and 'Convenciones' not in ''.join(titles), titles)
         bad = []
         for w in (1920, 1280, 768, 390, 320):
             await q.set_viewport_size({'width': w, 'height': 900}); await q.wait_for_timeout(250)

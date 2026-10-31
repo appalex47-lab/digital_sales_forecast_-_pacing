@@ -45,7 +45,7 @@ async def main():
             await q.wait_for_selector('[data-action="commit-staged"]:not([disabled])', timeout=120000); await q.click('[data-action="commit-staged"]')
             await q.wait_for_function("document.querySelectorAll('#view-carga .staging__head').length === 0", timeout=120000); await q.wait_for_timeout(600)
         await load('actual', 'real.csv', ACT)
-        await q.goto(u + '#inicio'); await q.wait_for_selector('#h-now', state='attached'); await q.wait_for_timeout(600)
+        await q.goto(u + '#inicio'); await q.wait_for_selector('#hs-channels', state='attached'); await q.wait_for_timeout(600)
         txt = lambda sel: ev(f"(document.querySelector('{sel}')||{{innerText:''}}).innerText.replace(/\\s+/g,' ')")
         # 0 · sin periodo anterior (año): el bloque 1 lo dice y no inventa nada
         await q.select_option('#home-per', 'year'); await q.wait_for_timeout(800)
@@ -83,7 +83,7 @@ async def main():
         # 6 · segmentos: sin cargar → vacío; con carga → picks y aviso de calidad
         t = await txt('#hs-where'); chk('H6 sin segmentos: invita a cargarlos', 'Todavía no hay segmentos cargados' in t, t[:200])
         await load('segments', 'seg.csv', SEG)
-        await q.goto(u + '#inicio'); await q.wait_for_selector('#h-now', state='attached'); await q.select_option('#home-per', '2026-09'); await q.select_option('#home-ch', 'ecommerce'); await q.wait_for_timeout(1200)
+        await q.goto(u + '#inicio'); await q.wait_for_selector('#hs-channels', state='attached'); await q.select_option('#home-per', '2026-09'); await q.select_option('#home-ch', 'ecommerce'); await q.wait_for_timeout(1200)
         pk = await ev("[...document.querySelectorAll('#hs-where [data-pick]')].map(e=>[e.dataset.pick,e.innerText.replace(/\\s+/g,' ')])")
         chk('H7 aparece un segmento de la dimensión Landing', any(x[0] == 'landing' for x in pk), pk)
         q_ = await ev("(document.querySelector('#hs-where .sgd-quality')||{innerText:''}).innerText.replace(/\\s+/g,' ')")
@@ -97,18 +97,18 @@ async def main():
         tbl = await ev("[...document.querySelectorAll('table[aria-label=\"Efectos por segmento\"] tbody tr')].map(r=>r.textContent.replace(/\\s+/g,' '))")
         chk('H8c el segmento sugerido está en la tabla de Segmentos', any(seg in r for r in tbl), (seg, tbl[:3]))
         # 8 · las tarjetas de «¿Qué está pasando?» no cambian de estructura
-        await q.goto(u + '#inicio'); await q.wait_for_selector('#h-now', state='attached'); await q.wait_for_timeout(600)
-        nc = await ev("document.querySelectorAll('#h-now').length && document.querySelector('#h-now').closest('section').querySelectorAll('.metric-card').length"); chk('H9 siguen las 7 tarjetas de «¿Qué está pasando?»', nc == 7, nc)
-        ids = ['hk-t', 'h-now', 'hs-why', 'hs-where', 'hs-channels', 'hs-trust', 'h-flow']
+        await q.goto(u + '#inicio'); await q.wait_for_selector('#hs-channels', state='attached'); await q.wait_for_timeout(600)
+        nc = await ev("[document.querySelectorAll('#h-now').length, !!document.querySelector('[data-home-more=key] a[data-nav=pacing]')]"); chk('H9 con datos Inicio ya no repite las 7 tarjetas (viven en Pacing) y enlaza a ellas desde «¿Cómo voy en detalle?»', nc == [0, True], nc)
+        ids = ['hk-t', 'hs-why', 'hs-where', 'hs-trust', 'h-flow']
         pos = await ev("(ids)=>ids.map(i=>document.getElementById(i)).map((e,k,a)=>k===0?true:!!(a[k-1].compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING))", ids)
-        chk('H10 orden: lo esencial → todas las cifras → por qué → dónde mirar → canales → confianza → recorrido', all(pos), pos)
+        chk('H10 orden de «Ver más»: lo esencial → por qué → dónde mirar → confianza → recorrido', all(pos), pos)
         # 9 · Inicio simplificado: lo esencial a la vista, todo lo demás plegado pero presente
         await q.evaluate("document.querySelectorAll('details.home-more').forEach(d=>d.open=false)"); await q.wait_for_timeout(250)
         await q.select_option('#home-ch', 'app'); await q.select_option('#home-ch', 'ecommerce'); await q.wait_for_timeout(1000)
-        st = await q.evaluate("(()=>{const d=[...document.querySelectorAll('details.home-more')]; return {n:d.length, open:d.filter(x=>x.open).length, key:!!document.querySelector('[data-block=key]') && document.querySelector('[data-block=key]').getBoundingClientRect().height>0, nowHidden:!document.querySelector('#h-now').checkVisibility()}})()")
-        chk('H11 El veredicto se ve y los 7 «Ver más» (detalle de lo esencial, 7 tarjetas, cascada, segmentos, canales, confianza, recorrido) vienen cerrados (7 tarjetas, cascada, segmentos, canales, confianza, recorrido)', st['n'] == 7 and st['open'] == 0 and st['key'] and st['nowHidden'], st)
-        kv = await ev("(()=>{const c=[...document.querySelectorAll('#h-now')][0].closest('section'); const card=l=>[...c.querySelectorAll('.metric-card')].find(x=>x.querySelector('.metric-card__label').textContent.trim()===l).querySelector('.metric-card__value').textContent.trim(); return {cum:card('Cumplimiento'), fc:card('Forecast'), big:document.querySelector('.home-key__big').textContent.trim(), keytxt:document.querySelector('[data-key=how]').innerText.replace(/\\s+/g,' ')}})()")
-        chk('H12 «¿Cómo voy?» = tarjetas de «Todas las cifras» (cumplimiento y forecast)', kv['big'] == kv['cum'] and kv['fc'].replace(' ', '') in kv['keytxt'].replace(' ', ''), kv)
+        st = await q.evaluate("(()=>{const d=[...document.querySelectorAll('details.home-more')]; return {n:d.length, open:d.filter(x=>x.open).length, key:!!document.querySelector('[data-block=key]') && document.querySelector('[data-block=key]').getBoundingClientRect().height>0, nowHidden:true}})()")
+        chk('H11 El veredicto se ve y los 5 «Ver más» (detalle de lo esencial, cascada, segmentos, confianza, recorrido) vienen cerrados; los canales van a la vista', st['n'] == 5 and st['open'] == 0 and st['key'], st)
+        kv = await ev("(()=>({cum:(([...document.querySelectorAll('#home-b .px-kpi')].find(k=>k.querySelector('.px-kpi__l').textContent.trim()==='Cumplimiento')||{querySelector:()=>({textContent:''})}).querySelector('.px-kpi__v').textContent.trim()), big:document.querySelector('.home-key__big').textContent.trim()}))()")
+        chk('H12 «¿Cómo voy?» de lo esencial = «Cumplimiento» del veredicto', kv['big'] == kv['cum'] and kv['big'] != '', kv)
         eff = await ev("(()=>({card:!!document.querySelector('[data-key=why] [data-why-basis=previous]'), wf:[...document.querySelectorAll('#hs-why [data-basis=previous] .sgd-wf__val')].map(e=>e.textContent.trim()).slice(0,3)}))()")
         chk('H13 la tarjeta de lo esencial NO repite la lectura contra el periodo anterior (satura); esa cascada vive en «Ver más»', eff['card'] is False and len(eff['wf']) == 3, eff)
         pl = await ev("(()=>{const num=t=>{const m=String(t).match(/([+−-])?\\$([\\d,]+)/);return m?(m[1]&&m[1]!=='+'?-1:1)*+m[2].replace(/,/g,''):null}; const vals=[...document.querySelectorAll('[data-key=why] [data-why-basis=plan]')].length?[...document.querySelectorAll('[data-key=why] .home-key__list b')].map(b=>num(b.textContent)):[]; const gapLi=[...document.querySelectorAll('[data-key=how] .home-key__list li')].find(l=>l.textContent.trim().startsWith('Gap')); return {vals, gap: gapLi?num(gapLi.querySelector('b').textContent):null, head:(document.querySelector('[data-why-basis=plan]')||{textContent:''}).textContent}})()")
@@ -126,9 +126,9 @@ async def main():
         chk('H15 sección «Contra el plan» con tabla Plan/Real y sus efectos suman el cambio', pt['heads'][1].startswith('Plan') and pt['heads'][2] == 'Real' and abs(sum(num(pt['rows'][k][3]) for k in ('sessions', 'cr', 'aov')) - num(pt['rows']['revenue'][3])) <= 2, pt)
         kc = await ev("(()=>({plan:[...document.querySelectorAll('[data-key=why] [data-cmp]')].map(e=>e.textContent.trim()), prev:!!document.querySelector('[data-key=why] [data-why-prev-cmp], [data-key=why] [data-why-differ]')}))()")
         chk('H16 la tarjeta de Inicio muestra de dónde a dónde contra el plan (Plan → Real) y sin el bloque del periodo anterior', len(kc['plan']) == 3 and all(x.startswith('Plan ') and ' → Real ' in x for x in kc['plan']) and kc['prev'] is False, kc)
-        await q.evaluate("document.querySelector('details[data-home-more=channels]').open=true"); await q.wait_for_timeout(200)
         await q.select_option('#home-ch', 'app'); await q.wait_for_timeout(900)
-        op = await q.evaluate("document.querySelector('details[data-home-more=channels]').open"); chk('H14 al cambiar de canal, lo que la persona abrió sigue abierto', op is True, op)
+        await q.evaluate("document.querySelector('details[data-home-more=why]').open=true"); await q.select_option('#home-ch', 'ecommerce'); await q.wait_for_timeout(900)
+        op = await q.evaluate("document.querySelector('details[data-home-more=why]').open"); chk('H14 al cambiar de canal, lo que la persona abrió sigue abierto', op is True, op)
         ch2 = await q.evaluate("[...document.querySelectorAll('.home-key__chips [data-chip]')].map(e=>e.dataset.chip)"); chk('H15 línea de estado por canal en lo esencial (4 canales)', ch2 == CH, ch2)
         # 16 · venta real en $ de «¿Cómo voy?» = suma aparte del 1 al 22 de septiembre
         for ch in ['ecommerce', 'app']:
