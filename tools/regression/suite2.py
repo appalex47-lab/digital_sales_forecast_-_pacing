@@ -21,11 +21,11 @@ async def main():
             ex[view]=[hashlib.md5(re.sub(r'"[A-Za-z_]*(At|Date|Time|time|stamp|Id|id)":"[^"]*"','',x).encode()).hexdigest() for x in h]
         R['export_hash']=ex
         # pruebas de almacenamiento por su botón (vista producto)
-        await pg.goto(url+'#prodevol'); await pg.wait_for_timeout(800)
+        # pruebas de almacenamiento (sin la de volumen, que tarda minutos y puede agotar la memoria del navegador sin interfaz)
+        await pg.goto(url+'#inicio'); await pg.wait_for_timeout(600)
         try:
-            await pg.click('[data-action="storage-tests"]',timeout=2000); await pg.wait_for_timeout(6000)
-            R['storage_ui']=await pg.evaluate("(document.body.innerText.match(/Pruebas de almacenamiento[^\\n]*|\\d+ de \\d+ correctas/)||['sin texto'])[0]")
-        except Exception as e: R['storage_ui']='sin botón: '+str(e)[:50]
+            R['storage_ui']=await pg.evaluate("""(async()=>{await FP.lazy.load('storagetests');const r=await Promise.race([FP.storageTests.run({volume:false}),new Promise(x=>setTimeout(()=>x(null),60000))]);return r?`${r.passed} de ${r.total} correctas (sin la prueba de volumen)`:'sin resultado en 60 s'})()""")
+        except Exception as e: R['storage_ui']='error: '+str(e)[:80]
         # teclado: el primer Tab llega a la navegación y el foco es visible
         await pg.goto(url+'#inicio'); await pg.wait_for_timeout(600)
         for _ in range(4): await pg.keyboard.press('Tab')
@@ -44,7 +44,11 @@ async def main():
         R['mobile_overflow']={k:v for k,v in mo.items() if v>0}
         await m.goto(url+'#ayuda'); await m.wait_for_timeout(500)
         if await m.query_selector('.menu-toggle'):
-            await m.click('.menu-toggle'); await m.click('.app-nav a[data-nav="pacing"]'); await m.wait_for_timeout(500)
+            await m.click('.menu-toggle'); await m.wait_for_timeout(300)
+            # el menú agrupa las vistas en secciones plegables: se abre la de Monitorear antes de pulsar Pacing
+            if await m.evaluate("document.querySelector('.snav__toggle[data-value=\"monitorear\"]').getAttribute('aria-expanded')") != 'true':
+                await m.click('.snav__toggle[data-value="monitorear"]'); await m.wait_for_timeout(300)
+            await m.click('.app-nav a[data-nav="pacing"]'); await m.wait_for_timeout(500)
             R['mobile_nav_closes']=await m.evaluate("!document.body.classList.contains('nav-open') && location.hash==='#pacing'")
         else: R['mobile_nav_closes']='n/a (original sin menú móvil)'
         R['errors_total']=errs[:5]
