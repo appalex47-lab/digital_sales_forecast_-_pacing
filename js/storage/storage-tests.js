@@ -184,7 +184,7 @@
     });
     await t('Faltante e inválido no son cero; geografía inválida se marca sin adivinar (desde 8.4 el renglón se conserva)', async () => {
       const q = FP.productImport.stage(FP.mockProducts.qualityCase(), { fileName: 'q.csv', kind: 'sales' });
-      const r = await FP.productImport.process(q, {});
+      const r = await FP.productImport.process(q, { settings: { sumSameKey: false } });
       const hasAll = ['INVALID_STATE', 'MISSING_BRANCH', 'INVALID_DELIVERY', 'EXACT_DUPLICATE', 'CONFLICT', 'NEGATIVE_REVENUE', 'INVALID_REVENUE'].every((k) => r.summary.issuesByType[k]);
       // Solo se rechaza lo que no se puede ubicar en el tiempo o el canal (aquí: canal "marketplace"); la geografía inválida se conserva marcada
       return { pass: hasAll && r.summary.rejected === 1 && r.summary.accepted > 0 && Boolean(r.summary.issuesByType.INVALID_CHANNEL), detail: `${r.summary.rejected} rechazadas, ${r.summary.accepted} aceptadas` };
@@ -222,14 +222,14 @@
       return [...reg.keys()].join() === 'Jalisco' && br.get('025').revenue === 1000 && !br.has('(sin dato)') && sku.get('G1').revenue === 1000 && sku.get('G2').revenue === 300;
     });
     await t('Geografía: bloque anterior sin ciudad se enriquece al recargar el periodo con ciudad (sin duplicar)', async () => {
-      const H0 = 'fecha,canal,sku,estado,sucursal,tipo_entrega,venta,pedidos,unidades';
-      const r0 = await FP.productImport.process(FP.productImport.stage(`${H0}\n2026-09-21,app,E1,Jalisco,025,domicilio,300,3,3`, { fileName: 'viejo.csv' }), {});
+      const H0 = 'fecha,canal,sku,producto,estado,sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente';   // producto, id_pedido e id_cliente son obligatorios desde Clientes y LTV
+      const r0 = await FP.productImport.process(FP.productImport.stage(`${H0}\n2026-09-21,app,E1,Prod E1,Jalisco,025,domicilio,300,3,3,o1,c1`, { fileName: 'viejo.csv' }), {});
       await PS().commit(r0.draft, { fileName: 'viejo.csv' });
       const blk = await IDB.get(prodRepo.db, 'productDays', ['2026-09-21', 'app']);
       delete blk.cityIdx; delete blk.geoFlags;
       await IDB.put(prodRepo.db, 'productDays', blk);
-      const H1 = 'fecha,canal,sku,estado,ciudad,sucursal,tipo_entrega,venta,pedidos,unidades';
-      const r1 = await FP.productImport.process(FP.productImport.stage(`${H1}\n2026-09-21,app,E1,Jalisco,Guadalajara,025,domicilio,200,2,2\n2026-09-21,app,E1,Jalisco,Zapopan,025,domicilio,100,1,1`, { fileName: 'nuevo.csv' }), {});
+      const H1 = 'fecha,canal,sku,producto,estado,ciudad,sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente';
+      const r1 = await FP.productImport.process(FP.productImport.stage(`${H1}\n2026-09-21,app,E1,Prod E1,Jalisco,Guadalajara,025,domicilio,200,2,2,o2,c2\n2026-09-21,app,E1,Prod E1,Jalisco,Zapopan,025,domicilio,100,1,1,o3,c3`, { fileName: 'nuevo.csv' }), {});
       const b = await PS().commit(r1.draft, { fileName: 'nuevo.csv' });
       const m = await PS().aggregate({ from: '2026-09-21', to: '2026-09-21', channel: 'app', groupBy: 'sku' });
       return { pass: b.storedMerge.enriched === 1 && m.get('E1').revenue === 300, detail: `enriquecidos ${b.storedMerge.enriched}, venta del SKU ${m.get('E1').revenue}` };
