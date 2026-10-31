@@ -3773,6 +3773,22 @@
       state.peOnArrive = key; state.peFromDx = { period: run.period.label, channel: run.channel.label, key, comparison: run.comparison.label };
       actions.go({ dataset: { view: 'prodevol' } });
     },
+    /** Clientes y LTV → Diagnóstico del último mes cerrado contra el anterior, mismo canal. No guarda nada. */
+    'cu-to-dx'(el) {
+      const ch = state.cu.opts.channel || 'total', m = el.dataset.month || '';
+      Object.assign(state.dx.settings, { comparison: 'actual_vs_previous', periodType: 'month', periodKey: m, channel: ch });
+      state.dx.run = null; saveDiagnosticSettings();
+      state.ux.routeCtx = { channel: ch, periodType: 'month', periodKey: m, comparison: 'actual_vs_previous' };
+      actions.go({ dataset: { view: 'diagnostico' } });
+    },
+    /** Clientes y LTV → Cross-sell. */
+    'cu-to-cross'() { actions.go({ dataset: { view: 'crosssell' } }); },
+    /** Clientes y LTV → Producto y evolución con el mismo canal y el último mes cerrado. */
+    'cu-to-prod'(el) {
+      const ch = state.cu.opts.channel || 'total';
+      state.ux.routeCtx = { channel: ch, ...(el.dataset.month ? { periodType: 'month', periodKey: el.dataset.month } : {}) };
+      actions.go({ dataset: { view: 'prodevol' } });
+    },
     /** → Recuperar con el mismo contexto, la hipótesis ya ligada y la ruta del driver resaltada. Nada se guarda: el usuario revisa y guarda. */
     'dx-to-recovery'(el) {
       const run = state.dx.run; if (!run) return;

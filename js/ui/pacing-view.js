@@ -406,9 +406,9 @@
     const mres = $('pc-m-res'), mfull = $('pc-m-full');
     if (mres) { mres.setAttribute('aria-pressed', String(u.mode === 'res')); mfull.setAttribute('aria-pressed', String(u.mode !== 'res')); }
     const run = state.fc.run, hasRun = Boolean(run && run.plan.source !== 'none');
-    ['s-g', 's-c', 's-f', 's-a', 's-p', 'pc-vp', 'pc-foot', 'pc-meth'].forEach((id) => { const el = $(id); if (el) el.hidden = !hasRun; });
+    ['pc-g', 'pc-c', 'pc-f', 'pc-a', 'pc-p', 'pc-vp', 'pc-foot', 'pc-meth'].forEach((id) => { const el = $(id); if (el) el.hidden = !hasRun; });
     ['pc-lec-g', 'pc-lec-c', 'pc-lec-f', 'pc-lec-a'].forEach((id) => { const el = $(id); if (el) { el.hidden = true; el.innerHTML = ''; } });
-    const V = $('pc-vtop'), S = $('pc-summary'), Q = $('s-q');
+    const V = $('pc-vtop'), S = $('pc-summary'), Q = $('pc-q');
     if (!hasRun) { V.innerHTML = ''; S.innerHTML = ''; S.hidden = true; if (Q) Q.hidden = true; return; }
     S.hidden = false;
     const res = FP.pcResumen.build(state), long = u.sum === 'l', k = state.fc.metric;

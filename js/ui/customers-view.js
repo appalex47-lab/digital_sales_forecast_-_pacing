@@ -134,6 +134,16 @@
       { title: 'Ubicación', html: FKEYS.filter((k) => !['category', 'subcategory', 'product'].includes(k)).map(sel).join('') }] })}</div>`;
   }
 
+  /** «¿Qué hago con esto?»: enlaces con contexto; ninguno guarda ni ejecuta nada. Solo aparecen los que la regla respalda. */
+  function actionsBlock(res) {
+    const A = res.actions || [];
+    if (!A.length) return '';
+    const go = { dx: 'cu-to-dx', cross: 'cu-to-cross', prod: 'cu-to-prod' };
+    const card = (a) => `<div><b>${esc(a.title)}</b><span>${esc(a.desc)}</span>${a.why ? `<span class="cap"><b>No disponible.</b> ${esc(a.why)}</span>` : `<button type="button" class="lk" data-action="${go[a.id]}"${a.month ? ` data-month="${esc(a.month)}"` : ''}>Abrir →</button>`}</div>`;
+    return `<section class="blk" id="cu-q"><div class="blk__h"><h3>¿Qué hago con esto?</h3><span class="cap">De los clientes a la acción: lo que sigue en el flujo, con el mismo canal.</span></div><div class="act">${A.map(card).join('')}</div>
+      <p class="cap">Llegas con el contexto puesto. Nada se guarda ni se ejecuta desde aquí. Todavía no hay una acción para reactivar clientes que no regresaron: se pueden ver y diagnosticar, pero no hay a dónde enviarlos.</p></section>`;
+  }
+
   function render(state) {
     const el = $('cus-body'); if (!el) return;
     const esc2 = H().esc, cu = state.cu;
@@ -198,6 +208,7 @@
       ${sec('s-c', 'Por canal del primer pedido', 'Los clientes se cuentan en el canal donde hicieron su primer pedido.', chTable(r), res.lec.c)}
       ${sec('s-x', 'Entre canales', 'Clientes que compran en varios canales y cómo migran de su canal de entrada al actual.', chanBlock(x.channels, cfg), res.lec.x)}
       ${cc ? sec('s-p', 'Concentración del valor', `Qué parte de la venta viene de los clientes que más compran. ${PX().tip('Se ordenan los clientes de mayor a menor venta acumulada y se suma lo que aporta cada grupo.')}`, concBlock(cc), res.lec.p) : ''}
+      ${actionsBlock(res)}
       <section class="blk foot"><span class="mu">Venta por producto con id_cliente · ${esc2(fmtD(r.minDay))} a ${esc2(fmtD(r.maxDay))} · ${res.insuf ? 'histórico corto' : 'histórico suficiente'}</span></section>
       <details class="meth" id="cu-meth"${ux.meth ? ' open' : ''}><summary>Método y definiciones</summary><div class="meth__b"><section class="dsec"><h4>Definiciones</h4><dl class="defs">${defs.map((d) => `<div><dt>${esc2(d[0])}</dt><dd>${esc2(d[1])}</dd></div>`).join('')}</dl><p class="cap">Las compras sin ID de cliente válido (vacío, 0, null, invitado) y las líneas sin ID de pedido no entran aquí, pero sí cuentan en Productos. El ID de cliente se toma tal cual del archivo: si un mismo cliente tiene IDs distintos por canal, se contará como dos.</p></section>
         <section class="dsec"><h4>Datos</h4><dl class="fi"><div><dt>Archivo</dt><dd>${esc2(files.length ? files.slice(0, 3).join(', ') + (files.length > 3 ? ` y ${files.length - 3} más` : '') : 'Venta por producto con id_pedido e id_cliente')}</dd></div><div><dt>Periodo cargado</dt><dd>${esc2(fmtD(r.minDay))} – ${esc2(fmtD(r.maxDay))}</dd></div><div><dt>Pedidos y clientes</dt><dd>${n0(s.orders)} pedidos · ${n0(s.customers)} clientes</dd></div><div><dt>IDs válidos</dt><dd>${res.ids === null ? 'sin dato' : Math.round(res.ids * 100) + ' % de las líneas'}</dd></div><div><dt>Reactivado desde</dt><dd>${o.reactivationDays} días sin pedidos</dd></div></dl><p class="cap">El ID de cliente (anonimizado) viaja con los productos a la nube de tu equipo, comprimido.</p></section></div></details>

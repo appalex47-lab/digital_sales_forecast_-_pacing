@@ -656,7 +656,8 @@
           channelQualityPct: 0.15, channelMin: 30,  // canal: mejor vs peor LTV ≥ 15 % (canales de ≥ 30 clientes)
           multiShare: 0.10, migrateShare: 0.20, migrateMinRow: 30,  // entre canales: ≥ 10 % multicanal o ≥ 20 % de una fila de ≥ 30 migrado
           topShare: 0.50, topChangePp: 3,    // concentración: el 10 % que más compra aporta ≥ 50 %, o cambia ≥ 3 pp en 6 meses
-          idsMinShare: 0.95                  // IDs válidos: se avisa por debajo de 95 %
+          idsMinShare: 0.95,                 // IDs válidos: se avisa por debajo de 95 %
+          actActiveMin: 100, actRepeatMin: 0.10  // «Crecer con quienes ya compran»: ≥ 100 clientes activos y ≥ 10 % que repite
         },
       },
       /** Cross-sell (productos que se compran juntos). PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */

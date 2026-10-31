@@ -34,7 +34,7 @@ async def main():
         await q.goto(U + '#diagnostico'); await q.wait_for_selector('#dx-verdict h2', timeout=60000); await q.wait_for_timeout(2500)
         await q.evaluate("document.querySelectorAll('dialog,#tour-offer').forEach(d=>d.remove())")
         chk('D1 la página abre con veredicto, ruta de 4 pasos, ≥3 etiquetas, 6 indicadores y resumen general con ≥2 filas', await q.locator('#dx-verdict h2').count() == 1 and await q.locator('#dx-verdict .dx-stp a').count() == 4 and await q.locator('#dx-verdict .px-tchip').count() >= 3 and await q.locator('#dx-verdict .px-kpi').count() == 6 and await q.locator('[data-dx-summary] .px-sum__r').count() >= 2)
-        chk('D2 las cinco preguntas y el método existen; el método viene cerrado', all([await q.locator(f'#{i}').count() == 1 for i in ('s-h', 's-d', 's-w', 's-y', 's-c', 'dx-meth')]) and await q.evaluate("!document.getElementById('dx-meth').open"))
+        chk('D2 las cinco preguntas y el método existen; el método viene cerrado', all([await q.locator(f'#view-diagnostico #{i}').count() == 1 for i in ('s-h', 's-d', 's-w', 's-y', 's-c', 'dx-meth')]) and await q.evaluate("!document.getElementById('dx-meth').open"))
         chk('D3 los filtros vienen plegados y los chips dicen qué está activo (Comparación, Periodo, Canal, Métrica, Método)', await q.evaluate("!document.getElementById('dx-filters').open") and await q.locator('#dx-filters .dx-filters__chips .ds-badge').count() == 5)
         short = await q.evaluate("document.querySelector('[data-dx-summary]').innerText")
         await q.click('#dx-md [data-v=l]'); await q.wait_for_timeout(200)
@@ -57,7 +57,7 @@ async def main():
         await q.select_option('#dx-cmp', 'actual_vs_plan'); await q.wait_for_timeout(2000)
         # ---- ¿Qué hago con esto? ----
         n = await q.evaluate(HYP); await q.wait_for_timeout(300)
-        chk('D9 con una hipótesis aparece «¿Qué hago con esto?» con 3 destinos', n == 1 and await q.locator('#s-q').is_visible() and await q.locator('#dx-actions .px-act > div').count() == 3)
+        chk('D9 con una hipótesis aparece «¿Qué hago con esto?» con 3 destinos', n == 1 and await q.locator('#view-diagnostico #s-q').is_visible() and await q.locator('#dx-actions .px-act > div').count() == 3)
         chk('D10 «Simular la recuperación» está disponible contra el plan y «Llevar al plan de acción» pide un escenario guardado', await q.locator('[data-action="dx-to-recovery"]').count() == 1 and await q.locator('[data-action="dx-to-plan"]').count() == 0 and 'Primero guarda un escenario' in await q.evaluate("document.getElementById('dx-actions').innerText"))
         await q.click('[data-action="dx-to-recovery"]'); await q.wait_for_selector('#view-recovery:not([hidden]) [data-dx-banner]', timeout=30000); await q.wait_for_timeout(800)
         st = await q.evaluate("(()=>{const A=FP.app.state;return [A.rc.settings.channel===A.dx.settings.channel, A.rc.settings.periodKey===A.dx.settings.periodKey, A.rc.settings.comparison===A.dx.settings.comparison, A.rc.altHyp, A.rc.fromDx&&A.rc.fromDx.alt]})()")
