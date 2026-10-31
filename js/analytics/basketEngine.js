@@ -16,6 +16,8 @@
   const fin = (v) => typeof v === 'number' && Number.isFinite(v);
   const DEFAULTS = { minPairs: 30, minLift: 2, minConf: 0.05, minAnchorOrders: 100, maxItemsPerOrder: 30, topPairs: 20, topCats: 8, prevDays: 90, prevMinOrders: 500 };
 
+  const normIng = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[+\/;,]/).map((x) => x.replace(/\s+/g, ' ').trim()).filter(Boolean).sort().join(' + ');
+
   /** Una pasada: pedidos por producto, pares y distribución de la canasta. `keyOf(row)` devuelve la lista de claves distintas del pedido. */
   function pass(rows, keyOf, o) {
     const itemN = new Map(), itemRev = new Map(), pairN = new Map(), partner = new Map();
@@ -54,7 +56,7 @@
    * @param options { level: 'product'|'sku'|'category', channel: id|null, ...DEFAULTS }
    */
   function analyze(ledger, catalog, options) {
-    const L = ledger, opt = { ...DEFAULTS, ...(options || {}) }, level = ['sku', 'category'].includes(opt.level) ? opt.level : 'product';
+    const L = ledger, opt = { ...DEFAULTS, ...(options || {}) }, level = ['sku', 'category', 'ingredient'].includes(opt.level) ? opt.level : 'product';
     if (!L || !L.key || !L.key.length) return { status: 'no_ledger' };
     const LN = L.lines;
     if (!LN || !LN.o.length) return { status: 'no_lines', missingFiles: (L.batches || []).map((b) => b.fileName || b.id) };
@@ -64,13 +66,19 @@
     /* líneas por pedido (fila del libro) */
     const lines = new Array(n); let totalOrders = 0, withLines = 0;
     for (let j = 0; j < LN.o.length; j++) { const r = LN.o[j]; (lines[r] || (lines[r] = [])).push(j); }
-    const meta = (sku) => cat.get(sku) || null;
+    const meta = (sku) => cat.get(sku) || null, ingDisplay = new Map();
     const label = {
       sku: (sku) => { const m = meta(sku); return m && m.product ? `${m.product} (${sku})` : sku; },
       product: (sku) => { const m = meta(sku); return (m && (m.product || m.sku)) || sku; },
-      category: (sku) => { const m = meta(sku); return (m && m.category) || 'Sin categoría'; }
+      category: (sku) => { const m = meta(sku); return (m && m.category) || 'Sin categoría'; },
+      /* principio activo: se normaliza (mayúsculas, acentos, espacios y orden de las combinaciones «A + B») para que variantes de escritura sean el mismo; sin dato no entra */
+      ingredient: (sku) => { const m = meta(sku), raw = m && m.activeIngredient ? String(m.activeIngredient).trim() : ''; if (!raw) return null; const k = normIng(raw); if (!ingDisplay.has(k)) ingDisplay.set(k, raw); return ingDisplay.get(k); }
     };
     const keyAt = (lv, j) => { const sku = LN.dict.sku[LN.sku[j]]; return label[lv](sku); };
+    /* qué principio activo tiene cada producto (para mostrarlo y para descartar pares de la misma sustancia) y qué parte del catálogo lo trae */
+    const ingOfKey = new Map(); let withIng = 0;
+    LN.dict.sku.forEach((sku) => { const m = cat.get(sku); const has = m && m.activeIngredient && String(m.activeIngredient).trim(); if (has) { withIng++; const nk = normIng(has); if (!ingDisplay.has(nk)) ingDisplay.set(nk, String(has).trim()); if (level !== 'ingredient' && level !== 'category') { const k = label[level](sku); if (!ingOfKey.has(k)) ingOfKey.set(k, nk); } } });
+    const ingredientCoverage = LN.dict.sku.length ? withIng / LN.dict.sku.length : 0;
     const rowsAll = []; let minDay = Infinity, maxDay = -Infinity, revAll = 0;
     for (let i = 0; i < n; i++) {
       if (chId >= 0 && L.ch[i] !== chId) continue;
@@ -80,9 +88,10 @@
       if (L.day[i] < minDay) minDay = L.day[i]; if (L.day[i] > maxDay) maxDay = L.day[i]; revAll += L.rev[i];
     }
     if (!withLines) return { status: 'ok', empty: true, level, totalOrders, withLines: 0, coverage: 0, channelsAvailable: L.channels.slice(), options: opt };
-    const keysOf = (lv) => (i) => { const s = new Set(); lines[i].forEach((j) => s.add(keyAt(lv, j))); return [...s]; };
+    const keysOf = (lv) => (i) => { const s = new Set(); lines[i].forEach((j) => { const k = keyAt(lv, j); if (k !== null) s.add(k); }); return [...s]; };
     const mainKeys = keysOf(level), P = pass(rowsAll, mainKeys, opt);
-    const cands = candidatesOf(P, opt);
+    let cands = candidatesOf(P, opt), excludedSame = 0;
+    if (opt.excludeSameIngredient !== false && ingOfKey.size) { const before = cands.length; cands = cands.filter((c) => !(ingOfKey.get(c.a) && ingOfKey.get(c.a) === ingOfKey.get(c.b))); excludedSame = before - cands.length; }
     /* venta por pedido de cada producto y ticket de la canasta: una pasada por pedido (venta de las líneas, no el total del libro) */
     const revOf = new Map(), cntOf = new Map(), tkSum = new Map(), restSum = new Map();
     const need = new Set(); cands.forEach((c) => { need.add(c.a); need.add(c.b); });
@@ -90,7 +99,7 @@
     let revMulti = 0, totalAll = 0;
     rowsAll.forEach((i) => {
       const per = new Map(); let tot = 0;
-      lines[i].forEach((j) => { const k = keyAt(level, j); per.set(k, (per.get(k) || 0) + LN.rev[j]); tot += LN.rev[j]; });
+      lines[i].forEach((j) => { const k = keyAt(level, j); if (k !== null) per.set(k, (per.get(k) || 0) + LN.rev[j]); tot += LN.rev[j]; });
       totalAll += tot;
       if (per.size > 1) revMulti += tot;
       per.forEach((v, k) => {
@@ -113,7 +122,7 @@
       byCh = watch.map((c, k) => L.channels.map((chn, ci) => ({ channel: chn, orders: an[k][ci], conf: an[k][ci] >= opt.minPairs ? pn[k][ci] / an[k][ci] : null })));
     }
     /* espacio por probar en pesos = pedidos con A sin B × venta de B por pedido (no es un pronóstico) */
-    const candidates = top.map((c, k) => ({ ...c, byChannel: byCh && byCh[k] ? byCh[k] : null }));
+    const candidates = top.map((c, k) => ({ ...c, aIng: ingDisplay.get(ingOfKey.get(c.a)) || null, bIng: ingDisplay.get(ingOfKey.get(c.b)) || null, byChannel: byCh && byCh[k] ? byCh[k] : null }));
     /* productos ancla: ticket del pedido que lo lleva, ticket del RESTO de la canasta (sin contar al ancla, así el precio propio no cuenta),
        ticket de un pedido sin él, y qué porcentaje de sus pedidos lleva otro producto */
     const best = new Map();
@@ -145,9 +154,9 @@
     }
     return { status: 'ok', level, options: opt, totalOrders, withLines, coverage: totalOrders ? withLines / totalOrders : 0, orders: P.N,
       avgItems: P.N ? P.items / P.N : null, multiShare: P.N ? P.multi / P.N : null, multiRevShare: revAll > 0 ? revMulti / revAll : null,
-      avgTicket: P.N ? totalAll / P.N : null, dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, counts, strict, anchors, cats, prev,
+      avgTicket: P.N ? totalAll / P.N : null, dist: P.dist.map((c) => (P.N ? c / P.N : 0)), skippedLarge: P.skipped, candidates, counts, strict, ingredientCoverage, excludedSame, anchors, cats, prev,
       channelsAvailable: L.channels.slice(), minDay: CE.isoOf(minDay), maxDay: CE.isoOf(maxDay) };
   }
 
-  FP.basketEngine = { DEFAULTS, analyze, pass, candidatesOf };
+  FP.basketEngine = { DEFAULTS, analyze, pass, candidatesOf, normIng };
 })(typeof window !== 'undefined' ? window : globalThis);

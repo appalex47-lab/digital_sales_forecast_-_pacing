@@ -131,11 +131,13 @@
    */
   function customersCase({ from = '2025-01-01', to = '2026-09-22', customers = 3000, skus = 120, seed = 21 } = {}) {
     const cat = catalog(skus), br = branches(), r = rng(seed);
-    const head = 'fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente';
+    const head = 'fecha,canal,sku,codigo_producto,producto,marca,categoria,subcategoria,presentacion,principio_activo,region,estado,ciudad,sucursal,nombre_sucursal,tipo_entrega,venta,pedidos,unidades,id_pedido,id_cliente';
     const out = [head], span = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
     const chs = ['ecommerce', 'app', 'whatsapp', 'llamadas'], chW = [0.55, 0.3, 0.09, 0.06];
     const pickCh = () => { let x = r(), i = 0; while (i < 3 && x > chW[i]) { x -= chW[i]; i++; } return chs[i]; };
     let order = 0;
+    /* demo: en la mitad de los pares ancla + complemento los dos comparten principio activo (sustitutos), para ver cómo se descartan */
+    const ingOf = (i) => (((i % 4 === 1 && Math.floor(i / 4) % 2 === 1) ? i - 1 : i) % 60);
     const emit = (cust, mainCh, dayOffset, chronic) => {
       const d = FP.calendar.addDays(from, dayOffset);
       const ch = r() < 0.85 ? mainCh : pickCh(), b = br[Math.floor(r() * br.length)], dom = ch === 'ecommerce' || ch === 'app' ? r() < 0.6 : r() < 0.3;
@@ -148,7 +150,7 @@
         prevIdx = idx;
         const c = cat[idx] || cat[0];
         const units = 1 + Math.floor(r() * 3);
-        out.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,${b.region},${b.state},${b.city},${b.id},${b.name},${dom ? 'domicilio' : 'recoleccion'},${Math.round(units * c.price * 100) / 100},1,${units},${id},C${String(cust).padStart(6, '0')}`);
+        out.push(`${d},${ch},${c.sku},EAN${c.sku.slice(3)},${c.product},${c.brand},${c.category},${c.subcategory},Caja,Principio demo ${String(ingOf(Number(c.sku.slice(3)) - 700000)).padStart(2, '0')},${b.region},${b.state},${b.city},${b.id},${b.name},${dom ? 'domicilio' : 'recoleccion'},${Math.round(units * c.price * 100) / 100},1,${units},${id},C${String(cust).padStart(6, '0')}`);
       }
     };
     for (let c = 1; c <= customers; c++) {
