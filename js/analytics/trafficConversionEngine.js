@@ -121,7 +121,8 @@
     items.sort((a, b) => a.delta - b.delta);                       // mayor pérdida primero
     const shown = items.length > maxRows ? [...items.slice(0, Math.ceil(maxRows / 2)), ...items.slice(-Math.floor(maxRows / 2))] : items;
     const dominantEffect = ['traffic', 'cr', 'aov'].sort((a, b) => Math.abs(total[b]) - Math.abs(total[a]))[0];
-    const out = { status: 'ok', total, dominantEffect, mix, items: shown, allItems: items, hidden: items.length - shown.length, excluded, minSessions };
+    const out = { status: 'ok', total, dominantEffect, mix, items: shown, allItems: items, hidden: items.length - shown.length, excluded, minSessions,
+      totals: { base: { t: T0, o: O0, r: R0 }, cur: { t: T1, o: O1, r: R1 } } };
     out.quality = qualityChecks(out, T1 > 0 ? O1 / T1 : null);
     const oth = items.find((x) => x.grouped > 0);
     out.others = oth ? { segments: oth.grouped, sessions: oth.cur ? oth.cur.t : 0, share: T1 > 0 && oth.cur ? oth.cur.t / T1 : 0 } : null;   // cuánto del tráfico actual quedó en «Otros»
@@ -135,7 +136,7 @@
     const scale = Math.abs(dec.total.traffic) + Math.abs(dec.total.cr) + Math.abs(dec.total.aov), floor = 0.02 * scale;
     const out = [], it = dec.allItems.filter((x) => x.grouped === 0);
     const negCr = it.filter((x) => x.cr < 0).sort((a, b) => a.cr - b.cr)[0];
-    const negCrTotal = sum(dec.allItems.filter((x) => x.cr < 0), (x) => x.cr);
+    const negCrTotal = sum(dec.allItems.filter((x) => x.cr < 0 && negCr && x.dim === negCr.dim), (x) => x.cr);   // en la lista de todas las dimensiones, el peso es dentro de su dimensión (no se suman dimensiones)
     if (negCr && negCr.crPpDelta !== null && Math.abs(negCr.cr) >= floor) {
       const sig = negCr.crTest.significant;
       out.push({ kind: 'cr', amount: negCr.cr, tag: 'Conversión', tone: 'danger', title: `«${label(negCr)}» convirtió menos: ${pct(negCr.base.o / negCr.base.t, 2)} → ${pct(negCr.cur.o / negCr.cur.t, 2)}.`,
@@ -150,5 +151,117 @@
     return out.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 4);
   }
 
-  FP.trafficConversionEngine = { analyze, effects, crTest, findings, qualityChecks };
+  /* ====================================================================================================================
+   * Todas las dimensiones a la vez.
+   * Cada dimensión parte la MISMA venta en segmentos distintos (un visitante es a la vez de un dispositivo, una fuente y un tipo de
+   * cliente): sus efectos no se suman entre dimensiones. Por eso el resultado general sale del TOTAL (que es el mismo en todas) y
+   * la lista junta los segmentos de todas, cada uno con su dimensión y su peso dentro de ella.
+   * El cruce de dos dimensiones (p. ej. «Móvil · google / cpc») sí es una partición: sus celdas se pueden sumar.
+   * ==================================================================================================================== */
+  const COMBO = ['device_source'];
+  const EFFK = ['traffic', 'cr', 'aov'];
+  const COVER_TOL = 0.05;                              // una dimensión cuyo total difiere más de 5 % del de referencia se avisa
+
+  /** Cruce a partir de la dimensión combinada: filas = dispositivo, columnas = fuente/medio (se separan en « · »). */
+  function crossTab(res, { maxCols = 8 } = {}) {
+    const cells = new Map(), colTraffic = new Map();
+    for (const r of res.rows || []) {
+      const c = val(r.current), b = val(r.baseline); if (!c && !b) continue;
+      if ((r.current && !c) || (r.baseline && !b)) continue;
+      const label = String(r.label || r.key), i = label.indexOf(' · ');
+      if (i < 0) continue;
+      const a = label.slice(0, i).trim(), col = label.slice(i + 3).trim();
+      cells.set(`${a}\u0000${col}`, { a, b: col, base: b, cur: c });
+      colTraffic.set(col, (colTraffic.get(col) || 0) + ((c && c.t) || 0));
+    }
+    if (!cells.size) return null;
+    const keep = [...colTraffic.entries()].sort((x, y) => y[1] - x[1]).slice(0, maxCols).map((x) => x[0]), keepSet = new Set(keep);
+    const merged = new Map();
+    cells.forEach((v) => {
+      const colName = keepSet.has(v.b) ? v.b : 'Otros';
+      const k = `${v.a}\u0000${colName}`, m = merged.get(k) || { a: v.a, b: colName, base: null, cur: null };
+      const add = (x, y) => (y ? (x ? { t: x.t + y.t, o: x.o + y.o, r: x.r + y.r } : { ...y }) : x);
+      m.base = add(m.base, v.base); m.cur = add(m.cur, v.cur); merged.set(k, m);
+    });
+    const list = [...merged.values()].map((x) => {
+      const e = effects(x.base, x.cur);
+      return { ...x, delta: e.delta, traffic: e.traffic, cr: e.cr, aov: e.aov, kind: e.kind, crTest: e.crTest,
+        cr0: x.base && x.base.t > 0 ? x.base.o / x.base.t : null, cr1: x.cur && x.cur.t > 0 ? x.cur.o / x.cur.t : null };
+    });
+    const rowsA = [...new Set(list.map((x) => x.a))], colsB = [...keep, ...(list.some((x) => x.b === 'Otros') ? ['Otros'] : [])];
+    return { cells: list, rowsA, colsB, total: sum(list, (x) => x.delta), reconciles: Math.abs(sum(list, (x) => x.traffic + x.cr + x.aov) - sum(list, (x) => x.delta)) < 0.5 };
+  }
+
+  /**
+   * @param {Array<{dim:string,label:string,res:object,ins?:object}>} dims  cada dimensión con su resumen (segmentsView.summarize) y, opcional,
+   *   sus insights (segmentInsights.analyze) para las oportunidades y los tickets bajos
+   * @param {{minByDim?:object, maxRows?:number}} opts
+   */
+  function analyzeAll(dims, { minByDim = {}, maxRows = 12 } = {}) {
+    const regular = (dims || []).filter((d) => !COMBO.includes(d.dim)), combo = (dims || []).find((d) => COMBO.includes(d.dim));
+    const parts = regular.map((d) => ({ dim: d.dim, label: d.label, ins: d.ins || null, dec: analyze(d.res, { minSessions: minByDim[d.dim] || null, maxRows }) }));
+    const ok = parts.filter((p) => p.dec.status === 'ok');
+    if (!ok.length) return { status: parts.some((p) => p.dec.status === 'no_baseline') ? 'no_baseline' : 'no_data', dims: parts.map((p) => ({ dim: p.dim, label: p.label, status: p.dec.status })) };
+    // Dimensión de referencia: la que cubre más tráfico y venta del periodo actual (sus totales son «el total»)
+    const ref = ok.slice().sort((a, b) => (b.dec.totals.cur.t - a.dec.totals.cur.t) || (b.dec.totals.cur.r - a.dec.totals.cur.r))[0];
+    const tb = ref.dec.totals.base, tc = ref.dec.totals.cur, e = effects(tb, tc);
+    const total = { traffic: e.traffic, cr: e.cr, aov: e.aov, delta: e.delta, base: tb.r, current: tc.r, deltaPct: tb.r > 0 ? (tc.r - tb.r) / tb.r : null,
+      reconciles: Math.abs(e.traffic + e.cr + e.aov - e.delta) < 0.5 };
+    total.lead = EFFK.slice().sort((a, b) => Math.abs(total[b]) - Math.abs(total[a]))[0];
+    const totals = { base: tb, cur: tc, cr0: tb.t > 0 ? tb.o / tb.t : null, cr1: tc.t > 0 ? tc.o / tc.t : null, aov0: tb.o > 0 ? tb.r / tb.o : null, aov1: tc.o > 0 ? tc.r / tc.o : null };
+    // Cobertura: cuánto del total de referencia ve cada dimensión (si una cubre menos, su lectura es parcial)
+    const dimsOut = parts.map((p) => {
+      if (p.dec.status !== 'ok') return { dim: p.dim, label: p.label, status: p.dec.status, dec: p.dec, ins: p.ins };
+      const cov = { traffic: tc.t > 0 ? p.dec.totals.cur.t / tc.t : null, revenue: tc.r > 0 ? p.dec.totals.cur.r / tc.r : null };
+      const partial = [cov.traffic, cov.revenue].some((v) => fin(v) && Math.abs(v - 1) > COVER_TOL);
+      return { dim: p.dim, label: p.label, status: 'ok', dec: p.dec, ins: p.ins, coverage: cov, partial, isRef: p === ref };
+    });
+    const items = [];
+    ok.forEach((p) => p.dec.allItems.forEach((x) => items.push({ ...x, dim: p.dim, dimLabel: p.label })));
+    const pseudo = { status: 'ok', total, allItems: items.filter((x) => x.grouped === 0) };
+    const out = { status: 'ok', reference: ref.dim, total, totals, dims: dimsOut, items, pseudo, partialDims: dimsOut.filter((d) => d.partial).map((d) => d.label) };
+    out.mix = ref.dec.mix;
+    // Calidad del tráfico: se juntan los avisos de todas las dimensiones (sin repetir el mismo segmento)
+    const seen = new Set(); out.quality = [];
+    ok.forEach((p) => (p.dec.quality || []).forEach((f) => { const k = `${p.dim}\u0000${f.key}`; if (!seen.has(k)) { seen.add(k); out.quality.push({ ...f, dim: p.dim, dimLabel: p.label }); } }));
+    out.quality.sort((a, b) => b.added - a.added);
+    const oth = ok.map((p) => ({ dimLabel: p.label, o: p.dec.others })).filter((x) => x.o);
+    out.others = oth;
+    // Oportunidades y tickets bajos: de cada dimensión, con su etiqueta; no se suman entre dimensiones
+    out.opportunities = []; out.lowAov = [];
+    ok.forEach((p) => {
+      if (!p.ins) return;
+      (p.ins.opportunities || []).forEach((o) => out.opportunities.push({ ...o, dim: p.dim, dimLabel: p.label }));
+      (p.ins.lowAov || []).forEach((o) => out.lowAov.push({ ...o, dim: p.dim, dimLabel: p.label }));
+    });
+    out.opportunities.sort((a, b) => (b.opportunity || 0) - (a.opportunity || 0));
+    out.cross = combo ? crossTab(combo.res) : null;
+    return out;
+  }
+
+  /**
+   * Lista unificada «qué mirar primero»: filtra y ordena los segmentos de todas las dimensiones.
+   * @param {object} all  resultado de analyzeAll
+   * @param {{dim?:string, effect?:'traffic'|'cr'|'aov', sign?:'neg'|'pos', limit?:number, withOthers?:boolean}} f
+   * effect omitido → se usa el efecto dominante de cada segmento. Devuelve {rows, total}; cada fila trae `effect` y `value`.
+   */
+  function pick(all, { dim = null, effect = null, sign = null, limit = null, withOthers = false } = {}) {
+    if (!all || all.status !== 'ok') return { rows: [], total: 0 };
+    let rows = all.items.filter((x) => (withOthers || x.grouped === 0) && (!dim || x.dim === dim)).map((x) => {
+      const k = effect || EFFK.slice().sort((a, b) => Math.abs(x[b]) - Math.abs(x[a]))[0];
+      return { ...x, effect: k, value: x[k] };
+    });
+    if (sign === 'neg') rows = rows.filter((x) => x.value < -0.5);
+    else if (sign === 'pos') rows = rows.filter((x) => x.value > 0.5);
+    rows.sort((a, b) => (sign === 'pos' ? b.value - a.value : sign === 'neg' ? a.value - b.value : Math.abs(b.value) - Math.abs(a.value)));
+    return { rows: limit ? rows.slice(0, limit) : rows, total: rows.length };
+  }
+
+  /** Hallazgos («qué mirar primero») sobre todas las dimensiones; la etiqueta incluye la dimensión. */
+  function findingsAll(all, { money, pct }) {
+    if (!all || all.status !== 'ok') return [];
+    return findings(all.pseudo, { money, pct, label: (x) => `${x.dimLabel}: ${x.label}` });
+  }
+
+  FP.trafficConversionEngine = { analyze, effects, crTest, findings, qualityChecks, analyzeAll, pick, findingsAll, crossTab };
 })(typeof window !== 'undefined' ? window : globalThis);
