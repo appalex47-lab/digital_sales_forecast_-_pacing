@@ -421,6 +421,15 @@
       attributionMethod: 'sequential',
       attributionMethods: { sequential: 'Secuencial (volumen → CR → AOV)', shapley: 'Shapley (simétrico)' },
       attributionOrder: ['trafficVolume', 'conversionRate', 'aov'],
+      /** Resumen general del Diagnóstico: cuándo se nombra cada cosa. PROVISIONALES: criterios propuestos, no benchmarks; ajústalos con tu historial. */
+      summary: {
+        flatPct: 0.01,        // «en línea»: la brecha es menor a 1 %
+        dominantShare: 0.5,   // un driver «explica sobre todo» si aporta ≥ 50 % de la brecha
+        driverShare: 0.2,     // se nombra el driver principal si aporta ≥ 20 %
+        offsetShare: 0.1,     // «compensa»: un driver en sentido contrario que pesa ≥ 10 % de la brecha
+        maxShare: 2.5,        // un «% de la brecha» mayor a 250 % no se muestra (brecha casi cero: el porcentaje no informa)
+        productShare: 0.25    // producto o categoría que aporta ≥ 25 % del cambio de la venta de productos
+      },
       comparisons: {
         actual_vs_plan:         { label: 'Actual vs Plan', current: 'Actual', baseline: 'Plan' },
         forecast_vs_plan:       { label: 'Forecast vs Plan', current: 'Forecast', baseline: 'Plan' },

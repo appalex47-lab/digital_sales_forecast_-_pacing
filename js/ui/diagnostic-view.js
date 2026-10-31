@@ -37,11 +37,11 @@
     return weeks;
   }
 
-  /** Panel «Filtros»: abierto en escritorio y plegado en móvil por defecto; si la persona lo cambia, se respeta durante la sesión. */
+  /** Panel «Filtros»: plegado por defecto (los chips resumen lo activo); si la persona lo cambia, se respeta durante la sesión. */
   let filtersOpen = null;
   function filtersAreOpen() {
     if (filtersOpen !== null) return filtersOpen;
-    return !(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 860px)').matches);
+    return false;   // plegado: los chips de la barra ya dicen qué filtros están activos
   }
 
   function renderControls(state) {
@@ -69,9 +69,8 @@
         ${sel('dx-ch', 'channel', chOpts, d.channel, 'Canal')}
         ${sel('dx-metric', 'metric', metOpts, d.metric, 'Métrica')}
         ${sel('dx-method', 'method', methOpts, d.method, 'Método de atribución')}
-      </div></details>
-      <p class="field__hint">La app no mezcla comparaciones: cada una usa su propia referencia. ${esc(state.dx.run && state.dx.run.assumptions ? state.dx.run.assumptions.pairing : '')}</p>
-      <ol class="chain">${['Hecho', 'Driver', 'Señal', 'Hipótesis'].map((s, i) => `<li><strong>${stage(s)}</strong><span>${['Qué pasó y cuánto', 'Qué variable lo explica matemáticamente', 'Dónde ocurre y merece investigarse', 'Explicación posible que requiere validación'][i]}</span></li>`).join('')}</ol>`;
+        <p class="field__hint" style="grid-column:1/-1">La app no mezcla comparaciones: cada una usa su propia referencia. ${esc(state.dx.run && state.dx.run.assumptions ? state.dx.run.assumptions.pairing : '')}</p>
+      </div></details>`;
     const dtl = $('dx-filters');
     if (dtl) dtl.addEventListener('toggle', () => { filtersOpen = dtl.open; });
   }
@@ -295,15 +294,68 @@
       </div>`;
   }
 
-  /** «Ver más» solo existe si hay algo que detallar: sin diagnóstico (o sin productos) no se muestran desplegables vacíos. */
+  /** Los desplegables (árbol de drivers, cómo leer) solo se muestran si hay algo que detallar: sin diagnóstico no aparecen vacíos. */
   function syncMore() {
     const root = document.getElementById('view-diagnostico'); if (!root) return;
-    let any = false;
     root.querySelectorAll('details.dx-more').forEach((d) => {
-      const has = [...d.querySelectorAll('.panel__body')].some((b) => b.textContent.trim()) && !d.querySelector('section[hidden]');
-      d.hidden = !has; if (has) any = true;
+      const body = d.querySelector('div[id]');
+      d.hidden = !(body && body.textContent.trim());
     });
-    const layer = root.querySelector('.dx-layer'); if (layer) layer.hidden = !any;
+  }
+
+  /* ---------- Veredicto, resumen general y «¿Qué hago con esto?» (reglas invisibles en FP.dxResumen) ---------- */
+
+  const ux = (state) => (state.ux.dx = state.ux.dx || { mode: 'full', sum: 'c', prod: 0 });
+  const sectionIds = ['s-d', 's-w', 's-y', 's-c'];
+
+  function actionCards(a, state) {
+    const esc = H().esc, h = a.hyp;
+    const off = (why) => `<span class="px-cap"><b>No disponible.</b> ${esc(why)}</span>`;
+    const prod = a.product ? `<div><b>Ver el producto afectado</b><span>Abre Producto y evolución con el mismo periodo, canal y comparación, parado en ${esc(a.product.level)} <b>${esc(a.product.name)}</b>. No recalcula nada: son las mismas cifras de «¿Dónde ocurre?».</span><button type="button" class="px-lk" data-action="dx-to-product" data-key="${esc(a.product.key)}">Abrir →</button></div>` : '';
+    const rec = a.recovery.why ? `<div><b>Simular la recuperación</b><span>Abre Recuperar con la misma brecha, la hipótesis ligada y la ruta del driver cargada en el simulador. Tú la revisas y la guardas; no se guarda sola.</span>${off(a.recovery.why)}</div>`
+      : `<div><b>Simular la recuperación</b><span>Abre Recuperar con la misma brecha, la hipótesis «${esc(a.recovery.hyp.replace(/\.$/, ''))}» ya ligada y la ruta del driver cargada en el simulador. Tú la revisas y la guardas; no se guarda sola.</span><button type="button" class="px-lk" data-action="dx-to-recovery" data-hyp="${esc(a.recovery.hypId)}" data-alt="${esc(a.recovery.altId || '')}">Abrir en Recuperar →</button></div>`;
+    const pl = a.plan.why ? `<div><b>Llevar al plan de acción</b><span>Abre el catálogo de acciones de ese driver con el escenario ligado a la hipótesis. Tú eliges la acción y sus fechas; después Medir y aprender compara el resultado.</span>${off(a.plan.why)}</div>`
+      : `<div><b>Llevar al plan de acción</b><span>Abre Recuperar en el catálogo de acciones con el escenario «${esc(a.plan.name)}» ya elegido. Tú eliges la acción y sus fechas; después Medir y aprender compara el resultado.</span><button type="button" class="px-lk" data-action="dx-to-plan" data-hyp="${esc(h.id)}" data-scenario="${esc(a.plan.scenarioId)}">Abrir →</button></div>`;
+    return `<div class="px-act">${prod}${rec}${pl}</div><p class="px-cap">Llegas con la propuesta lista para revisar. Nada se guarda ni se ejecuta desde el Diagnóstico.</p>`;
+  }
+
+  function renderTop(state, d) {
+    const esc = H().esc, frame = $('dx-frame'), u = ux(state);
+    if (!frame) return;
+    frame.dataset.mode = u.mode;
+    const mres = $('dx-m-res'), mfull = $('dx-m-full');
+    if (mres) { mres.setAttribute('aria-pressed', String(u.mode === 'res')); mfull.setAttribute('aria-pressed', String(u.mode !== 'res')); }
+    const ok = d && d.status === 'ok';
+    sectionIds.forEach((id) => { const el = $(id); if (el) el.hidden = !ok; });
+    if ($('dx-meth')) $('dx-meth').hidden = !ok;
+    const V = $('dx-verdict'), S = $('dx-summary'), Q = $('s-q');
+    ['h', 'd', 'w', 'y', 'c'].forEach((k) => { const el = $(`dx-lec-${k}`); if (el) { el.hidden = true; el.innerHTML = ''; } });
+    if (!ok) { V.innerHTML = ''; V.hidden = true; S.innerHTML = ''; S.hidden = true; if (Q) Q.hidden = true; return; }
+    V.hidden = false; S.hidden = false;
+    const res = FP.dxResumen.build(state, d), long = u.sum === 'l';
+    const STAGES = [['Hecho', 's-h', true], ['Driver', 's-d', true], ['Señal', 's-w', d.signals.length > 0], ['Hipótesis', 's-y', d.hypotheses.length > 0]];
+    V.innerHTML = `<p class="px-eyebrow">¿Por qué? · Diagnóstico · ${esc(d.period.label)} · ${esc(d.channel.label)}</p><h2>${esc(res.verdict)}</h2>
+      <div class="dx-stp" aria-label="Ruta del razonamiento">${STAGES.map(([t, id, on], i) => `${i ? '<i>→</i>' : ''}<a href="#${id}" data-dx-jump="${id}" class="${on ? 'on' : ''}">${t}</a>`).join('')}</div>
+      <div class="px-trust" aria-label="Confiabilidad y contexto">${res.chips.map((c) => `<span class="px-tchip px-${c[0]}" tabindex="0" data-tip="${esc(c[2])}">${esc(c[1])}</span>`).join('')}</div>
+      <div class="px-kpis">${res.kpis.map(([l, v, sub]) => `<div class="px-kpi"><div class="px-kpi__l">${esc(l)}</div><div class="px-kpi__v px-num">${esc(v)}</div><div class="px-kpi__d px-mu" style="font-weight:500">${esc(sub)}</div></div>`).join('')}</div>`;
+    const rowsS = res.rows.filter((r) => (long ? r[2] : r[1]));
+    S.innerHTML = `<div class="px-intro__h"><h3>Resumen general</h3><div class="px-mini" id="dx-md" role="group" aria-label="Versión del resumen"><button type="button" data-v="c" aria-pressed="${!long}">Versión corta</button><button type="button" data-v="l" aria-pressed="${long}">Versión larga</button></div></div>
+      <div class="px-sum${long ? ' px-sum--l' : ''}" data-dx-summary="1">${rowsS.map((r) => `<div class="px-sum__r"><span>${esc(r[0])}</span><span>${long ? r[2] : r[1]}</span></div>`).join('')}<div class="px-sum__f">Descriptivo: muestra dónde y cuánto, no causas. Cada frase baja a su tabla abajo.</div></div>`;
+    Object.entries({ h: res.lec.h, d: res.lec.d, w: res.lec.w, y: res.lec.y, c: res.lec.c }).forEach(([k, t]) => { const el = $(`dx-lec-${k}`); if (el && t) { el.innerHTML = t; el.hidden = false; } });
+    const a = res.actions, showQ = Boolean(a.hyp);
+    if (Q) { Q.hidden = !showQ; if (showQ) $('dx-actions').innerHTML = actionCards(a, state); }
+  }
+
+  function bindTop() {
+    const root = $('view-diagnostico'); if (!root || root._dxBound) return;
+    root._dxBound = true;
+    root.addEventListener('click', (e) => {
+      const st = FP.app && FP.app.state, u = st && ux(st); if (!u) return;
+      const m = e.target.closest('#dx-m-res,#dx-m-full'); if (m) { u.mode = m.id === 'dx-m-res' ? 'res' : 'full'; const f = $('dx-frame'); f.dataset.mode = u.mode; $('dx-m-res').setAttribute('aria-pressed', String(u.mode === 'res')); $('dx-m-full').setAttribute('aria-pressed', String(u.mode !== 'res')); return; }
+      const pt = e.target.closest('#dx-pt button'); if (pt) { u.prod = +pt.dataset.pt; renderProducts(st); return; }
+      const sm = e.target.closest('#dx-md button'); if (sm) { u.sum = sm.dataset.v; renderTop(st, st.dx.run); return; }
+      const j = e.target.closest('[data-dx-jump]'); if (j) { e.preventDefault(); const t = $(j.dataset.dxJump); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
   }
 
   /** Lleva a un elemento del diagnóstico (abriendo lo que lo esconda), lo resalta unos segundos y le da el foco. */
@@ -325,8 +377,10 @@
   }
 
   function render(state) {
+    bindTop();
     renderControls(state);
     const d = state.dx.run;
+    renderTop(state, d);
     if (!d) {
       ['dx-result', 'dx-level1', 'dx-tree', 'dx-signals', 'dx-hyps', 'dx-recovery', 'dx-confidence'].forEach((id) => { $(id).innerHTML = ''; });
       $('dx-result').innerHTML = `<div class="empty"><strong>No hay diagnóstico todavía</strong>Se necesita un plan del año y venta real: guarda el plan distribuido en Plan e importa el real.</div>`;
@@ -343,6 +397,7 @@
     renderHypotheses(state, d);
     renderRecovery(d);
     renderConfidence(state, d);
+    renderTop(state, d);   // vuelve a pintar el resumen con el desglose de productos ya calculado
     syncMore();
   }
 
@@ -391,17 +446,20 @@
       : '';
     const dayNote = cov && cov.currentRange && cov.currentRange[1] && r.to && cov.currentRange[1] !== r.to
       ? `<p class="field__hint" data-recon="days">Aviso: los datos de producto llegan hasta ${esc(r.to)} y el titular cuenta la venta real hasta ${esc(cov.currentRange[1])}; no cubren los mismos días, por eso las cifras pueden no coincidir.</p>` : '';
+    const pi = ux(state).prod || 0;
+    el.dataset.pt = String(pi);
     el.innerHTML = `${head}
       <p class="field__hint">Venta de productos ${esc(r.from)} a ${esc(r.to)} contra ${esc(r.comparison === 'yoy' ? 'las mismas fechas del año anterior' : (bl.label || 'el periodo anterior'))} (${esc(bl.from || '')} a ${esc(bl.to || '')}):
         <strong>${F.currency(t.current || 0, 0)}</strong> contra ${F.currency(t.baseline || 0, 0)} (${signed(t.delta)}). ${r.note ? esc(r.note) : ''}
         Contribución = parte del cambio total de la venta de productos. El CR del embudo es pedidos ÷ vistas de ficha; no es el CR por sesiones del árbol de arriba.</p>
       ${recon}
       ${dayNote}
-      ${table('Categoría', r.category, 'dx-p-cat')}
-      ${table('Producto', r.product, 'dx-p-prod')}
-      ${table('Región', r.region, 'dx-p-reg')}
+      <div class="px-mini" id="dx-pt" role="group" aria-label="Ver por" style="margin:8px 0">${['Categoría', 'Producto', 'Región'].map((t, i) => `<button type="button" data-pt="${i}" aria-pressed="${i === pi}">${t}</button>`).join('')}</div>
+      <div class="dx-pt" data-pt="0">${table('Categoría', r.category, 'dx-p-cat')}</div>
+      <div class="dx-pt" data-pt="1">${table('Producto', r.product, 'dx-p-prod')}</div>
+      <div class="dx-pt" data-pt="2">${table('Región', r.region, 'dx-p-reg')}</div>
       <p class="field__hint">Mismos cálculos que <a href="#producto" data-nav="producto">Categoría → Producto</a>, donde puedes bajar hasta SKU, estado o sucursal.</p>`;
   }
 
-  FP.diagnosticView = { render, focusEvidence, periodOptions, syncMore, renderProducts: (state) => { renderProducts(state); syncMore(); } };
+  FP.diagnosticView = { render, focusEvidence, periodOptions, syncMore, renderProducts: (state) => { renderProducts(state); renderTop(state, state.dx.run); syncMore(); }, renderTop };
 })(typeof window !== 'undefined' ? window : globalThis);

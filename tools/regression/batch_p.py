@@ -39,7 +39,7 @@ async def main():
         chk('P-1 la Narrativa narra septiembre', 'Septiembre 2026' in n1, n1[:200])
         # elegido a mano: se respeta
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(500)
-        await q.select_option('#dx-key', '2026-10'); await q.wait_for_timeout(600)
+        await q.evaluate("document.getElementById('dx-filters').open=true"); await q.select_option('#dx-key', '2026-10'); await q.wait_for_timeout(600)
         await q.goto(u + '#inicio'); await q.wait_for_timeout(300); await q.goto(u + '#diagnostico'); await q.wait_for_timeout(600)
         chk('P-1 si eliges octubre a mano, se respeta (no se cambia solo)', await q.evaluate("document.getElementById('dx-key').value") == '2026-10')
         await c.close()

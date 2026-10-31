@@ -388,6 +388,12 @@
     return `<div class="topbar"><div class="topbar__row">${parts.channel}${parts.period}${parts.compare}<button class="btn" data-action="fs-toggle" data-fs-page="pa" aria-expanded="${parts.open}" aria-controls="fs-pa">⚙ Filtros${n ? ` · ${n}` : ''}</button><div class="visit"><button class="btn" id="visitb" aria-expanded="false" aria-controls="visitp">↻ Desde tu última visita</button><div class="visit__p" id="visitp" hidden>${vp}</div></div><div class="seg" role="group" aria-label="Nivel de detalle"><button id="m-res" aria-pressed="${mode === 'res'}">Resumen</button><button id="m-full" aria-pressed="${mode !== 'res'}">Completo</button></div></div></div>@@PANEL@@`;
   }
 
+  /** «Vienes del Diagnóstico»: mismo periodo, canal y comparación; no se recalculó nada. Se quita al salir de Producto y evolución. */
+  function fromDx(state) {
+    const f = state.peFromDx; if (!f) return '';
+    return `<div style="padding:12px 24px 0"><div class="bn"><span><b>Vienes del Diagnóstico.</b> Mismo periodo (${esc(f.period)}), canal (${esc(f.channel)}) y comparación. Parado en <b>${esc(nameOf({ level: 'category' }, f.key))}</b>.</span><span class="cap">No se recalculó nada: son las cifras de «¿Dónde ocurre?». Producto y evolución compara contra el periodo anterior cuando el diagnóstico va contra el plan. <button type="button" class="lk" data-action="go" data-view="diagnostico">↩ Volver al diagnóstico</button></span></div></div>`;
+  }
+
   /* ---------- Página ---------- */
   function emptyState(html) { return `<div class="px"><div class="app" id="frame"><section class="blk">${html}</section></div></div>`; }
   function footer(m) {
@@ -422,7 +428,7 @@
     const hist = !early && !(m.a.rows || []).length && !m.a.loading && m.a.key !== null && !(opts && opts.range);
     const rangeNote = opts && opts.range ? '<p class="cap"><b>La evolución necesita periodos de calendario.</b> El rango libre solo aplica a la foto del periodo: elige Año, Mes, Semana o Día en Granularidad (en Filtros) para actualizar la evolución.</p>' : '';
     const noHist = hist && FP.prodevolView && FP.prodevolView.noHistory ? FP.prodevolView.noHistory(state) : '';
-    const html = `<div class="px"><div class="app" id="frame" data-mode="${ux.mode}">${topbar(state, ux.mode, m)}${verdict(m)}${attention(m)}<div class="more">${who(m, ux.quien)}${rangeNote ? `<section class="blk">${rangeNote}</section>` : ''}${since(m, noHist)}${why(m, state.peFocusKey)}${metaBlock(m)}${footer(m)}${method(m, ux)}</div></div></div>`;
+    const html = `<div class="px"><div class="app" id="frame" data-mode="${ux.mode}">${topbar(state, ux.mode, m)}${fromDx(state)}${verdict(m)}${attention(m)}<div class="more">${who(m, ux.quien)}${rangeNote ? `<section class="blk">${rangeNote}</section>` : ''}${since(m, noHist)}${why(m, state.peFocusKey)}${metaBlock(m)}${footer(m)}${method(m, ux)}</div></div></div>`;
     el.innerHTML = PP(html);
     bind(el, state);
     mountDrawer(state, m);

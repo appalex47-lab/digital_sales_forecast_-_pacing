@@ -37,7 +37,7 @@ async def main():
         u = f'http://127.0.0.1:{port}/index.html'
         # W0 · sin datos: sin «Ver más» vacíos
         await q.goto(u + '#diagnostico'); await q.wait_for_timeout(900)
-        e = await q.evaluate("(()=>({more:[...document.querySelectorAll('#view-diagnostico details.dx-more')].filter(d=>!d.hidden).length, layer:!document.querySelector('#view-diagnostico .dx-layer').hidden, hub:document.querySelectorAll('#why-hub-diagnostico .why-hub__item').length}))()")
+        e = await q.evaluate("(()=>({more:[...document.querySelectorAll('#view-diagnostico details.dx-more')].filter(d=>!d.hidden).length, layer:false, hub:document.querySelectorAll('#why-hub-diagnostico .why-hub__item').length}))()")
         chk('W0 sin diagnóstico: no hay «Ver más» vacíos y la entrada «¿Por qué?» sí está', e['more'] == 0 and not e['layer'] and e['hub'] == 3, e)
         await prepare(q, u)
         # W1 · la franja en las tres vistas, con la actual marcada y las otras dos como enlaces
@@ -56,11 +56,11 @@ async def main():
         # W3 · orden y desplegables de Diagnóstico
         await q.goto(u + '#diagnostico'); await q.wait_for_selector('#dx-result .metric-card, #dx-result table', timeout=60000); await q.wait_for_timeout(800)
         top = lambda sel: q.evaluate(f"(()=>{{const e=document.querySelector('{sel}'); return e? e.getBoundingClientRect().top + window.scrollY : null}})()")
-        o = {k: await top(s) for k, s in [('hub', '#why-hub-diagnostico'), ('result', '#dx-result'), ('level1', '#dx-level1'), ('signals', '#dx-signals'), ('hyps', '#dx-hyps'), ('more', '.dx-more')]}
-        chk('W3 orden: franja → resultado → driver → señales → hipótesis → «Ver más»', all(v is not None for v in o.values()) and o['hub'] < o['result'] < o['level1'] < o['signals'] < o['hyps'] < o['more'], o)
+        o = {k: await top(s) for k, s in [('verdict', '#dx-verdict'), ('result', '#dx-result'), ('level1', '#dx-level1'), ('signals', '#dx-signals'), ('hub', '#why-hub-diagnostico'), ('hyps', '#dx-hyps'), ('conf', '#dx-confidence'), ('meth', '#dx-meth')]}
+        chk('W3 orden: veredicto → resultado → driver → señales → franja «Para profundizar» → hipótesis → confianza → método', all(v is not None for v in o.values()) and o['verdict'] < o['result'] < o['level1'] < o['signals'] < o['hub'] < o['hyps'] < o['conf'] < o['meth'], o)
         st = await q.evaluate("(()=>{const d=[...document.querySelectorAll('#view-diagnostico details.dx-more')].filter(x=>!x.hidden); return {ids:d.map(x=>x.dataset.dxMore), open:d.filter(x=>x.open).length, res:document.querySelector('#dx-result').checkVisibility(), tree:document.querySelector('#dx-tree').checkVisibility()}})()")
-        chk('W4 «Ver más» (guía, árbol, productos, confianza) cerrado; el resultado se ve sin abrir nada', st['ids'] == ['why', 'tree', 'products', 'confidence'] and st['open'] == 0 and st['res'] and not st['tree'], st)
-        n = await q.evaluate("(()=>{document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true); return {why:document.querySelector('#dx-why').textContent.trim().length, tree:document.querySelectorAll('#dx-tree tbody tr').length, prod:document.querySelector('#dx-products').textContent.trim().length, conf:document.querySelector('#dx-confidence').textContent.trim().length}})()")
+        chk('W4 los desplegables (guía y árbol) vienen cerrados; el resultado se ve sin abrir nada', sorted(st['ids']) == ['tree', 'why'] and st['open'] == 0 and st['res'] and not st['tree'], st)
+        await q.evaluate("document.getElementById('dx-meth').open=true"); n = await q.evaluate("(()=>{document.querySelectorAll('#view-diagnostico details.dx-more').forEach(d=>d.open=true); return {why:document.querySelector('#dx-why').textContent.trim().length, tree:document.querySelectorAll('#dx-tree tbody tr').length, prod:document.querySelector('#dx-products').textContent.trim().length, conf:document.querySelector('#dx-confidence').textContent.trim().length}})()")
         chk('W5 abierto, cada bloque tiene su contenido (guía, árbol con filas, productos, confianza)', n['why'] > 20 and n['tree'] > 0 and n['prod'] > 20 and n['conf'] > 20, n)
         # W6 · la brecha de la respuesta = suma de los efectos de los drivers (cálculo aparte con los números visibles)
         g = await q.evaluate("(()=>{const rows=[...document.querySelectorAll('#dx-level1 tbody tr')]; return rows.map(r=>r.cells[4]?r.cells[4].innerText.trim():'')})()")

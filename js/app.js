@@ -1626,6 +1626,7 @@
     FP.ui.renderStatus(state);
     VIEWS.forEach((v) => { document.getElementById(`view-${v}`).hidden = v !== state.view; });
     FP.startupAssumptionsView.sync(state);
+    if (state.view !== 'prodevol' && state.view !== 'diagnostico') state.peFromDx = null;   // el aviso «Vienes del Diagnóstico» solo vale mientras sigues en Producto y evolución
     if (state.view === 'resumen') {
       FP.ui.renderFacts(state);
       FP.ui.renderTargets(state);
@@ -1660,6 +1661,7 @@
         document.getElementById('rc-context').innerHTML = '<div class="empty"><strong>Todavía no hay contexto de recuperación</strong>Se necesita un plan del año y venta real, o importar un analysis_export.json o reforecast_export.json.</div>';
         FP.recoveryCenter.syncMore();
       } else FP.recoveryCenter.render(state);
+      if (state.rc.fromDx && state.rc.fromDx.to && state.rc.ctx) { const to = state.rc.fromDx.to; state.rc.fromDx.to = null; root.requestAnimationFrame(() => { const t = document.getElementById(to === 'library' ? 'rc-library' : 'rc-inverse'); if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
     }
     else if (state.view === 'inicio') { ensureForecast(); ensureReforecast(); FP.homeView.render(state, FP.contextEngine.collectStatus(state)); }
     else if (state.view === 'clientes') FP.customersView.render(state);
@@ -1672,6 +1674,7 @@
     else if (state.view === 'segmentos') { ensureDiagnostic(); FP.segmentsView.render(state); }
     else if (state.view === 'prodevol') {
       const range = peSync(); FP.prodevolView.render(state, { range }); ensureProductAnalysis(); ensureTrendAnalysis();
+      if (state.peOnArrive) { const k = state.peOnArrive; state.peOnArrive = null; actions['pe-focus']({ dataset: { key: k } }); }
     }
     else if (state.view === 'proyeccion') FP.projectionView.render(state);
     else if (state.view === 'ayuda') FP.helpView.render(state);
@@ -3762,6 +3765,37 @@
     'an-to-product'() { state.peDrawer = false; render(); root.requestAnimationFrame(() => { const t = document.getElementById('pe-porque'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); },   // el foco ya es esta entidad: se baja al capítulo del embudo
     'an-open-trace'(el) { return actions['pa-trace']({ dataset: { key: el.dataset.sku } }); },   // la trazabilidad es del SKU: no cambia la ruta
     'pa-trace-close'() { state.pa.trace = null; render(); },
+    /** «¿Qué hago con esto?» del Diagnóstico → Producto y evolución con el mismo periodo, canal y comparación, parado en el producto o categoría que más pesa. */
+    'dx-to-product'(el) {
+      const run = state.dx.run; if (!run) return;
+      const key = el.dataset.key;
+      actions['pa-from-dx']();
+      state.peOnArrive = key; state.peFromDx = { period: run.period.label, channel: run.channel.label, key, comparison: run.comparison.label };
+      actions.go({ dataset: { view: 'prodevol' } });
+    },
+    /** → Recuperar con el mismo contexto, la hipótesis ya ligada y la ruta del driver resaltada. Nada se guarda: el usuario revisa y guarda. */
+    'dx-to-recovery'(el) {
+      const run = state.dx.run; if (!run) return;
+      const ds = state.dx.settings, rc = state.rc, hyp = (run.hypotheses || []).find((h) => h.id === el.dataset.hyp);
+      if (rc.imported) { rc.imported = null; rc.draft = emptyDraft(); }
+      Object.assign(rc.settings, { channel: ds.channel, periodType: ds.periodType, periodKey: ds.periodKey, comparison: ds.comparison });
+      rc.altHyp = el.dataset.hyp; rc.draft = { ...(rc.draft || emptyDraft()), hypothesisId: el.dataset.hyp };
+      rc.fromDx = { hypId: el.dataset.hyp, hyp: hyp ? hyp.hypothesis : '', alt: el.dataset.alt || '', period: run.period.label, channel: run.channel.label, to: 'inverse' };
+      saveRecoverySettings();
+      actions.go({ dataset: { view: 'recovery' } });
+    },
+    /** → Recuperar en el catálogo de acciones, con el escenario ligado a la hipótesis ya elegido. */
+    'dx-to-plan'(el) {
+      const run = state.dx.run; if (!run) return;
+      const ds = state.dx.settings, rc = state.rc, hyp = (run.hypotheses || []).find((h) => h.id === el.dataset.hyp);
+      if (rc.imported) { rc.imported = null; rc.draft = emptyDraft(); }
+      Object.assign(rc.settings, { channel: ds.channel, periodType: ds.periodType, periodKey: ds.periodKey, comparison: ds.comparison });
+      rc.actionScenario = el.dataset.scenario;
+      rc.fromDx = { hypId: el.dataset.hyp, hyp: hyp ? hyp.hypothesis : '', alt: '', period: run.period.label, channel: run.channel.label, to: 'library' };
+      saveRecoverySettings();
+      actions.go({ dataset: { view: 'recovery' } });
+    },
+    'rc-dx-dismiss'() { state.rc.fromDx = null; render(); },
     'pa-from-dx'() {
       const x = FP.productAnalysis.fromDiagnosis(state.dx.run);
       if (!x) return;
@@ -3921,7 +3955,7 @@
     /* ----- Fase 6: Recovery Center ----- */
     'rc-setting'(el) {
       const s = state.rc.settings;
-      s[el.dataset.key] = el.value;
+      s[el.dataset.key] = el.value; state.rc.fromDx = null;   // otro contexto: el aviso del Diagnóstico ya no aplica
       saveRecoverySettings(); render();
     },
     'rc-open-channel'(el) {

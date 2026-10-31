@@ -40,8 +40,10 @@
     const cnum = (key, label, hint, scale) => `<div class="field"><label for="rc-c-${key}" class="field__hint">${esc(label)}</label>
       <input id="rc-c-${key}" type="number" step="0.01" value="${fin(k[key]) ? esc(+(k[key] * scale).toFixed(4)) : ''}" data-action="rc-constraint" data-key="${key}" data-scale="${scale}" placeholder="Sin restricción">
       <span class="field__hint">${esc(hint)}</span></div>`;
+    const fx = rc.fromDx, ALT = { A: 'Solo volumen', B: 'Solo CR', C: 'Solo AOV' };
+    const dxBanner = fx ? `<div class="banner" role="status" data-dx-banner="1"><p class="banner__title">Vienes del Diagnóstico</p><p class="banner__text">${fx.hypId ? `Hipótesis <strong>${esc(fx.hypId)}${fx.hyp ? ` · ${esc(String(fx.hyp).replace(/\.$/, ''))}` : ''}</strong> ya ligada. ` : ''}${fx.alt && ALT[fx.alt] ? `Ruta del driver cargada: <strong>${esc(ALT[fx.alt])}</strong>. ` : ''}Nada está guardado todavía: revisa y pulsa «Guardar como escenario»${fx.alt ? '' : ' o elige la acción'}. <button type="button" class="btn btn--small" data-action="go" data-view="diagnostico">↩ Volver al diagnóstico</button> <button type="button" class="btn btn--small btn--ghost" data-action="rc-dx-dismiss">Quitar aviso</button></p></div>` : '';
     $('rc-context').innerHTML = `
-      ${imp ? `<div class="banner banner--warning" role="status"><p class="banner__title">Trabajando sobre ${esc(imp.sourceFile)}</p>
+      ${dxBanner}${imp ? `<div class="banner banner--warning" role="status"><p class="banner__title">Trabajando sobre ${esc(imp.sourceFile)}</p>
         <p class="banner__text">Contexto importado (${esc(imp.source === 'analysis_import' ? 'analysis_export' : 'reforecast_export')}): ${esc(imp.period.label || '')}. Los datos de la app no cambian.
         <button type="button" class="btn btn--small" data-action="rc-clear-import">Volver a los datos de la app</button></p></div>` : ''}
       <div class="filters">
